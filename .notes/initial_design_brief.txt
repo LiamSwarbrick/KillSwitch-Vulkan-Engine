@@ -1,0 +1,40 @@
+NOTE(Liam): I'm coming up with an initial structure, to help keep the project as modular and maintainable as we can.
+I'll write the dependencies in brackets.
+An exposed API of a module shall be in a header-file at root level e.g. /core/core.h
+whereas, internal headers will go in an include dir e.g. /core/include/basic_types.h
+
+/core/:
+o deps: ()
+o APIs: (core.h)
+- Core contains the shared systems for each other library.
+
+/renderer/: (core)
+- No caching of invariant draw commands across frames (simplies the API).
+- 
+
+Rendering Abstraction Layer:
+Designing this to be nice to work with is seeming to be crazy complicated, so I've been reading a shit load.
+Here's two useful ones.
+- https://alextardif.com/RenderingAbstractionLayers.html
+- https://blog.mecheye.net/2023/09/how-to-write-a-renderer-for-modern-apis/
+-- o Refer to the quote:
+     """
+     The biggest difference between something like OpenGL and a modern API like Vulkan is that OpenGL is forgiving at letting you stumble around until you realize how to write a renderer, while Vulkan makes you have a blueprint from the start.
+     The messy boilerplate of modern APIs like Vulkan only become not so bad when you come in with this plan from the start.
+     """
+     """
+    My one recommendation to help get a grip on this is that you try to architect your renderer
+    in a way that you can do pretty much all of your data uploads at the beginning of the frame.
+    For textures and vertex data, this isn’t too tricky, but uniform data can be trickier, since
+    it often comes glued together with the draw calls. One common way to help with this is to
+    build out a linear allocator — effectively, this is just a growable array of memory.
+    When your renderer is walking the list of objects to generate draw calls for, it receives
+    a pointer to the linear allocator too, and the code for rendering out each object allocates
+    a chunk of memory, saves off the offset, and writes the uniform data it wants into the buffer.
+    When it comes time to submit to the GPU, it is relatively easy to upload the whole buffer first
+    thing, and use dynamic uniform buffer offsets to send the right region of data for each draw call;
+    Direct3D 12 and Metal have similar offsets in their APIs when you bind them to the draw call.
+    """
+Also:
+- https://pixelalchemy.dev/posts/a-frame-of-slime-rancher/
+
