@@ -24,12 +24,8 @@ workspace "AdventureEngine"
     targetdir ("bin")
     objdir ("build-artefacts/%{cfg.buildcfg}")
 
-
-project "game"
-    kind "ConsoleApp"
-    language "C++"
-    cppdialect "C++23"    
-    filter "configurations:Debug"
+-- Shared config for all projects:
+filter "configurations:Debug"
         symbols "On"
         targetprefix "debug-"
     filter "configurations:Release"
@@ -38,10 +34,50 @@ project "game"
         targetprefix "release-"
     filter "*"
 
-    files {
-        SRC .. "game/**.h",
-        SRC .. "game/**.cpp"
+-- --------------------------------------------------------------------
+-- Core Module (Windowing, Input)
+-- --------------------------------------------------------------------
+project "core"
+    kind "StaticLib"
+    language "C++"
+    cppdialect "C++23"
+    staticruntime "off"
+
+    files { SRC .. "core/**.h", SRC .. "core/**.cpp" }
+    
+    includedirs { 
+        SRC, 
+        SDL_DIR .. "/include" 
     }
+
+-- --------------------------------------------------------------------
+-- Renderer Module (Vulkan implementation)
+-- --------------------------------------------------------------------
+project "renderer"
+    kind "StaticLib"
+    language "C++"
+    cppdialect "C++23"
+    staticruntime "off"
+
+    files { SRC .. "renderer/**.h", SRC .. "renderer/**.cpp" }
+
+    includedirs { 
+        SRC, 
+        SRC .. "renderer/include", -- Internal includes
+        SDL_DIR .. "/include",
+        VULKAN_INCLUDE
+    }
+
+
+-- --------------------------------------------------------------------
+-- Game:
+-- --------------------------------------------------------------------
+project "game"
+    kind "ConsoleApp"
+    language "C++"
+    cppdialect "C++23"    
+
+    files { SRC .. "game/**.h", SRC .. "game/**.cpp" }
 
     prebuildcommands {
         -- Build SDL with their cmake build system
