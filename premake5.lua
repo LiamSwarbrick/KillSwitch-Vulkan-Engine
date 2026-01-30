@@ -1,13 +1,22 @@
 
--- include_paths = {
---     SDL3 = "extern/SDL/include",
---     Vulkan = os.getenv("VULKAN_SDK") .. "/Include",
---     Core = "core/"
--- }
-
+local EXTERNAL = "extern/"
 local SRC = "src/"
 
-workspace "AdventureEngine"  -- Working name, we can decided on a different one
+local SDL_DIR = EXTERNAL .. "SDL"
+local SDL_BUILD_DIR = SDL_DIR .. "/build"
+
+local VULKAN_SDK = os.getenv("VULKAN_SDK") or ""
+-- TODO: Check for good enough Vulkan SDK version. e.g. 1.4
+
+include_paths = {}
+include_paths.SDL3 = SDL_DIR .. "/include"
+include_paths.Vulkan = VULKAN_SDK .. "/include",
+filter "system:windows"
+    include_paths.Vulkan = VULKAN_SDK .. "/Include"
+filter "*"
+
+
+workspace "AdventureEngine"
     architecture "x64"
     configurations { "debug", "release" }
     startproject "game"
@@ -15,6 +24,11 @@ workspace "AdventureEngine"  -- Working name, we can decided on a different one
     targetdir ("bin")
     objdir ("build-artefacts/%{cfg.buildcfg}")
 
+
+project "game"
+    kind "ConsoleApp"
+    language "C++"
+    cppdialect "C++23"    
     filter "configurations:Debug"
         symbols "On"
         targetprefix "debug-"
@@ -24,40 +38,34 @@ workspace "AdventureEngine"  -- Working name, we can decided on a different one
         targetprefix "release-"
     filter "*"
 
-    -- VULKAN_SDK = os.getenv("VULKAN_SDK")
-    SDL3_PATH = "extern/SDL/"
-
-
-project "game"
-    kind "ConsoleApp"
-    language "C++"
-    cppdialect "C++23"
-    location (SRC .. "game")
-    
     files {
         SRC .. "game/**.h",
         SRC .. "game/**.cpp"
     }
 
-    -- TODO: Game uses each module
+    prebuildcommands {
+        -- Build SDL with their cmake build system
+        "mkdir -p " .. SDL_BUILD_DIR,
+        "{ cd " .. SDL_BUILD_DIR .. " && cmake .. -DCMAKE_BUILD_TYPE=%{cfg.buildcfg == 'debug' and 'Debug' or 'Release'} && make -j; }"
+    }
+
     includedirs {
-        SRC,  -- <- All the submodules e.g. renderer are visible through their names e.g. renderer/renderer.h
-        -- SDL3_PATH .. "include"
+        SRC,
+        include_paths.SDL3,
+        include_paths.Vulkan
     }
 
-    -- Dependency enforcement: Game links against these modules
-    links {
-        -- "Core",
-        -- "Renderer"
-        -- "AssetSys"
-    }
-
-    -- Link the actual Third Party binaries
     libdirs {
+        SDL_BUILD_DIR
         -- "%{VULKAN_SDK}/Lib",
-        -- "%{SDL3_PATH}/lib"
     }
+
     links {
-        -- "vulkan",
-        -- "SDL3"
+        "SDL3",   -- The lib we just built via cmake in prebuildcommands
+        "vulkan"  -- System vulkan folder
+
+        -- Dependency enforcement: Game links against these modules:
+        -- "core",
+        -- "renderer"
+        -- "assetsys"
     }
