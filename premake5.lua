@@ -10,10 +10,46 @@ local VULKAN_SDK = os.getenv("VULKAN_SDK") or ""
 
 include_paths = {}
 include_paths.SDL3 = SDL_DIR .. "/include"
-include_paths.Vulkan = VULKAN_SDK .. "/include",
+include_paths.Vulkan = VULKAN_SDK .. "/include"
+include_paths.volk = "volk"
+
+lib_dirs = {}
+lib_dirs.SDL3 = SDL_BUILD_DIR
+lib_dirs.Vulkan = VULKAN_SDK .. "/lib"
+
 filter "system:windows"
     include_paths.Vulkan = VULKAN_SDK .. "/Include"
+    lib_dirs.Vulkan = VULKAN_SDK .. "/Lib"
 filter "*"
+
+
+
+local function ensure_sdl_built()
+    if os.isdir(SDL_BUILD_DIR) then
+        print("SDL already built — skipping")
+        return
+    end
+
+    print("SDL build directory not found, building SDL...")
+
+    os.mkdir(SDL_BUILD_DIR)
+
+    local build_type = "Release" -- default
+
+    -- Premake knows nothing about cfg here, so pick one or build both
+    local cmd = table.concat({
+        "cd " .. SDL_BUILD_DIR,
+        "cmake .. -DCMAKE_BUILD_TYPE=" .. build_type,
+        "cmake --build . -j"
+    }, " && ")
+
+    local result = os.execute(cmd)
+    if result ~= 0 then
+        error("SDL build failed")
+    end
+end
+
+
 
 
 workspace "AdventureEngine"
@@ -43,11 +79,31 @@ project "core"
     cppdialect "C++23"
     staticruntime "off"
 
+    -- prebuildcommands {
+    --     -- Build SDL with their cmake build system
+    --     "mkdir -p " .. SDL_BUILD_DIR,
+    --     "{ cd " .. SDL_BUILD_DIR .. " && cmake .. -DCMAKE_BUILD_TYPE=%{cfg.buildcfg == 'debug' and 'Debug' or 'Release'} && make -j; }"
+    -- }
+    ensure_sdl_built()
+
     files { SRC .. "core/**.h", SRC .. "core/**.cpp" }
-    
+
     includedirs { 
-        SRC, 
-        SDL_DIR .. "/include" 
+        SRC,
+        include_paths.SDL3
+    }
+
+    -- This makes any project linking 'core' also search this directory
+    usageincludedirs {
+        SRC .. "core/include"  -- Internal include headers
+    }
+
+    libdirs {
+        lib_dirs.SDL3
+    }
+
+    links {
+        "SDL3",   -- The lib we just built via cmake in prebuildcommands
     }
 
 -- --------------------------------------------------------------------
@@ -59,13 +115,29 @@ project "renderer"
     cppdialect "C++23"
     staticruntime "off"
 
-    files { SRC .. "renderer/**.h", SRC .. "renderer/**.cpp" }
+    files {
+        SRC .. "renderer/**.h",
+        SRC .. "renderer/**.cpp",
+        EXTERNAL .. "volk/volk.c"
+    }
 
     includedirs { 
-        SRC, 
-        SRC .. "renderer/include", -- Internal includes
-        SDL_DIR .. "/include",
-        VULKAN_INCLUDE
+        SRC,                       -- Exported API headers
+        include_paths.volk,
+        include_paths.Vulkan,
+    }
+
+    usageincludedirs {
+        SRC .. "renderer/include",
+    }
+
+    libdirs {
+        lib_dirs.Vulkan
+    }
+
+    links {
+        "core", -- TODO: Finish syntax here
+        "vulkan"  -- System vulkan folder
     }
 
 
@@ -79,29 +151,18 @@ project "game"
 
     files { SRC .. "game/**.h", SRC .. "game/**.cpp" }
 
-    prebuildcommands {
-        -- Build SDL with their cmake build system
-        "mkdir -p " .. SDL_BUILD_DIR,
-        "{ cd " .. SDL_BUILD_DIR .. " && cmake .. -DCMAKE_BUILD_TYPE=%{cfg.buildcfg == 'debug' and 'Debug' or 'Release'} && make -j; }"
-    }
-
     includedirs {
         SRC,
-        include_paths.SDL3,
-        include_paths.Vulkan
+        SRC .. "game/include"
     }
 
     libdirs {
-        SDL_BUILD_DIR
-        -- "%{VULKAN_SDK}/Lib",
+        
     }
 
     links {
-        "SDL3",   -- The lib we just built via cmake in prebuildcommands
-        "vulkan"  -- System vulkan folder
-
         -- Dependency enforcement: Game links against these modules:
-        -- "core",
-        -- "renderer"
+        "core",
+        "renderer"
         -- "assetsys"
     }
