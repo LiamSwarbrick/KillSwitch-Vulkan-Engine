@@ -3,7 +3,8 @@ bin/
 build-artefacts/
 
 # Clangd
-# compile_flags.txt
+compile_commands.json
+.cache/
 
 # --- Premake Generated Files ---
 # We ignore these because they are platform-specific; 

@@ -12,3 +12,10 @@ $
 $ make -j config=release
 $ ./bin/release-game.exe
 ```
+
+Here's a simple way to generate intellisense if using clangd on vscode:
+```
+# Install bear, which listens to compile commands and generates the clangd 'compile_commands.json'
+# Then build with
+$ bear -- make -j
+```
