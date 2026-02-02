@@ -12,6 +12,8 @@ bool Renderer_Init(const Renderer_InitInfo* info)
 
     SDL_Log("TODO: Create engine.cpp and try to directly include as much of my vulkan renderer as possible in order to get up and running as quick as possible.\n");
 
+    SDL_Log("Reminder to self: Get a basic cube renderer working, that takes a camera and list of positions as input i guess\n");
+
     return true;
 }
 
