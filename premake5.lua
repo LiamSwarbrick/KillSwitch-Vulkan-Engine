@@ -1,4 +1,3 @@
-
 local EXTERNAL = "extern/"
 local SRC = "src/"
 
@@ -11,7 +10,7 @@ local VULKAN_SDK = os.getenv("VULKAN_SDK") or ""
 include_paths = {}
 include_paths.SDL3 = SDL_DIR .. "/include"
 include_paths.Vulkan = VULKAN_SDK .. "/include"
-include_paths.volk = "volk"
+include_paths.volk = EXTERNAL .. "volk"
 
 lib_dirs = {}
 lib_dirs.SDL3 = SDL_BUILD_DIR
@@ -21,8 +20,6 @@ filter "system:windows"
     include_paths.Vulkan = VULKAN_SDK .. "/Include"
     lib_dirs.Vulkan = VULKAN_SDK .. "/Lib"
 filter "*"
-
-
 
 local function ensure_sdl_built()
     if os.isdir(SDL_BUILD_DIR) then
@@ -50,8 +47,6 @@ local function ensure_sdl_built()
 end
 
 
-
-
 workspace "AdventureEngine"
     architecture "x64"
     configurations { "debug", "release" }
@@ -70,6 +65,7 @@ filter "configurations:Debug"
         targetprefix "release-"
     filter "*"
 
+    
 -- --------------------------------------------------------------------
 -- Core Module (Windowing, Input)
 -- --------------------------------------------------------------------
@@ -79,23 +75,17 @@ project "core"
     cppdialect "C++23"
     staticruntime "off"
 
-    -- prebuildcommands {
-    --     -- Build SDL with their cmake build system
-    --     "mkdir -p " .. SDL_BUILD_DIR,
-    --     "{ cd " .. SDL_BUILD_DIR .. " && cmake .. -DCMAKE_BUILD_TYPE=%{cfg.buildcfg == 'debug' and 'Debug' or 'Release'} && make -j; }"
-    -- }
     ensure_sdl_built()
 
-    files { SRC .. "core/**.h", SRC .. "core/**.cpp" }
-
-    includedirs { 
-        SRC,
-        include_paths.SDL3
+    files {
+        SRC .. "core/**.h",
+        SRC .. "core/**.cpp"
     }
 
-    -- This makes any project linking 'core' also search this directory
-    usageincludedirs {
-        SRC .. "core/include"  -- Internal include headers
+    includedirs { 
+        SRC,  -- Exported API headers
+        SRC .. "core/include",  -- Internal include headers
+        include_paths.SDL3
     }
 
     libdirs {
@@ -121,14 +111,16 @@ project "renderer"
         EXTERNAL .. "volk/volk.c"
     }
 
-    includedirs { 
-        SRC,                       -- Exported API headers
-        include_paths.volk,
-        include_paths.Vulkan,
+    defines {
+        "VK_NO_PROTOTYPES"
     }
 
-    usageincludedirs {
+    includedirs { 
+        SRC,
         SRC .. "renderer/include",
+        include_paths.SDL3,
+        include_paths.volk,
+        include_paths.Vulkan
     }
 
     libdirs {
@@ -137,7 +129,9 @@ project "renderer"
 
     links {
         "core", -- TODO: Finish syntax here
-        "vulkan"  -- System vulkan folder
+        -- "assetsys"
+        "vulkan",  -- System vulkan folder
+        "SDL3"
     }
 
 
@@ -149,20 +143,24 @@ project "game"
     language "C++"
     cppdialect "C++23"    
 
-    files { SRC .. "game/**.h", SRC .. "game/**.cpp" }
+    files {
+        SRC .. "game/**.h",
+        SRC .. "game/**.cpp"
+    }
 
     includedirs {
         SRC,
-        SRC .. "game/include"
+        SRC .. "game/include",
+        include_paths.SDL3
     }
 
     libdirs {
-        
+        lib_dirs.SDL3
     }
 
     links {
-        -- Dependency enforcement: Game links against these modules:
         "core",
-        "renderer"
+        "renderer",
         -- "assetsys"
+        "SDL3"
     }
