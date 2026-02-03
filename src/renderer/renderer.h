@@ -1,6 +1,7 @@
 #ifndef ENGINE_RENDERER_H
 #define ENGINE_RENDERER_H
 
+#include "core/core.h"
 #include "SDL3/SDL.h"
 
 /* NOTES:

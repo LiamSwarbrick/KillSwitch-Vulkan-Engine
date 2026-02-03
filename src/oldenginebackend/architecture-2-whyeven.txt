@@ -1,0 +1,20 @@
+Thinking along these lines:
+Making a dream game will likely lead to unfinished projects.
+For every unfinished project you don't want to throw away all the systems.
+We want to make polished systems that we can reuse in multiple games.
+E.g.
+- Reusable UI systems:
+    o Game Settings menu system.
+    o An inventory/crafting system.
+- Reusable game mechanics:
+    o Character controller base.
+    o Enemy path finding system.
+    o World collision system.
+
+In order to have these polished systems that we can reuse to make future
+projects easier and easier, we end up with a GAME ENGINE.
+But this speaks to the design of the engine.
+How do we seperate systems so we can piece them together and take pieces from previous projects into the next easily.
+- This is what the designing of the engine is for.
+
+

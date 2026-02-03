@@ -4,9 +4,9 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <assert.h>
 #include <string.h>
 #include <stdarg.h>
-#include <inttypes.h>
 #include <math.h>
 
 typedef uint32_t u32;
@@ -18,13 +18,12 @@ typedef int32_t b32;
 typedef uint8_t u8;
 typedef int8_t b8;
 
-// NOTE: Old: use SDL_Log and friends instead
-// #define ENABLE_VERBOSE_LOGGING
-// #ifdef ENABLE_VERBOSE_LOGGING
-// #define VERBOSE_LOG(...) printf(__VA_ARGS__)
-// #else
-// #define VERBOSE_LOG(...) do {} while (0)
-// #endif
+#define ENABLE_VERBOSE_LOGGING
+#ifdef ENABLE_VERBOSE_LOGGING
+#define VERBOSE_LOG(...) printf(__VA_ARGS__)
+#else
+#define VERBOSE_LOG(...) do {} while (0)
+#endif
 
 
 #define ANSI_CYAN "\x1b[36m"

@@ -11,6 +11,7 @@ include_paths = {}
 include_paths.SDL3 = SDL_DIR .. "/include"
 include_paths.Vulkan = VULKAN_SDK .. "/include"
 include_paths.volk = EXTERNAL .. "volk"
+include_paths.VMA = EXTERNAL .. "VMA"
 
 lib_dirs = {}
 lib_dirs.SDL3 = SDL_BUILD_DIR
@@ -65,7 +66,7 @@ filter "configurations:Debug"
         targetprefix "release-"
     filter "*"
 
-    
+
 -- --------------------------------------------------------------------
 -- Core Module (Windowing, Input)
 -- --------------------------------------------------------------------
@@ -115,12 +116,13 @@ project "renderer"
         "VK_NO_PROTOTYPES"
     }
 
-    includedirs { 
+    includedirs {
         SRC,
         SRC .. "renderer/include",
         include_paths.SDL3,
         include_paths.volk,
-        include_paths.Vulkan
+        include_paths.Vulkan,
+        include_paths.VMA
     }
 
     libdirs {
@@ -128,7 +130,7 @@ project "renderer"
     }
 
     links {
-        "core", -- TODO: Finish syntax here
+        "core",
         -- "assetsys"
         "vulkan",  -- System vulkan folder
         "SDL3"
@@ -141,7 +143,7 @@ project "renderer"
 project "game"
     kind "ConsoleApp"
     language "C++"
-    cppdialect "C++23"    
+    cppdialect "C++23"
 
     files {
         SRC .. "game/**.h",

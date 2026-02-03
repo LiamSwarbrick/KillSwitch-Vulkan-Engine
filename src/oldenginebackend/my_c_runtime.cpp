@@ -1,6 +1,5 @@
 #include "my_c_runtime.h"
-
-#include <assert.h>
+#include "inttypes.h"
 
 //
 // Memory Tracker API
@@ -28,7 +27,7 @@ void
 check_tracker_for_memory_leaks(ThreadAllocTracker* tracker)
 {
     #ifdef NDEBUG
-        printf("%s: (Fast path for release mode. Not checking for leaks).\n", tracker->tracker_name);
+        VERBOSE_LOG("%s: (Fast path for release mode. Not checking for leaks).\n", tracker->tracker_name);
     #else
         s64 active_allocs = (s64)(tracker->total_allocs) - (s64)(tracker->total_frees);
         s64 active_bytes = (s64)(tracker->total_bytes_allocated) - (s64)(tracker->total_bytes_freed);
@@ -45,7 +44,7 @@ check_tracker_for_memory_leaks(ThreadAllocTracker* tracker)
             ThreadAllocInfo* list_entry = tracker->head;
             while (list_entry)
             {
-                printf(ANSI_MAGENTA "*----* " ANSI_YELLOW "- %s:%s:line %" PRIu32 ANSI_RESET ": alloc of" ANSI_MAGENTA " %" PRIu64 " bytes" ANSI_RESET " never freed.\n",
+                VERBOSE_LOG(ANSI_MAGENTA "*----* " ANSI_YELLOW "- %s:%s:line %" PRIu32 ANSI_RESET ": alloc of" ANSI_MAGENTA " %" PRIu64 " bytes" ANSI_RESET " never freed.\n",
                     list_entry->filename, list_entry->funcname, list_entry->line_number, list_entry->buffer_size);
                 ThreadAllocInfo* missed_alloc = list_entry;
                 list_entry = missed_alloc->next;

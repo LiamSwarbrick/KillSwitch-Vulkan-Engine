@@ -1,0 +1,98 @@
+First thing to do after is design an asset system.
+
+// TODO: Lots of shared code in setting up renderpasses
+// Creating a rendergraph system would be very worth while
+
+
+
+Vulkan Architecture TODO:
+- Entangle checking for a device feature with enabling that feature.
+- Switch to GPU pointers?
+- The current concept of a scene might need redesigning for something nicer.
+
+
+Overall architecture TODO:
+- Need to put more time into deciding what things should be modular, what shouldn't, and the specifics.
+- The VulkanEngine struct being passed to everything would need redesigning, doing it well is quite challenging.
+- Currently it's just a renderer so obviously nothing dynamic/interesting is happening in terms of resource use,
+  once that is happening, make use of frame arenas seeded with ample memory in order to avoid bajillions of varying amounts of per frame memory allocations,
+  because choosing to use arbitrarily allocate each frame is rife with memory leak potential.
+  And also we want consistent frame times, not spikes, so keeping the work done each frame consistant is important.
+- Also think about how multithreading in this engine would be best, this needs careful thinking about.
+  Realistically, unless the engine needs to tackle something specific like oh we need to update a million entities per frame, it's easiest
+  to keep each system on their own thread and keep systems of the engine modular enough to parallelise them. But I need to do more thinking on that.
+  I have never gotten close to maximizing CPU usage, it's always been the rendering that takes all the time, so I haven't had to design for that much ever.
+
+
+Currently half assing the Architecture TODO until it is more clear what kind of design it should be:
+for example:
+  Is it a monolith with a nice API? This would be fastest to write, and avoids needing to know how your interfaces should be imediately.
+    This choice is what I have write now and it's problably the best choice for on one condition (the following):
+    - Refactor ruthlessly when it is needed! Don't try to mould features into a bad API, rework it to ensure it remains clean!
+
+  Alternatively:
+  Is it lots of smaller modules with clean API? If so what shared structures/formats ensure they go together well.
+    This is probably what "The Machinery/Our Machinery" engine was like before it's existance was deleted,
+    apparently a moduler engine you could build your engine from.
+    Likely a more maintainable approach than a monolithic engine, but requires you already have made lots of engines to know how you want to design it
+    whereas my idea of a monolith is one that you can ruthlessly refactor. 
+
+  Or is it something inbetween? With some stuff seperated to be reused in a potentially very different engine but requiring one of the same systems.
+    E.g. I likely want to make an animation system for large creatures with collision shapes attached to them, so that for instance,
+    they can hit things with their first in an attack animation, pushing things far away, also the feet must stomp and not move relative to the ground.
+    This means all the translation of the entity has to be done at the end of an animation sequence, and the animation sequence must change the root node position.
+    E.g. instead of inverse kinematics on legs, it's easier to have animations for turn 30degrees left/right, and take 2/4 steps forward.
+  Tracking physics collision shapes from something like jolt over a rigged model may be something I'd could make modular.
+  The tracking may need to be handcraft and put in it's own file format, so if the system is modular from the engine, the tool for it
+  can be seperate from the engine which is useful.
+  - Realistically the data should occupy the extras field of a glTF2 file, where we can put arbitrary json.
+
+
+
+
+Standards for this code to try to keep things sane.
+=================================================
+Remember, the code should do the minimal amount of things it needs in order to work, so it's best to think of it wholistically,
+rather than millions of little pieces with random/differing lifetimes to keep track of all conniving to make the program work.
+The simple way to do something is often harder to think of until doing it a lot, so ruthless refactoring is always a good idea.
+
+Use larger allocations.
+- The program should have the most minimal set of resource aquisition it needs.
+- Do this by thinking in terms of grouped objects, and joint lifetimes etc...
+  This removes the need for RAII, special pointer types etc...
+  These constructs duck tape temporary code together, but thinking about the architect of your software.
+  Following the phillosophy that your code should make the fewest amount of operations that can fail as reasonable (e.g. allocations).
+  You would group resource allocation, instead of doing resource allocation/aquisition in a constructor/destroy of a single object.
+  Then your code has a very discrete number of grouped allocations/resource aquisitions, instead of millions, and so that wholistic information
+  about the program is something you can reason about yourself, removing the need for these constucts/borrow semantics
+  because obviously, a pointer/handle to a resource is not the owner of a resource except for obvious points in your code that handle grouped resources/allocations.
+
+How to allocate?
+- See the my_c_runtime.h header, malloc/calloc/realloc/free calls should instead use L_calloc/L_realloc/L_free.
+- These track the memory, and let us check for leaks at point in code we define should have fully freed the memory by now.
+
+Scratch memory:
+- What is scratch memory?
+  Scratch memory from my point of view is an allocation with a very short lifetime,
+  e.g. a function, or a few lines of code.
+- To allocate scratch memory, just use L_calloc as it's not worth it at the moment to provide a custom allocator.
+  Since scratch memory for programs contains lots of little allocations, this is where the memory tracking becomes useful.
+
+- Frame arenas: Sometimes the lifetime is longer than a function or few lines of code, but only exists during a frame,
+  we can handle this by putting these allocs/frees at the start/end of each frame, and hence keep them grouped.
+  That is probably fine, but sometimes we don't want to think about putting frees in, and also don't want to fill the start of the frame update
+  with specifying each and every resource from various parts of the code. A clearer way is to have a per frame-lifetime memory arena.
+  I.e. we just push to the arena, and it returns a pointer we can use for memory, and at the end of the frame this memory is cleared.
+  But then we don't need to alloc/free this arena each frame, just start it on init with an ample size.
+  So...
+  Instead of alloc/free during each frame, have a fixed size arena cleared each frame.
+  If we were using the shared pointer RAII strategy in our program with millions of allocation, it would be hard to reason 
+  what size this frame arena needs to be, but because we group our allocations, it should be simple to find out how many resources.
+NOTE: Dont implement arenas as returning pointers but instead memory_index.
+
+Resources:
+- It's tempting to want to do a computer science and try to think about a program as lots of tiny little things accumulating,
+  but grouping resource use crucial to keep the rest of the code modular and maybe even functional.
+  E.g. don't think: spawn_entity()-> oh its a new entity, load its resources and continue. Think: load_scene_resources().
+  And a resource used by an entity is stored as an index into a contiguous resource array such that all resources in that array have the same lifetime -> e.g. scene scope.
+

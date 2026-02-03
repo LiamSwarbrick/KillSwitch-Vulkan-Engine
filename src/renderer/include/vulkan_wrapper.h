@@ -2,6 +2,7 @@
 #define RENDERER_VULKAN_WRAPPER_H
 
 #include "volk.h"
+#include "vk_mem_alloc.h"
 
 const char* vklayer_result_to_string(VkResult result);
 void vklayer_print_queueflagbits(VkQueueFlagBits flags);
@@ -16,7 +17,7 @@ do                                                                          \
     {                                                                       \
         fprintf(stderr, "[%s:%d] Vulkan error: %s (%d)\n",                  \
             __FILE__, __LINE__, vklayer_result_to_string(err), (int)(err)); \
-        assert(0 && "VK_CHECK() not successful.");                          \
+        SDL_assert(0 && "VK_CHECK() not successful.");                          \
         abort();                                                            \
     }                                                                       \
 } while (0)
