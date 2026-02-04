@@ -1,6 +1,10 @@
 #ifndef MY_C_RUNTIME_H
 #define MY_C_RUNTIME_H
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -124,5 +128,9 @@ void L_free(void* ptr, ThreadAllocTracker* alloc_tracker);
 // The buffer size gets stored in *out_size.
 void* L_load_binary_file(const char* const file_path, u64* out_size, ThreadAllocTracker* alloc_tracker);
 
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif  // MY_C_RUNTIME_H

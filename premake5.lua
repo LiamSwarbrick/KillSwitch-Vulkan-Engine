@@ -51,118 +51,113 @@ end
 workspace "AdventureEngine"
     architecture "x64"
     configurations { "debug", "release" }
-    startproject "game"
 
     targetdir ("bin")
     objdir ("build-artefacts/%{cfg.buildcfg}")
 
--- Shared config for all projects:
-filter "configurations:Debug"
-        symbols "On"
-        targetprefix "debug-"
-    filter "configurations:Release"
-        optimize "On"
-        defines { "NDEBUG" }
-        targetprefix "release-"
-    filter "*"
+    -- Shared config for all projects:
+    filter "configurations:Debug"
+            symbols "On"
+            targetprefix "debug-"
+        filter "configurations:Release"
+            optimize "On"
+            defines { "NDEBUG" }
+            targetprefix "release-"
+        filter "*"
 
 
--- --------------------------------------------------------------------
--- Core Module (Windowing, Input)
--- --------------------------------------------------------------------
-project "core"
-    kind "StaticLib"
-    language "C++"
-    cppdialect "C++23"
-    staticruntime "off"
+    -- --------------------------------------------------------------------
+    -- Core Module (Windowing, Input)
+    -- --------------------------------------------------------------------
+    project "core"
+        kind "StaticLib"
+        language "C++"
+        cppdialect "C++23"
 
-    ensure_sdl_built()
+        ensure_sdl_built()
 
-    files {
-        SRC .. "core/**.h",
-        SRC .. "core/**.cpp"
-    }
+        files {
+            SRC .. "core/**.h",
+            SRC .. "core/**.cpp"
+        }
 
-    includedirs { 
-        SRC,  -- Exported API headers
-        SRC .. "core/include",  -- Internal include headers
-        include_paths.SDL3
-    }
+        includedirs { 
+            SRC,  -- Exported API headers
+            SRC .. "core/include",  -- Internal include headers
+            include_paths.SDL3
+        }
 
-    libdirs {
-        lib_dirs.SDL3
-    }
+        libdirs {
+            lib_dirs.SDL3
+        }
 
-    links {
-        "SDL3",   -- The lib we just built via cmake in prebuildcommands
-    }
+        links {
+            "SDL3"   -- The lib we just built via cmake in prebuildcommands
+        }
 
--- --------------------------------------------------------------------
--- Renderer Module (Vulkan implementation)
--- --------------------------------------------------------------------
-project "renderer"
-    kind "StaticLib"
-    language "C++"
-    cppdialect "C++23"
-    staticruntime "off"
+    -- --------------------------------------------------------------------
+    -- Renderer Module (Vulkan implementation)
+    -- --------------------------------------------------------------------
+    project "renderer"
+        kind "StaticLib"
+        language "C++"
+        cppdialect "C++23"
 
-    files {
-        SRC .. "renderer/**.h",
-        SRC .. "renderer/**.cpp",
-        EXTERNAL .. "volk/volk.c"
-    }
+        files {
+            SRC .. "renderer/**.h",
+            SRC .. "renderer/**.cpp",
+            EXTERNAL .. "volk/volk.c"
+        }
 
-    defines {
-        "VK_NO_PROTOTYPES"
-    }
+        defines {
+            "VK_NO_PROTOTYPES"
+        }
 
-    includedirs {
-        SRC,
-        SRC .. "renderer/include",
-        include_paths.SDL3,
-        include_paths.volk,
-        include_paths.Vulkan,
-        include_paths.VMA
-    }
+        includedirs {
+            SRC,
+            SRC .. "renderer/include",
+            include_paths.SDL3,
+            include_paths.volk,
+            include_paths.Vulkan,
+            include_paths.VMA
+        }
 
-    libdirs {
-        lib_dirs.Vulkan
-    }
+        libdirs {
+            lib_dirs.Vulkan
+        }
 
-    links {
-        "core",
-        -- "assetsys"
-        "vulkan",  -- System vulkan folder
-        "SDL3"
-    }
+        links {
+            "vulkan",  -- System vulkan folder
+            "core",
+            "SDL3"
+        }
 
 
--- --------------------------------------------------------------------
--- Game:
--- --------------------------------------------------------------------
-project "game"
-    kind "ConsoleApp"
-    language "C++"
-    cppdialect "C++23"
+    -- --------------------------------------------------------------------
+    -- Game:
+    -- --------------------------------------------------------------------
+    project "game"
+        kind "ConsoleApp"
+        language "C++"
+        cppdialect "C++23"
 
-    files {
-        SRC .. "game/**.h",
-        SRC .. "game/**.cpp"
-    }
+        files {
+            SRC .. "game/**.h",
+            SRC .. "game/**.cpp"
+        }
 
-    includedirs {
-        SRC,
-        SRC .. "game/include",
-        include_paths.SDL3
-    }
+        includedirs {
+            SRC,
+            SRC .. "game/include",
+            include_paths.SDL3
+        }
 
-    libdirs {
-        lib_dirs.SDL3
-    }
+        libdirs {
+            lib_dirs.SDL3
+        }
 
-    links {
-        "core",
-        "renderer",
-        -- "assetsys"
-        "SDL3"
-    }
+        links {  -- NOTE: Must link from highest level dependency to lowest level for some reason        
+            "renderer",
+            "core",
+            "SDL3"
+        }
