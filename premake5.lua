@@ -78,12 +78,13 @@ workspace "AdventureEngine"
 
         files {
             SRC .. "core/**.h",
-            SRC .. "core/**.cpp"
+            SRC .. "core/impl/**.cpp"
         }
 
         includedirs { 
             SRC,  -- Exported API headers
-            SRC .. "core/include",  -- Internal include headers
+            SRC .. "core",
+            SRC .. "core/impl",  -- Internal include headers
             include_paths.SDL3
         }
 
@@ -105,7 +106,7 @@ workspace "AdventureEngine"
 
         files {
             SRC .. "renderer/**.h",
-            SRC .. "renderer/**.cpp",
+            SRC .. "renderer/impl/**.cpp",
             EXTERNAL .. "volk/volk.c"
         }
 
@@ -115,7 +116,8 @@ workspace "AdventureEngine"
 
         includedirs {
             SRC,
-            SRC .. "renderer/include",
+            SRC .. "renderer",
+            SRC .. "renderer/impl",
             include_paths.SDL3,
             include_paths.volk,
             include_paths.Vulkan,

@@ -82,7 +82,14 @@ void old_stuff_init(RenderState* renderstate)
 
         SDL_assert(renderstate->old.default_sampler != VK_NULL_HANDLE);
     }
+
+    // TODO: Create all descriptor set layouts
 }
+
+// TODO: Add function that handles the part of swapchain creation that is old, whereas the new stuff 
+// will go in renderer.cpp, or for now, just put all of the swapchain shit in old.
+
+// TODO: Then, expose the draw api, but only for a simple Renderer_DrawColoredCube() or something
 
 void old_stuff_clean(RenderState* renderstate)
 {

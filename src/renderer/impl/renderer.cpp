@@ -483,8 +483,8 @@ bool Renderer_Init(const Renderer_InitInfo* info)
 
     old_stuff_init(&renderstate);
 
-    // TODO: How to handle porting the rest? i guess i just get it working before
-    // trying a multithreadable pooling system and stuff.
+    
+
     return true;
 }
 

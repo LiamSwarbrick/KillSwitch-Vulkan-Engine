@@ -35,6 +35,9 @@ typedef struct RenderState
     VkQueue graphics_queue;
     VkQueue presentation_queue;
 
+    // The old stuff that I want to redo, but first need something up on the screen for others to work from.
+    // E.g. Get cube rendering running, and then people can work on input and player movement
+    // Implementing collisions with a physics engine (jolt)
     OldRenderState old;
 }
 RenderState;
