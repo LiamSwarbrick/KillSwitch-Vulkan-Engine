@@ -3,22 +3,21 @@
 ### Architecture Design So Far
 Settling on a modular approach like this:
 
-NOTE: modules e.g. /core/ have their api visible in /core/, while internal includes for these modules that aren't part of an exported API should go in e.g. /core/include/.
+NOTE: modules e.g. /core/ have their api visible in /core/, while internal implementation (internal headers and source) for these modules that aren't part of an exported API should go in e.g. /core/impl/.
 ```
 ARCHITECTURE NOTES:
 src/core/
 |- core.h             <-- PUBLIC: No SDL includes here. Pure C/C++ types.
-|- include/
+|- impl/
 |  |- core_internal.h <-- PRIVATE: SDL includes, platform-specifics.
-|- core.cpp           <-- IMPLEMENTATION: The bridge.
+|  |- core.cpp        <-- IMPLEMENTATION.
 
 src/renderer/
 |- renderer.h              <-- PUBLIC: No Vulkan includes.
-|- include/
+|- impl/
 |  |- renderer_internal.h <-- PRIVATE: volk.h, vk_mem_alloc.h, etc.
-|- renderer.cpp           <-- IMPLEMENTATION: Uses vulkan to render,..
-        ..but the functions it implements from renderer.h contains..
-        ..no Vulkan types, only opaque handles and transform data.
+|  |- renderer.cpp        <-- IMPLEMENTATION: Uses vulkan to render,..
+NOTE: No Vulkan types in exposed API, only opaque handles and transform data.
 
 src/game/
 |- include/
@@ -55,4 +54,9 @@ $ bear -- make -j
 
 # Or if you don't have bear and have some other way of getting intellisense:
 ./premake5 gmake && make -j
+```
+
+```
+# I like doing this to build after added / changing file names and locations:
+make clean && ./premake5 gmake && bear -- make -j
 ```
