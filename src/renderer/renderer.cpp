@@ -481,8 +481,7 @@ bool Renderer_Init(const Renderer_InitInfo* info)
         SDL_assert(renderstate.vma_allocator != VK_NULL_HANDLE);
     }
 
-
-
+    old_stuff_init(&renderstate);
 
     // TODO: How to handle porting the rest? i guess i just get it working before
     // trying a multithreadable pooling system and stuff.
@@ -491,7 +490,45 @@ bool Renderer_Init(const Renderer_InitInfo* info)
 
 void Renderer_Shutdown()
 {
-    // TODO Cleanup
+    SDL_Log("******** Renderer_Shutdown() ********\n");
+
+    // Ensure device is not doing anywork before destroying it's stuff.
+    vkDeviceWaitIdle(renderstate.device);
+
+    old_stuff_clean(&renderstate);
+
+
+    // Destroy fundamental Vulkan objects
+    vmaDestroyAllocator(renderstate.vma_allocator);
+    vkDestroyDevice(renderstate.device, NULL);
+    vkDestroySurfaceKHR(renderstate.instance, renderstate.surface, NULL);
+    if (renderstate.using_validation_layers)
+    {
+        vkDestroyDebugUtilsMessengerEXT(renderstate.instance, renderstate.debug_messenger, NULL);
+    }
+    vkDestroyInstance(renderstate.instance, NULL);
+
+    // Destroy Window
+    SDL_DestroyWindowSurface(renderstate.window);
+    SDL_DestroyWindow(renderstate.window);
+
+    // Display if we had correct Vulkan API usage
+    if (renderstate.using_validation_layers)
+    {
+        if (!renderstate.program_caused_vulkan_validation_layer_errors)
+        {
+            // Vulkan clean up successful
+            SDL_Log(ANSI_CYAN "Vulkan cleanup was successful: No complaints from the enabled validation layers.\n" ANSI_RESET);
+        }
+        else
+        {
+            SDL_Log(ANSI_MAGENTA "Vulkan validation layer errors/warnings appeared :(\n" ANSI_RESET);
+        }
+    }
+
+    // Report memory leaks of main tracker
+    SDL_Log("\n***********  Memory Tracker Results ***********\n");
+    check_tracker_for_memory_leaks(&renderstate.main.tt);
 }
 
 void Renderer_OnWindowResize()

@@ -4,6 +4,7 @@
 #include "../renderer.h"
 
 #include "internal_structs.h"
+#include "internals_due_rework.h"
 
 typedef struct ThreadData
 {
@@ -34,13 +35,12 @@ typedef struct RenderState
     VkQueue graphics_queue;
     VkQueue presentation_queue;
 
-    
-
-    // I think I might try directly porting my vulkan engine and storing it here
-    // for now as in:
-    // VulkanEngine engine
+    OldRenderState old;
 }
 RenderState;
+
+void old_stuff_init(RenderState* renderstate);
+void old_stuff_clean(RenderState* renderstate);
 
 SwapChainSupportDetails get_and_alloc_swap_chain_support_details(VkPhysicalDevice physical_device);
 void free_swap_chain_support_details(SwapChainSupportDetails details, ThreadAllocTracker* alloc_tracker);
