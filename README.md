@@ -6,6 +6,8 @@ Settling on a modular approach like this:
 NOTE: modules e.g. /core/ have their api visible in /core/, while internal implementation (internal headers and source) for these modules that aren't part of an exported API should go in e.g. /core/impl/.
 ```
 ARCHITECTURE NOTES:
+Internal headers MUST NOT include the public API headers, but the .cpp implementation source code can include the public headers.
+
 src/core/
 |- core.h             <-- PUBLIC: No SDL includes here. Pure C/C++ types.
 |- impl/
