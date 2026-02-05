@@ -83,9 +83,6 @@ InternalVulkanDebugCallback(
 bool Renderer_Init(const Renderer_InitInfo* info)
 {
     // TODO: Initialize vulkan, storing the stuff from my old renderer into internal render state
-    SDL_Log("TODO: Create engine.cpp and try to directly include as much of my vulkan renderer as possible in order to get up and running as quick as possible.\n");
-    SDL_Log("Reminder to self: Get a basic cube renderer working, that takes a camera and list of positions as input i guess\n");
-    SDL_Log("Update a few days later from that TODO: On train, busy as fuck but it's probably best to just sit down and write it all by hand with the other one as reference, because trying to rework it is too shit and will take just as long.\n");
 
     // Init the main memory tracker for the main thread which in debug mode we can query it for memory leaks during cleanup
     renderstate.main.tt = init_per_thread_allocation_tracker("Renderer_MainThreadTracker");
@@ -99,7 +96,7 @@ bool Renderer_Init(const Renderer_InitInfo* info)
     if (volkGetInstanceVersion() < API_VERSION)
     {
         SDL_LogError(SDL_LOG_CATEGORY_ERROR, "Sorry, Vulkan %d.%d is strictly required.\n", VK_API_VERSION_MAJOR(API_VERSION), VK_API_VERSION_MINOR(API_VERSION));
-        exit(1);
+        return false;
     }
 
     // Display Vulkan loader version
@@ -282,11 +279,10 @@ bool Renderer_Init(const Renderer_InitInfo* info)
         if (!SDL_Vulkan_CreateSurface(renderstate.window, renderstate.instance, NULL, &renderstate.surface))
         {
             SDL_LogError(SDL_LOG_CATEGORY_ERROR, "Failed to create SDL Vulkan Window Surface\n");
-            exit(1);
+            return false;
         }
 
         SDL_Log("Created Window Surface\n");
-
 
         SDL_assert(renderstate.surface != VK_NULL_HANDLE);
     }
@@ -302,7 +298,7 @@ bool Renderer_Init(const Renderer_InitInfo* info)
         if (device_count == 0)
         {
             fprintf(stderr, "Could not find a GPU with Vulkan support... Exiting");
-            abort();
+            return false;
         }
 
         VkPhysicalDevice* devices = (VkPhysicalDevice*)L_calloc(device_count, sizeof(VkPhysicalDevice), &renderstate.main.tt);
@@ -328,7 +324,7 @@ bool Renderer_Init(const Renderer_InitInfo* info)
         if (device_suitability_score[candidate_device_index] < 0)
         {
             fprintf(stderr, "No suitable physical device for this vulkan program :(\n");
-            exit(1);
+            return false;
         }
         renderstate.physical_device = devices[candidate_device_index];
     
@@ -350,7 +346,6 @@ bool Renderer_Init(const Renderer_InitInfo* info)
 
         L_free(device_suitability_score, &renderstate.main.tt);
         L_free(devices, &renderstate.main.tt);
-
 
         SDL_assert(renderstate.physical_device != VK_NULL_HANDLE);
     }
@@ -486,16 +481,17 @@ bool Renderer_Init(const Renderer_InitInfo* info)
         SDL_assert(renderstate.vma_allocator != VK_NULL_HANDLE);
     }
 
+
+
+
     // TODO: How to handle porting the rest? i guess i just get it working before
     // trying a multithreadable pooling system and stuff.
-
-
     return true;
 }
 
 void Renderer_Shutdown()
 {
-
+    // TODO Cleanup
 }
 
 void Renderer_OnWindowResize()

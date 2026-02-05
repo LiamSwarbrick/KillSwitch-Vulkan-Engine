@@ -156,7 +156,7 @@ workspace "AdventureEngine"
             lib_dirs.SDL3
         }
 
-        links {  -- NOTE: Must link from highest level dependency to lowest level for some reason        
+        links {  -- NOTE: Must link from highest level dependency to lowest level.   
             "renderer",
             "core",
             "SDL3"
