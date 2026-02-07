@@ -13,12 +13,13 @@ extern "C" {
 #include <inttypes.h>
 #include <math.h>
 
+// NOTE(Liam): Might deprecate these shorthand typedefs, but currently need them because
+// of older code. For public apis, best not to use them. 
 typedef uint32_t u32;
 typedef uint64_t u64;
 typedef int32_t  s32;
 typedef int64_t  s64;
 typedef int32_t b32;
-
 typedef uint8_t u8;
 typedef int8_t b8;
 

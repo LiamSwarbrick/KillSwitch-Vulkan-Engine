@@ -29,6 +29,25 @@ src/game/
 Also TODO similarly for: Asset system (assetsys/) and simulation system (simulation/).
 ```
 
+```
+MEMORY LEAK DETECTION:
+Make sure each subsystem uses a ThreadAllocTracker (defined in core/my_c_runtime.h).
+And use L_calloc and L_free instead of malloc and free
+Example: See ThreadAllocTracker in renderer/impl/internal_state.h.
+For runtime stuff try to use larger allocations and bulk data structures.
+Contained one off allocations during init, shutdown and data uploads are fine,
+but if allocs and frees are happening each frame at runtime, especially on the main
+thread (not background asset loader threads), then that can be bad.
+
+On shutdown of a module or subsystem of a module,
+check for memory leaks with check_tracker_for_memory_leaks() e.g.:
+    check_tracker_for_memory_leaks(&renderstate.main.tt);
+
+This will output the exact file and line of code where an allocation occured that did was not freed.
+And will output a green success message if all allocations were freed.
+(In release mode all the overhead (which isn't much) of the alloc tracking is gone).
+```
+
 ### Build
 ```
 The premake will build SDL from source, but you will likely need to install SDL's dependencies:

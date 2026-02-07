@@ -12,6 +12,7 @@ include_paths.SDL3 = SDL_DIR .. "/include"
 include_paths.Vulkan = VULKAN_SDK .. "/include"
 include_paths.volk = EXTERNAL .. "volk"
 include_paths.VMA = EXTERNAL .. "VMA"
+include_paths.glm = EXTERNAL .. "glm"
 
 lib_dirs = {}
 lib_dirs.SDL3 = SDL_BUILD_DIR
@@ -85,7 +86,8 @@ workspace "AdventureEngine"
             SRC,  -- Exported API headers
             SRC .. "core",
             SRC .. "core/impl",  -- Internal include headers
-            include_paths.SDL3
+            include_paths.SDL3,
+            include_paths.glm
         }
 
         libdirs {
@@ -95,6 +97,7 @@ workspace "AdventureEngine"
         links {
             "SDL3"   -- The lib we just built via cmake in prebuildcommands
         }
+
 
     -- --------------------------------------------------------------------
     -- Renderer Module (Vulkan implementation)
@@ -121,7 +124,8 @@ workspace "AdventureEngine"
             include_paths.SDL3,
             include_paths.volk,
             include_paths.Vulkan,
-            include_paths.VMA
+            include_paths.VMA,
+            include_paths.glm
         }
 
         libdirs {
@@ -151,7 +155,8 @@ workspace "AdventureEngine"
         includedirs {
             SRC,
             SRC .. "game/include",
-            include_paths.SDL3
+            include_paths.SDL3,
+            include_paths.glm
         }
 
         libdirs {

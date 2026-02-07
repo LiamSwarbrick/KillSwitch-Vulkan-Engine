@@ -483,7 +483,14 @@ bool Renderer_Init(const Renderer_InitInfo* info)
 
     old_stuff_init(&renderstate);
 
-    
+    // Create SwapChain
+    {
+        renderstate.swapchain = VK_NULL_HANDLE;
+
+        create_or_recreate_swapchain();
+
+        SDL_assert(renderstate.swapchain != VK_NULL_HANDLE);
+    }
 
     return true;
 }
@@ -496,7 +503,7 @@ void Renderer_Shutdown()
     vkDeviceWaitIdle(renderstate.device);
 
     old_stuff_clean(&renderstate);
-
+    destroy_swapchain();
 
     // Destroy fundamental Vulkan objects
     vmaDestroyAllocator(renderstate.vma_allocator);
@@ -533,43 +540,10 @@ void Renderer_Shutdown()
 
 void Renderer_OnWindowResize()
 {
-
+    #warning TODO: Implement swapchain resize and link to SDL size callback
 }
 
 /////////////////
-
-// NOTE: Need to free SwapChainSupportDetails.formats and .present_modes after use
-SwapChainSupportDetails get_and_alloc_swap_chain_support_details(VkPhysicalDevice physical_device)
-{
-    SwapChainSupportDetails details = {};
-
-    // Capabilities are based on the VkPhysicalDevice and the VkSurfaceKHR
-    vkGetPhysicalDeviceSurfaceCapabilitiesKHR(physical_device, renderstate.surface, &details.capabilities);
-
-    // Query the supported surface formats 
-    vkGetPhysicalDeviceSurfaceFormatsKHR(physical_device, renderstate.surface, &details.format_count, NULL);
-    if (details.format_count != 0)
-    {
-        details.formats = (VkSurfaceFormatKHR*)L_calloc(details.format_count, sizeof(VkSurfaceFormatKHR), &renderstate.main.tt);
-        vkGetPhysicalDeviceSurfaceFormatsKHR(physical_device, renderstate.surface, &details.format_count, details.formats);
-    }
-
-    // Query the presentation modes
-    vkGetPhysicalDeviceSurfacePresentModesKHR(physical_device, renderstate.surface, &details.present_mode_count, NULL);
-    if (details.present_mode_count != 0)
-    {
-        details.present_modes = (VkPresentModeKHR*)L_calloc(details.present_mode_count, sizeof(VkPresentModeKHR), &renderstate.main.tt);
-        vkGetPhysicalDeviceSurfacePresentModesKHR(physical_device, renderstate.surface, &details.present_mode_count, details.present_modes);
-    }
-
-    return details;
-}
-
-void free_swap_chain_support_details(SwapChainSupportDetails details)
-{
-    if (details.formats)       L_free(details.formats, &renderstate.main.tt);
-    if (details.present_modes) L_free(details.present_modes, &renderstate.main.tt);
-}
 
 QueueFamilyIndices get_physical_device_queue_family_indices(VkPhysicalDevice physical_device)
 {
@@ -636,7 +610,6 @@ QueueFamilyIndices get_physical_device_queue_family_indices(VkPhysicalDevice phy
 
     return queue_family_indices;
 }
-
 
 int score_physical_device_and_check_required_features(VkPhysicalDevice physical_device)
 {
@@ -834,4 +807,272 @@ int score_physical_device_and_check_required_features(VkPhysicalDevice physical_
     {
         return -1;
     }
+}
+
+// NOTE: Need to free SwapChainSupportDetails.formats and .present_modes after use
+SwapChainSupportDetails get_and_alloc_swap_chain_support_details(VkPhysicalDevice physical_device)
+{
+    SwapChainSupportDetails details = {};
+
+    // Capabilities are based on the VkPhysicalDevice and the VkSurfaceKHR
+    vkGetPhysicalDeviceSurfaceCapabilitiesKHR(physical_device, renderstate.surface, &details.capabilities);
+
+    // Query the supported surface formats 
+    vkGetPhysicalDeviceSurfaceFormatsKHR(physical_device, renderstate.surface, &details.format_count, NULL);
+    if (details.format_count != 0)
+    {
+        details.formats = (VkSurfaceFormatKHR*)L_calloc(details.format_count, sizeof(VkSurfaceFormatKHR), &renderstate.main.tt);
+        vkGetPhysicalDeviceSurfaceFormatsKHR(physical_device, renderstate.surface, &details.format_count, details.formats);
+    }
+
+    // Query the presentation modes
+    vkGetPhysicalDeviceSurfacePresentModesKHR(physical_device, renderstate.surface, &details.present_mode_count, NULL);
+    if (details.present_mode_count != 0)
+    {
+        details.present_modes = (VkPresentModeKHR*)L_calloc(details.present_mode_count, sizeof(VkPresentModeKHR), &renderstate.main.tt);
+        vkGetPhysicalDeviceSurfacePresentModesKHR(physical_device, renderstate.surface, &details.present_mode_count, details.present_modes);
+    }
+
+    return details;
+}
+
+void free_swap_chain_support_details(SwapChainSupportDetails details)
+{
+    if (details.formats)       L_free(details.formats, &renderstate.main.tt);
+    if (details.present_modes) L_free(details.present_modes, &renderstate.main.tt);
+}
+
+void create_or_recreate_swapchain()
+{
+    // NOTE: If a swapchain already exists, Vulkan wants the handle to the old swapchain
+    // passed to the swapchain create info of the new one.
+    // Hence create_or_recreate instead of just destroy() then create() when one already exists.
+
+    // Get support details for swap chain
+    SwapChainSupportDetails details = get_and_alloc_swap_chain_support_details(engine, engine->physical_device);
+
+    VkSurfaceFormatKHR chosen_format;
+    int chosen_format_index = 0;
+    for (u32 i = 0; i < details.format_count; ++i)
+    {
+        if (details.formats[i].format == VK_FORMAT_B8G8R8A8_SRGB &&
+            details.formats[i].colorSpace == VK_COLOR_SPACE_SRGB_NONLINEAR_KHR)
+        {
+            chosen_format_index = i;
+        }
+    }
+    chosen_format = details.formats[chosen_format_index];
+
+    VkPresentModeKHR chosen_present_mode;
+    chosen_present_mode = VK_PRESENT_MODE_FIFO_KHR;  // Only FIFO is guarunteed to be available
+    for (u32 i = 0; i < details.present_mode_count; ++i)
+    {
+        if (engine->uncapped_fps)
+        {
+            // Mailbox (aka "triplebuffering") means minimal latency without screen-tearing
+            // So we'll use this if it's available
+            if (details.present_modes[i] == VK_PRESENT_MODE_MAILBOX_KHR)
+            {
+                chosen_present_mode = details.present_modes[i];
+            }
+        }
+        else
+        {
+            // Relaxed means if we miss the vsync slightly, we still submit
+            // in that case the screen will have tearing, but it means the fps
+            // doesn't get halved by needing to wait for the next "vblank".
+            if (details.present_modes[i] == VK_PRESENT_MODE_FIFO_RELAXED_KHR)
+            {
+                chosen_present_mode = details.present_modes[i];
+            }
+        }
+    }
+
+    VkExtent2D chosen_swap_extent;
+    if (details.capabilities.currentExtent.width != UINT32_MAX)
+    {
+        chosen_swap_extent = details.capabilities.currentExtent;
+    }
+    else
+    {
+        // Requesting in pixel coordinates not screen coordinates because some HiDPI displays make a distinction there
+        // and we want to actually render to each and every pixel available on the monitor
+        int width, height;
+        glfwGetFramebufferSize(engine->window, &width, &height);
+
+        VkExtent2D actual_extent = { (u32)width, (u32)height };
+
+        // Must be clamped between the min and max extents allowed by the implementation
+        actual_extent.width = std::clamp(actual_extent.width,
+            details.capabilities.minImageExtent.width,
+            details.capabilities.maxImageExtent.width
+        );
+        actual_extent.height = std::clamp(actual_extent.height,
+            details.capabilities.minImageExtent.height,
+            details.capabilities.maxImageExtent.height
+        );
+
+        chosen_swap_extent = actual_extent;
+    }
+
+    // Request (minImageCount + 1) images so that there is always an image we can immediately aquire to render to.
+    // NOTE: minImageCount is the minimum amount for the swapchain implementation to function.
+    u32 min_image_count = details.capabilities.minImageCount + 1;
+
+    // Then make sure this doesn't push us over the maxImageCount
+    // NOTE: maxImageCount of 0 is a special value for no maximum.
+    if (details.capabilities.maxImageCount > 0 &&
+        min_image_count > details.capabilities.maxImageCount)
+    {
+        min_image_count = details.capabilities.maxImageCount;
+    }
+
+    // Finally create the swap chain
+    VkSwapchainCreateInfoKHR swapchain_create_info = {};
+    swapchain_create_info.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
+    swapchain_create_info.surface = engine->surface;
+    swapchain_create_info.minImageCount = min_image_count;
+    swapchain_create_info.imageFormat = chosen_format.format;
+    swapchain_create_info.imageColorSpace = chosen_format.colorSpace;
+    swapchain_create_info.imageExtent = chosen_swap_extent;
+    swapchain_create_info.imageArrayLayers = 1;  // One layer since we aren't making a stereoscopic 3D application
+    swapchain_create_info.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
+
+    // OLD: (I do explicit ownership transfer with VK_SHARING_MODE_EXCLUSIVE now)
+    // if (engine->queue_family_indices.graphics_family != engine->queue_family_indices.present_family)
+    // {
+    //     // TODO: when gfx_queue!=present_queue: VK_SHARING_MODE_EXCLUSIVE has better performance
+    //     // but first we need to seperate it so only the presentation queue uses the swapchain images (i think)
+    //     // or just transfer ownership and use barriers
+    //     swapchain_create_info.imageSharingMode = VK_SHARING_MODE_CONCURRENT;
+    //     swapchain_create_info.queueFamilyIndexCount = 2;
+    //     swapchain_create_info.pQueueFamilyIndices = (u32*)engine->queue_family_indices.array;
+    // }
+    // else
+    // {
+    //     swapchain_create_info.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE;
+    //     swapchain_create_info.queueFamilyIndexCount = 0;
+    //     swapchain_create_info.pQueueFamilyIndices = NULL;
+    // }
+
+    // NOTE: The correct ownership transfers of swapchain images in vk_draw now get performed
+    // so it is safe to use VK_SHARING_MODE_EXCLUSIVE even if present queue != graphics queue.
+    swapchain_create_info.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE;
+    swapchain_create_info.queueFamilyIndexCount = 0;
+    swapchain_create_info.pQueueFamilyIndices = NULL;
+
+    swapchain_create_info.preTransform = details.capabilities.currentTransform;
+    swapchain_create_info.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;  // Alpha is opaque, i.e. no blending with other windows
+    swapchain_create_info.presentMode = chosen_present_mode;
+    swapchain_create_info.clipped = VK_TRUE;  // When another window is partially in the way, we don't care what the covered pixels colours are (unless you are reading from them later for some special reason)
+
+    VkSwapchainKHR old_swapchain = engine->swapchain;
+    if (engine->is_a_swapchain_created)
+    {
+        // Passing the old swapchain can allow the driver to reuse some resources
+        swapchain_create_info.oldSwapchain = old_swapchain;
+    }
+    else
+    {
+        swapchain_create_info.oldSwapchain = VK_NULL_HANDLE;
+    }
+
+    
+    // Create the swapchain
+    VK_CHECK(vkCreateSwapchainKHR(engine->device, &swapchain_create_info, NULL, &engine->swapchain));
+    free_swap_chain_support_details(details, &engine->main.tt);
+
+    if (engine->is_a_swapchain_created)
+    {
+        // Vulkan never implicitly destroys the old swapchain we passed to the new create info, we still must destroy it.
+        destroy_swapchain(engine, old_swapchain);
+    }
+
+
+    // Save the chosen format and extent so we can copy/transfer correctly to it later
+    VkFormat old_format = engine->swapchain_image_format;
+    engine->swapchain_image_format = chosen_format.format;
+    engine->swapchain_extent = chosen_swap_extent;
+
+    // Retrieve the handles of the images created by the swapchaip
+    vkGetSwapchainImagesKHR(engine->device, engine->swapchain, &engine->swapchain_image_count, NULL);
+    engine->swapchain_images = (VkImage*)L_calloc(engine->swapchain_image_count, sizeof(VkImage), &engine->main.tt);
+    vkGetSwapchainImagesKHR(engine->device, engine->swapchain, &engine->swapchain_image_count, engine->swapchain_images);
+
+    VERBOSE_LOG("Swapchain created.\n");
+    VERBOSE_LOG("- logical resolution(%d, %d)\n", engine->swapchain_extent.width, engine->swapchain_extent.height);
+    
+    
+    // Create Image Views for SwapChain
+    engine->swapchain_image_views = (VkImageView*)L_calloc(engine->swapchain_image_count, sizeof(VkImageView), &engine->main.tt);
+    for (u32 i = 0; i < engine->swapchain_image_count; ++i)
+    {
+        VkImageViewCreateInfo image_view_create_info = {};
+        image_view_create_info.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+        image_view_create_info.image = engine->swapchain_images[i];
+        image_view_create_info.viewType = VK_IMAGE_VIEW_TYPE_2D;
+        image_view_create_info.format = engine->swapchain_image_format;
+        
+        // Use no swizzle for the color components
+        image_view_create_info.components.r = VK_COMPONENT_SWIZZLE_IDENTITY;
+        image_view_create_info.components.g = VK_COMPONENT_SWIZZLE_IDENTITY;
+        image_view_create_info.components.b = VK_COMPONENT_SWIZZLE_IDENTITY;
+        image_view_create_info.components.a = VK_COMPONENT_SWIZZLE_IDENTITY;
+
+        // Specify as color target with no mipmapping
+        image_view_create_info.subresourceRange.aspectMask= VK_IMAGE_ASPECT_COLOR_BIT;
+        image_view_create_info.subresourceRange.baseMipLevel = 0;
+        image_view_create_info.subresourceRange.levelCount = 1;
+        image_view_create_info.subresourceRange.baseArrayLayer = 0;
+        image_view_create_info.subresourceRange.layerCount = 1;
+
+        VK_CHECK(vkCreateImageView(engine->device, &image_view_create_info, NULL, &engine->swapchain_image_views[i]));
+    }
+
+
+    // Create Semaphores for SwapChain
+    engine->swapchain_image_acquired_semaphores = (VkSemaphore*)L_calloc(engine->swapchain_image_count, sizeof(VkSemaphore), &engine->main.tt);
+    engine->swapchain_image_render_semaphores = (VkSemaphore*)L_calloc(engine->swapchain_image_count, sizeof(VkSemaphore), &engine->main.tt);
+
+    VkSemaphoreCreateInfo semaphore_create_info = {};
+    semaphore_create_info.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
+    semaphore_create_info.pNext = NULL;
+    semaphore_create_info.flags = 0;
+    for (u32 i = 0; i < engine->swapchain_image_count; ++i)
+    {
+        engine->swapchain_image_acquired_semaphores[i] = VK_NULL_HANDLE;
+        engine->swapchain_image_render_semaphores[i] = VK_NULL_HANDLE;
+        VK_CHECK(vkCreateSemaphore(engine->device, &semaphore_create_info, NULL, &engine->swapchain_image_acquired_semaphores[i]));
+        VK_CHECK(vkCreateSemaphore(engine->device, &semaphore_create_info, NULL, &engine->swapchain_image_render_semaphores[i]));
+    }
+    
+
+    // Swapchain creation is completed
+    VERBOSE_LOG("- created %d swapchain image views.\n", engine->swapchain_image_count);
+    engine->is_a_swapchain_created = 1;
+    
+
+    old_create_swapchain_tied_objects(&renderstate);
+}
+
+void destroy_swapchain()
+{
+    old_destroy_swapchain_tied_objects(&renderstate);
+
+    // Destroy Image Views and Semaphores
+    for (u32 i = 0; i < renderstate.swapchain_image_count; ++i)
+    {
+        vkDestroyImageView(renderstate.device, renderstate.swapchain_image_views[i], NULL);
+
+        vkDestroySemaphore(renderstate.device, renderstate.swapchain_image_acquired_semaphores[i], NULL);
+        vkDestroySemaphore(renderstate.device, renderstate.swapchain_image_render_semaphores[i], NULL);
+    }
+    L_free(renderstate.swapchain_image_views, &renderstate.main.tt);
+    L_free(renderstate.swapchain_image_acquired_semaphores, &renderstate.main.tt);
+    L_free(renderstate.swapchain_image_render_semaphores, &renderstate.main.tt);
+
+    // Swapchain images are automatically destroyed when swapchain is destroyed due to ownership
+    L_free(renderstate.swapchain_images, &renderstate.main.tt);
+
+    vkDestroySwapchainKHR(renderstate.device, renderstate.swapchain, NULL);
 }

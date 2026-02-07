@@ -37,5 +37,24 @@ typedef struct SwapChainSupportDetails
 }
 SwapChainSupportDetails;
 
+typedef struct GPU_Buffer
+{
+    VkBuffer buffer;
+    VmaAllocation allocation;
+    VmaAllocationInfo info;
+}
+GPU_Buffer;
+
+typedef struct GPU_Image
+{
+    VkImageLayout   current_layout;
+    VkImage         image;
+    VkImageView     image_view;
+    VmaAllocation   allocation;
+    VkExtent3D      image_extent;
+    VkFormat        image_format;
+}
+GPU_Image;
+
 
 #endif  // ENGINE_RENDERER_INTERNAL_STRUCTS_H
