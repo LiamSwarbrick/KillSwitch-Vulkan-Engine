@@ -1,0 +1,7 @@
+deprecate L_load_binary_file or at least make internal api use an SDL function
+so it's more portable.
+
+create_graphics_pipeline assumes a viewport of render_target width and height.
+
+
+Pipeline hash system for rewrite instead of millions of graphics pipeline code per each. 

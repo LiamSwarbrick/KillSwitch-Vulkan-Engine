@@ -56,5 +56,12 @@ typedef struct GPU_Image
 }
 GPU_Image;
 
+typedef struct SPIRVConfig
+{
+    const char* spirv_path;
+    const char* entrypoint_name;
+    const VkSpecializationInfo* pSpecializationInfo;
+}
+SPIRVConfig;
 
 #endif  // ENGINE_RENDERER_INTERNAL_STRUCTS_H

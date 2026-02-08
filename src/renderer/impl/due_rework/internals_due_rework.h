@@ -6,6 +6,85 @@
 #include "internal_structs.h"
 #include "shared_glsl_defs.h"
 
+typedef enum BlendModeEnum
+{
+    BLEND_MODE_OPAQUE,
+    BLEND_MODE_ALPHA_MASK,
+    BLEND_MODE_ALPHA_BLEND,
+    BLEND_MODE_ALPHA_BLEND_BUT_WRITE_DEPTH,  // For the opaque overshading shader, an unusual case for the overshading visualisation where we actually want transparent fragments to write and discard future fragments behind them.
+    BLEND_MODE_ADD_TO_SRC,  // Used to add the bloom texture on top the render target without pingpong buffers (don't want to have to sample the rendertarget as well, and then copy)
+}
+BlendMode;
+
+typedef struct GraphicsPipelineConfigInfo
+{
+    // NOTE: In future with extra types of shaders, use NULL spirv_path to not use that shader
+    SPIRVConfig vertex_spirv_config;
+    SPIRVConfig fragment_spirv_config;
+    union
+    {
+        struct
+        {
+            SPIRVConfig geometry_spirv_config;
+        };
+        SPIRVConfig other_shaders_spirv_configs[1];
+    };
+
+    union
+    {
+        struct
+        {
+            b32 has_attribute_position;
+            b32 has_attribute_normal;
+            b32 has_attribute_texcoord;
+            b32 has_attribute_tangent;
+        };
+        b32 has_attrib[MAX_VERTEX_ATTRIBUTES];  // e.g. has_attrib[ATTRIB_LOC_POSITION]
+    };
+    VkPipelineLayoutCreateInfo     pipeline_layout_create_info;
+    VkPipelineRenderingCreateInfo  pipeline_rendering_create_info;
+    u32                            blend_mode_count;
+    BlendModeEnum*                 blend_modes;
+    VkCullModeFlags                cull_mode;
+}
+GraphicsPipelineConfigInfo;
+
+typedef struct GraphicsPipeline
+{
+    b32 is_created;
+    VkPipelineLayout layout;
+    VkPipeline pipeline;
+
+    b32 has_attrib[MAX_VERTEX_ATTRIBUTES];  // e.g. has_attrib[ATTRIB_LOC_POSITION]
+}
+GraphicsPipeline;
+
+#define RENDERMODE_LIST(X) \
+    X(RENDERMODE_INVALID, "Invalid or uninitialised mode.") \
+    \
+    X(RENDERMODE_DEFAULT_FORWARD,  "Forward opaque and transparent pass.") \
+    X(RENDERMODE_DEFAULT_DEFERRED, "Deferred opaque pass, still forward for transparent pass.") \
+    \
+    X(RENDERMODE_DEBUGVIZ_SHOW_MIPLEVELS,    "Show mipmap levels.") \
+    X(RENDERMODE_DEBUGVIZ_FRAGMENT_DEPTH,    "Show fragment depth.") \
+    X(RENDERMODE_DEBUGVIZ_FRAGMENT_DEPTH_PARTIAL_DERIVATIVES, "Show derivatives of frag depth.") \
+    X(RENDERMODE_DEBUGVIZ_BASELINE_OVERDRAW, "Show number of fragment shader invocations per pixel that would occur without depth testing.") \
+    X(RENDERMODE_DEBUGVIZ_BASIC_OVERSHADING, "Show number of fragment shader invocations per pixel that occurs with depth testing.") \
+    X(RENDERMODE_DEBUGVIZ_MESH_DENSITY,      "Show triangle area per pixel, smaller triangles represent denser meshes.")
+// NOTE: X is a macro of the form X(name, desc)
+// The description argument is just so we can comment the usecase of each rendermode.
+// Macros don't allow comments, so this is the way to do that.
+// TODO: If making a controllable rendergraph for a game engine, the description might be a feature we could use.
+
+typedef enum RenderModeEnum
+{
+    #define AS_ENUM(name, desc) name,
+    RENDERMODE_LIST(AS_ENUM)
+    #undef AS_ENUM
+}
+RenderMode;
+
+
 typedef struct OldFrameData
 {
     // Persistant until program end
@@ -57,6 +136,23 @@ typedef struct OldRenderState
     VkCommandPool onetime_command_pool;
     VkCommandBuffer onetime_command;
     VkFence onetime_command_complete_fence;
+
+    // Current rendering mode: e.g. select PBR or one of the various debug rendering modes
+    RenderMode render_mode;
+    RenderMode last_render_mode;
+
+    // Graphics Pipelines
+    GraphicsPipeline gp_opaque_pass;
+    GraphicsPipeline gp_deferred_lighting;
+    GraphicsPipeline gp_transparent_pass;
+    GraphicsPipeline gp_fullscreen_tri_mosaic;
+    GraphicsPipeline gp_shadowmap_opaque;
+    GraphicsPipeline gp_shadowmap_transparent;
+    GraphicsPipeline gp_bloom_brightness_extraction;
+    GraphicsPipeline gp_bloom_gaussian_blur_horizontal;
+    GraphicsPipeline gp_bloom_gaussian_blur_vertical;
+    GraphicsPipeline gp_bloom_apply;
+
 
     // Default sampler
     b32 use_anisotropic_filtering;
@@ -130,6 +226,6 @@ VkBufferMemoryBarrier2 vklayer_specify_buffer_barrier(
     u32                   new_queue_family_index
 );
 void vklayer_cmd_pipeline_barrier_for_buffers(VkCommandBuffer cmd, u32 barrier_count, const VkBufferMemoryBarrier2* barriers);
-
+VkFormat vklayer_find_supported_depth_format(VkPhysicalDevice physical_device);
 
 #endif  // RENDERER_INTERNALS_DUE_REWORK_H

@@ -6,7 +6,17 @@ VkDescriptorSet alloc_descriptor_set(RenderState* renderstate, VkDescriptorPool 
 void create_all_descriptor_set_layouts(RenderState* renderstate);
 void destroy_all_descriptor_set_layouts(RenderState* renderstate);
 
-
+const char*
+get_render_mode_name(RenderMode render_mode)
+{
+    switch (render_mode)
+    {
+        #define AS_STRING(name, desc) case name: return #name;
+        RENDERMODE_LIST(AS_STRING)
+        #undef AS_STRING
+        default: return "UNKNOWN_RENDERMODE";
+    }
+}
 
 VkCommandBuffer
 vklayer_alloc_cmd_buffer(VkDevice device, VkCommandPool command_pool)
@@ -192,6 +202,12 @@ vklayer_cmd_pipeline_barrier_for_buffers(VkCommandBuffer cmd, u32 barrier_count,
     vkCmdPipelineBarrier2(cmd, &dependency_info);
 }
 
+VkFormat vklayer_find_supported_depth_format(VkPhysicalDevice physical_device)
+{
+
+}
+
+/////////////////
 
 void old_stuff_init(RenderState* renderstate)
 {
@@ -280,7 +296,7 @@ void old_stuff_clean(RenderState* renderstate)
     vkDestroyCommandPool(renderstate->device, renderstate->old.onetime_command_pool, NULL);
 }
 
-void old_create_swapchain_tied_objects(RenderState* renderstate)
+void old_create_swapchain_tied_objects(RenderState* renderstate, VkFormat old_format)
 {
     // Create render target
     VkExtent3D render_image_extent = {
@@ -319,7 +335,7 @@ void old_create_swapchain_tied_objects(RenderState* renderstate)
     renderstate->old.render_target_deferred_normal_metalness = create_render_target_attachment(renderstate, 0,
         VK_FORMAT_R16G16B16A16_SNORM, render_image_extent, VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT
     );
-    // engine->render_target_deferred_normal_metalness = create_render_target_attachment(engine, 0, VK_FORMAT_A2B10G10R10_UNORM_PACK32, render_image_extent, VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT);  // OLD.
+    // renderstate->old.render_target_deferred_normal_metalness = create_render_target_attachment(renderstate, 0, VK_FORMAT_A2B10G10R10_UNORM_PACK32, render_image_extent, VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT);  // OLD.
 
     renderstate->old.render_target_deferred_emissive_ao = create_render_target_attachment(renderstate, 0,
         VK_FORMAT_R16G16B16A16_SFLOAT,
@@ -355,30 +371,30 @@ void old_create_swapchain_tied_objects(RenderState* renderstate)
     // Dynamic pipeline state let us handle the extent change (e.g. vkCmdSetViewport() and vkCmdSetScissor())
     // So we basically never recreate the graphics pipeline.
     //
-    bool create_or_recreate_graphics_pipeline = (old_format != chosen_format.format);  // Format changed.
+    bool create_or_recreate_graphics_pipeline = (old_format != renderstate->swapchain_image_format);  // Format changed.
     if (create_or_recreate_graphics_pipeline)
     {
-        vkDeviceWaitIdle(engine->device);
+        vkDeviceWaitIdle(renderstate->device);
         
-        destroy_all_graphics_pipelines(engine);
-        create_all_graphics_pipelines(engine);
+        destroy_all_graphics_pipelines(renderstate);
+        create_all_graphics_pipelines(renderstate);
     }
 
 
     // Alloc postprocess descriptors and write to them
-    engine->postprocess_descriptor_set = alloc_descriptor_set(engine, engine->descriptor_pool, engine->postprocess_set_layout);
+    renderstate->old.postprocess_descriptor_set = alloc_descriptor_set(renderstate, renderstate->old.descriptor_pool, renderstate->old.postprocess_set_layout);
     {
         VkWriteDescriptorSet descriptors[POSTPROCESS_DESCRIPTOR_COUNT] = {};
-        assert(engine->render_target_image.image_view);
+        assert(renderstate->old.render_target_image.image_view);
         VkDescriptorImageInfo image_info = {
-            .sampler     = engine->postprocess_sampler,
-            .imageView   = engine->render_target_image.image_view,
+            .sampler     = renderstate->old.postprocess_sampler,
+            .imageView   = renderstate->old.render_target_image.image_view,
             .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
         };
 
         descriptors[0].sType           = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
         descriptors[0].pNext           = NULL;
-        descriptors[0].dstSet          = engine->postprocess_descriptor_set; 
+        descriptors[0].dstSet          = renderstate->old.postprocess_descriptor_set; 
         descriptors[0].dstBinding      = POSTPROCESS_DESCRIPTOR_SET_BINDING_SAMPLER; 
         descriptors[0].descriptorCount = 1; 
         descriptors[0].descriptorType  = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
@@ -386,22 +402,22 @@ void old_create_swapchain_tied_objects(RenderState* renderstate)
 
         // Update descriptor sets
         const u32 num_sets = sizeof(descriptors) / sizeof(descriptors[0]);
-        vkUpdateDescriptorSets(engine->device, num_sets, descriptors, 0, NULL);
+        vkUpdateDescriptorSets(renderstate->device, num_sets, descriptors, 0, NULL);
     }
 
-    engine->postprocess_pingpong_descriptor_set = alloc_descriptor_set(engine, engine->descriptor_pool, engine->postprocess_set_layout);
+    renderstate->old.postprocess_pingpong_descriptor_set = alloc_descriptor_set(renderstate, renderstate->old.descriptor_pool, renderstate->old.postprocess_set_layout);
     {
         VkWriteDescriptorSet descriptors[POSTPROCESS_DESCRIPTOR_COUNT] = {};
-        assert(engine->render_target_image.image_view);
+        assert(renderstate->old.render_target_image.image_view);
         VkDescriptorImageInfo image_info = {
-            .sampler     = engine->postprocess_sampler,
-            .imageView   = engine->render_target_pingpong_image.image_view,
+            .sampler     = renderstate->old.postprocess_sampler,
+            .imageView   = renderstate->old.render_target_pingpong_image.image_view,
             .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
         };
 
         descriptors[0].sType           = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
         descriptors[0].pNext           = NULL;
-        descriptors[0].dstSet          = engine->postprocess_pingpong_descriptor_set; 
+        descriptors[0].dstSet          = renderstate->old.postprocess_pingpong_descriptor_set; 
         descriptors[0].dstBinding      = POSTPROCESS_DESCRIPTOR_SET_BINDING_SAMPLER; 
         descriptors[0].descriptorCount = 1; 
         descriptors[0].descriptorType  = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
@@ -409,22 +425,22 @@ void old_create_swapchain_tied_objects(RenderState* renderstate)
 
         // Update descriptor sets
         const u32 num_sets = sizeof(descriptors) / sizeof(descriptors[0]);
-        vkUpdateDescriptorSets(engine->device, num_sets, descriptors, 0, NULL);
+        vkUpdateDescriptorSets(renderstate->device, num_sets, descriptors, 0, NULL);
     }
 
-    engine->bloom_target_postprocess_descriptor_set = alloc_descriptor_set(engine, engine->descriptor_pool, engine->postprocess_set_layout);
+    renderstate->old.bloom_target_postprocess_descriptor_set = alloc_descriptor_set(renderstate, renderstate->old.descriptor_pool, renderstate->old.postprocess_set_layout);
     {
         VkWriteDescriptorSet descriptors[POSTPROCESS_DESCRIPTOR_COUNT] = {};
-        assert(engine->render_target_image.image_view);
+        assert(renderstate->old.render_target_image.image_view);
         VkDescriptorImageInfo image_info = {
-            .sampler     = engine->postprocess_sampler,
-            .imageView   = engine->bloom_target_image.image_view,
+            .sampler     = renderstate->old.postprocess_sampler,
+            .imageView   = renderstate->old.bloom_target_image.image_view,
             .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
         };
 
         descriptors[0].sType           = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
         descriptors[0].pNext           = NULL;
-        descriptors[0].dstSet          = engine->bloom_target_postprocess_descriptor_set; 
+        descriptors[0].dstSet          = renderstate->old.bloom_target_postprocess_descriptor_set; 
         descriptors[0].dstBinding      = POSTPROCESS_DESCRIPTOR_SET_BINDING_SAMPLER; 
         descriptors[0].descriptorCount = 1; 
         descriptors[0].descriptorType  = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
@@ -432,22 +448,22 @@ void old_create_swapchain_tied_objects(RenderState* renderstate)
 
         // Update descriptor sets
         const u32 num_sets = sizeof(descriptors) / sizeof(descriptors[0]);
-        vkUpdateDescriptorSets(engine->device, num_sets, descriptors, 0, NULL);
+        vkUpdateDescriptorSets(renderstate->device, num_sets, descriptors, 0, NULL);
     }
 
-    engine->bloom_pingpong_postprocess_descriptor_set = alloc_descriptor_set(engine, engine->descriptor_pool, engine->postprocess_set_layout);
+    renderstate->old.bloom_pingpong_postprocess_descriptor_set = alloc_descriptor_set(renderstate, renderstate->old.descriptor_pool, renderstate->old.postprocess_set_layout);
     {
         VkWriteDescriptorSet descriptors[POSTPROCESS_DESCRIPTOR_COUNT] = {};
-        assert(engine->bloom_pingpong_image.image_view);
+        assert(renderstate->old.bloom_pingpong_image.image_view);
         VkDescriptorImageInfo image_info = {
-            .sampler     = engine->postprocess_sampler,
-            .imageView   = engine->bloom_pingpong_image.image_view,
+            .sampler     = renderstate->old.postprocess_sampler,
+            .imageView   = renderstate->old.bloom_pingpong_image.image_view,
             .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
         };
 
         descriptors[0].sType           = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
         descriptors[0].pNext           = NULL;
-        descriptors[0].dstSet          = engine->bloom_pingpong_postprocess_descriptor_set; 
+        descriptors[0].dstSet          = renderstate->old.bloom_pingpong_postprocess_descriptor_set; 
         descriptors[0].dstBinding      = POSTPROCESS_DESCRIPTOR_SET_BINDING_SAMPLER; 
         descriptors[0].descriptorCount = 1; 
         descriptors[0].descriptorType  = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
@@ -455,29 +471,29 @@ void old_create_swapchain_tied_objects(RenderState* renderstate)
 
         // Update descriptor sets
         const u32 num_sets = sizeof(descriptors) / sizeof(descriptors[0]);
-        vkUpdateDescriptorSets(engine->device, num_sets, descriptors, 0, NULL);
+        vkUpdateDescriptorSets(renderstate->device, num_sets, descriptors, 0, NULL);
     }
 
-    engine->bloom_apply_descriptor_set = alloc_descriptor_set(engine, engine->descriptor_pool, engine->bloom_apply_set_layout);
+    renderstate->old.bloom_apply_descriptor_set = alloc_descriptor_set(renderstate, renderstate->old.descriptor_pool, renderstate->old.bloom_apply_set_layout);
     {
         VkWriteDescriptorSet descriptors[BLOOM_APPLY_DESCRIPTOR_COUNT] = {};
-        assert(engine->render_target_image.image);
-        assert(engine->bloom_target_image.image);
+        assert(renderstate->old.render_target_image.image);
+        assert(renderstate->old.bloom_target_image.image);
 
         VkDescriptorImageInfo scene_image_info = {
-            .sampler     = engine->postprocess_sampler,
-            .imageView   = engine->render_target_image.image_view,
+            .sampler     = renderstate->old.postprocess_sampler,
+            .imageView   = renderstate->old.render_target_image.image_view,
             .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
         };
         VkDescriptorImageInfo bloom_image_info = {
-            .sampler     = engine->postprocess_sampler,
-            .imageView   = engine->bloom_target_image.image_view,
+            .sampler     = renderstate->old.postprocess_sampler,
+            .imageView   = renderstate->old.bloom_target_image.image_view,
             .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
         };
 
         descriptors[0].sType           = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
         descriptors[0].pNext           = NULL;
-        descriptors[0].dstSet          = engine->bloom_apply_descriptor_set; 
+        descriptors[0].dstSet          = renderstate->old.bloom_apply_descriptor_set; 
         descriptors[0].dstBinding      = BLOOM_APPLY_DESCRIPTOR_SET_BINDING_SCENE_TEXTURE; 
         descriptors[0].descriptorCount = 1; 
         descriptors[0].descriptorType  = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
@@ -485,7 +501,7 @@ void old_create_swapchain_tied_objects(RenderState* renderstate)
 
         descriptors[1].sType           = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
         descriptors[1].pNext           = NULL;
-        descriptors[1].dstSet          = engine->bloom_apply_descriptor_set; 
+        descriptors[1].dstSet          = renderstate->old.bloom_apply_descriptor_set; 
         descriptors[1].dstBinding      = BLOOM_APPLY_DESCRIPTOR_SET_BINDING_BLOOM_TEXTURE; 
         descriptors[1].descriptorCount = 1; 
         descriptors[1].descriptorType  = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
@@ -493,11 +509,11 @@ void old_create_swapchain_tied_objects(RenderState* renderstate)
 
         // Update descriptor sets
         const u32 num_sets = sizeof(descriptors) / sizeof(descriptors[0]);
-        vkUpdateDescriptorSets(engine->device, num_sets, descriptors, 0, NULL);
+        vkUpdateDescriptorSets(renderstate->device, num_sets, descriptors, 0, NULL);
     }
 
     // Alloc GBuffer descriptor sets and write to them
-    engine->gbuffers_descriptor_set = alloc_descriptor_set(engine, engine->descriptor_pool, engine->gbuffers_set_layout);
+    renderstate->old.gbuffers_descriptor_set = alloc_descriptor_set(renderstate, renderstate->old.descriptor_pool, renderstate->old.gbuffers_set_layout);
     {
         VkWriteDescriptorSet descriptors[RENDER_TARGET_DEFERRED_ATTACHMENT_COUNT] = {};
         VkDescriptorImageInfo image_infos[RENDER_TARGET_DEFERRED_ATTACHMENT_COUNT] = {};
@@ -505,20 +521,20 @@ void old_create_swapchain_tied_objects(RenderState* renderstate)
         {
             GPU_Image* attachment;
             if (i < RENDER_TARGET_DEFERRED_COLOR_ATTACHMENT_COUNT)
-                attachment = &engine->render_target_deferred_attachments[i];
+                attachment = &renderstate->old.render_target_deferred_attachments[i];
             else
-                attachment = &engine->render_target_depth;
+                attachment = &renderstate->old.render_target_depth;
             assert(attachment->image_view);
 
             image_infos[i] = {
-                .sampler     = engine->postprocess_sampler,
+                .sampler     = renderstate->old.postprocess_sampler,
                 .imageView   = attachment->image_view,
                 .imageLayout = i < RENDER_TARGET_DEFERRED_COLOR_ATTACHMENT_COUNT ? VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL : VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL
             };
 
             descriptors[i].sType           = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
             descriptors[i].pNext           = NULL;
-            descriptors[i].dstSet          = engine->gbuffers_descriptor_set; 
+            descriptors[i].dstSet          = renderstate->old.gbuffers_descriptor_set; 
             descriptors[i].dstBinding      = GBUFFERS_DESCRIPTOR_SET_BINDING_ALBEDO_ROUGHNESS + i;
             descriptors[i].descriptorCount = 1; 
             descriptors[i].descriptorType  = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
@@ -527,23 +543,23 @@ void old_create_swapchain_tied_objects(RenderState* renderstate)
         
         // Update descriptor sets
         const u32 num_sets = sizeof(descriptors) / sizeof(descriptors[0]);
-        vkUpdateDescriptorSets(engine->device, num_sets, descriptors, 0, NULL);
+        vkUpdateDescriptorSets(renderstate->device, num_sets, descriptors, 0, NULL);
     }
 
     // Alloc Shadow map descriptor sets and write to them
-    engine->shadow_maps_descriptor_set = alloc_descriptor_set(engine, engine->descriptor_pool, engine->shadow_maps_set_layout);
+    renderstate->old.shadow_maps_descriptor_set = alloc_descriptor_set(renderstate, renderstate->old.descriptor_pool, renderstate->old.shadow_maps_set_layout);
     {
         VkWriteDescriptorSet descriptors[1] = {};
-        assert(engine->render_target_image.image_view);
+        assert(renderstate->old.render_target_image.image_view);
         VkDescriptorImageInfo image_info = {
-            .sampler     = engine->shadow_map_sampler,
-            .imageView   = engine->shadow_map_depth.image_view,
+            .sampler     = renderstate->old.shadow_map_sampler,
+            .imageView   = renderstate->old.shadow_map_depth.image_view,
             .imageLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL
         };
 
         descriptors[0].sType           = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
         descriptors[0].pNext           = NULL;
-        descriptors[0].dstSet          = engine->shadow_maps_descriptor_set; 
+        descriptors[0].dstSet          = renderstate->old.shadow_maps_descriptor_set; 
         descriptors[0].dstBinding      = SHADOW_MAPS_DESCRIPTOR_SET_BINDING;
         descriptors[0].descriptorCount = 1; 
         descriptors[0].descriptorType  = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
@@ -551,7 +567,7 @@ void old_create_swapchain_tied_objects(RenderState* renderstate)
 
         // Update descriptor sets
         const u32 num_sets = sizeof(descriptors) / sizeof(descriptors[0]);
-        vkUpdateDescriptorSets(engine->device, num_sets, descriptors, 0, NULL);
+        vkUpdateDescriptorSets(renderstate->device, num_sets, descriptors, 0, NULL);
     }
 }
 
@@ -992,7 +1008,7 @@ VkCommandBuffer begin_one_time_command(RenderState* renderstate)
     };
     VK_CHECK(vkBeginCommandBuffer(renderstate->old.onetime_command, &begin_info));
 
-    // NOTE: No need to return currently since we know we are using engine->onetime_comand,
+    // NOTE: No need to return currently since we know we are using renderstate->old.onetime_comand,
     // but if we change this to use more than one command buffer
     // this will make the refactoring easier later, so use the returned value.
     return renderstate->old.onetime_command;
@@ -1242,8 +1258,7 @@ GPU_Image create_image_texture2d(RenderState* renderstate, u8* data, u64 data_si
     return gpu_image;
 }
 
-GPU_Image create_render_target_attachment(VulkanEngine* engine, b32 is_depth_attachment,
-    VkFormat desired_format, VkExtent3D extent, VkImageUsageFlags usage)
+GPU_Image create_render_target_attachment(RenderState* renderstate, b32 is_depth_attachment, VkFormat desired_format, VkExtent3D extent, VkImageUsageFlags usage)
 {
     VkFormat format;
     // VkImageUsageFlags usage;
@@ -1261,7 +1276,7 @@ GPU_Image create_render_target_attachment(VulkanEngine* engine, b32 is_depth_att
     if (is_depth_attachment)
     {
         // Get best depth format for this device
-        format = vklayer_find_supported_depth_format(engine->physical_device);
+        format = vklayer_find_supported_depth_format(renderstate->physical_device);
         // usage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
 
         // Include the depth aspect.
@@ -1280,5 +1295,1265 @@ GPU_Image create_render_target_attachment(VulkanEngine* engine, b32 is_depth_att
         aspect_flags = VK_IMAGE_ASPECT_COLOR_BIT;
     }
 
-    return create_attachment_image(engine, extent, format, usage, aspect_flags, 0);  // No MSAA
+    return create_attachment_image(renderstate, extent, format, usage, aspect_flags, 0);  // No MSAA
 }
+
+GraphicsPipeline create_graphics_pipeline(RenderState* renderstate, GraphicsPipelineConfigInfo config)
+{
+    assert(renderstate->old.render_target_image.image != VK_NULL_HANDLE && "graphics pipeline relies on using the same image format as the render target image");
+
+    GraphicsPipeline gfx = {
+        .is_created = 1,
+        .layout = VK_NULL_HANDLE,
+        .pipeline = VK_NULL_HANDLE,
+        .has_attrib = {}
+    };
+    for (u32 i = 0; i < sizeof(gfx.has_attrib) / sizeof(gfx.has_attrib[0]); ++i)
+        gfx.has_attrib[i] = config.has_attrib[i];
+
+    // Create pipeline layout
+    VK_CHECK(vkCreatePipelineLayout(renderstate->device, &config.pipeline_layout_create_info, NULL, &gfx.layout));
+
+    // Load shader code spirv files
+    // - Using VK_KHR_maintenance5 feature of Vulkan 1.4 to skip VkShaderModule and instead pass spirv directly to the pipeline object.
+
+    u32 num_shaders = 0;  // To count how many shaders files are in config
+    
+    u64 vert_spirv_size = 0;
+    u32* vert_spirv_code = NULL;
+    if (config.vertex_spirv_config.spirv_path)
+    {
+        ++num_shaders;
+        vert_spirv_code = (u32*)L_load_binary_file(config.vertex_spirv_config.spirv_path, &vert_spirv_size, &renderstate->main.tt);
+        if (vert_spirv_code == NULL)
+        {
+            fprintf(stderr, "Error: Failed to load SPIR-V shader: %s\n", config.vertex_spirv_config.spirv_path);
+            exit(1);
+        }
+    }
+    
+    u64 frag_spirv_size = 0;
+    u32* frag_spirv_code = NULL;
+    if (config.fragment_spirv_config.spirv_path)
+    {
+        ++num_shaders;
+        frag_spirv_code = (u32*)L_load_binary_file(config.fragment_spirv_config.spirv_path, &frag_spirv_size, &renderstate->main.tt);
+        if (frag_spirv_code == NULL)
+        {
+            fprintf(stderr, "Error: Failed to load SPIR-V shader: %s\n", config.fragment_spirv_config.spirv_path);
+            exit(1);
+        }
+    }
+
+    u64 geom_spirv_size = 0;
+    u32* geom_spirv_code = NULL;
+    if (config.geometry_spirv_config.spirv_path)
+    {
+        ++num_shaders;
+        geom_spirv_code = (u32*)L_load_binary_file(config.geometry_spirv_config.spirv_path, &geom_spirv_size, &renderstate->main.tt);
+        if (geom_spirv_code == NULL)
+        {
+            fprintf(stderr, "Error: Failed to load SPIR-V shader: %s\n", config.geometry_spirv_config.spirv_path);
+            exit(1);
+        }
+    }
+    
+    // Vertex and fragment shaders are the minimum for a graphics pipeline
+    if (!config.vertex_spirv_config.spirv_path || !config.fragment_spirv_config.spirv_path)
+    {
+        fprintf(stderr, "Missing vertex or fragment shader path in config: Those two are the minimum required for a graphics pipeline.\n");
+        exit(1);
+    }
+
+
+    // Put spirv into shader module create infos
+    // Pass that into shader stages via the pNext chain
+    assert(num_shaders >= 2);
+
+    VkShaderModuleCreateInfo* code = (VkShaderModuleCreateInfo*)L_calloc(num_shaders, sizeof(VkShaderModuleCreateInfo), &renderstate->main.tt);  // C++ lacking variable length arrays be like
+    VkPipelineShaderStageCreateInfo* stages = (VkPipelineShaderStageCreateInfo*)L_calloc(num_shaders, sizeof(VkPipelineShaderStageCreateInfo), &renderstate->main.tt);
+
+    u32 stage_count = 0;
+
+    // Vertex shader module and stage
+    const u32 spirv_vertex_index = stage_count++;
+    code[spirv_vertex_index].sType     = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
+    code[spirv_vertex_index].pNext     = NULL;
+    code[spirv_vertex_index].flags     = 0;
+    code[spirv_vertex_index].codeSize  = vert_spirv_size;
+    code[spirv_vertex_index].pCode     = vert_spirv_code;
+
+    stages[spirv_vertex_index].sType   = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+    stages[spirv_vertex_index].pNext   = &code[spirv_vertex_index];
+    stages[spirv_vertex_index].flags   = 0;
+    stages[spirv_vertex_index].stage   = VK_SHADER_STAGE_VERTEX_BIT;
+    stages[spirv_vertex_index].module  = VK_NULL_HANDLE;
+    stages[spirv_vertex_index].pName   = config.vertex_spirv_config.entrypoint_name;
+    stages[spirv_vertex_index].pSpecializationInfo = config.vertex_spirv_config.pSpecializationInfo;
+
+    // Geometry shader (Order of these shaders matters in the code and stages arrays, vertex->geometry->fragment)
+    if (geom_spirv_code)
+    {
+        const u32 spirv_geometry_index = stage_count++;
+        // Geometry shader module and stage
+        code[spirv_geometry_index].sType     = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
+        code[spirv_geometry_index].pNext     = NULL;
+        code[spirv_geometry_index].flags     = 0;
+        code[spirv_geometry_index].codeSize  = geom_spirv_size;
+        code[spirv_geometry_index].pCode     = geom_spirv_code;    
+
+        stages[spirv_geometry_index].sType   = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+        stages[spirv_geometry_index].pNext   = &code[spirv_geometry_index];
+        stages[spirv_geometry_index].flags   = 0;
+        stages[spirv_geometry_index].stage   = VK_SHADER_STAGE_GEOMETRY_BIT;
+        stages[spirv_geometry_index].module  = VK_NULL_HANDLE;
+        stages[spirv_geometry_index].pName   = config.geometry_spirv_config.entrypoint_name;
+        stages[spirv_geometry_index].pSpecializationInfo = config.geometry_spirv_config.pSpecializationInfo;
+    }
+
+    // Fragment shader module and stage
+    const u32 spirv_fragment_index = stage_count++;
+    code[spirv_fragment_index].sType     = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
+    code[spirv_fragment_index].pNext     = NULL;
+    code[spirv_fragment_index].flags     = 0;
+    code[spirv_fragment_index].codeSize  = frag_spirv_size;
+    code[spirv_fragment_index].pCode     = frag_spirv_code;    
+
+    stages[spirv_fragment_index].sType   = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+    stages[spirv_fragment_index].pNext   = &code[spirv_fragment_index];
+    stages[spirv_fragment_index].flags   = 0;
+    stages[spirv_fragment_index].stage   = VK_SHADER_STAGE_FRAGMENT_BIT;
+    stages[spirv_fragment_index].module  = VK_NULL_HANDLE;
+    stages[spirv_fragment_index].pName   = config.fragment_spirv_config.entrypoint_name;
+    stages[spirv_fragment_index].pSpecializationInfo = config.fragment_spirv_config.pSpecializationInfo;
+
+
+    // Vertex attributes
+    u32 attrib_count = 0;
+    u32 binding_count = 0;
+    VkVertexInputBindingDescription vertex_inputs[MAX_VERTEX_ATTRIBUTES];
+    VkVertexInputAttributeDescription vertex_attributes[MAX_VERTEX_BINDINGS];
+    {
+        // TODO: For instanced rendering look into VK_VERTEX_INPUT_RATE_INSTANCE
+
+        // Position (vec3f)
+        if (config.has_attribute_position)
+        {
+            vertex_inputs[binding_count].binding   = ATTRIB_BINDING_POSITION;
+            vertex_inputs[binding_count].stride    = sizeof(float) * 3;
+            vertex_inputs[binding_count].inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
+            ++binding_count;
+
+            vertex_attributes[attrib_count].binding   = ATTRIB_BINDING_POSITION;
+            vertex_attributes[attrib_count].location  = ATTRIB_LOC_POSITION;
+            vertex_attributes[attrib_count].format    = VK_FORMAT_R32G32B32_SFLOAT;
+            vertex_attributes[attrib_count].offset    = 0;
+            ++attrib_count;
+        }
+
+        // Normal (vec3f)
+        if (config.has_attribute_normal)
+        {
+            vertex_inputs[binding_count].binding   = ATTRIB_BINDING_NORMAL;
+            vertex_inputs[binding_count].stride    = sizeof(float) * 3;
+            vertex_inputs[binding_count].inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
+            ++binding_count;
+
+            vertex_attributes[attrib_count].binding   = ATTRIB_BINDING_NORMAL;
+            vertex_attributes[attrib_count].location  = ATTRIB_LOC_NORMAL;
+            vertex_attributes[attrib_count].format    = VK_FORMAT_R32G32B32_SFLOAT;
+            vertex_attributes[attrib_count].offset    = 0;
+            ++attrib_count;
+        }
+
+        // Texcoord (vec2f)
+        if (config.has_attribute_texcoord)
+        {
+            vertex_inputs[binding_count].binding   = ATTRIB_BINDING_TEXCOORD;
+            vertex_inputs[binding_count].stride    = sizeof(float) * 2;
+            vertex_inputs[binding_count].inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
+            ++binding_count;
+
+            vertex_attributes[attrib_count].binding   = ATTRIB_BINDING_TEXCOORD;
+            vertex_attributes[attrib_count].location  = ATTRIB_LOC_TEXCOORD;
+            vertex_attributes[attrib_count].format    = VK_FORMAT_R32G32_SFLOAT;
+            vertex_attributes[attrib_count].offset    = 0;
+            ++attrib_count;
+        }
+
+        // Tangent (vec4f)
+        if (config.has_attribute_tangent)
+        {
+            vertex_inputs[binding_count].binding   = ATTRIB_BINDING_TANGENT;
+            vertex_inputs[binding_count].stride    = sizeof(float) * 4;
+            vertex_inputs[binding_count].inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
+            ++binding_count;
+
+            vertex_attributes[attrib_count].binding   = ATTRIB_BINDING_TANGENT;
+            vertex_attributes[attrib_count].location  = ATTRIB_LOC_TANGENT;
+            vertex_attributes[attrib_count].format    = VK_FORMAT_R32G32B32A32_SFLOAT;
+            vertex_attributes[attrib_count].offset    = 0;
+            ++attrib_count;
+        }
+    }
+
+    VkPipelineVertexInputStateCreateInfo vertex_input_state_create_info = {};
+    vertex_input_state_create_info.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
+    vertex_input_state_create_info.pNext = NULL;
+    vertex_input_state_create_info.flags = 0;
+    vertex_input_state_create_info.vertexBindingDescriptionCount    = binding_count;
+    vertex_input_state_create_info.pVertexBindingDescriptions       = vertex_inputs;
+    vertex_input_state_create_info.vertexAttributeDescriptionCount  = attrib_count;
+    vertex_input_state_create_info.pVertexAttributeDescriptions     = vertex_attributes;
+
+    // Input Assembly (the rasterization primitive)
+    VkPipelineInputAssemblyStateCreateInfo input_assembly_create_info = {};
+    input_assembly_create_info.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
+    input_assembly_create_info.pNext = NULL;
+    input_assembly_create_info.flags = 0;
+    input_assembly_create_info.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
+    input_assembly_create_info.primitiveRestartEnable = VK_FALSE;
+
+    // Viewport and scissor regions
+    VkViewport viewport = {};  // The framebuffer coords the ndcs map to
+    viewport.x = 0.0f;
+    viewport.y = 0.0f;
+    viewport.width = (float)renderstate->old.render_target_extent.width;
+    viewport.height = (float)renderstate->old.render_target_extent.height;
+    viewport.minDepth = 0.0f;
+    viewport.maxDepth = 1.0f;
+
+    VkRect2D scissor = {};  // The subset of the framebuffer to actual rasterize to
+    scissor.offset = (VkOffset2D){ 0, 0 };
+    scissor.extent = renderstate->old.render_target_extent;
+
+    VkPipelineViewportStateCreateInfo viewport_state_create_info = {};
+    viewport_state_create_info.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
+    viewport_state_create_info.pNext = NULL;
+    viewport_state_create_info.flags = 0;
+    viewport_state_create_info.viewportCount = 1;
+    viewport_state_create_info.pViewports = &viewport;
+    viewport_state_create_info.scissorCount = 1;
+    viewport_state_create_info.pScissors = &scissor;
+
+    // Rasterization state
+    VkPipelineRasterizationStateCreateInfo raster_state_create_info = {};
+    raster_state_create_info.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
+    raster_state_create_info.pNext = NULL;
+    raster_state_create_info.flags = 0;
+    raster_state_create_info.depthClampEnable = VK_FALSE;
+    raster_state_create_info.rasterizerDiscardEnable = VK_FALSE;  // This would disable rasterization of our primitives so we definitely don't want that.
+    // For example, there are things like Point-Tesselated Voxelization (Fei, et al. 2012) that use hardware tesselation but not use the rasterizer.
+    raster_state_create_info.polygonMode = VK_POLYGON_MODE_FILL;
+    raster_state_create_info.cullMode = config.cull_mode;
+    raster_state_create_info.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
+    raster_state_create_info.depthBiasEnable = VK_FALSE;
+    raster_state_create_info.lineWidth = 1.0f;  // Required. (Because it only applies to line raster primitives or VK_POLYGON_MODE_LINE)
+    
+    // Multisampling state
+    VkPipelineMultisampleStateCreateInfo multisampling_state_create_info = {};
+    multisampling_state_create_info.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
+    multisampling_state_create_info.pNext = NULL;
+    multisampling_state_create_info.flags = 0;
+    multisampling_state_create_info.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
+
+    // Depth and stencil buffer state
+    VkPipelineDepthStencilStateCreateInfo depth_stencil_state_create_info = {
+        .sType                  = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO,
+        .pNext                  = NULL,
+        .flags                  = 0,
+        .depthTestEnable        = VK_TRUE,
+        .depthWriteEnable       = VK_TRUE,
+        .depthCompareOp         = VK_COMPARE_OP_LESS_OR_EQUAL,
+        .depthBoundsTestEnable  = VK_FALSE,  // NOTE: I think depth bounds is for that CAT-scan like effect where you only see a portion of the depth range rendered.
+        .stencilTestEnable      = VK_FALSE,  // NOTE: Not using stencil buffer at the moment
+        .front                  = {},
+        .back                   = {},
+        .minDepthBounds         = 0.0f,
+        .maxDepthBounds         = 1.0f
+    };
+    for (u32 i = 0; i < config.blend_mode_count; ++i)
+    {
+        if (config.blend_modes[i] == BLEND_MODE_ALPHA_BLEND)
+        {
+            // It's incorrect to write depth values of translucent fragments (except for BLEND_MODE_ALPHA_BLEND_BUT_WRITE_DEPTH)
+            // So if any color attachment using alpha blending we disable depth writing.
+            depth_stencil_state_create_info.depthWriteEnable = VK_FALSE;
+        }
+    }
+
+    // Color blend state (one per attachment)
+    VkPipelineColorBlendAttachmentState* blend_states = (VkPipelineColorBlendAttachmentState*)L_calloc(config.blend_mode_count,  sizeof(VkPipelineColorBlendAttachmentState), &renderstate->main.tt);
+    for (u32 i = 0; i < config.blend_mode_count; ++i)
+    {
+        BlendMode blend_mode = config.blend_modes[i];
+        switch (blend_mode)
+        {
+            // NOTE: Not setting blend_states[i].alphaBlendOp. No purpose for it yet.
+
+            case BLEND_MODE_OPAQUE:
+            case BLEND_MODE_ALPHA_MASK:
+                blend_states[i].blendEnable = VK_FALSE;
+                blend_states[i].colorWriteMask =
+                    VK_COLOR_COMPONENT_R_BIT |
+                    VK_COLOR_COMPONENT_G_BIT |
+                    VK_COLOR_COMPONENT_B_BIT |
+                    VK_COLOR_COMPONENT_A_BIT;
+                break;
+            
+            case BLEND_MODE_ALPHA_BLEND:
+            case BLEND_MODE_ALPHA_BLEND_BUT_WRITE_DEPTH:
+                blend_states[i].blendEnable          = VK_TRUE;
+                blend_states[i].colorBlendOp         = VK_BLEND_OP_ADD;
+                blend_states[i].srcColorBlendFactor  = VK_BLEND_FACTOR_SRC_ALPHA;
+                blend_states[i].dstColorBlendFactor  = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
+                blend_states[i].colorWriteMask =
+                    VK_COLOR_COMPONENT_R_BIT |
+                    VK_COLOR_COMPONENT_G_BIT |
+                    VK_COLOR_COMPONENT_B_BIT |
+                    VK_COLOR_COMPONENT_A_BIT;
+                break;
+
+            case BLEND_MODE_ADD_TO_SRC:
+                blend_states[i].blendEnable = VK_TRUE;
+                blend_states[i].colorBlendOp = VK_BLEND_OP_ADD;
+                blend_states[i].srcColorBlendFactor = VK_BLEND_FACTOR_ONE;
+                blend_states[i].dstColorBlendFactor = VK_BLEND_FACTOR_ONE;
+                blend_states[i].colorWriteMask =
+                    VK_COLOR_COMPONENT_R_BIT |
+                    VK_COLOR_COMPONENT_G_BIT |
+                    VK_COLOR_COMPONENT_B_BIT |
+                    VK_COLOR_COMPONENT_A_BIT;
+                break;
+
+            default:
+                assert(0 && "Unimplemented blend mode.");
+                abort();
+        }
+    }
+    
+    VkPipelineColorBlendStateCreateInfo blend_state_create_info = {};
+    blend_state_create_info.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
+    blend_state_create_info.pNext = NULL;
+    blend_state_create_info.flags = 0;
+    blend_state_create_info.logicOpEnable = VK_FALSE;
+    blend_state_create_info.attachmentCount = config.blend_mode_count;
+    blend_state_create_info.pAttachments = blend_states;
+
+    // Dynamic States
+    // Specifically scissor and viewport so we don't have to recreate the pipeline on every swapchain resize.
+    // Although we'd still have to recreate the pipeline if the swapchain images change format (but that's much less frequent).
+    VkPipelineDynamicStateCreateInfo dynamic_state_create_info = {};
+    dynamic_state_create_info.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
+    dynamic_state_create_info.pNext = NULL;
+    dynamic_state_create_info.flags = 0;
+
+    const VkDynamicState dynamic_states[] = {
+        VK_DYNAMIC_STATE_VIEWPORT,
+        VK_DYNAMIC_STATE_SCISSOR
+    };
+    dynamic_state_create_info.dynamicStateCount = sizeof(dynamic_states)/sizeof(VkDynamicState);
+    dynamic_state_create_info.pDynamicStates = dynamic_states;
+
+
+    // Graphics Pipeline Create Info
+    // All that shit goes into the graphics pipeline create info
+    VkGraphicsPipelineCreateInfo graphics_pipeline_create_info = {
+        .sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
+        .pNext = &config.pipeline_rendering_create_info,  // NOTE: pNext chain instead of Vulkan render passes.
+        .flags = 0,
+        .stageCount           = stage_count,
+        .pStages              = stages,
+        .pVertexInputState    = &vertex_input_state_create_info,
+        .pInputAssemblyState  = &input_assembly_create_info,
+        .pTessellationState   = NULL,  // TODO: Not using tesselation at the moment.
+        .pViewportState       = &viewport_state_create_info,
+        .pRasterizationState  = &raster_state_create_info,
+        .pMultisampleState    = &multisampling_state_create_info,
+        .pDepthStencilState   = &depth_stencil_state_create_info,
+        .pColorBlendState     = &blend_state_create_info,
+        .pDynamicState        = &dynamic_state_create_info,
+
+        .layout = gfx.layout,
+
+        // Not using render passes:
+        .renderPass          = VK_NULL_HANDLE,
+        .subpass             = 0,
+        .basePipelineHandle  = VK_NULL_HANDLE,
+        .basePipelineIndex   = 0,
+    };
+
+    VK_CHECK(vkCreateGraphicsPipelines(renderstate->device, VK_NULL_HANDLE, 1, &graphics_pipeline_create_info, NULL, &gfx.pipeline));
+
+
+    L_free(blend_states, &renderstate->main.tt);
+
+    // Free loaded shader files and allocated create infos
+    if (vert_spirv_code) L_free(vert_spirv_code, &renderstate->main.tt);
+    if (frag_spirv_code) L_free(frag_spirv_code, &renderstate->main.tt);
+    if (geom_spirv_code) L_free(geom_spirv_code, &renderstate->main.tt);
+    L_free(code,   &renderstate->main.tt);
+    L_free(stages, &renderstate->main.tt);
+
+
+    SDL_Log("Graphics Pipeline Created.\n");
+
+    return gfx;
+}
+
+
+void destroy_graphics_pipeline(RenderState* renderstate, GraphicsPipeline* gp)
+{
+    if (gp->is_created)
+    {
+        assert(gp->layout);
+        assert(gp->pipeline);
+        vkDestroyPipelineLayout(renderstate->device, gp->layout, NULL);
+        vkDestroyPipeline(renderstate->device, gp->pipeline, NULL);
+        
+        *gp = {};
+        gp->is_created = 0;  // Just being explicit
+        gp->layout = VK_NULL_HANDLE;
+        gp->pipeline = VK_NULL_HANDLE;
+    }
+}
+
+static GraphicsPipeline create_fullscreen_postprocess_pipeline(RenderState* renderstate, const char* fragment_spirv_path, const VkFormat output_image_format)
+{
+    const char* vertex_spirv_path   = SPIRV_PATH_FULLSCREEN_VERT;
+
+    VkDescriptorSetLayout layouts[] = {
+        // Order must match the layout set value in the shaders
+        renderstate->old.scene_set_layout,       // set 0
+        renderstate->old.postprocess_set_layout  // set 1
+    };
+
+    VkPipelineLayoutCreateInfo pipeline_layout_create_info = {
+        .sType                  = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
+        .pNext                  = NULL,
+        .flags                  = 0,
+        .setLayoutCount         = sizeof(layouts) / sizeof(VkDescriptorSetLayout),
+        .pSetLayouts            = layouts,
+        .pushConstantRangeCount = 0,
+        .pPushConstantRanges    = NULL
+    };
+    
+    // Pipeline rendering info. Part of the dynamic rendering feature (core since Vulkan 1.3)
+    // We don't specify a renderpass and instead use this struct in the pNext chain of VkGraphicsPipelineCreateInfo
+    const VkFormat color_formats[] = { output_image_format };
+    VkPipelineRenderingCreateInfo pipeline_rendering_create_info = {
+        .sType                    = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO,
+        .pNext                    = NULL,
+        .viewMask                 = 0,
+        .colorAttachmentCount     = sizeof(color_formats) / sizeof(VkFormat),
+        .pColorAttachmentFormats  = color_formats,
+        .depthAttachmentFormat    = renderstate->old.render_target_depth.image_format,
+        .stencilAttachmentFormat  = VK_FORMAT_UNDEFINED
+    };
+
+    BlendMode blend_modes[] = { BLEND_MODE_OPAQUE };
+
+    GraphicsPipelineConfigInfo config = {
+        .vertex_spirv_config = {
+            .spirv_path          = vertex_spirv_path,
+            .entrypoint_name     = "main",
+            .pSpecializationInfo = NULL
+        },
+        .fragment_spirv_config = {
+            .spirv_path          = fragment_spirv_path,
+            .entrypoint_name     = "main",
+            .pSpecializationInfo = NULL
+        },
+        .other_shaders_spirv_configs = {},
+
+        // Fullscreen triangle has no vertex data as it's generated in the vertex shader.
+        // See https://www.saschawillems.de/blog/2016/08/13/vulkan-tutorial-on-rendering-a-fullscreen-quad-without-buffers/
+        .has_attribute_position  = 0,
+        .has_attribute_normal    = 0,
+        .has_attribute_texcoord  = 0,
+        .has_attribute_tangent   = 0,
+
+        .pipeline_layout_create_info    = pipeline_layout_create_info,
+        .pipeline_rendering_create_info = pipeline_rendering_create_info,
+        .blend_mode_count = sizeof(blend_modes) / sizeof(blend_modes[0]),
+        .blend_modes = blend_modes,
+        .cull_mode = VK_CULL_MODE_FRONT_BIT  // <- The procedural triangle is clockwise
+    };
+    
+    SDL_Log("Fullscreen postprocess ");
+    return create_graphics_pipeline(renderstate, config);
+}
+
+static GraphicsPipeline create_bloom_apply_pipeline(RenderState* renderstate, VkFormat target_format)
+{
+    const char* vertex_spirv_path    = SPIRV_PATH_FULLSCREEN_VERT;
+    const char* fragment_spirv_path  = SPIRV_PATH_BLOOM_APPLY_FRAG;
+
+    VkDescriptorSetLayout layouts[] = {
+        // Order must match the layout set value in the shaders
+        renderstate->old.scene_set_layout,       // set 0
+        renderstate->old.bloom_apply_set_layout  // set 1
+    };
+
+    VkPipelineLayoutCreateInfo pipeline_layout_create_info = {
+        .sType                  = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
+        .pNext                  = NULL,
+        .flags                  = 0,
+        .setLayoutCount         = sizeof(layouts) / sizeof(VkDescriptorSetLayout),
+        .pSetLayouts            = layouts,
+        .pushConstantRangeCount = 0,
+        .pPushConstantRanges    = NULL
+    };
+    
+    // Pipeline rendering info. Part of the dynamic rendering feature (core since Vulkan 1.3)
+    // We don't specify a renderpass and instead use this struct in the pNext chain of VkGraphicsPipelineCreateInfo
+    const VkFormat color_formats[] = { target_format };
+    VkPipelineRenderingCreateInfo pipeline_rendering_create_info = {
+        .sType                    = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO,
+        .pNext                    = NULL,
+        .viewMask                 = 0,
+        .colorAttachmentCount     = sizeof(color_formats) / sizeof(VkFormat),
+        .pColorAttachmentFormats  = color_formats,
+        .depthAttachmentFormat    = VK_FORMAT_UNDEFINED,
+        .stencilAttachmentFormat  = VK_FORMAT_UNDEFINED
+    };
+
+    BlendMode blend_modes[] = { BLEND_MODE_OPAQUE };
+
+    GraphicsPipelineConfigInfo config = {
+        .vertex_spirv_config = {
+            .spirv_path          = vertex_spirv_path,
+            .entrypoint_name     = "main",
+            .pSpecializationInfo = NULL
+        },
+        .fragment_spirv_config = {
+            .spirv_path          = fragment_spirv_path,
+            .entrypoint_name     = "main",
+            .pSpecializationInfo = NULL
+        },
+        .other_shaders_spirv_configs = {},
+
+        // Fullscreen triangle has no vertex data as it's generated in the vertex shader.
+        // See https://www.saschawillems.de/blog/2016/08/13/vulkan-tutorial-on-rendering-a-fullscreen-quad-without-buffers/
+        .has_attribute_position  = 0,
+        .has_attribute_normal    = 0,
+        .has_attribute_texcoord  = 0,
+        .has_attribute_tangent   = 0,
+
+        .pipeline_layout_create_info    = pipeline_layout_create_info,
+        .pipeline_rendering_create_info = pipeline_rendering_create_info,
+        .blend_mode_count = sizeof(blend_modes) / sizeof(blend_modes[0]),
+        .blend_modes = blend_modes,
+        .cull_mode = VK_CULL_MODE_FRONT_BIT  // <- The procedural triangle is clockwise
+    };
+    
+    SDL_Log("Fullscreen postprocess (apply bloom) ");
+    return create_graphics_pipeline(renderstate, config);
+}
+
+static GraphicsPipeline create_deferred_opaque_geometry_pipeline(RenderState* renderstate)
+{
+    const char* vertex_spirv_path   = SPIRV_PATH_SCENE_VERT;
+    const char* fragment_spirv_path = SPIRV_PATH_DEFERRED_WRITE_GBUFFERS_FRAG;
+
+    // Define which descripter set layouts the shaders use
+    assert(renderstate->old.scene_set_layout != VK_NULL_HANDLE);
+    assert(renderstate->old.object_set_layout != VK_NULL_HANDLE);
+    VkDescriptorSetLayout layouts[] = {
+        // Order must match the layout set value in the shaders
+        // (which matches the constants in the shader info header)
+        renderstate->old.scene_set_layout,   // set 0
+        renderstate->old.object_set_layout,  // set 1
+    };
+
+    VkPushConstantRange push_constant_range = {
+        .stageFlags = VK_SHADER_STAGE_VERTEX_BIT,
+        .offset = 0,
+        .size = sizeof(Object_GLSL_PushConstants)
+    };
+
+    VkPipelineLayoutCreateInfo pipeline_layout_create_info = {
+        .sType                  = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
+        .pNext                  = NULL,
+        .flags                  = 0,
+        .setLayoutCount         = sizeof(layouts) / sizeof(VkDescriptorSetLayout),
+        .pSetLayouts            = layouts,
+        .pushConstantRangeCount = 1,
+        .pPushConstantRanges    = &push_constant_range
+    };
+    
+    // Specify G-Buffer attachments (except depth attachment which is specified seperately in VkPipelineRenderingCreateInfo):
+    VkFormat color_formats[RENDER_TARGET_DEFERRED_COLOR_ATTACHMENT_COUNT] = {};
+    for (u32 i = 0; i < RENDER_TARGET_DEFERRED_COLOR_ATTACHMENT_COUNT; ++i)
+    {
+        color_formats[i] = renderstate->old.render_target_deferred_attachments[i].image_format;
+    }
+
+    // Pipeline rendering info. Part of the dynamic rendering feature (core since Vulkan 1.3)
+    // We don't specify a renderpass and instead use this struct in the pNext chain of VkGraphicsPipelineCreateInfo
+    VkPipelineRenderingCreateInfo pipeline_rendering_create_info = {
+        .sType                    = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO,
+        .pNext                    = NULL,
+        .viewMask                 = 0,
+        .colorAttachmentCount     = sizeof(color_formats) / sizeof(VkFormat),
+        .pColorAttachmentFormats  = color_formats,
+        .depthAttachmentFormat    = renderstate->old.render_target_depth.image_format,
+        .stencilAttachmentFormat  = VK_FORMAT_UNDEFINED
+    };
+    
+    BlendMode blend_modes[RENDER_TARGET_DEFERRED_COLOR_ATTACHMENT_COUNT] = {};
+    for (int i = 0; i < RENDER_TARGET_DEFERRED_COLOR_ATTACHMENT_COUNT; ++i)
+        blend_modes[i] = BLEND_MODE_OPAQUE;
+
+    GraphicsPipelineConfigInfo config = {
+        .vertex_spirv_config = {
+            .spirv_path          = vertex_spirv_path,
+            .entrypoint_name     = "main",
+            .pSpecializationInfo = NULL
+        },
+        .fragment_spirv_config = {
+            .spirv_path          = fragment_spirv_path,
+            .entrypoint_name     = "main",
+            .pSpecializationInfo = NULL
+        },
+        .other_shaders_spirv_configs = {},
+
+        .has_attribute_position  = 1,
+        .has_attribute_normal    = 1,
+        .has_attribute_texcoord  = 1,
+        .has_attribute_tangent   = 1,
+
+        .pipeline_layout_create_info    = pipeline_layout_create_info,
+        .pipeline_rendering_create_info = pipeline_rendering_create_info,
+        .blend_mode_count = sizeof(blend_modes) / sizeof(blend_modes[0]),
+        .blend_modes = blend_modes,
+        .cull_mode = VK_CULL_MODE_BACK_BIT
+    };
+    
+    SDL_Log("Deferred opaque geometry ");
+    return create_graphics_pipeline(renderstate, config);
+}
+
+static GraphicsPipeline create_deferred_lighting_pass_pipeline(RenderState* renderstate)
+{
+    const char* vertex_spirv_path   = SPIRV_PATH_FULLSCREEN_VERT;
+    const char* fragment_spirv_path = SPIRV_PATH_DEFERRED_LIGHTING_FRAG;
+
+    VkDescriptorSetLayout layouts[] = {
+        // Order must match the layout set value in the shaders
+        renderstate->old.scene_set_layout,       // set 0
+        renderstate->old.gbuffers_set_layout,    // set 1
+        renderstate->old.lights_set_layout,      // set 2
+        renderstate->old.shadow_maps_set_layout  // set 3
+    };
+
+    VkPipelineLayoutCreateInfo pipeline_layout_create_info = {
+        .sType                  = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
+        .pNext                  = NULL,
+        .flags                  = 0,
+        .setLayoutCount         = sizeof(layouts) / sizeof(VkDescriptorSetLayout),
+        .pSetLayouts            = layouts,
+        .pushConstantRangeCount = 0,
+        .pPushConstantRanges    = NULL
+    };
+    
+    // Pipeline rendering info. Part of the dynamic rendering feature (core since Vulkan 1.3)
+    // We don't specify a renderpass and instead use this struct in the pNext chain of VkGraphicsPipelineCreateInfo
+    const VkFormat color_formats[] = { renderstate->old.render_target_image.image_format };
+    VkPipelineRenderingCreateInfo pipeline_rendering_create_info = {
+        .sType                    = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO,
+        .pNext                    = NULL,
+        .viewMask                 = 0,
+        .colorAttachmentCount     = sizeof(color_formats) / sizeof(VkFormat),
+        .pColorAttachmentFormats  = color_formats,
+        .depthAttachmentFormat    = renderstate->old.render_target_depth.image_format,
+        .stencilAttachmentFormat  = VK_FORMAT_UNDEFINED
+    };
+
+    BlendMode blend_modes[] = { BLEND_MODE_OPAQUE };
+
+    GraphicsPipelineConfigInfo config = {
+        .vertex_spirv_config = {
+            .spirv_path          = vertex_spirv_path,
+            .entrypoint_name     = "main",
+            .pSpecializationInfo = NULL
+        },
+        .fragment_spirv_config = {
+            .spirv_path          = fragment_spirv_path,
+            .entrypoint_name     = "main",
+            .pSpecializationInfo = NULL
+        },
+        .other_shaders_spirv_configs = {},
+
+        // Fullscreen triangle has no vertex data as it's generated in the vertex shader.
+        // See https://www.saschawillems.de/blog/2016/08/13/vulkan-tutorial-on-rendering-a-fullscreen-quad-without-buffers/
+        .has_attribute_position  = 0,
+        .has_attribute_normal    = 0,
+        .has_attribute_texcoord  = 0,
+        .has_attribute_tangent   = 0,
+
+        .pipeline_layout_create_info    = pipeline_layout_create_info,
+        .pipeline_rendering_create_info = pipeline_rendering_create_info,
+        .blend_mode_count = sizeof(blend_modes) / sizeof(blend_modes[0]),
+        .blend_modes = blend_modes,
+        .cull_mode = VK_CULL_MODE_FRONT_BIT  // <- The procedural triangle is clockwise
+    };
+    
+    SDL_Log("Deferred lighting ");
+    return create_graphics_pipeline(renderstate, config);
+}
+
+static GraphicsPipeline create_forward_opaque_pass(RenderState* renderstate)
+{
+    const char* vertex_spirv_path   = SPIRV_PATH_SCENE_VERT;
+    const char* fragment_spirv_path = SPIRV_PATH_FORWARD_LIGHTING_FRAG;
+
+    // Define which descripter set layouts the shaders use
+    assert(renderstate->old.scene_set_layout != VK_NULL_HANDLE);
+    assert(renderstate->old.object_set_layout != VK_NULL_HANDLE);
+    VkDescriptorSetLayout layouts[] = {
+        // Order must match the layout set value in the shaders
+        // (which matches the constants in the shader info header)
+        renderstate->old.scene_set_layout,   // set 0
+        renderstate->old.object_set_layout,  // set 1
+        renderstate->old.lights_set_layout,  // set 2
+        renderstate->old.shadow_maps_set_layout  // set 3
+    };
+
+    VkPushConstantRange push_constant_range = {
+        .stageFlags = VK_SHADER_STAGE_VERTEX_BIT,
+        .offset = 0,
+        .size = sizeof(Object_GLSL_PushConstants)
+    };
+
+    VkPipelineLayoutCreateInfo pipeline_layout_create_info = {
+        .sType                  = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
+        .pNext                  = NULL,
+        .flags                  = 0,
+        .setLayoutCount         = sizeof(layouts) / sizeof(VkDescriptorSetLayout),
+        .pSetLayouts            = layouts,
+        .pushConstantRangeCount = 1,
+        .pPushConstantRanges    = &push_constant_range
+    };
+    
+    // Pipeline rendering info. Part of the dynamic rendering feature (core since Vulkan 1.3)
+    // We don't specify a renderpass and instead use this struct in the pNext chain of VkGraphicsPipelineCreateInfo
+    const VkFormat color_formats[] = { renderstate->old.render_target_image.image_format };
+    VkPipelineRenderingCreateInfo pipeline_rendering_create_info = {
+        .sType                    = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO,
+        .pNext                    = NULL,
+        .viewMask                 = 0,
+        .colorAttachmentCount     = sizeof(color_formats) / sizeof(VkFormat),
+        .pColorAttachmentFormats  = color_formats,
+        .depthAttachmentFormat    = renderstate->old.render_target_depth.image_format,
+        .stencilAttachmentFormat  = VK_FORMAT_UNDEFINED
+    };
+    
+    BlendMode blend_modes[] = { BLEND_MODE_OPAQUE };
+
+    GraphicsPipelineConfigInfo config = {
+        .vertex_spirv_config = {
+            .spirv_path          = vertex_spirv_path,
+            .entrypoint_name     = "main",
+            .pSpecializationInfo = NULL
+        },
+        .fragment_spirv_config = {
+            .spirv_path          = fragment_spirv_path,
+            .entrypoint_name     = "main",
+            .pSpecializationInfo = NULL
+        },
+        .other_shaders_spirv_configs = {},
+
+        .has_attribute_position  = 1,
+        .has_attribute_normal    = 1,
+        .has_attribute_texcoord  = 1,
+        .has_attribute_tangent   = 1,
+
+        .pipeline_layout_create_info    = pipeline_layout_create_info,
+        .pipeline_rendering_create_info = pipeline_rendering_create_info,
+        .blend_mode_count = sizeof(blend_modes) / sizeof(blend_modes[0]),
+        .blend_modes = blend_modes,
+        .cull_mode = VK_CULL_MODE_BACK_BIT
+    };
+    
+    SDL_Log("Forward opaque ");
+    return create_graphics_pipeline(renderstate, config);
+}
+
+static GraphicsPipeline create_forward_transparent_pass(RenderState* renderstate)
+{
+    const char* vertex_spirv_path   = SPIRV_PATH_SCENE_VERT;
+    const char* fragment_spirv_path = SPIRV_PATH_FORWARD_LIGHTING_FRAG;
+
+    // Pass specialization constants
+    b32 is_alpha_masked = true;
+    VkSpecializationMapEntry map_entry_is_alpha_masked = {
+        .constantID = 0,
+        .offset     = 0,
+        .size       = sizeof(VkBool32)
+    };
+    VkSpecializationInfo fragment_specialization_info = {
+        .mapEntryCount  = 1,
+        .pMapEntries    = &map_entry_is_alpha_masked,
+        .dataSize       = sizeof(VkBool32),
+        .pData          = &is_alpha_masked
+    };
+    
+    // TEMP: For the leaf sway....
+    VkSpecializationInfo vertex_specialization_info = fragment_specialization_info;
+
+    // Define which descripter set layouts the shaders use
+    assert(renderstate->old.scene_set_layout != VK_NULL_HANDLE);
+    assert(renderstate->old.object_set_layout != VK_NULL_HANDLE);
+    VkDescriptorSetLayout layouts[] = {
+        // Order must match the layout set value in the shaders
+        // (which matches the constants in the shader info header)
+        renderstate->old.scene_set_layout,   // set 0
+        renderstate->old.object_set_layout,  // set 1
+        renderstate->old.lights_set_layout,  // set 2
+        renderstate->old.shadow_maps_set_layout  // set 3
+    };
+
+    VkPushConstantRange push_constant_range = {
+        .stageFlags = VK_SHADER_STAGE_VERTEX_BIT,
+        .offset = 0,
+        .size = sizeof(Object_GLSL_PushConstants)
+    };
+
+    VkPipelineLayoutCreateInfo pipeline_layout_create_info = {
+        .sType                  = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
+        .pNext                  = NULL,
+        .flags                  = 0,
+        .setLayoutCount         = sizeof(layouts) / sizeof(VkDescriptorSetLayout),
+        .pSetLayouts            = layouts,
+        .pushConstantRangeCount = 1,
+        .pPushConstantRanges    = &push_constant_range
+    };
+    
+    const VkFormat color_formats[] = { renderstate->old.render_target_image.image_format };
+    VkPipelineRenderingCreateInfo pipeline_rendering_create_info = {
+        .sType                    = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO,
+        .pNext                    = NULL,
+        .viewMask                 = 0,
+        .colorAttachmentCount     = sizeof(color_formats) / sizeof(VkFormat),
+        .pColorAttachmentFormats  = color_formats,
+        .depthAttachmentFormat    = renderstate->old.render_target_depth.image_format,
+        .stencilAttachmentFormat  = VK_FORMAT_UNDEFINED
+    };
+    
+    BlendMode blend_modes[] = { BLEND_MODE_ALPHA_MASK };
+
+    GraphicsPipelineConfigInfo config = {
+        .vertex_spirv_config = {
+            .spirv_path          = vertex_spirv_path,
+            .entrypoint_name     = "main",
+            .pSpecializationInfo = &vertex_specialization_info
+        },
+        .fragment_spirv_config = {
+            .spirv_path          = fragment_spirv_path,
+            .entrypoint_name     = "main",
+            .pSpecializationInfo = &fragment_specialization_info
+        },
+        .other_shaders_spirv_configs = {},
+
+        .has_attribute_position  = 1,
+        .has_attribute_normal    = 1,
+        .has_attribute_texcoord  = 1,
+        .has_attribute_tangent   = 1,
+
+        .pipeline_layout_create_info    = pipeline_layout_create_info,
+        .pipeline_rendering_create_info = pipeline_rendering_create_info,
+        .blend_mode_count = sizeof(blend_modes) / sizeof(blend_modes[0]),
+        .blend_modes = blend_modes,
+        .cull_mode = VK_CULL_MODE_NONE  // Disable backface culling for alpha-masked leaves
+    };
+
+    SDL_Log("Forward transparent ");
+    return create_graphics_pipeline(renderstate, config);
+}
+
+static void create_general_debug_visuals_pipelines(RenderState* renderstate)
+{
+    // Debug rendermodes:
+    SDL_Log("Debug Viz %s\n", get_render_mode_name(renderstate->old.render_mode));
+
+    const char* vertex_spirv_path    = SPIRV_PATH_SCENE_VERT;
+    const char* fragment_spirv_path  = SPIRV_PATH_DEBUG_VISUALS_FRAG;
+
+    // NOTE: Google's GLSLC doesn't support custom GLSL entrypoints so we do this by hand with a specialization constant for now.
+    s32 fragment_entrypoint_id = 0;
+    VkSpecializationMapEntry map_entry_fragment_entrypoint_id = {
+        .constantID = 0,
+        .offset     = 0,
+        .size       = sizeof(fragment_entrypoint_id)
+    };
+    VkSpecializationInfo fragment_specialization_info = {
+        .mapEntryCount  = 1,
+        .pMapEntries    = &map_entry_fragment_entrypoint_id,
+        .dataSize       = sizeof(fragment_entrypoint_id),
+        .pData          = &fragment_entrypoint_id
+    };
+
+    BlendMode blend_mode_opaque_geometry = BLEND_MODE_OPAQUE;
+    BlendMode blend_mode_transparent_geometry = BLEND_MODE_OPAQUE;
+
+    // Select shader and graphics pipeline parameters based on render mode
+    switch (renderstate->old.render_mode)
+    {
+        case RENDERMODE_DEBUGVIZ_SHOW_MIPLEVELS:
+            fragment_entrypoint_id = SHADER_ENTRYPOINT_ID_DEBUGVIZ_MIPLEVELS;
+            break;
+
+        case RENDERMODE_DEBUGVIZ_FRAGMENT_DEPTH:
+            fragment_entrypoint_id = SHADER_ENTRYPOINT_ID_DEBUGVIZ_FRAGDEPTH;
+            break;
+
+        case RENDERMODE_DEBUGVIZ_FRAGMENT_DEPTH_PARTIAL_DERIVATIVES:
+            fragment_entrypoint_id = SHADER_ENTRYPOINT_ID_DEBUGVIZ_FRAGDEPTH_DERIVATIVES;
+            break;
+        
+        case RENDERMODE_DEBUGVIZ_BASELINE_OVERDRAW:
+            fragment_entrypoint_id = SHADER_ENTRYPOINT_ID_DEBUGVIZ_BASELINE_OVERDRAW;
+
+            blend_mode_opaque_geometry = BLEND_MODE_ALPHA_BLEND;
+            blend_mode_transparent_geometry = BLEND_MODE_ALPHA_BLEND;
+            break;
+
+        case RENDERMODE_DEBUGVIZ_BASIC_OVERSHADING:
+            fragment_entrypoint_id = SHADER_ENTRYPOINT_ID_DEBUGVIZ_BASIC_OVERSHADING;
+
+            blend_mode_opaque_geometry = BLEND_MODE_ALPHA_BLEND_BUT_WRITE_DEPTH;  // Write the depth just like how our opaque geometry is tested against in the lighting shaders
+            blend_mode_transparent_geometry = BLEND_MODE_ALPHA_BLEND;             // Depth testing does not happen in our transparent frag shader so we maintain that here.
+            break;
+
+        default:
+            SDL_LogError(SDL_LOG_CATEGORY_ERROR, "Error: Unimplemented general debug render mode: %d\n", renderstate->old.render_mode);
+            assert(0 && "Unimplemented render mode");
+            exit(1);
+    }
+
+    
+    // Define which descripter set layouts the shaders use
+    assert(renderstate->old.scene_set_layout != VK_NULL_HANDLE);
+    assert(renderstate->old.object_set_layout != VK_NULL_HANDLE);
+    VkDescriptorSetLayout layouts[] = {
+        // Order must match the layout set value in the shaders
+        // (which matches the constants in the shader info header)
+        renderstate->old.scene_set_layout,   // set 0
+        renderstate->old.object_set_layout,  // set 1
+        renderstate->old.lights_set_layout,  // set 2
+        renderstate->old.shadow_maps_set_layout  // set 3
+    };
+
+    VkPushConstantRange push_constant_range = {
+        .stageFlags = VK_SHADER_STAGE_VERTEX_BIT,
+        .offset = 0,
+        .size = sizeof(Object_GLSL_PushConstants)
+    };
+
+    VkPipelineLayoutCreateInfo pipeline_layout_create_info = {
+        .sType                  = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
+        .pNext                  = NULL,
+        .flags                  = 0,
+        .setLayoutCount         = sizeof(layouts) / sizeof(VkDescriptorSetLayout),
+        .pSetLayouts            = layouts,
+        .pushConstantRangeCount = 1,
+        .pPushConstantRanges    = &push_constant_range
+    };
+    
+    // Pipeline rendering info. Part of the dynamic rendering feature (core since Vulkan 1.3)
+    // We don't specify a renderpass and instead use this struct in the pNext chain of VkGraphicsPipelineCreateInfo
+    const VkFormat color_formats[] = { renderstate->old.render_target_image.image_format };
+    VkPipelineRenderingCreateInfo pipeline_rendering_create_info = {
+        .sType                    = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO,
+        .pNext                    = NULL,
+        .viewMask                 = 0,
+        .colorAttachmentCount     = sizeof(color_formats) / sizeof(VkFormat),
+        .pColorAttachmentFormats  = color_formats,
+        .depthAttachmentFormat    = renderstate->old.render_target_depth.image_format,
+        .stencilAttachmentFormat  = VK_FORMAT_UNDEFINED
+    };
+    
+    BlendMode blend_modes[] = { blend_mode_opaque_geometry };
+
+    GraphicsPipelineConfigInfo config = {
+        .vertex_spirv_config = {
+            .spirv_path          = vertex_spirv_path,
+            .entrypoint_name     = "main",
+            .pSpecializationInfo = NULL
+        },
+        .fragment_spirv_config = {
+            .spirv_path          = fragment_spirv_path,
+            .entrypoint_name     = "main",
+            .pSpecializationInfo = &fragment_specialization_info
+        },
+        .other_shaders_spirv_configs = {},
+
+        .has_attribute_position  = 1,
+        .has_attribute_normal    = 1,
+        .has_attribute_texcoord  = 1,
+        .has_attribute_tangent   = 1,
+
+        .pipeline_layout_create_info    = pipeline_layout_create_info,
+        .pipeline_rendering_create_info = pipeline_rendering_create_info,
+        .blend_mode_count = sizeof(blend_modes) / sizeof(blend_modes[0]),
+        .blend_modes = blend_modes,
+        .cull_mode = VK_CULL_MODE_BACK_BIT
+    };
+    
+    SDL_Log("[\n  Opaque ");
+    renderstate->old.gp_opaque_pass = create_graphics_pipeline(renderstate, config);
+
+    SDL_Log("  Transparent ");
+    config.blend_modes[0] = blend_mode_transparent_geometry;
+    renderstate->old.gp_transparent_pass = create_graphics_pipeline(renderstate, config);
+    SDL_Log("]\n");
+}
+
+static void create_mesh_density_visualisation_pipelines(RenderState* renderstate)
+{
+    // Debug rendermodes:
+    SDL_Log("Debug Viz %s\n", get_render_mode_name(renderstate->old.render_mode));
+
+    const char* vertex_spirv_path    = SPIRV_PATH_DEBUG_MESH_DENSITY_VERT;
+    const char* geometry_spirv_path  = SPIRV_PATH_DEBUG_MESH_DENSITY_GEOM;
+    const char* fragment_spirv_path  = SPIRV_PATH_DEBUG_MESH_DENSITY_FRAG;
+
+    BlendMode blend_mode_opaque_geometry = BLEND_MODE_OPAQUE;
+    BlendMode blend_mode_transparent_geometry = BLEND_MODE_OPAQUE;
+    
+    // Define which descripter set layouts the shaders use
+    assert(renderstate->old.scene_set_layout != VK_NULL_HANDLE);
+    assert(renderstate->old.object_set_layout != VK_NULL_HANDLE);
+    VkDescriptorSetLayout layouts[] = {
+        // Order must match the layout set value in the shaders
+        renderstate->old.scene_set_layout,       // set 0
+        renderstate->old.gbuffers_set_layout,    // set 1
+        renderstate->old.lights_set_layout,      // set 2
+        renderstate->old.shadow_maps_set_layout  // set 3
+    };
+
+    VkPushConstantRange push_constant_range = {
+        .stageFlags = VK_SHADER_STAGE_VERTEX_BIT,
+        .offset = 0,
+        .size = sizeof(Object_GLSL_PushConstants)
+    };
+
+    VkPipelineLayoutCreateInfo pipeline_layout_create_info = {
+        .sType                  = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
+        .pNext                  = NULL,
+        .flags                  = 0,
+        .setLayoutCount         = sizeof(layouts) / sizeof(VkDescriptorSetLayout),
+        .pSetLayouts            = layouts,
+        .pushConstantRangeCount = 1,
+        .pPushConstantRanges    = &push_constant_range
+    };
+    
+    // Pipeline rendering info. Part of the dynamic rendering feature (core since Vulkan 1.3)
+    // We don't specify a renderpass and instead use this struct in the pNext chain of VkGraphicsPipelineCreateInfo
+    const VkFormat color_formats[] = { renderstate->old.render_target_image.image_format };
+    VkPipelineRenderingCreateInfo pipeline_rendering_create_info = {
+        .sType                    = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO,
+        .pNext                    = NULL,
+        .viewMask                 = 0,
+        .colorAttachmentCount     = sizeof(color_formats) / sizeof(VkFormat),
+        .pColorAttachmentFormats  = color_formats,
+        .depthAttachmentFormat    = renderstate->old.render_target_depth.image_format,
+        .stencilAttachmentFormat  = VK_FORMAT_UNDEFINED
+    };
+    
+    BlendMode blend_modes[] = { blend_mode_opaque_geometry };
+
+    GraphicsPipelineConfigInfo config = {
+        .vertex_spirv_config = {
+            .spirv_path          = vertex_spirv_path,
+            .entrypoint_name     = "main",
+            .pSpecializationInfo = NULL
+        },
+        .fragment_spirv_config = {
+            .spirv_path          = fragment_spirv_path,
+            .entrypoint_name     = "main",
+            .pSpecializationInfo = NULL
+        },
+        .geometry_spirv_config = {
+            .spirv_path          = geometry_spirv_path,
+            .entrypoint_name     = "main",
+            .pSpecializationInfo = NULL
+        },
+
+        .has_attribute_position  = 1,
+        .has_attribute_normal    = 0,
+        .has_attribute_texcoord  = 0,
+        .has_attribute_tangent   = 0,
+
+        .pipeline_layout_create_info    = pipeline_layout_create_info,
+        .pipeline_rendering_create_info = pipeline_rendering_create_info,
+        .blend_mode_count = sizeof(blend_modes) / sizeof(blend_modes[0]),
+        .blend_modes = blend_modes,
+        .cull_mode = VK_CULL_MODE_BACK_BIT
+    };
+    
+    SDL_Log("[\n  Opaque ");
+    renderstate->old.gp_opaque_pass = create_graphics_pipeline(renderstate, config);
+
+    SDL_Log("  Transparent ");
+    config.blend_modes[0] = blend_mode_transparent_geometry;
+    renderstate->old.gp_transparent_pass = create_graphics_pipeline(renderstate, config);
+    SDL_Log("]\n");
+}
+
+static GraphicsPipeline create_shader_mapping_pipeline(RenderState* renderstate, b32 is_transparent)
+{
+    const char* vertex_spirv_path   = SPIRV_PATH_SHADOW_MAP_VERT;
+    const char* fragment_spirv_path = SPIRV_PATH_SHADOW_MAP_FRAG;
+
+    // Pass specialization constants
+    b32 is_alpha_masked = is_transparent;
+    VkSpecializationMapEntry map_entry_is_alpha_masked = {
+        .constantID = 0,
+        .offset     = 0,
+        .size       = sizeof(VkBool32)
+    };
+    VkSpecializationInfo fragment_specialization_info = {
+        .mapEntryCount  = 1,
+        .pMapEntries    = &map_entry_is_alpha_masked,
+        .dataSize       = sizeof(VkBool32),
+        .pData          = &is_alpha_masked
+    };
+    
+    // TEMP: To capture the leaf sway in the shadow mapping of alpha masked folliage
+    VkSpecializationInfo vertex_specialization_info = fragment_specialization_info;
+
+    // Define which descripter set layouts the shaders use
+    assert(renderstate->old.scene_set_layout != VK_NULL_HANDLE);
+    assert(renderstate->old.object_set_layout != VK_NULL_HANDLE);
+    VkDescriptorSetLayout layouts[] = {
+        // Order must match the layout set value in the shaders
+        // (which matches the constants in the shader info header)
+        renderstate->old.scene_set_layout,  // set 0
+        renderstate->old.object_set_layout  // set 1
+    };
+
+    VkPushConstantRange push_constant_range = {
+        .stageFlags = VK_SHADER_STAGE_VERTEX_BIT,
+        .offset = 0,
+        .size = sizeof(Object_GLSL_PushConstants)
+    };
+
+    VkPipelineLayoutCreateInfo pipeline_layout_create_info = {
+        .sType                  = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
+        .pNext                  = NULL,
+        .flags                  = 0,
+        .setLayoutCount         = sizeof(layouts) / sizeof(VkDescriptorSetLayout),
+        .pSetLayouts            = layouts,
+        .pushConstantRangeCount = 1,
+        .pPushConstantRanges    = &push_constant_range
+    };
+    
+    // No color formats
+    VkPipelineRenderingCreateInfo pipeline_rendering_create_info = {
+        .sType                    = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO,
+        .pNext                    = NULL,
+        .viewMask                 = 0,
+        .colorAttachmentCount     = 0,
+        .pColorAttachmentFormats  = NULL,
+        .depthAttachmentFormat    = renderstate->old.shadow_map_depth.image_format,  // TODO: When using multiple shadow maps, they should all be the same format so do: shadow_maps[0].format prolly
+        .stencilAttachmentFormat  = VK_FORMAT_UNDEFINED
+    };
+    
+    BlendMode blend_mode = is_transparent ? BLEND_MODE_ALPHA_MASK : BLEND_MODE_OPAQUE;
+
+    GraphicsPipelineConfigInfo config = {
+        .vertex_spirv_config = {
+            .spirv_path          = vertex_spirv_path,
+            .entrypoint_name     = "main",
+            .pSpecializationInfo = &vertex_specialization_info
+        },
+        .fragment_spirv_config = {
+            .spirv_path          = fragment_spirv_path,
+            .entrypoint_name     = "main",
+            .pSpecializationInfo = &fragment_specialization_info
+        },
+        .other_shaders_spirv_configs = {},
+
+        .has_attribute_position  = 1,
+        .has_attribute_normal    = 0,
+        .has_attribute_texcoord  = 1,  // NOTE: Texcoords only needed for alpha masked pipeline, but we include it in opaque as well so we don't have to write to seperate shader files
+        .has_attribute_tangent   = 0,
+
+        .pipeline_layout_create_info    = pipeline_layout_create_info,
+        .pipeline_rendering_create_info = pipeline_rendering_create_info,
+        .blend_mode_count = 1,
+        .blend_modes = &blend_mode,
+        .cull_mode = is_transparent ? VK_CULL_MODE_NONE : VK_CULL_MODE_BACK_BIT  // Disable backface culling for alpha-masked leaves
+    };
+
+    SDL_Log("Shadow map %s ", is_transparent ? "transparent" : "opaque");
+    return create_graphics_pipeline(renderstate, config);
+}
+
+
+void create_all_graphics_pipelines(RenderState* renderstate)
+{
+    SDL_Log("Creating all graphics pipelines:\n");
+
+    // Main geometry and lighting pipelines depends on rendermode:
+    switch (renderstate->old.render_mode)
+    {
+        case RENDERMODE_DEFAULT_DEFERRED:
+            renderstate->old.gp_opaque_pass = create_deferred_opaque_geometry_pipeline(renderstate);
+            renderstate->old.gp_deferred_lighting = create_deferred_lighting_pass_pipeline(renderstate);
+            renderstate->old.gp_transparent_pass = create_forward_transparent_pass(renderstate);
+            break;
+        
+        case RENDERMODE_DEFAULT_FORWARD:
+            renderstate->old.gp_opaque_pass = create_forward_opaque_pass(renderstate);
+            renderstate->old.gp_transparent_pass = create_forward_transparent_pass(renderstate);
+            break;
+        
+        case RENDERMODE_DEBUGVIZ_MESH_DENSITY:
+            create_mesh_density_visualisation_pipelines(renderstate);
+            break;
+        
+        case RENDERMODE_DEBUGVIZ_SHOW_MIPLEVELS:
+        case RENDERMODE_DEBUGVIZ_FRAGMENT_DEPTH:
+        case RENDERMODE_DEBUGVIZ_FRAGMENT_DEPTH_PARTIAL_DERIVATIVES:        
+        case RENDERMODE_DEBUGVIZ_BASELINE_OVERDRAW:
+        case RENDERMODE_DEBUGVIZ_BASIC_OVERSHADING:
+            create_general_debug_visuals_pipelines(renderstate);
+            break;
+
+        default:
+            SDL_LogError(SDL_LOG_CATEGORY_ERROR, "Error: Unimplemented render mode: %d\n", renderstate->old.render_mode);
+            assert(0 && "Unimplemented render mode");
+            exit(1);
+    }
+
+    // Postprocess shaders
+    renderstate->old.gp_fullscreen_tri_mosaic = create_fullscreen_postprocess_pipeline(renderstate, SPIRV_PATH_POSTPROCESS_MOSAIC_FRAG, renderstate->swapchain_image_format);
+
+    // Bloom shaders (horizontal goes into an identical pingpong image buffer because we can't read and write to the same image at the same time during parallel computation)
+    renderstate->old.gp_bloom_brightness_extraction    = create_fullscreen_postprocess_pipeline(renderstate, SPIRV_PATH_BLOOM_EXTRACT_BRIGHTNESS_FRAG, renderstate->old.bloom_target_image.image_format);
+    renderstate->old.gp_bloom_gaussian_blur_horizontal = create_fullscreen_postprocess_pipeline(renderstate, SPIRV_PATH_BLOOM_HBLUR_FRAG, renderstate->old.bloom_pingpong_image.image_format);
+    renderstate->old.gp_bloom_gaussian_blur_vertical   = create_fullscreen_postprocess_pipeline(renderstate, SPIRV_PATH_BLOOM_VBLUR_FRAG, renderstate->old.bloom_target_image.image_format);
+    renderstate->old.gp_bloom_apply = create_bloom_apply_pipeline(renderstate, renderstate->old.render_target_pingpong_image.image_format);
+
+    // Shadow mapping shaders
+    renderstate->old.gp_shadowmap_opaque      = create_shader_mapping_pipeline(renderstate, 0);
+    renderstate->old.gp_shadowmap_transparent = create_shader_mapping_pipeline(renderstate, 1);
+}
+
+void destroy_all_graphics_pipelines(RenderState* renderstate)
+{
+    destroy_graphics_pipeline(renderstate, &renderstate->old.gp_opaque_pass);
+    destroy_graphics_pipeline(renderstate, &renderstate->old.gp_deferred_lighting);
+    destroy_graphics_pipeline(renderstate, &renderstate->old.gp_transparent_pass);
+    destroy_graphics_pipeline(renderstate, &renderstate->old.gp_fullscreen_tri_mosaic);
+    destroy_graphics_pipeline(renderstate, &renderstate->old.gp_shadowmap_opaque);
+    destroy_graphics_pipeline(renderstate, &renderstate->old.gp_shadowmap_transparent);
+    destroy_graphics_pipeline(renderstate, &renderstate->old.gp_bloom_brightness_extraction);
+    destroy_graphics_pipeline(renderstate, &renderstate->old.gp_bloom_gaussian_blur_horizontal);
+    destroy_graphics_pipeline(renderstate, &renderstate->old.gp_bloom_gaussian_blur_vertical);
+    destroy_graphics_pipeline(renderstate, &renderstate->old.gp_bloom_apply);
+}
+
