@@ -21,6 +21,7 @@ typedef struct RenderState
     SDL_Window* window;
     b32 using_validation_layers;
     b32 program_caused_vulkan_validation_layer_errors;
+    u64 frame_number;
 
     b32 uncapped_fps;
 
@@ -47,6 +48,10 @@ typedef struct RenderState
     VkSemaphore* swapchain_image_acquired_semaphores;
     VkSemaphore* swapchain_image_render_semaphores;
 
+    // Multiple frames in flight to avoid stalling pipeline between frames
+#define NUM_FRAMES_IN_FLIGHT 2
+    VkFence rendering_complete_fences[NUM_FRAMES_IN_FLIGHT];
+
     // The old stuff that I want to redo, but first need something up on the screen for others to work from.
     // E.g. Get cube rendering running, and then people can work on input and player movement
     // Implementing collisions with a physics engine (jolt)
@@ -72,7 +77,10 @@ RenderState;
 // // (end of due rework)
 
 // Not in due_rework/:
+
 void _Renderer_OnWindowResize();
+void _Renderer_OnWindowMinimize();
+
 QueueFamilyIndices      get_physical_device_queue_family_indices(VkPhysicalDevice physical_device);
 int                     score_physical_device_and_check_required_features(VkPhysicalDevice physical_device);  // Negative score means unsuitable device
 SwapChainSupportDetails get_and_alloc_swap_chain_support_details(VkPhysicalDevice physical_device);

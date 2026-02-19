@@ -494,6 +494,21 @@ bool Renderer_Init(const Renderer_InitInfo* info)
         SDL_assert(renderstate.swapchain != VK_NULL_HANDLE);
     }
 
+    // Init per frame sync structures
+    {
+        VkFenceCreateInfo render_fence_create_info = {
+            .sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO,
+            .pNext = NULL,
+            .flags = VK_FENCE_CREATE_SIGNALED_BIT,
+        };
+
+        for (u32 i = 0; i < NUM_FRAMES_IN_FLIGHT; ++i)
+        {
+            VK_CHECK(vkCreateFence(renderstate.device, &render_fence_create_info, NULL, &renderstate.rendering_complete_fences[i]));
+        }
+    }
+
+
     return true;
 }
 
@@ -544,17 +559,26 @@ void Renderer_ListenToWindowEvent(SDL_Event event)
 {
     switch (event.type)
     {
-    case SDL_EVENT_WINDOW_RESIZED:
-        _Renderer_OnWindowResize();   
-        break;
+        case SDL_EVENT_WINDOW_RESIZED:
+            _Renderer_OnWindowResize();   
+            break;
+        
+        case SDL_EVENT_WINDOW_MINIMIZED:
+            _Renderer_OnWindowMinimize();
+            break;
+        
+        default:
     }
 }
 
 void _Renderer_OnWindowResize()
 {
-    #warning TODO: Implement swapchain resize and link to SDL size callback
+    create_or_recreate_swapchain();
+}
 
-
+void _Renderer_OnWindowMinimize()
+{
+    // TODO: Pause rendering on minimize
 }
 
 void Renderer_BeginFrame()
@@ -564,11 +588,62 @@ void Renderer_BeginFrame()
 
 void Renderer_EndFrame()
 {
+    // TEMP NOTES
     // clear background
     // go through draw call lists and render then with vulkan (deferred and forward?)
     // (hybrid? with clustered shading? lots to think about)
     // best to support as much via shared code if it's simple, otherwise make an early choice.
     
+    u32 frame_in_flight = renderstate.frame_number % NUM_FRAMES_IN_FLIGHT;
+
+    // Wait for rendering to be complete for this frame in flight.
+    // NOTE: We don't reset the fence until after we know the swapchain does not need recreating.
+    u64 sync_timeout_nanoseconds;
+#   ifdef NDEBUG
+        // Wait forever in release mode
+        sync_timeout_nanoseconds = UINT64_MAX;
+#   else
+        // Only wait one second in debug mdoe to detect deadlocks/hangs
+        sync_timeout_nanoseconds = 1000000000UL;
+#   endif
+    VK_CHECK(vkWaitForFences(renderstate.device, 1, &renderstate.rendering_complete_fences[frame_in_flight], VK_TRUE, sync_timeout_nanoseconds));
+
+    // Get next swapchain image
+    // NOTE: If another frame isn't finished with the swapchain image, the GPU must't execute commands on the next swapchain image.
+    //       so it must have attained the image_aquired semaphore first.
+    u32 image_acquired_semaphore_id = renderstate.frame_number % renderstate.swapchain_image_count;
+    u32 swapchain_image_index;
+    VkResult acquire_result = vkAcquireNextImageKHR(
+        renderstate.device,
+        renderstate.swapchain,
+        sync_timeout_nanoseconds,
+        renderstate.swapchain_image_acquired_semaphores[image_acquired_semaphore_id],
+        VK_NULL_HANDLE,
+        &swapchain_image_index
+    );
+    if (acquire_result == VK_ERROR_OUT_OF_DATE_KHR || acquire_result == VK_SUBOPTIMAL_KHR)
+    {
+        // NOTE: This handles resizes explicitly for drivers that don't explicitly trigger
+        // VK_ERROR_OUT_OF_DATE_KHR automatically on window resize (hence not triggering the SDL callback)
+        // I don't get this issue on my laptop but it seems like it may be needed for some machines.
+
+        // Return from draw function, marking the window to be resized and subtracting the framenumber
+        // since we aren't drawing until the next main loop cycle.
+        _Renderer_OnWindowResize();
+        --renderstate.frame_number;
+        return;
+    }
+    VK_CHECK(acquire_result);
+
+    // Now we can safely reset the rendering complete fence.
+    // NOTE: The fence is in place to make sure this frame in flight's graphics commands have finished executing on the GPU.
+    VK_CHECK(vkResetFences(renderstate.device, 1, &renderstate.rendering_complete_fences[frame_in_flight]));
+
+
+    #warning TODO: Command buffer stuff. Whats the multithread proof approach here?
+
+    // This happens at the very end:
+    ++renderstate.frame_number;
 }
 
 /////////////////
@@ -926,7 +1001,9 @@ void create_or_recreate_swapchain()
         // Requesting in pixel coordinates not screen coordinates because some HiDPI displays make a distinction there
         // and we want to actually render to each and every pixel available on the monitor
         int width, height;
-        SDL_GetWindowSizeInPixels(renderstate.window, &width, &height);
+        SDL_assert(
+            SDL_GetWindowSizeInPixels(renderstate.window, &width, &height)
+        );
 
         VkExtent2D actual_extent = { (u32)width, (u32)height };
 
