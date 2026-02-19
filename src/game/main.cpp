@@ -11,8 +11,10 @@ int main(int argc, char *argv[])
     is_debugging = false;
 #endif
 
-    Core_Init();
-    SDL_Window* window = Core_CreateEngineWindow("Adventure Game", 1280, 720);
+    SDL_Window* window = Core_Init((Core_InitInfo){
+        "Close-quarters Adventure Game",
+        1280, 720
+    });
 
     Renderer_InitInfo renderer_info = { .window = window, .enable_validation = is_debugging };
     Renderer_Init(&renderer_info);
@@ -26,10 +28,7 @@ int main(int argc, char *argv[])
         {
             if (event.type == SDL_EVENT_QUIT) running = false;
 
-            if (event.type == SDL_EVENT_WINDOW_RESIZED)
-            {
-                Renderer_OnWindowResize();
-            }
+            Renderer_ListenToWindowEvent(event);
         }
 
         // Game ticks
@@ -39,13 +38,13 @@ int main(int argc, char *argv[])
         uint32_t flags = SDL_GetWindowFlags(window);
         if (!(flags & SDL_WINDOW_MINIMIZED))
         {
-            // Renderer_BeginFrame();
+            Renderer_BeginFrame();
 
             // Example basic submission to implement:
             // Renderer_DrawCmd cmd = ????;
             // Renderer_Submit(cmd);
 
-            // Renderer_EndFrame();
+            Renderer_EndFrame();
         }
 
         static int temp_exit_window = 0;

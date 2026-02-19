@@ -33,7 +33,7 @@ local function ensure_sdl_built()
 
     os.mkdir(SDL_BUILD_DIR)
 
-    local build_type = "Release" -- default
+    local build_type = "Release" -- default (no need to debug SDL right?)
 
     -- Premake knows nothing about cfg here, so pick one or build both
     local cmd = table.concat({

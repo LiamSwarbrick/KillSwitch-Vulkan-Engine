@@ -48,6 +48,9 @@ RendererInitInfo;
 
 bool Renderer_Init(const Renderer_InitInfo* info);
 void Renderer_Shutdown();
-void Renderer_OnWindowResize();
+void Renderer_ListenToWindowEvent(SDL_Event event);
+void Renderer_BeginFrame();
+void Renderer_EndFrame();
+
 
 #endif  // ENGINE_RENDERER_H

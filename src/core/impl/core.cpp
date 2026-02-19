@@ -1,6 +1,6 @@
 #include "core.h"
 
-bool Core_Init()
+SDL_Window* Core_Init(Core_InitInfo init_info)
 {
     bool success = SDL_Init(
         SDL_INIT_VIDEO
@@ -9,13 +9,20 @@ bool Core_Init()
     if (!success)
     {
         SDL_LogError(SDL_LOG_CATEGORY_ERROR, "Failed to init SDL\n");
-        return false;
+        exit(1);
     }
 
     SDL_SetAppMetadata("Adventure Engine Game", "earlyprototype", NULL);
     
+    SDL_Window* window = SDL_CreateWindow(init_info.title, init_info.width, init_info.height, SDL_WINDOW_VULKAN | SDL_WINDOW_RESIZABLE);
+    if (window == NULL)
+    {
+        SDL_LogError(SDL_LOG_CATEGORY_ERROR, "Failed to create window: %s\n", SDL_GetError());
+        return NULL;
+    }
+
     SDL_Log("Core Initialized\n");
-    return true;
+    return window;
 }
 
 void Core_Shutdown()
@@ -25,14 +32,3 @@ void Core_Shutdown()
     SDL_Log("Core Shutdown.\n");
 }
 
-SDL_Window* Core_CreateEngineWindow(const char* title, int width, int height)
-{
-    SDL_Window* window = SDL_CreateWindow(title, width, height, SDL_WINDOW_VULKAN | SDL_WINDOW_RESIZABLE);
-    if (window == NULL)
-    {
-        SDL_LogError(SDL_LOG_CATEGORY_ERROR, "Failed to create window: %s\n", SDL_GetError());
-        return NULL;
-    }
-
-    return window;
-}

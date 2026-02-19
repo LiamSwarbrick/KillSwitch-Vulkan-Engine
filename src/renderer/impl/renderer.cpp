@@ -8,7 +8,7 @@ RenderState renderstate;
 // All other global state here should be const
 
 #define API_VERSION VK_API_VERSION_1_4
-const char* app_name = "gotonwrongtrainfuck";
+const char* app_name = "quantocostoilengino";
 const u32 app_version = VK_MAKE_VERSION(0, 0, 0);
 const char* engine_name = "advengine_renderer_in_progress";
 const u32 engine_version = VK_MAKE_VERSION(0, 0, 0);
@@ -87,7 +87,7 @@ bool Renderer_Init(const Renderer_InitInfo* info)
     // Init the main memory tracker for the main thread which in debug mode we can query it for memory leaks during cleanup
     renderstate.main.tt = init_per_thread_allocation_tracker("Renderer_MainThreadTracker");
 
-    // Init from Renderer_InitInfo
+    // Init internal state from Renderer_InitInfo
     renderstate.window = info->window;
     renderstate.using_validation_layers = info->enable_validation;
 
@@ -297,7 +297,7 @@ bool Renderer_Init(const Renderer_InitInfo* info)
         VK_CHECK(vkEnumeratePhysicalDevices(renderstate.instance, &device_count, NULL));
         if (device_count == 0)
         {
-            fprintf(stderr, "Could not find a GPU with Vulkan support... Exiting");
+            SDL_LogError(SDL_LOG_CATEGORY_ERROR, "Could not find a GPU with Vulkan support... Exiting");
             return false;
         }
 
@@ -323,7 +323,7 @@ bool Renderer_Init(const Renderer_InitInfo* info)
         }
         if (device_suitability_score[candidate_device_index] < 0)
         {
-            fprintf(stderr, "No suitable physical device for this vulkan program :(\n");
+            SDL_LogError(SDL_LOG_CATEGORY_ERROR, "No suitable physical device for this vulkan program :(\n");
             return false;
         }
         renderstate.physical_device = devices[candidate_device_index];
@@ -395,6 +395,9 @@ bool Renderer_Init(const Renderer_InitInfo* info)
             }
         }
         
+        // ::::::::::::::::: ENABLE THE PHYSICAL DEVICE FEATURES WE ARE USING ::::::::::::::::: //
+        // NOTE: Keep score_physical_device_and_check_required_features() up to date with this  //
+
         // The physical device features we are using get specified here
         VkPhysicalDeviceFeatures device_features = {};
         device_features.samplerAnisotropy = VK_TRUE;
@@ -433,7 +436,7 @@ bool Renderer_Init(const Renderer_InitInfo* info)
 
         // Older Vulkan APIs had distinction between instance and device extensions.
         // Later versions don't need to specify extensions for the device 
-        // but we do it anyway for compatability with older versions
+        // but we do it anyway for compatability with older versions in case we ever downgrade for some platform.
         device_create_info.enabledLayerCount = validation_layers_count;
         device_create_info.ppEnabledLayerNames = validation_layers;
         
@@ -475,13 +478,12 @@ bool Renderer_Init(const Renderer_InitInfo* info)
         allocator_create_info.pVulkanFunctions = &vulkan_functions;
 
         VK_CHECK(vmaCreateAllocator(&allocator_create_info, &renderstate.vma_allocator));
-
         SDL_Log("Vulkan Memory Allocator Initialised\n");
 
         SDL_assert(renderstate.vma_allocator != VK_NULL_HANDLE);
     }
 
-    old_stuff_init(&renderstate);
+    // old_stuff_init(&renderstate);
 
     // Create SwapChain
     {
@@ -502,7 +504,7 @@ void Renderer_Shutdown()
     // Ensure device is not doing anywork before destroying it's stuff.
     vkDeviceWaitIdle(renderstate.device);
 
-    old_stuff_clean(&renderstate);
+    // old_stuff_clean(&renderstate);
     destroy_swapchain(renderstate.swapchain);
 
     // Destroy fundamental Vulkan objects
@@ -538,11 +540,35 @@ void Renderer_Shutdown()
     check_tracker_for_memory_leaks(&renderstate.main.tt);
 }
 
-void Renderer_OnWindowResize()
+void Renderer_ListenToWindowEvent(SDL_Event event)
+{
+    switch (event.type)
+    {
+    case SDL_EVENT_WINDOW_RESIZED:
+        _Renderer_OnWindowResize();   
+        break;
+    }
+}
+
+void _Renderer_OnWindowResize()
 {
     #warning TODO: Implement swapchain resize and link to SDL size callback
-    #warning (actually, instead just pass all events to a Renderer_EventListen() function and do it all in there)
-    // This way, each module can listen to all events and respond accordingly.
+
+
+}
+
+void Renderer_BeginFrame()
+{
+    // Clear draw call lists
+}
+
+void Renderer_EndFrame()
+{
+    // clear background
+    // go through draw call lists and render then with vulkan (deferred and forward?)
+    // (hybrid? with clustered shading? lots to think about)
+    // best to support as much via shared code if it's simple, otherwise make an early choice.
+    
 }
 
 /////////////////
@@ -720,7 +746,7 @@ int score_physical_device_and_check_required_features(VkPhysicalDevice physical_
             all_required_features_supported = all_required_features_supported  && device_features.features.samplerAnisotropy;
             if (device_features.features.samplerAnisotropy)
             {
-                printf("--- - Max anisotropy: %f\n", device_properties.limits.maxSamplerAnisotropy);
+                SDL_Log("--- - Max anisotropy: %f\n", device_properties.limits.maxSamplerAnisotropy);
             }
             
             SDL_Log("--- Synchronization 2: %d\n", vk13_features.synchronization2);
@@ -1031,13 +1057,13 @@ void create_or_recreate_swapchain()
     
 
     // TODO: Change the following during the rework:
-    old_create_swapchain_tied_objects(&renderstate, old_format);
+    // old_create_swapchain_tied_objects(&renderstate, old_format);
 }
 
 void destroy_swapchain(VkSwapchainKHR swapchain)
 {
     // TODO: Change the following during the rework:
-    old_destroy_swapchain_tied_objects(&renderstate);
+    // old_destroy_swapchain_tied_objects(&renderstate);
 
     // Destroy Image Views and Semaphores
     for (u32 i = 0; i < renderstate.swapchain_image_count; ++i)

@@ -204,8 +204,33 @@ vklayer_cmd_pipeline_barrier_for_buffers(VkCommandBuffer cmd, u32 barrier_count,
 
 VkFormat vklayer_find_supported_depth_format(VkPhysicalDevice physical_device)
 {
+    // TODO: Currently just checking for support of D32_SFLOAT, support more formats
 
+    // Preferred formats in order of quality/support
+    const VkFormat candidates[] = {
+        VK_FORMAT_D32_SFLOAT,           // 32-bit floating point depth (best precision)
+        // VK_FORMAT_D32_SFLOAT_S8_UINT,   // 32-bit depth + 8-bit stencil
+        // VK_FORMAT_D24_UNORM_S8_UINT,    // 24-bit normalized depth + 8-bit stencil (most common)
+        // VK_FORMAT_D16_UNORM             // 16-bit depth (least precision, fastest)
+    };
+
+    int num_candidates = sizeof(candidates) / sizeof(VkFormat);
+    for (int i = 0; i < num_candidates; ++i)
+    {
+        VkFormatProperties format_properties;
+        vkGetPhysicalDeviceFormatProperties(physical_device, candidates[i], &format_properties);
+
+        // Check if the format can be used as a depth/stencil attachment
+        if (format_properties.optimalTilingFeatures & VK_FORMAT_FEATURE_DEPTH_STENCIL_ATTACHMENT_BIT)
+        {
+            return candidates[i];
+        }
+    }
+
+    SDL_assert(0 && "TODO: Support more than just D32_SFLOAT depth buffer format");
+    return VK_FORMAT_UNDEFINED;
 }
+
 
 /////////////////
 

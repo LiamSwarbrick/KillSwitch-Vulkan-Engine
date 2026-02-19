@@ -6,6 +6,7 @@
 
 #include "SDL3/SDL.h"
 
+// TODO: Maybe put config file in init info?
 typedef struct Core_InitInfo
 {
     const char* title;
@@ -14,15 +15,16 @@ typedef struct Core_InitInfo
 }
 Core_InitInfo;
 
-bool Core_Init();
+SDL_Window* Core_Init(Core_InitInfo init_info);
 void Core_Shutdown();
 
 SDL_Window* Core_CreateEngineWindow(const char* title, int width, int height);
 void Core_DestroyWindow();
 
-// E.g. (this is my current plan)
-typedef uint32_t MeshHandle;
-typedef uint32_t TextureHandle;
-typedef uint32_t BufferHandle;
+// Currently plan to use opaque handles for referring to things
+// from different modules maybe, e.g.:
+// typedef uint32_t MeshHandle;
+// typedef uint32_t TextureHandle;
+// typedef uint32_t BufferHandle;
 
 #endif  // ENGINE_CORE_H
