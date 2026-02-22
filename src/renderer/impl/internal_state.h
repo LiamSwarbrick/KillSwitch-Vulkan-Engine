@@ -13,6 +13,14 @@ typedef struct ThreadData
 }
 ThreadData;
 
+typedef struct FrameState
+{
+    VkFence rendering_complete_fence;
+    VkCommandPool render_command_pool;
+    VkCommandBuffer render_command_buffer;
+}
+FrameState;
+
 typedef struct RenderState
 {
     // Main thread:
@@ -42,15 +50,21 @@ typedef struct RenderState
     VkSwapchainKHR swapchain;
     VkFormat swapchain_image_format;
     VkExtent2D swapchain_extent;
+    #define MAX_SWAPCHAIN_IMAGE_COUNT 10
     u32 swapchain_image_count;
-    VkImage* swapchain_images;
-    VkImageView* swapchain_image_views;
-    VkSemaphore* swapchain_image_acquired_semaphores;
-    VkSemaphore* swapchain_image_render_semaphores;
+    VkImage swapchain_images[MAX_SWAPCHAIN_IMAGE_COUNT];
+    VkImageView swapchain_image_views[MAX_SWAPCHAIN_IMAGE_COUNT];
+    VkSemaphore swapchain_image_acquired_semaphores[MAX_SWAPCHAIN_IMAGE_COUNT];
+    VkSemaphore swapchain_image_render_semaphores[MAX_SWAPCHAIN_IMAGE_COUNT];
+    // u32 swapchain_image_count;
+    // VkImage* swapchain_images;
+    // VkImageView* swapchain_image_views;
+    // VkSemaphore* swapchain_image_acquired_semaphores;
+    // VkSemaphore* swapchain_image_render_semaphores;
 
     // Multiple frames in flight to avoid stalling pipeline between frames
 #define NUM_FRAMES_IN_FLIGHT 2
-    VkFence rendering_complete_fences[NUM_FRAMES_IN_FLIGHT];
+    FrameState frames[NUM_FRAMES_IN_FLIGHT];
 
     // The old stuff that I want to redo, but first need something up on the screen for others to work from.
     // E.g. Get cube rendering running, and then people can work on input and player movement
@@ -87,7 +101,7 @@ SwapChainSupportDetails get_and_alloc_swap_chain_support_details(VkPhysicalDevic
 void                    free_swap_chain_support_details(SwapChainSupportDetails details);
 
 void create_or_recreate_swapchain();
-void destroy_swapchain(VkSwapchainKHR swapchain);
+void destroy_swapchain();
 
 GPU_Buffer create_buffer(VmaAllocator vma_allocator, u64 size, VkBufferUsageFlags buffer_usage_flags, VmaAllocationCreateFlags allocation_flags, VmaMemoryUsage memory_usage);
 void       destroy_buffer(VmaAllocator vma_allocator, const GPU_Buffer* gpu_buffer);

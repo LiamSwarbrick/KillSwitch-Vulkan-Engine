@@ -27,7 +27,7 @@ typedef union QueueFamilyIndices
 }
 QueueFamilyIndices;
 
-typedef struct SwapChainSupportDetails
+typedef struct SwapchainSupportDetails
 {
     VkSurfaceCapabilitiesKHR capabilities;
     u32 format_count;

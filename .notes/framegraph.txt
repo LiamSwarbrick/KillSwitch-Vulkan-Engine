@@ -1,0 +1,180 @@
+
+Framegraph:
+- RenderPasses are nodes. Resources are dependencies to be synchonised.
+- Modern engines rebuild every frame since the FrameGraph is such a small datastructure
+
+// RESOURCES:
+//
+typedef enum
+{
+    FG_RESOURCE_IMAGE,
+    FG_RESOURCE_BUFFER
+}
+FG_ResourceType;
+
+typedef enum
+{
+    FG_ACCESS_READ,
+    FG_ACCESS_WRITE,
+    FG_ACCESS_READ_WRITE
+}
+FG_Access;
+
+typedef struct FG_ResourceUsage
+{
+    uint32_t resource_id;
+
+    FG_ResourceType type;
+    FG_Access access;
+
+    VkPipelineStageFlags2 stage;
+    VkAccessFlags2 access_mask;
+}
+FG_ResourceUsage;
+
+typedef struct FG_Resource
+{
+    FG_ResourceType type;
+
+    union {
+        struct {
+            VkFormat format;
+            VkExtent3D extent;
+            VkImageUsageFlags usage;
+        } image;
+
+        struct {
+            size_t size;
+            VkBufferUsageFlags usage;
+        } buffer;
+    };
+
+}
+FG_Resource;
+
+// RENDERPASSES:
+//
+typedef enum
+{
+    FG_PASS_GRAPHICS,
+    FG_PASS_COMPUTE,
+    FG_PASS_TRANSFER
+    // Far future: FG_PASS_RAYTRACING?
+}
+FG_PassType;
+
+#define FG_RENDERPASS_MAX_RESOURCES 32  // To keep the struct POD
+typedef void (*FG_ExecuteFn)(CommandList*, void* user_data);
+struct FG_RenderPass
+{
+    const char* name;
+    FG_PassType type;
+
+    uint32_t resource_count;
+    FG_ResourceUsage resources[FG_RENDERPASS_MAX_RESOURCES];
+
+    FG_ExecuteFn execute;
+    void* user_data;
+};
+
+// FRAMEGRAPH:
+//
+#define FG_MAX_RESOURCES    256
+#define FG_MAX_RENDERPASSES 256
+typedef struct FrameGraph
+{
+    uint32_t pass_count;
+    uint32_t resource_count;
+
+    FG_RenderPass passes[FG_MAX_PASSES];
+    FG_Resource resources[FG_MAX_RESOURCES];
+
+} FrameGraph;
+
+
+OLD
+DAG of Nodes, which we topological sort for optimal execution.
+Node in graph is either a rendertarget or a renderpass.
+Execution of the framegraph involves tracking state of each rendertargets used by renderpasses, so that synchronisation occurs (pipeline barriers).
+
+#define MAX_MRT 12  // Max input/output targets for multiple render targets
+typedef struct RenderPass
+{
+    uint32_t in_target_count;
+    uint32_t out_target_count;
+
+    RenderTargetHandle input_targets[MAX_MRT];
+    RenderTargetHandle output_targets[MAX_MRT];
+}
+RenderPass;
+
+struct RenderTarget
+{
+    GPU_Image image;
+    // current synch state
+}
+RenderTarget;
+
+enum FrameGraphNodeTypeEnum { FRAMEGRAPH_NODE_TYPE_RENDERPASS, FRAMEGRAPH_NODE_TYPE_RENDERPASS };
+typedef struct FrameGraphNode
+{
+    uint32_t node_type;
+    union
+    {
+        RenderPass renderpass;
+        RenderTarget rendertarget;
+    };
+}
+FrameGraphNode;
+
+
+
+typedef struct GPU_Buffer
+{
+    VkBuffer buffer;
+    VmaAllocation allocation;
+    VmaAllocationInfo info;
+}
+GPU_Buffer;
+
+typedef struct GPU_Image
+{
+    VkImageLayout   current_layout;
+    VkImage         image;
+    VkImageView     image_view;
+    VmaAllocation   allocation;
+    VkExtent3D      image_extent;
+    VkFormat        image_format;
+}
+GPU_Image;
+
+DrawPacket:
+- MaterialHandle:
+
+
+
+
+
+
+
+OLD
+Material:
+- uint shader_type;  // PBR, unlit, toon-shaded, etc.
+- uint flags;        // outlined, xray, emissive, etc.  (For adding modifications)
+- uint texture
+
+Multiple passes, same mesh (very common):
+if (enemy.marked_for_death)
+{
+    xray_pass.add(draw_packet(enemy));
+}
+
+main_pass.add(draw_packet(enemy));
+
+if (enemy.outlined)
+{
+    outline_pass.add(draw_packet(enemy));
+}
+
+for each drawpacket:
+- if material 

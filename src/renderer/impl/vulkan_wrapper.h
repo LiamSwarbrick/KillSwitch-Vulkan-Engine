@@ -15,7 +15,7 @@ do                                                                          \
     VkResult err = (x);                                                     \
     if (err != VK_SUCCESS)                                                  \
     {                                                                       \
-        fprintf(stderr, "[%s:%d] Vulkan error: %s (%d)\n",                  \
+        fprintf(stderr, "\x1b[33m[%s:%d] Vulkan error: %s (%d)\x1b[0m\n",                  \
             __FILE__, __LINE__, vklayer_result_to_string(err), (int)(err)); \
         SDL_assert(0 && "VK_CHECK() not successful.");                          \
         abort();                                                            \

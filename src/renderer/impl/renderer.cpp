@@ -485,26 +485,36 @@ bool Renderer_Init(const Renderer_InitInfo* info)
 
     // old_stuff_init(&renderstate);
 
-    // Create SwapChain
-    {
-        renderstate.swapchain = VK_NULL_HANDLE;
+    // Create Swapchain
+    create_or_recreate_swapchain();
 
-        create_or_recreate_swapchain();
-
-        SDL_assert(renderstate.swapchain != VK_NULL_HANDLE);
-    }
-
-    // Init per frame sync structures
+    // Init per frame structures
     {
         VkFenceCreateInfo render_fence_create_info = {
             .sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO,
             .pNext = NULL,
             .flags = VK_FENCE_CREATE_SIGNALED_BIT,
         };
+        VkCommandPoolCreateInfo cmdpool_create_info = {
+            .sType             = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
+            .pNext             = NULL,
+            .flags             = 0,
+            .queueFamilyIndex  = (u32)renderstate.queue_family_indices.graphics_family
+        };
 
         for (u32 i = 0; i < NUM_FRAMES_IN_FLIGHT; ++i)
         {
-            VK_CHECK(vkCreateFence(renderstate.device, &render_fence_create_info, NULL, &renderstate.rendering_complete_fences[i]));
+            VK_CHECK(vkCreateFence(renderstate.device, &render_fence_create_info, NULL, &renderstate.frames[i].rendering_complete_fence));
+            VK_CHECK(vkCreateCommandPool(renderstate.device, &cmdpool_create_info, NULL, &renderstate.frames[i].render_command_pool));
+
+            VkCommandBufferAllocateInfo cmd_alloc_info = {
+                .sType               = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
+                .pNext               = NULL,
+                .commandPool         = renderstate.frames[i].render_command_pool,
+                .level               = VK_COMMAND_BUFFER_LEVEL_PRIMARY,
+                .commandBufferCount  = 1
+            };
+            VK_CHECK(vkAllocateCommandBuffers(renderstate.device, &cmd_alloc_info, &renderstate.frames[i].render_command_buffer));
         }
     }
 
@@ -520,7 +530,14 @@ void Renderer_Shutdown()
     vkDeviceWaitIdle(renderstate.device);
 
     // old_stuff_clean(&renderstate);
-    destroy_swapchain(renderstate.swapchain);
+
+    for (int i = 0; i < NUM_FRAMES_IN_FLIGHT; ++i)
+    {
+        vkDestroyFence(renderstate.device, renderstate.frames[i].rendering_complete_fence, NULL);
+        vkDestroyCommandPool(renderstate.device, renderstate.frames[i].render_command_pool, NULL);
+    }
+
+    destroy_swapchain();
 
     // Destroy fundamental Vulkan objects
     vmaDestroyAllocator(renderstate.vma_allocator);
@@ -566,13 +583,12 @@ void Renderer_ListenToWindowEvent(SDL_Event event)
         case SDL_EVENT_WINDOW_MINIMIZED:
             _Renderer_OnWindowMinimize();
             break;
-        
-        default:
-    }
+    };
 }
 
 void _Renderer_OnWindowResize()
 {
+    vkDeviceWaitIdle(renderstate.device);
     create_or_recreate_swapchain();
 }
 
@@ -586,27 +602,24 @@ void Renderer_BeginFrame()
     // Clear draw call lists
 }
 
-void Renderer_EndFrame()
-{
-    // TEMP NOTES
+// TEMP NOTES
     // clear background
     // go through draw call lists and render then with vulkan (deferred and forward?)
     // (hybrid? with clustered shading? lots to think about)
     // best to support as much via shared code if it's simple, otherwise make an early choice.
-    
+void Renderer_EndFrame()
+{
     u32 frame_in_flight = renderstate.frame_number % NUM_FRAMES_IN_FLIGHT;
 
     // Wait for rendering to be complete for this frame in flight.
     // NOTE: We don't reset the fence until after we know the swapchain does not need recreating.
     u64 sync_timeout_nanoseconds;
-#   ifdef NDEBUG
-        // Wait forever in release mode
-        sync_timeout_nanoseconds = UINT64_MAX;
-#   else
-        // Only wait one second in debug mdoe to detect deadlocks/hangs
-        sync_timeout_nanoseconds = 1000000000UL;
-#   endif
-    VK_CHECK(vkWaitForFences(renderstate.device, 1, &renderstate.rendering_complete_fences[frame_in_flight], VK_TRUE, sync_timeout_nanoseconds));
+#ifdef NDEBUG
+    sync_timeout_nanoseconds = UINT64_MAX;  // Wait forever in release mode
+#else
+    sync_timeout_nanoseconds = 1000000000UL;  // Only wait one second in debug mdoe to detect deadlocks/hangs
+#endif
+    VK_CHECK(vkWaitForFences(renderstate.device, 1, &renderstate.frames[frame_in_flight].rendering_complete_fence, VK_TRUE, sync_timeout_nanoseconds));
 
     // Get next swapchain image
     // NOTE: If another frame isn't finished with the swapchain image, the GPU must't execute commands on the next swapchain image.
@@ -637,7 +650,7 @@ void Renderer_EndFrame()
 
     // Now we can safely reset the rendering complete fence.
     // NOTE: The fence is in place to make sure this frame in flight's graphics commands have finished executing on the GPU.
-    VK_CHECK(vkResetFences(renderstate.device, 1, &renderstate.rendering_complete_fences[frame_in_flight]));
+    VK_CHECK(vkResetFences(renderstate.device, 1, &renderstate.frames[frame_in_flight].rendering_complete_fence));
 
 
     #warning TODO: Command buffer stuff. Whats the multithread proof approach here?
@@ -886,7 +899,7 @@ int score_physical_device_and_check_required_features(VkPhysicalDevice physical_
         b32 is_swapchain_adequate = 0;
         if (all_required_extensions_available)  // Must only query swapchain support after making sure the previous extensions to do so were available
         {
-            SwapChainSupportDetails details = get_and_alloc_swap_chain_support_details(physical_device);
+            SwapchainSupportDetails details = get_and_alloc_swap_chain_support_details(physical_device);
             is_swapchain_adequate = details.format_count > 0 && details.present_mode_count > 0;
             free_swap_chain_support_details(details);
         }
@@ -912,10 +925,10 @@ int score_physical_device_and_check_required_features(VkPhysicalDevice physical_
     }
 }
 
-// NOTE: Need to free SwapChainSupportDetails.formats and .present_modes after use
-SwapChainSupportDetails get_and_alloc_swap_chain_support_details(VkPhysicalDevice physical_device)
+// NOTE: Need to free SwapchainSupportDetails.formats and .present_modes after use
+SwapchainSupportDetails get_and_alloc_swap_chain_support_details(VkPhysicalDevice physical_device)
 {
-    SwapChainSupportDetails details = {};
+    SwapchainSupportDetails details = {};
 
     // Capabilities are based on the VkPhysicalDevice and the VkSurfaceKHR
     vkGetPhysicalDeviceSurfaceCapabilitiesKHR(physical_device, renderstate.surface, &details.capabilities);
@@ -939,7 +952,7 @@ SwapChainSupportDetails get_and_alloc_swap_chain_support_details(VkPhysicalDevic
     return details;
 }
 
-void free_swap_chain_support_details(SwapChainSupportDetails details)
+void free_swap_chain_support_details(SwapchainSupportDetails details)
 {
     if (details.formats)       L_free(details.formats, &renderstate.main.tt);
     if (details.present_modes) L_free(details.present_modes, &renderstate.main.tt);
@@ -952,7 +965,7 @@ void create_or_recreate_swapchain()
     // Hence create_or_recreate instead of just destroy() then create() when one already exists.
 
     // Get support details for swap chain
-    SwapChainSupportDetails details = get_and_alloc_swap_chain_support_details(renderstate.physical_device);
+    SwapchainSupportDetails details = get_and_alloc_swap_chain_support_details(renderstate.physical_device);
 
     VkSurfaceFormatKHR chosen_format;
     int chosen_format_index = 0;
@@ -1060,7 +1073,8 @@ void create_or_recreate_swapchain()
     swapchain_create_info.oldSwapchain = old_swapchain;  // Will be VK_NULL_HANDLE on first creation since an old swapchain does not exist.
     
     // Create the (new) swapchain
-    VK_CHECK(vkCreateSwapchainKHR(renderstate.device, &swapchain_create_info, NULL, &renderstate.swapchain));
+    VkSwapchainKHR new_swapchain = VK_NULL_HANDLE;
+    VK_CHECK(vkCreateSwapchainKHR(renderstate.device, &swapchain_create_info, NULL, &new_swapchain));
     free_swap_chain_support_details(details);
 
     // Save the chosen format and extent so we can copy/transfer correctly to it later
@@ -1069,16 +1083,17 @@ void create_or_recreate_swapchain()
     renderstate.swapchain_extent = chosen_swap_extent;
 
     // Destroy old swapchain if it exists
-    if (renderstate.swapchain != VK_NULL_HANDLE)
+    if (old_swapchain != VK_NULL_HANDLE)
     {
         // Vulkan never implicitly destroys the old swapchain we passed to the new create info, we still must destroy it.
-        destroy_swapchain(old_swapchain);
+        destroy_swapchain();
     }
+    renderstate.swapchain = new_swapchain;
 
 
     // Retrieve the handles of the images created by the swapchaip
     vkGetSwapchainImagesKHR(renderstate.device, renderstate.swapchain, &renderstate.swapchain_image_count, NULL);
-    renderstate.swapchain_images = (VkImage*)L_calloc(renderstate.swapchain_image_count, sizeof(VkImage), &renderstate.main.tt);
+    memset(renderstate.swapchain_images, 0, sizeof(renderstate.swapchain_images));
     vkGetSwapchainImagesKHR(renderstate.device, renderstate.swapchain, &renderstate.swapchain_image_count, renderstate.swapchain_images);
 
     SDL_Log("Swapchain created.\n");
@@ -1086,7 +1101,7 @@ void create_or_recreate_swapchain()
     
     
     // Create Image Views for SwapChain
-    renderstate.swapchain_image_views = (VkImageView*)L_calloc(renderstate.swapchain_image_count, sizeof(VkImageView), &renderstate.main.tt);
+    memset(renderstate.swapchain_image_views, 0, sizeof(renderstate.swapchain_image_views));
     for (u32 i = 0; i < renderstate.swapchain_image_count; ++i)
     {
         VkImageViewCreateInfo image_view_create_info = {};
@@ -1113,8 +1128,8 @@ void create_or_recreate_swapchain()
 
 
     // Create Semaphores for SwapChain
-    renderstate.swapchain_image_acquired_semaphores = (VkSemaphore*)L_calloc(renderstate.swapchain_image_count, sizeof(VkSemaphore), &renderstate.main.tt);
-    renderstate.swapchain_image_render_semaphores   = (VkSemaphore*)L_calloc(renderstate.swapchain_image_count, sizeof(VkSemaphore), &renderstate.main.tt);
+    memset(renderstate.swapchain_image_acquired_semaphores, 0, sizeof(renderstate.swapchain_image_acquired_semaphores));
+    memset(renderstate.swapchain_image_render_semaphores, 0, sizeof(renderstate.swapchain_image_render_semaphores));
 
     VkSemaphoreCreateInfo semaphore_create_info = {};
     semaphore_create_info.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
@@ -1137,7 +1152,7 @@ void create_or_recreate_swapchain()
     // old_create_swapchain_tied_objects(&renderstate, old_format);
 }
 
-void destroy_swapchain(VkSwapchainKHR swapchain)
+void destroy_swapchain()
 {
     // TODO: Change the following during the rework:
     // old_destroy_swapchain_tied_objects(&renderstate);
@@ -1150,12 +1165,7 @@ void destroy_swapchain(VkSwapchainKHR swapchain)
         vkDestroySemaphore(renderstate.device, renderstate.swapchain_image_acquired_semaphores[i], NULL);
         vkDestroySemaphore(renderstate.device, renderstate.swapchain_image_render_semaphores[i], NULL);
     }
-    L_free(renderstate.swapchain_image_views, &renderstate.main.tt);
-    L_free(renderstate.swapchain_image_acquired_semaphores, &renderstate.main.tt);
-    L_free(renderstate.swapchain_image_render_semaphores, &renderstate.main.tt);
 
     // Swapchain images are automatically destroyed when swapchain is destroyed due to ownership
-    L_free(renderstate.swapchain_images, &renderstate.main.tt);
-
-    vkDestroySwapchainKHR(renderstate.device, swapchain, NULL);
+    vkDestroySwapchainKHR(renderstate.device, renderstate.swapchain, NULL);
 }
