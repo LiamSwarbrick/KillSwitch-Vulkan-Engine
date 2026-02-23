@@ -1,3 +1,6 @@
+# --- Misc Local Folders ---
+.notes_local_temp/
+
 # --- Build Outputs ---
 bin/
 build-artefacts/
@@ -34,10 +37,3 @@ Makefile
 *.swp
 *.swo
 .DS_Store
-
-# # --- External Libraries ---
-# # If you are building SDL3 from source, you usually want to keep the source 
-# # but ignore its build folder.
-# extern/SDL/build/  # <- but SDL has it's own gitignore
-# extern/**/bin/
-# extern/**/obj/
