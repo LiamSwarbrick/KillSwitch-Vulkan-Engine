@@ -98,11 +98,11 @@ void                    free_swap_chain_support_details(SwapChainSupportDetails 
 void create_or_recreate_swapchain();
 void destroy_swapchain();
 
-GPU_Buffer create_buffer(VmaAllocator vma_allocator, u64 size, VkBufferUsageFlags buffer_usage_flags, VmaAllocationCreateFlags allocation_flags, VmaMemoryUsage memory_usage);
-void       destroy_buffer(VmaAllocator vma_allocator, const GPU_Buffer* gpu_buffer);
-GPU_Buffer create_staging_buffer_from_data(VmaAllocator vma_allocator, u8* data, u64 size);
-void       destroy_image(VkDevice device, VmaAllocator vma_allocator, GPU_Image gpu_image);
-u32        compute_num_mip_levels(u32 image_level0_width, u32 image_level0_height);
-GPU_Image  create_attachment_image(RenderState* renderstate, VkExtent3D extent, VkFormat format, VkImageUsageFlags usage, VkImageAspectFlags aspect_flags, b32 has_msaa);
+// GPU_Buffer create_buffer(VmaAllocator vma_allocator, u64 size, VkBufferUsageFlags buffer_usage_flags, VmaAllocationCreateFlags allocation_flags, VmaMemoryUsage memory_usage);
+// void       destroy_buffer(VmaAllocator vma_allocator, const GPU_Buffer* gpu_buffer);
+// GPU_Buffer create_staging_buffer_from_data(VmaAllocator vma_allocator, u8* data, u64 size);
+// void       destroy_image(VkDevice device, VmaAllocator vma_allocator, GPU_Image gpu_image);
+// u32        compute_num_mip_levels(u32 image_level0_width, u32 image_level0_height);
+// GPU_Image  create_attachment_image(RenderState* renderstate, VkExtent3D extent, VkFormat format, VkImageUsageFlags usage, VkImageAspectFlags aspect_flags, b32 has_msaa);
 
 #endif  // ENGINE_RENDERER_RENDER_STATE_H
