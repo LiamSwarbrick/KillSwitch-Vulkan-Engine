@@ -46,14 +46,6 @@ int main(int argc, char *argv[])
 
             Renderer_EndFrame();
         }
-
-        static int temp_exit_window = 0;
-        temp_exit_window++;
-        if (temp_exit_window > 30)
-        {
-            SDL_Log("TEMP: Exiting window after 30 frames until something is actually on the screen\n");
-            break;
-        }
     }
 
     Renderer_Shutdown();

@@ -360,7 +360,7 @@ bool Renderer_Init(const Renderer_InitInfo* info)
 
         for (int i = 0; i < NUM_QUEUE_FAMILY_INDICES; ++i)
         {
-            SDL_assert(renderstate.queue_family_indices.array[i] > -1);
+            SDL_assert(renderstate.queue_family_indices.array[i] != UINT32_MAX);
         }
     }
 
@@ -386,7 +386,7 @@ bool Renderer_Init(const Renderer_InitInfo* info)
             {
                 VkDeviceQueueCreateInfo queue_create_info = {};
                 queue_create_info.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
-                queue_create_info.queueFamilyIndex = (u32)renderstate.queue_family_indices.array[i];
+                queue_create_info.queueFamilyIndex = renderstate.queue_family_indices.array[i];
                 queue_create_info.queueCount = 1;
                 queue_create_info.pQueuePriorities = queue_priorities;
 
@@ -495,26 +495,31 @@ bool Renderer_Init(const Renderer_InitInfo* info)
             .pNext = NULL,
             .flags = VK_FENCE_CREATE_SIGNALED_BIT,
         };
-        VkCommandPoolCreateInfo cmdpool_create_info = {
+        VkSemaphoreCreateInfo semaphore_create_info = {
+            .sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO,
+            .pNext = NULL,
+            .flags = 0
+        };
+        VkCommandPoolCreateInfo gfx_cmdpool_create_info = {
             .sType             = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
             .pNext             = NULL,
             .flags             = 0,
-            .queueFamilyIndex  = (u32)renderstate.queue_family_indices.graphics_family
+            .queueFamilyIndex  = renderstate.queue_family_indices.graphics_family
         };
 
         for (u32 i = 0; i < NUM_FRAMES_IN_FLIGHT; ++i)
         {
             VK_CHECK(vkCreateFence(renderstate.device, &render_fence_create_info, NULL, &renderstate.frames[i].rendering_complete_fence));
-            VK_CHECK(vkCreateCommandPool(renderstate.device, &cmdpool_create_info, NULL, &renderstate.frames[i].render_command_pool));
-
+            VK_CHECK(vkCreateSemaphore(renderstate.device, &semaphore_create_info, NULL, &renderstate.frames[i].swapchain_image_acquired_semaphore));
+            VK_CHECK(vkCreateCommandPool(renderstate.device, &gfx_cmdpool_create_info, NULL, &renderstate.frames[i].graphics_command_pool));
             VkCommandBufferAllocateInfo cmd_alloc_info = {
                 .sType               = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
                 .pNext               = NULL,
-                .commandPool         = renderstate.frames[i].render_command_pool,
+                .commandPool         = renderstate.frames[i].graphics_command_pool,
                 .level               = VK_COMMAND_BUFFER_LEVEL_PRIMARY,
                 .commandBufferCount  = 1
             };
-            VK_CHECK(vkAllocateCommandBuffers(renderstate.device, &cmd_alloc_info, &renderstate.frames[i].render_command_buffer));
+            VK_CHECK(vkAllocateCommandBuffers(renderstate.device, &cmd_alloc_info, &renderstate.frames[i].graphics_command_buffer));
         }
     }
 
@@ -534,7 +539,8 @@ void Renderer_Shutdown()
     for (int i = 0; i < NUM_FRAMES_IN_FLIGHT; ++i)
     {
         vkDestroyFence(renderstate.device, renderstate.frames[i].rendering_complete_fence, NULL);
-        vkDestroyCommandPool(renderstate.device, renderstate.frames[i].render_command_pool, NULL);
+        vkDestroySemaphore(renderstate.device, renderstate.frames[i].swapchain_image_acquired_semaphore, NULL);
+        vkDestroyCommandPool(renderstate.device, renderstate.frames[i].graphics_command_pool, NULL);
     }
 
     destroy_swapchain();
@@ -624,13 +630,12 @@ void Renderer_EndFrame()
     // Get next swapchain image
     // NOTE: If another frame isn't finished with the swapchain image, the GPU must't execute commands on the next swapchain image.
     //       so it must have attained the image_aquired semaphore first.
-    u32 image_acquired_semaphore_id = renderstate.frame_number % renderstate.swapchain_image_count;
     u32 swapchain_image_index;
     VkResult acquire_result = vkAcquireNextImageKHR(
         renderstate.device,
         renderstate.swapchain,
         sync_timeout_nanoseconds,
-        renderstate.swapchain_image_acquired_semaphores[image_acquired_semaphore_id],
+        renderstate.frames[frame_in_flight].swapchain_image_acquired_semaphore,
         VK_NULL_HANDLE,
         &swapchain_image_index
     );
@@ -651,11 +656,166 @@ void Renderer_EndFrame()
     // Now we can safely reset the rendering complete fence.
     // NOTE: The fence is in place to make sure this frame in flight's graphics commands have finished executing on the GPU.
     VK_CHECK(vkResetFences(renderstate.device, 1, &renderstate.frames[frame_in_flight].rendering_complete_fence));
+    
+    // Reset command buffers by resetting the entire pool
+    vkResetCommandPool(renderstate.device, renderstate.frames[frame_in_flight].graphics_command_pool, 0);
 
 
-    #warning TODO: Command buffer stuff. Whats the multithread proof approach here?
+    
+    // Begin info for command buffer
+    VkCommandBufferBeginInfo graphics_cmd_begin_info = {
+        .sType             = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
+        .pNext             = NULL,
+        .flags             = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT,
+        .pInheritanceInfo  = NULL
+    };
+    VkCommandBuffer gcmd = renderstate.frames[frame_in_flight].graphics_command_buffer;
 
-    // This happens at the very end:
+    // Begin recording graphics commands
+    //
+
+    VK_CHECK(vkBeginCommandBuffer(gcmd, &graphics_cmd_begin_info));
+    {
+        // Swapchain as output color attachment
+        {
+            VkImageMemoryBarrier2 barrier = {
+                .sType                = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
+                .pNext                = NULL,
+                .srcStageMask         = VK_PIPELINE_STAGE_2_NONE,
+                .srcAccessMask        = VK_ACCESS_2_NONE,
+                .dstStageMask         = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
+                .dstAccessMask        = VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,
+                .oldLayout            = VK_IMAGE_LAYOUT_UNDEFINED,
+                .newLayout            = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+                .srcQueueFamilyIndex  = renderstate.queue_family_indices.present_family,
+                .dstQueueFamilyIndex  = renderstate.queue_family_indices.graphics_family,
+                .image                = renderstate.swapchain_images[swapchain_image_index],
+                .subresourceRange     = {
+                    .aspectMask      = VK_IMAGE_ASPECT_COLOR_BIT,
+                    .baseMipLevel    = 0,
+                    .levelCount      = 1,
+                    .baseArrayLayer  = 0,
+                    .layerCount      = 1
+                }
+            };
+            VkDependencyInfo dependency = {
+                .sType                     = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
+                .pNext                     = NULL,
+                .dependencyFlags           = VK_DEPENDENCY_BY_REGION_BIT,
+                // .memoryBarrierCount        =
+                // .pMemoryBarriers           =
+                // .bufferMemoryBarrierCount  =
+                // .pBufferMemoryBarriers     =
+                .imageMemoryBarrierCount   = 1,
+                .pImageMemoryBarriers      = &barrier
+            };
+            vkCmdPipelineBarrier2(gcmd, &dependency);
+        }
+
+        // Rendering to swapchain for now
+
+
+        // Swapchain to presentable format
+        {
+            VkImageMemoryBarrier2 barrier = {
+                .sType                = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
+                .pNext                = NULL,
+                .srcStageMask         = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
+                .srcAccessMask        = VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,
+                .dstStageMask         = VK_PIPELINE_STAGE_2_NONE,
+                .dstAccessMask        = VK_ACCESS_2_NONE,
+                .oldLayout            = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+                .newLayout            = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
+                .srcQueueFamilyIndex  = renderstate.queue_family_indices.present_family,
+                .dstQueueFamilyIndex  = renderstate.queue_family_indices.graphics_family,
+                .image                = renderstate.swapchain_images[swapchain_image_index],
+                .subresourceRange     = {
+                    .aspectMask      = VK_IMAGE_ASPECT_COLOR_BIT,
+                    .baseMipLevel    = 0,
+                    .levelCount      = 1,
+                    .baseArrayLayer  = 0,
+                    .layerCount      = 1
+                }
+            };
+            VkDependencyInfo dependency = {
+                .sType                     = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
+                .pNext                     = NULL,
+                .dependencyFlags           = VK_DEPENDENCY_BY_REGION_BIT,
+                // .memoryBarrierCount        =
+                // .pMemoryBarriers           =
+                // .bufferMemoryBarrierCount  =
+                // .pBufferMemoryBarriers     =
+                .imageMemoryBarrierCount   = 1,
+                .pImageMemoryBarriers      = &barrier
+            };
+            vkCmdPipelineBarrier2(gcmd, &dependency);
+        }
+    }
+    VK_CHECK(vkEndCommandBuffer(gcmd));
+
+    //
+    // End of graphics commands recording
+
+    
+
+    // Prepare submission of the command buffer to the queue.
+    // - Requires waiting on the present semaphore (signalled when the swapchain is ready)
+    // - We will signal the render semaphore, to signal that rendering has finished
+    VkCommandBufferSubmitInfo gcmd_submit_info = {
+        .sType          = VK_STRUCTURE_TYPE_COMMAND_BUFFER_SUBMIT_INFO,
+        .pNext          = NULL,
+        .commandBuffer  = gcmd,
+        .deviceMask     = 0
+    };
+    VkSemaphoreSubmitInfo gcmd_wait_info = {
+        .sType        = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO,
+        .pNext        = NULL,
+        .semaphore    = renderstate.frames[frame_in_flight].swapchain_image_acquired_semaphore,
+        .value        = 1,
+        .stageMask    = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
+        .deviceIndex  = 0
+    };
+    VkSemaphoreSubmitInfo gcmd_signal_info = gcmd_wait_info;
+    gcmd_signal_info.semaphore = renderstate.swapchain_image_rendering_complete_semaphores[swapchain_image_index];
+
+    // Submit command buffer to the queue to execute it
+    VkSubmitInfo2 submit_info = {
+        .sType                     = VK_STRUCTURE_TYPE_SUBMIT_INFO_2, 
+        .pNext                     = NULL,
+        .flags                     = 0,
+        .waitSemaphoreInfoCount    = 1,
+        .pWaitSemaphoreInfos       = &gcmd_wait_info,
+        .commandBufferInfoCount    = 1,
+        .pCommandBufferInfos       = &gcmd_submit_info,
+        .signalSemaphoreInfoCount  = 1,
+        .pSignalSemaphoreInfos     = &gcmd_signal_info
+    };
+    VK_CHECK(vkQueueSubmit2(renderstate.graphics_queue, 1, &submit_info, renderstate.frames[frame_in_flight].rendering_complete_fence));
+
+    
+    // Present to screen
+    // (after waiting on the rendering complete semaphore so that all drawing is completed first)
+    VkPresentInfoKHR present_info = {
+        .sType               = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR,
+        .pNext               = NULL,
+        .waitSemaphoreCount  = 1,
+        .pWaitSemaphores     = &renderstate.swapchain_image_rendering_complete_semaphores[swapchain_image_index],
+        .swapchainCount      = 1,
+        .pSwapchains         = &renderstate.swapchain,
+        .pImageIndices       = &swapchain_image_index,
+        .pResults            = NULL  // <- Only relevant when swapchainCount > 1
+    };
+    VkResult present_result = vkQueuePresentKHR(renderstate.presentation_queue, &present_info);
+    if (present_result == VK_ERROR_OUT_OF_DATE_KHR || present_result == VK_SUBOPTIMAL_KHR)
+    {
+        _Renderer_OnWindowResize();
+    }
+    else
+    {
+        VK_CHECK(present_result);
+    }
+
+    // This happens at the very very end:
     ++renderstate.frame_number;
 }
 
@@ -665,8 +825,8 @@ QueueFamilyIndices get_physical_device_queue_family_indices(VkPhysicalDevice phy
 {
     QueueFamilyIndices queue_family_indices = {};
 
-    // Each queue family index initialized to -1 so we can test for failure
-    memset(&queue_family_indices, -1, sizeof(QueueFamilyIndices));
+    // Each queue family index initialized to UINT32_MAX so we can test for failure
+    memset(&queue_family_indices, UINT32_MAX, sizeof(QueueFamilyIndices));
 
     u32 queue_family_count = 0;
     vkGetPhysicalDeviceQueueFamilyProperties(physical_device, &queue_family_count, NULL);
@@ -710,11 +870,11 @@ QueueFamilyIndices get_physical_device_queue_family_indices(VkPhysicalDevice phy
     // Otherwise, just find all the queue types we need
     for (u32 i = 0; i < queue_family_count; ++i)
     {
-        if (queue_families_support_for_graphics[i] && queue_family_indices.graphics_family == -1)
+        if (queue_families_support_for_graphics[i] && queue_family_indices.graphics_family == UINT32_MAX)
         {
             queue_family_indices.graphics_family = i;
         }
-        if (queue_families_support_for_presentation[i] && queue_family_indices.present_family == -1)
+        if (queue_families_support_for_presentation[i] && queue_family_indices.present_family == UINT32_MAX)
         {
             queue_family_indices.present_family = i;
         }
@@ -860,8 +1020,8 @@ int score_physical_device_and_check_required_features(VkPhysicalDevice physical_
         // Requires the necessary queue families
         QueueFamilyIndices indices = get_physical_device_queue_family_indices(physical_device);
         b32 all_required_queues_supported = 
-                indices.graphics_family != -1 &&
-                indices.present_family != -1;
+                indices.graphics_family != UINT32_MAX &&
+                indices.present_family != UINT32_MAX;
 
         // Requires some device extensions
         b32 all_required_extensions_available = 0;
@@ -964,10 +1124,15 @@ void create_or_recreate_swapchain()
     // passed to the swapchain create info of the new one.
     // Hence create_or_recreate instead of just destroy() then create() when one already exists.
 
+    VkSurfaceFormatKHR chosen_format;
+    VkPresentModeKHR chosen_present_mode;
+    VkExtent2D chosen_swap_extent;
+
     // Get support details for swap chain
     SwapchainSupportDetails details = get_and_alloc_swap_chain_support_details(renderstate.physical_device);
 
-    VkSurfaceFormatKHR chosen_format;
+    // Choose format
+    SDL_assert(details.format_count > 0);
     int chosen_format_index = 0;
     for (u32 i = 0; i < details.format_count; ++i)
     {
@@ -979,7 +1144,7 @@ void create_or_recreate_swapchain()
     }
     chosen_format = details.formats[chosen_format_index];
 
-    VkPresentModeKHR chosen_present_mode;
+    // Choose present mode
     chosen_present_mode = VK_PRESENT_MODE_FIFO_KHR;  // Only FIFO is guarunteed to be available
     for (u32 i = 0; i < details.present_mode_count; ++i)
     {
@@ -1004,7 +1169,7 @@ void create_or_recreate_swapchain()
         }
     }
 
-    VkExtent2D chosen_swap_extent;
+    // Choose swapchain image extents
     if (details.capabilities.currentExtent.width != UINT32_MAX)
     {
         chosen_swap_extent = details.capabilities.currentExtent;
@@ -1045,40 +1210,53 @@ void create_or_recreate_swapchain()
         min_image_count = details.capabilities.maxImageCount;
     }
 
-    // Finally create the swap chain
-    VkSwapchainCreateInfoKHR swapchain_create_info = {};
-    swapchain_create_info.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
-    swapchain_create_info.surface = renderstate.surface;
-    swapchain_create_info.minImageCount = min_image_count;
-    swapchain_create_info.imageFormat = chosen_format.format;
-    swapchain_create_info.imageColorSpace = chosen_format.colorSpace;
-    swapchain_create_info.imageExtent = chosen_swap_extent;
-    swapchain_create_info.imageArrayLayers = 1;  // One layer since we aren't making a stereoscopic 3D application
-    swapchain_create_info.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
 
-    // NOTE: With explicit queue ownership transfers of the swapchain images via pipeline barriers between
-    // graphics queue and present queue commands involving the swapchain,
-    // it is then safe to use VK_SHARING_MODE_EXCLUSIVE even if present queue != graphics queue.
-    swapchain_create_info.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE;
-    swapchain_create_info.queueFamilyIndexCount = 0;
-    swapchain_create_info.pQueueFamilyIndices = NULL;
-
-    swapchain_create_info.preTransform = details.capabilities.currentTransform;
-    swapchain_create_info.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;  // Alpha is opaque, i.e. no blending with other windows
-    swapchain_create_info.presentMode = chosen_present_mode;
-    swapchain_create_info.clipped = VK_TRUE;  // When another window is partially in the way, we don't care what the covered pixels colours are (unless you are reading from them later for some special reason)
-
-    // Passing the old swapchain can allow the driver to reuse some resources
+    // Swapchain Create Info
     VkSwapchainKHR old_swapchain = renderstate.swapchain;
-    swapchain_create_info.oldSwapchain = old_swapchain;  // Will be VK_NULL_HANDLE on first creation since an old swapchain does not exist.
-    
+    VkSwapchainCreateInfoKHR swapchain_create_info = {
+        .sType                  = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR,
+        .pNext                  = NULL,
+        .flags                  = 0,
+        .surface                = renderstate.surface,
+        .minImageCount          = min_image_count,
+        .imageFormat            = chosen_format.format,
+        .imageColorSpace        = chosen_format.colorSpace,
+        .imageExtent            = chosen_swap_extent,
+        .imageArrayLayers       = 1,  // One layer since we aren't making a stereoscopic 3D application
+        .imageUsage             = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT,
+
+        // NOTE: With explicit queue ownership transfers of the swapchain images via pipeline barriers between
+        // graphics queue and present queue commands involving the swapchain,
+        // it is then safe to use VK_SHARING_MODE_EXCLUSIVE even if present queue != graphics queue.
+        .imageSharingMode       = VK_SHARING_MODE_EXCLUSIVE,
+        .queueFamilyIndexCount  = 0,
+        .pQueueFamilyIndices    = NULL,
+
+        .preTransform           = details.capabilities.currentTransform,
+        .compositeAlpha         = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR,  // Alpha is opaque, i.e. no blending with other windows
+        .presentMode            = chosen_present_mode,
+
+        // When another window is partially in the way, we don't care what the covered pixels colours are
+        // (unless you are reading from them later for some special reason, I'm not)
+        .clipped                = VK_TRUE,
+
+
+        // Passing the old swapchain can allow the driver to reuse some resources
+        // old_swapchain will be VK_NULL_HANDLE on first creation since an old swapchain does not exist.
+        .oldSwapchain           = old_swapchain
+    };
+
     // Create the (new) swapchain
     VkSwapchainKHR new_swapchain = VK_NULL_HANDLE;
     VK_CHECK(vkCreateSwapchainKHR(renderstate.device, &swapchain_create_info, NULL, &new_swapchain));
     free_swap_chain_support_details(details);
 
-    // Save the chosen format and extent so we can copy/transfer correctly to it later
+    // Save the old format to check whether the new swapchain's format is the same or not.
+    // Because we only need to recreate graphics pipelines if the format changes.
+    // Window resizes don't require recreating piplines, since we use dynamic pipeline state for that.
     VkFormat old_format = renderstate.swapchain_image_format;
+
+    // Save the chosen format and extent so we can copy/transfer correctly to it later
     renderstate.swapchain_image_format = chosen_format.format;
     renderstate.swapchain_extent = chosen_swap_extent;
 
@@ -1091,56 +1269,62 @@ void create_or_recreate_swapchain()
     renderstate.swapchain = new_swapchain;
 
 
-    // Retrieve the handles of the images created by the swapchaip
+    // Get number of swapchain images
     vkGetSwapchainImagesKHR(renderstate.device, renderstate.swapchain, &renderstate.swapchain_image_count, NULL);
+    SDL_assert(renderstate.swapchain_image_count <= MAX_SWAPCHAIN_IMAGE_COUNT);
+
+    // Retrieve the handles of the images created by the swapchaip
     memset(renderstate.swapchain_images, 0, sizeof(renderstate.swapchain_images));
     vkGetSwapchainImagesKHR(renderstate.device, renderstate.swapchain, &renderstate.swapchain_image_count, renderstate.swapchain_images);
 
     SDL_Log("Swapchain created.\n");
-    SDL_Log("- logical resolution(%d, %d)\n", renderstate.swapchain_extent.width, renderstate.swapchain_extent.height);
+    SDL_Log("- pixel resolution(%d, %d)\n", renderstate.swapchain_extent.width, renderstate.swapchain_extent.height);
     
     
     // Create Image Views for SwapChain
     memset(renderstate.swapchain_image_views, 0, sizeof(renderstate.swapchain_image_views));
     for (u32 i = 0; i < renderstate.swapchain_image_count; ++i)
     {
-        VkImageViewCreateInfo image_view_create_info = {};
-        image_view_create_info.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
-        image_view_create_info.image = renderstate.swapchain_images[i];
-        image_view_create_info.viewType = VK_IMAGE_VIEW_TYPE_2D;
-        image_view_create_info.format = renderstate.swapchain_image_format;
-        
-        // Use no swizzle for the color components
-        image_view_create_info.components.r = VK_COMPONENT_SWIZZLE_IDENTITY;
-        image_view_create_info.components.g = VK_COMPONENT_SWIZZLE_IDENTITY;
-        image_view_create_info.components.b = VK_COMPONENT_SWIZZLE_IDENTITY;
-        image_view_create_info.components.a = VK_COMPONENT_SWIZZLE_IDENTITY;
+        VkImageViewCreateInfo image_view_create_info = {
+            .sType             = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
+            .pNext             = NULL,
+            .flags             = 0,
+            .image             = renderstate.swapchain_images[i],
+            .viewType          = VK_IMAGE_VIEW_TYPE_2D,
+            .format            = renderstate.swapchain_image_format,
 
-        // Specify as color target with no mipmapping
-        image_view_create_info.subresourceRange.aspectMask= VK_IMAGE_ASPECT_COLOR_BIT;
-        image_view_create_info.subresourceRange.baseMipLevel = 0;
-        image_view_create_info.subresourceRange.levelCount = 1;
-        image_view_create_info.subresourceRange.baseArrayLayer = 0;
-        image_view_create_info.subresourceRange.layerCount = 1;
+            // Use no swizzle for the color components
+            .components        = {
+                .r = VK_COMPONENT_SWIZZLE_IDENTITY,
+                .g = VK_COMPONENT_SWIZZLE_IDENTITY,
+                .b = VK_COMPONENT_SWIZZLE_IDENTITY,
+                .a = VK_COMPONENT_SWIZZLE_IDENTITY
+            },
 
+            // Specify as color target with no mipmapping
+            .subresourceRange  = {
+                .aspectMask      = VK_IMAGE_ASPECT_COLOR_BIT,
+                .baseMipLevel    = 0,
+                .levelCount      = 1,
+                .baseArrayLayer  = 0,
+                .layerCount      = 1
+            }
+        };
         VK_CHECK(vkCreateImageView(renderstate.device, &image_view_create_info, NULL, &renderstate.swapchain_image_views[i]));
     }
 
 
     // Create Semaphores for SwapChain
-    memset(renderstate.swapchain_image_acquired_semaphores, 0, sizeof(renderstate.swapchain_image_acquired_semaphores));
-    memset(renderstate.swapchain_image_render_semaphores, 0, sizeof(renderstate.swapchain_image_render_semaphores));
+    memset(renderstate.swapchain_image_rendering_complete_semaphores, 0, sizeof(renderstate.swapchain_image_rendering_complete_semaphores));
 
-    VkSemaphoreCreateInfo semaphore_create_info = {};
-    semaphore_create_info.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
-    semaphore_create_info.pNext = NULL;
-    semaphore_create_info.flags = 0;
+    VkSemaphoreCreateInfo semaphore_create_info = {
+        .sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO,
+        .pNext = NULL,
+        .flags = 0
+    };
     for (u32 i = 0; i < renderstate.swapchain_image_count; ++i)
     {
-        renderstate.swapchain_image_acquired_semaphores[i] = VK_NULL_HANDLE;
-        renderstate.swapchain_image_render_semaphores[i] = VK_NULL_HANDLE;
-        VK_CHECK(vkCreateSemaphore(renderstate.device, &semaphore_create_info, NULL, &renderstate.swapchain_image_acquired_semaphores[i]));
-        VK_CHECK(vkCreateSemaphore(renderstate.device, &semaphore_create_info, NULL, &renderstate.swapchain_image_render_semaphores[i]));
+        VK_CHECK(vkCreateSemaphore(renderstate.device, &semaphore_create_info, NULL, &renderstate.swapchain_image_rendering_complete_semaphores[i]));
     }
     
 
@@ -1161,9 +1345,7 @@ void destroy_swapchain()
     for (u32 i = 0; i < renderstate.swapchain_image_count; ++i)
     {
         vkDestroyImageView(renderstate.device, renderstate.swapchain_image_views[i], NULL);
-
-        vkDestroySemaphore(renderstate.device, renderstate.swapchain_image_acquired_semaphores[i], NULL);
-        vkDestroySemaphore(renderstate.device, renderstate.swapchain_image_render_semaphores[i], NULL);
+        vkDestroySemaphore(renderstate.device, renderstate.swapchain_image_rendering_complete_semaphores[i], NULL);
     }
 
     // Swapchain images are automatically destroyed when swapchain is destroyed due to ownership

@@ -16,8 +16,9 @@ ThreadData;
 typedef struct FrameState
 {
     VkFence rendering_complete_fence;
-    VkCommandPool render_command_pool;
-    VkCommandBuffer render_command_buffer;
+    VkSemaphore swapchain_image_acquired_semaphore;
+    VkCommandPool graphics_command_pool;
+    VkCommandBuffer graphics_command_buffer;
 }
 FrameState;
 
@@ -54,13 +55,7 @@ typedef struct RenderState
     u32 swapchain_image_count;
     VkImage swapchain_images[MAX_SWAPCHAIN_IMAGE_COUNT];
     VkImageView swapchain_image_views[MAX_SWAPCHAIN_IMAGE_COUNT];
-    VkSemaphore swapchain_image_acquired_semaphores[MAX_SWAPCHAIN_IMAGE_COUNT];
-    VkSemaphore swapchain_image_render_semaphores[MAX_SWAPCHAIN_IMAGE_COUNT];
-    // u32 swapchain_image_count;
-    // VkImage* swapchain_images;
-    // VkImageView* swapchain_image_views;
-    // VkSemaphore* swapchain_image_acquired_semaphores;
-    // VkSemaphore* swapchain_image_render_semaphores;
+    VkSemaphore swapchain_image_rendering_complete_semaphores[MAX_SWAPCHAIN_IMAGE_COUNT];
 
     // Multiple frames in flight to avoid stalling pipeline between frames
 #define NUM_FRAMES_IN_FLIGHT 2

@@ -20,10 +20,10 @@ typedef union QueueFamilyIndices
     // Same order as enum
     struct
     {
-        s32 graphics_family;
-        s32 present_family;
+        u32 graphics_family;
+        u32 present_family;
     };
-    s32 array[NUM_QUEUE_FAMILY_INDICES];
+    u32 array[NUM_QUEUE_FAMILY_INDICES];
 }
 QueueFamilyIndices;
 
