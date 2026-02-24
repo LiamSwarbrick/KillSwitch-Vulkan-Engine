@@ -4,6 +4,7 @@
 #include "../renderer.h"
 
 #include "internal_structs.h"
+#include "framegraph.h"
 // #include "due_rework/internals_due_rework.h"
 
 typedef struct ThreadData
@@ -61,12 +62,18 @@ typedef struct RenderState
 #define NUM_FRAMES_IN_FLIGHT 2
     FrameState frames[NUM_FRAMES_IN_FLIGHT];
 
+    // FrameGraph resource registry
+    ResourceRegistry registry;
+
+
     // The old stuff that I want to redo, but first need something up on the screen for others to work from.
     // E.g. Get cube rendering running, and then people can work on input and player movement
     // Implementing collisions with a physics engine (jolt)
     // OldRenderState old;
 }
 RenderState;
+
+extern RenderState renderstate;  // Declared in renderer.cpp
 
 // // In due_rework/:
 // void old_stuff_init(RenderState* renderstate);
