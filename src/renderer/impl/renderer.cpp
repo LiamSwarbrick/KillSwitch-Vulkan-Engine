@@ -57,17 +57,17 @@ InternalVulkanDebugCallback(
     switch (messageSeverity)
     {
         case VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT:
-        // SDL_LogError(SDL_LOG_CATEGORY_ERROR, ANSI_CYAN "Validation Layer Verbose: " ANSI_CYAN "%s\n" ANSI_RESET, pCallbackData->pMessage);
+        // fprintf(stderr, ANSI_CYAN "Validation Layer Verbose: " ANSI_CYAN "%s\n" ANSI_RESET, pCallbackData->pMessage);
         break;
 
         case VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT:
-        // SDL_LogError(SDL_LOG_CATEGORY_ERROR, ANSI_CYAN "Validation Layer Info: " ANSI_CYAN "%s\n" ANSI_RESET, pCallbackData->pMessage);
+        // fprintf(stderr, ANSI_CYAN "Validation Layer Info: " ANSI_CYAN "%s\n" ANSI_RESET, pCallbackData->pMessage);
         break;
         
         case VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT:
         case VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT:
 
-        SDL_LogError(SDL_LOG_CATEGORY_ERROR, ANSI_CYAN "Validation Layer %s: " ANSI_YELLOW "%s\n" ANSI_RESET,
+        fprintf(stderr, ANSI_CYAN "Validation Layer %s: " ANSI_YELLOW "%s\n" ANSI_RESET,
             messageSeverity == VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT ? "Warning" : "Error",
             pCallbackData->pMessage);
         // *(volatile int*)0 = 0;  // Crash the program so I can backtrace
@@ -95,7 +95,7 @@ bool Renderer_Init(const Renderer_InitInfo* info)
     VK_CHECK(volkInitialize());
     if (volkGetInstanceVersion() < API_VERSION)
     {
-        SDL_LogError(SDL_LOG_CATEGORY_ERROR, "Sorry, Vulkan %d.%d is strictly required.\n", VK_API_VERSION_MAJOR(API_VERSION), VK_API_VERSION_MINOR(API_VERSION));
+        fprintf(stderr, "Sorry, Vulkan %d.%d is strictly required.\n", VK_API_VERSION_MAJOR(API_VERSION), VK_API_VERSION_MINOR(API_VERSION));
         return false;
     }
 
@@ -106,7 +106,7 @@ bool Renderer_Init(const Renderer_InitInfo* info)
         // This proc was added in Vulkan 1.1
         VK_CHECK(vkEnumerateInstanceVersion(&loader_api_version));
     }
-    SDL_Log("Vulkan loader version: %d.%d.%d (variant %d)\n",
+    printf("Vulkan loader version: %d.%d.%d (variant %d)\n",
         VK_API_VERSION_MAJOR(loader_api_version), VK_API_VERSION_MINOR(loader_api_version),
         VK_API_VERSION_PATCH(loader_api_version), VK_API_VERSION_VARIANT(loader_api_version)
     );
@@ -135,24 +135,24 @@ bool Renderer_Init(const Renderer_InitInfo* info)
             
             if (!requested_layer_available)
             {
-                SDL_LogError(SDL_LOG_CATEGORY_ERROR, "Validation layer requested but not available: %s\n", validation_layers[i]);
+                fprintf(stderr, "Validation layer requested but not available: %s\n", validation_layers[i]);
             }
 
             found_all_layers &= requested_layer_available;
         }
         if (!found_all_layers)
         {
-            SDL_LogError(SDL_LOG_CATEGORY_ERROR, "All requested validation layers must be available... Exiting");
+            fprintf(stderr, "All requested validation layers must be available... Exiting");
             return false;
         }
 
         L_free(available_layers, &renderstate.main.tt);
 
-        SDL_Log("Debug mode: Using validation layers.\n");
+        printf("Debug mode: Using validation layers.\n");
     }
     else
     {
-        SDL_Log("Release mode: No validation layers.\n");
+        printf("Release mode: No validation layers.\n");
     }
 
     // Create instance
@@ -198,16 +198,16 @@ bool Renderer_Init(const Renderer_InitInfo* info)
         }
         
         // Display extensions
-        SDL_Log("Instance Extensions: ");
+        printf("Instance Extensions: ");
         if (instance_extensions_count)
         {
             for (u32 i = 0; i < instance_extensions_count-1; ++i)
-                SDL_Log("%s, ", instance_extensions[i]);
-            SDL_Log("%s\n", instance_extensions[instance_extensions_count-1]);
+                printf("%s, ", instance_extensions[i]);
+            printf("%s\n", instance_extensions[instance_extensions_count-1]);
         }
         else
         {
-            SDL_Log("None\n");
+            printf("None\n");
         }
 
         VkInstanceCreateInfo instance_create_info = {};
@@ -278,11 +278,11 @@ bool Renderer_Init(const Renderer_InitInfo* info)
         // SDL handles the differences in vulkan surface creation between Windows and Linux
         if (!SDL_Vulkan_CreateSurface(renderstate.window, renderstate.instance, NULL, &renderstate.surface))
         {
-            SDL_LogError(SDL_LOG_CATEGORY_ERROR, "Failed to create SDL Vulkan Window Surface\n");
+            fprintf(stderr, "Failed to create SDL Vulkan Window Surface\n");
             return false;
         }
 
-        SDL_Log("Created Window Surface\n");
+        printf("Created Window Surface\n");
 
         SDL_assert(renderstate.surface != VK_NULL_HANDLE);
     }
@@ -297,7 +297,7 @@ bool Renderer_Init(const Renderer_InitInfo* info)
         VK_CHECK(vkEnumeratePhysicalDevices(renderstate.instance, &device_count, NULL));
         if (device_count == 0)
         {
-            SDL_LogError(SDL_LOG_CATEGORY_ERROR, "Could not find a GPU with Vulkan support... Exiting");
+            fprintf(stderr, "Could not find a GPU with Vulkan support... Exiting");
             return false;
         }
 
@@ -306,10 +306,12 @@ bool Renderer_Init(const Renderer_InitInfo* info)
 
         // Give each device a suitability score and pick the best one (e.g. dGPU > iGPU)
         int* device_suitability_score = (int*)L_calloc(device_count, sizeof(int), &renderstate.main.tt);
+        printf("\n");
         for (u32 i = 0; i < device_count; ++i)
         {
-            SDL_Log("Device %d:\n", i);
+            printf("Device %d:\n", i);
             device_suitability_score[i] = score_physical_device_and_check_required_features(devices[i]);
+            printf("\n");
         }
         
         // Select device with highest scored suitability
@@ -323,7 +325,7 @@ bool Renderer_Init(const Renderer_InitInfo* info)
         }
         if (device_suitability_score[candidate_device_index] < 0)
         {
-            SDL_LogError(SDL_LOG_CATEGORY_ERROR, "No suitable physical device for this vulkan program :(\n");
+            fprintf(stderr, "No suitable physical device for this vulkan program :(\n");
             return false;
         }
         renderstate.physical_device = devices[candidate_device_index];
@@ -331,17 +333,17 @@ bool Renderer_Init(const Renderer_InitInfo* info)
         // Store physical device properties
         vkGetPhysicalDeviceProperties(renderstate.physical_device, &renderstate.physical_device_properties);
 
-        SDL_Log("Selected device %d.\n", candidate_device_index);
-        SDL_Log("Device Extensions: ");
+        printf("Selected device %d.\n", candidate_device_index);
+        printf("Device Extensions: ");
         if (device_extensions_count)
         {
             for (u32 i = 0; i < device_extensions_count-1; ++i)
-                SDL_Log("%s, ", device_extensions[i]);
-            SDL_Log("%s\n", device_extensions[device_extensions_count-1]);
+                printf("%s, ", device_extensions[i]);
+            printf("%s\n", device_extensions[device_extensions_count-1]);
         }
         else
         {
-            SDL_Log("None\n");
+            printf("None\n");
         }
 
         L_free(device_suitability_score, &renderstate.main.tt);
@@ -354,8 +356,8 @@ bool Renderer_Init(const Renderer_InitInfo* info)
     {
         renderstate.queue_family_indices = get_physical_device_queue_family_indices(renderstate.physical_device);
         
-        SDL_Log("Graphics queue family at index %d\n", renderstate.queue_family_indices.graphics_family);
-        SDL_Log("Presentation (surface) queue family at index %d\n", renderstate.queue_family_indices.present_family);
+        printf("Graphics queue family at index %d\n", renderstate.queue_family_indices.graphics_family);
+        printf("Presentation (surface) queue family at index %d\n", renderstate.queue_family_indices.present_family);
 
 
         for (int i = 0; i < NUM_QUEUE_FAMILY_INDICES; ++i)
@@ -403,6 +405,14 @@ bool Renderer_Init(const Renderer_InitInfo* info)
         device_features.samplerAnisotropy = VK_TRUE;
         device_features.geometryShader = VK_TRUE;
 
+        VkPhysicalDeviceVulkan12Features vk12_features = {};
+        vk12_features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES;
+        vk12_features.bufferDeviceAddress = VK_TRUE;
+        vk12_features.descriptorIndexing = VK_TRUE;
+        vk12_features.descriptorBindingPartiallyBound = VK_TRUE;
+        vk12_features.descriptorBindingSampledImageUpdateAfterBind = VK_TRUE;
+        vk12_features.runtimeDescriptorArray = VK_TRUE;
+
         VkPhysicalDeviceVulkan13Features vk13_features = {};
         vk13_features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES;
         vk13_features.dynamicRendering = VK_TRUE;
@@ -412,10 +422,10 @@ bool Renderer_Init(const Renderer_InitInfo* info)
         vk14_features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_4_FEATURES;
         vk14_features.maintenance5 = VK_TRUE;
 
-        // GPU pointers
-        VkPhysicalDeviceBufferDeviceAddressFeatures buffer_device_address_features = {};
-        buffer_device_address_features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_BUFFER_DEVICE_ADDRESS_FEATURES;
-        buffer_device_address_features.bufferDeviceAddress = VK_TRUE;
+        // // BufferDeviceAddress (buffer in shaders a la GPU pointers)
+        // VkPhysicalDeviceBufferDeviceAddressFeatures buffer_device_address_features = {};
+        // buffer_device_address_features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_BUFFER_DEVICE_ADDRESS_FEATURES;
+        // buffer_device_address_features.bufferDeviceAddress = VK_TRUE;
 
 
         // The main device is created here, with the queues and features we just specified
@@ -425,8 +435,10 @@ bool Renderer_Init(const Renderer_InitInfo* info)
         // pNext chain of features
         device_create_info.pNext = &vk14_features;
         vk14_features.pNext = &vk13_features;
-        vk13_features.pNext = &buffer_device_address_features;
-        buffer_device_address_features.pNext = NULL;
+        vk13_features.pNext = &vk12_features;
+        vk12_features.pNext = NULL;
+        // vk13_features.pNext = &buffer_device_address_features;
+        // buffer_device_address_features.pNext = NULL;
 
         device_create_info.queueCreateInfoCount = num_unique_queues;
         device_create_info.pQueueCreateInfos = queue_create_infos;
@@ -456,7 +468,7 @@ bool Renderer_Init(const Renderer_InitInfo* info)
 
         L_free(queue_create_infos, &renderstate.main.tt);
 
-        SDL_Log("Created Logcal Device.\n");
+        printf("Created Logcal Device.\n");
 
         SDL_assert(renderstate.device != VK_NULL_HANDLE);
     }
@@ -478,12 +490,10 @@ bool Renderer_Init(const Renderer_InitInfo* info)
         allocator_create_info.pVulkanFunctions = &vulkan_functions;
 
         VK_CHECK(vmaCreateAllocator(&allocator_create_info, &renderstate.vma_allocator));
-        SDL_Log("Vulkan Memory Allocator Initialised\n");
+        printf("Vulkan Memory Allocator Initialised\n");
 
         SDL_assert(renderstate.vma_allocator != VK_NULL_HANDLE);
     }
-
-    // old_stuff_init(&renderstate);
 
     // Create Swapchain
     create_or_recreate_swapchain();
@@ -523,24 +533,28 @@ bool Renderer_Init(const Renderer_InitInfo* info)
         }
     }
 
+    // Init FrameGraph subsystem
+    FG_Init();
 
     return true;
 }
 
 void Renderer_Shutdown()
 {
-    SDL_Log("******** Renderer_Shutdown() ********\n");
+    printf("******** Renderer_Shutdown() ********\n");
 
     // Ensure device is not doing anywork before destroying it's stuff.
     vkDeviceWaitIdle(renderstate.device);
 
-    // old_stuff_clean(&renderstate);
+    // Shutdown FrameGraph subsystem
+    FG_Shutdown();
 
+    // Clean up per frame objects
     for (int i = 0; i < NUM_FRAMES_IN_FLIGHT; ++i)
     {
-        vkDestroyFence(renderstate.device, renderstate.frames[i].rendering_complete_fence, NULL);
-        vkDestroySemaphore(renderstate.device, renderstate.frames[i].swapchain_image_acquired_semaphore, NULL);
         vkDestroyCommandPool(renderstate.device, renderstate.frames[i].graphics_command_pool, NULL);
+        vkDestroySemaphore(renderstate.device, renderstate.frames[i].swapchain_image_acquired_semaphore, NULL);
+        vkDestroyFence(renderstate.device, renderstate.frames[i].rendering_complete_fence, NULL);
     }
 
     destroy_swapchain();
@@ -565,16 +579,16 @@ void Renderer_Shutdown()
         if (!renderstate.program_caused_vulkan_validation_layer_errors)
         {
             // Vulkan clean up successful
-            SDL_Log(ANSI_CYAN "Vulkan cleanup was successful: No complaints from the enabled validation layers.\n" ANSI_RESET);
+            printf(ANSI_CYAN "Vulkan cleanup was successful: No complaints from the enabled validation layers.\n" ANSI_RESET);
         }
         else
         {
-            SDL_Log(ANSI_MAGENTA "Vulkan validation layer errors/warnings appeared :(\n" ANSI_RESET);
+            printf(ANSI_MAGENTA "Vulkan validation layer errors/warnings appeared :(\n" ANSI_RESET);
         }
     }
 
     // Report memory leaks of main tracker
-    SDL_Log("\n***********  Memory Tracker Results ***********\n");
+    printf("\n***********  Memory Tracker Results ***********\n");
     check_tracker_for_memory_leaks(&renderstate.main.tt);
 }
 
@@ -839,7 +853,7 @@ QueueFamilyIndices get_physical_device_queue_family_indices(VkPhysicalDevice phy
     // etc.
     for (u32 i = 0; i < queue_family_count; ++i)
     {
-        SDL_Log("--- Queue family %d's bits: ", i);
+        printf("--- Queue family %d's bits: ", i);
         vklayer_print_queueflagbits((VkQueueFlagBits)queue_families[i].queueFlags);
 
         if (queue_families[i].queueFlags & VK_QUEUE_GRAPHICS_BIT)
@@ -896,8 +910,8 @@ int score_physical_device_and_check_required_features(VkPhysicalDevice physical_
     u32 supported_version_minor = VK_API_VERSION_MINOR(device_properties.apiVersion);
     u32 supported_version_patch = VK_API_VERSION_PATCH(device_properties.apiVersion);
 
-    SDL_Log("--- name: %s\n", device_properties.deviceName);
-    SDL_Log("--- supports up to Vulkan %d.%d.%d\n",
+    printf("--- name: %s\n", device_properties.deviceName);
+    printf("--- supports up to Vulkan %d.%d.%d\n",
             supported_version_major,
             supported_version_minor,
             supported_version_patch
@@ -909,28 +923,28 @@ int score_physical_device_and_check_required_features(VkPhysicalDevice physical_
         switch (device_properties.deviceType)
         {
             case VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU:
-                SDL_Log("--- is dGPU... lovely :)\n");
+                printf("--- is dGPU... lovely :)\n");
                 suitability_score += 1000;    
                 break;
 
             case VK_PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU:
-                SDL_Log("--- is iGPU... decent :^)\n");
+                printf("--- is iGPU... decent :^)\n");
                 suitability_score += 500;
                 break;
 
             case VK_PHYSICAL_DEVICE_TYPE_VIRTUAL_GPU:
                 // TODO: vGPU could be better or worse than the iGPU on a machine, need to check more features in the future (good enough for now)
-                SDL_Log("--- is vGPU (virtual GPU)... who knows? TODO: Further checks for if it's a good vGPU e.g. cloud dGPU\n");
+                printf("--- is vGPU (virtual GPU)... who knows? TODO: Further checks for if it's a good vGPU e.g. cloud dGPU\n");
                 suitability_score += 200;
                 break;
 
             case VK_PHYSICAL_DEVICE_TYPE_CPU:
-                SDL_Log("--- is CPU... meh :(\n");
+                printf("--- is CPU... meh :(\n");
                 suitability_score += 0;
                 break;
             
             default:
-                SDL_Log("--- dunno what type of device this is :(\n");
+                printf("--- dunno what type of device this is :(\n");
                 suitability_score += 0;
         }
         
@@ -939,17 +953,17 @@ int score_physical_device_and_check_required_features(VkPhysicalDevice physical_
         vkGetPhysicalDeviceMemoryProperties(physical_device, &memory_properties);
 
         // Display memory heaps and types
-        SDL_Log("--- Heaps: has %d memory heap.\n", memory_properties.memoryHeapCount);
+        printf("--- Heaps: has %d memory heap.\n", memory_properties.memoryHeapCount);
         for (u32 i = 0; i < memory_properties.memoryHeapCount; ++i)
         {
-            SDL_Log("--- - heap %i: %lu MiB, flags: ", i, memory_properties.memoryHeaps[i].size / (1024*1024));
+            printf("--- - heap %i: %lu MiB, flags: ", i, memory_properties.memoryHeaps[i].size / (1024*1024));
             vklayer_print_memoryheapflagbits(memory_properties.memoryHeaps[i].flags);
         }
 
-        SDL_Log("--- Memory types: %d types\n", memory_properties.memoryTypeCount);
+        printf("--- Memory types: %d types\n", memory_properties.memoryTypeCount);
         for (u32 i = 0; i < memory_properties.memoryTypeCount; ++i)
         {
-            SDL_Log("--- - type %d: from heap %d, flags: ", i, memory_properties.memoryTypes[i].heapIndex);
+            printf("--- - type %d: from heap %d, flags: ", i, memory_properties.memoryTypes[i].heapIndex);
             vklayer_print_memorypropertyflagbits(memory_properties.memoryTypes[i].propertyFlags);
         }
     }
@@ -966,6 +980,7 @@ int score_physical_device_and_check_required_features(VkPhysicalDevice physical_
         }
 
         // Require some device features using VK_KHR_get_physical_device_properties2 that was introduced in Vulkan 1.1
+        // NOTE: Only double check vk13 and vk14 features, no need for earlier ones
         b32 all_required_features_supported = 0;
         if (supported_version_major > 1 || (supported_version_major == 1 && supported_version_minor >= 1))
         {
@@ -975,46 +990,37 @@ int score_physical_device_and_check_required_features(VkPhysicalDevice physical_
             VkPhysicalDeviceVulkan14Features vk14_features = {};
             vk14_features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_4_FEATURES;
 
-            VkPhysicalDeviceBufferDeviceAddressFeatures buffer_device_address_features = {};
-            buffer_device_address_features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_BUFFER_DEVICE_ADDRESS_FEATURES;
-
             VkPhysicalDeviceFeatures2 device_features = {};
             device_features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2;
 
             // pNext chain of features
             device_features.pNext = &vk14_features;
             vk14_features.pNext = &vk13_features;
-            vk13_features.pNext = &buffer_device_address_features;
-            buffer_device_address_features.pNext = NULL;
+            vk13_features.pNext = NULL;
 
             vkGetPhysicalDeviceFeatures2(physical_device, &device_features);
-        
+
             all_required_features_supported = 1;
-            SDL_Log("--- Anisotropic filtering: %d\n", device_features.features.samplerAnisotropy);
+            printf("--- Push constant size limit: %d\n", device_properties.limits.maxPushConstantsSize);
+            all_required_features_supported = all_required_features_supported && (device_properties.limits.maxPushConstantsSize >= 128);
+
+            printf("--- Anisotropic filtering: %d\n", device_features.features.samplerAnisotropy);
             all_required_features_supported = all_required_features_supported  && device_features.features.samplerAnisotropy;
             if (device_features.features.samplerAnisotropy)
             {
-                SDL_Log("--- - Max anisotropy: %f\n", device_properties.limits.maxSamplerAnisotropy);
+                printf("--- - Max anisotropy: %f\n", device_properties.limits.maxSamplerAnisotropy);
             }
             
-            SDL_Log("--- Synchronization 2: %d\n", vk13_features.synchronization2);
+            printf("--- Synchronization 2: %d\n", vk13_features.synchronization2);
             all_required_features_supported = all_required_features_supported  && vk13_features.synchronization2;
-            SDL_Log("--- Dynamic Rendering: %d\n", vk13_features.dynamicRendering);
+            printf("--- Dynamic Rendering: %d\n", vk13_features.dynamicRendering);
             all_required_features_supported = all_required_features_supported  && vk13_features.dynamicRendering;
             
             // Maintenance5 means we don't need VkShaderModule.
-            SDL_Log("--- Maintenance 5: %d\n", vk14_features.maintenance5);
+            printf("--- Maintenance 5: %d\n", vk14_features.maintenance5);
             all_required_features_supported = all_required_features_supported  && vk14_features.maintenance5;
-            SDL_Log("--- Maintenance 6: %d\n", vk14_features.maintenance6);
+            printf("--- Maintenance 6: %d\n", vk14_features.maintenance6);
             all_required_features_supported = all_required_features_supported  && vk14_features.maintenance6;
-
-            // Buffer device address for GPU pointers
-            SDL_Log("--- Buffer Device Address: %d (not using it at the moment though)\n", buffer_device_address_features.bufferDeviceAddress);
-            all_required_features_supported = all_required_features_supported  && buffer_device_address_features.bufferDeviceAddress;
-
-            // Geometry shaders
-            SDL_Log("--- Geometry shaders: %d\n", device_features.features.geometryShader);
-            all_required_features_supported = all_required_features_supported && device_features.features.geometryShader;
         }
 
         // Requires the necessary queue families
@@ -1064,7 +1070,7 @@ int score_physical_device_and_check_required_features(VkPhysicalDevice physical_
             free_swap_chain_support_details(details);
         }
 
-        SDL_Log("--- Checking against requirements: VersionUpToDate:%d, Features:%d, Queues:%d, Extensions:%d, SwapChain:%d\n",
+        printf("--- Checking against requirements: VersionUpToDate:%d, Features:%d, Queues:%d, Extensions:%d, SwapChain:%d\n",
                 supports_required_vulkan_version, all_required_features_supported, all_required_queues_supported, all_required_extensions_available, is_swapchain_adequate
         );
         is_gpu_suitable =
@@ -1277,8 +1283,8 @@ void create_or_recreate_swapchain()
     memset(renderstate.swapchain_images, 0, sizeof(renderstate.swapchain_images));
     vkGetSwapchainImagesKHR(renderstate.device, renderstate.swapchain, &renderstate.swapchain_image_count, renderstate.swapchain_images);
 
-    SDL_Log("Swapchain created.\n");
-    SDL_Log("- pixel resolution(%d, %d)\n", renderstate.swapchain_extent.width, renderstate.swapchain_extent.height);
+    printf("Swapchain created.\n");
+    printf("- pixel resolution(%d, %d)\n", renderstate.swapchain_extent.width, renderstate.swapchain_extent.height);
     
     
     // Create Image Views for SwapChain
@@ -1329,18 +1335,11 @@ void create_or_recreate_swapchain()
     
 
     // Swapchain creation is completed
-    SDL_Log("- created %d swapchain image views.\n", renderstate.swapchain_image_count);
-    
-
-    // TODO: Change the following during the rework:
-    // old_create_swapchain_tied_objects(&renderstate, old_format);
+    printf("- created %d swapchain image views.\n", renderstate.swapchain_image_count);
 }
 
 void destroy_swapchain()
 {
-    // TODO: Change the following during the rework:
-    // old_destroy_swapchain_tied_objects(&renderstate);
-
     // Destroy Image Views and Semaphores
     for (u32 i = 0; i < renderstate.swapchain_image_count; ++i)
     {

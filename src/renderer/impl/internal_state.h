@@ -62,9 +62,9 @@ typedef struct RenderState
 #define NUM_FRAMES_IN_FLIGHT 2
     FrameState frames[NUM_FRAMES_IN_FLIGHT];
 
-    // FrameGraph resource registry
+    // FrameGraph
     ResourceRegistry registry;
-
+    BindlessHeap heap;
 
     // The old stuff that I want to redo, but first need something up on the screen for others to work from.
     // E.g. Get cube rendering running, and then people can work on input and player movement

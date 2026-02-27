@@ -1,21 +1,51 @@
-#ifndef RENDERER_FRAMEGRAPH_H
-#define RENDERER_FRAMEGRAPH_H
-
 // NOTE(Liam): Frame Graph Motivation:
-// I've wasted too much time implemented features in pure hardcoded vulkan.
+// Because in the past I've wasted too much time implemented features in pure hardcoded vulkan
+// (things like bloom involves many passes and buffers and descriptor sets and layouts and pipeline and shaders and synchronisation).
 // The idea here is to define your frame as a graph, and compile the resource
-// dependencies. It's becoming more common recently, but there lot's of questions
-// that come about when it comes to actually programming this shit in Vulkan.
+// dependencies. It's becoming more common recently, but there lot's of questions ..
+// ..that come about when it comes to actually programming this shit in Vulkan.
 // Questions about the renderer, material system, mesh system, different types of shaders.
 // Oh well, will hopefully figure this out.
 
+
+// How the code works:
+//
+// To understand whats going on in the code, start with the struct FrameGraph (a bunch of renderpass descriptions).
+// For the internals, the RenderState contains:
+// - ResourceRegistry registry; Which holds all resources and their current state.
+// - BindlessHeap heap; Which is the descriptor set that holds all textures and samplers.
+// (buffers on the other hand, are passed to the shader through their GPU pointer with the BufferDeviceAddress vulkan feature)
+
+
+// Usage notes:
+//
+// - Create resource at startup or scene change (if resources differ there)
+//
+// - Specify render passes in order (inside the FrameGraph::passes array).
+//   Initial implementation will just execute them in the order they are specified.
+//   But with no change to the API, I could implement a topological sort under the hood ..
+//   ..by analysing the inputs and outputs of each pass.
+//
+#ifndef RENDERER_FRAMEGRAPH_H
+#define RENDERER_FRAMEGRAPH_H
+
 #include "../renderer.h"
 #include "vulkan_wrapper.h"
+
+// TODO: Still need topological sort and execution of all renderpasses.
+// Lest I just implement one pass after another, in the order it appears.
+// Actually, that's probably nicer.
+
+// Called at the start and end.
+void FG_Init();
+void FG_Shutdown();
 
 // Arbitrary predefined array sizes for simplicity
 #define MAX_PASS_RESOURCE_BANDWIDTH  16
 #define MAX_PASSES          64
 #define MAX_RESOURCES       1024
+
+#define NUM_BINDLESS_TEXTURE_SLOTS 100000   // Ample descriptor slots to never worry about again.
 
 typedef enum
 {
@@ -27,15 +57,28 @@ typedef enum
 }
 FG_UsageFlags;
 
+// TODO: Add more address modes than just REPEAT
+//       Also support for LUT textures (look up tables) e.g. for LTC area lights
+typedef enum
+{
+    FG_SAMPLER_NEAREST_REPEAT,
+    FG_SAMPLER_LINEAR_REPEAT,
+    FG_SAMPLER_ANISOTROPIC_REPEAT,
+    FG_SAMPLER_SHADOW,
+    FG_SAMPLER_COUNT
+}
+FG_SamplerType;
+
 typedef struct PassResourceUsage
 {
     uint32_t id;               // Index into a resource array (the internal registry)
     FG_UsageFlags usage_flags; // Tells the graph HOW to use this resource in this pass
+    FG_SamplerType sampler_type;  // Only for image resources. Not using combined image samplers so we can have different samplers for the same image in different passes
 
     // Sync state
-    VkAccessFlags2 access;        // e.g., VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT
-    VkPipelineStageFlags2 stage;  // e.g., VK_PIPELINE_STAGE_2_VERTEX_SHADER_BIT
-    VkImageLayout layout;         // For images only (buffers can leave these 0)
+    VkAccessFlags2 access;
+    VkPipelineStageFlags2 stage;
+    VkImageLayout layout;  // For images only (buffers can leave these 0)
     // NOTE: Not implementing queue ownership transfers of resources.
 
     // Per-output control (only used if usage_flags includes COLOR, DEPTH, or STENCIL)
@@ -47,7 +90,7 @@ PassResourceUsage;
 
 typedef struct RenderPassDesc
 {
-    const char* debug_name;
+    const char* debug_name;  // TODO: Add to renderdoc with vkDebugMarkerSetObjectNameEXT somehow
 
     // Resource inputs/outputs (buffers and image attachments)
     uint32_t          input_count;
@@ -75,6 +118,8 @@ typedef struct FrameGraph
 }
 FrameGraph;
 
+void FG_ApplyBarriers(VkCommandBuffer cmd, RenderPassDesc* pass);
+void FG_ExecutePass(FrameGraph* fg, uint32_t pass_idx, VkCommandBuffer cmd);
 
 // FrameGraph Resource Tracking Stuff
 //
@@ -86,31 +131,42 @@ typedef enum
 }
 FG_ResourceType;
 
+typedef struct ResourceBufferData
+{
+    VkBuffer handle;
+    uint32_t size;
+    void* mapped_data;  // Useful for uniform/storage updates
+}
+ResourceBufferData;
+
+typedef struct ResourceImageData
+{
+    VkImage handle;
+    VkImageView view;
+    VkFormat format;
+    VkImageSubresourceRange subresource_range;
+}
+ResourceImageData;
+
 typedef struct FG_Resource
 {
+    const char* debug_name;  // TODO: Add to renderdoc with vkDebugMarkerSetObjectNameEXT somehow
     FG_ResourceType type;
     union
     {
-        struct {
-            VkImage handle;
-            VkImageView view;
-            VkFormat format;
-            VkImageLayout last_layout;
-            VkImageAspectFlags aspect_mask;
-        } image;
+        ResourceBufferData buffer;
+        ResourceImageData image;
+    }; 
+    VmaAllocation allocation;  // NOTE: For imported resources like swapchain images set to VK_NULL_HANDLE.
 
-        struct {
-            VkBuffer handle;
-            uint32_t size;
-            void* mapped_data;  // Useful for uniform/storage updates
-        } buffer;
-    };
+    // Shader side access to resources
+    uint32_t image_bindless_index;             // Index into the global texture array
+    VkDeviceAddress buffer_gpu_address;  // Buffer device address for shader
 
-    // Shared Sync State
-    VmaAllocation allocation;
-    VkAccessFlags2 last_access;
-    VkPipelineStageFlags2 last_stage;
-    const char* name;  // For debugging
+    // Sync State
+    VkAccessFlags2         current_access;
+    VkPipelineStageFlags2  current_stage;
+    VkImageLayout          current_layout;  // Images only, buffers can leave this 0
 }
 FG_Resource;
 
@@ -121,5 +177,49 @@ typedef struct ResourceRegistry
 }
 ResourceRegistry;
 
+typedef union ResourceCreateInfo
+{
+    struct
+    {
+        VkImageCreateInfo image_create_info;
+        VkImageViewCreateInfo image_view_create_info;
+    };
+
+    VkBufferCreateInfo buffer_create_info;
+}
+ResourceCreateInfo;
+uint32_t FG_CreateResource(const char* debug_name, FG_ResourceType type, ResourceCreateInfo* create_info);
+
+typedef union ResourceImportInfo
+{
+    ResourceBufferData buffer;
+    ResourceImageData image;
+}
+ResourceImportInfo;
+uint32_t FG_ImportResource(const char* debug_name, FG_ResourceType type, ResourceImportInfo import_info);
+
+
+// Descriptors
+//
+
+typedef struct BindlessHeap
+{
+    VkDescriptorPool descriptor_pool;
+    VkDescriptorSetLayout set_layout;
+    VkDescriptorSet global_set;
+
+    uint32_t texture_count;
+    VkSampler samplers[FG_SAMPLER_COUNT];
+}
+BindlessHeap;
+
+void FG_BindlessHeap_Init();
+void FG_BindlessHeap_Shutdown();
+void FG_BindlessHeap_CreateAllSamplers();
+
+// Pipelines
+//
+
+void FG_CreateGlobalPipelineLayout();
 
 #endif  // RENDERER_FRAMEGRAPH_H

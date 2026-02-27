@@ -18,7 +18,7 @@ int main(int argc, char *argv[])
 
     Renderer_InitInfo renderer_info = { .window = window, .enable_validation = is_debugging };
     Renderer_Init(&renderer_info);
-
+    
     bool running = true;
     while (running)
     {
