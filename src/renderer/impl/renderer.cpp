@@ -1,4 +1,5 @@
 #include "internal_state.h"
+#include "pass_definitions.h"
 
 #include "SDL3/SDL_vulkan.h"
 
@@ -495,8 +496,12 @@ bool Renderer_Init(const Renderer_InitInfo* info)
         SDL_assert(renderstate.vma_allocator != VK_NULL_HANDLE);
     }
 
-    // Create Swapchain
-    create_or_recreate_swapchain();
+    // Init FrameGraph subsystem
+    FG_Init();
+
+    // Create Swapchain, FrameGraph resources and pass descriptions
+    renderstate.pass_defs.is_created = 0;
+    _Renderer_OnWindowResize();
 
     // Init per frame structures
     {
@@ -533,21 +538,15 @@ bool Renderer_Init(const Renderer_InitInfo* info)
         }
     }
 
-    // Init FrameGraph subsystem
-    FG_Init();
-
     return true;
 }
 
 void Renderer_Shutdown()
 {
-    printf("******** Renderer_Shutdown() ********\n");
+    printf("\n*********** Renderer_Shutdown() ***********\n");
 
-    // Ensure device is not doing anywork before destroying it's stuff.
+    // Ensure device is not doing any work before destroying it's stuff.
     vkDeviceWaitIdle(renderstate.device);
-
-    // Shutdown FrameGraph subsystem
-    FG_Shutdown();
 
     // Clean up per frame objects
     for (int i = 0; i < NUM_FRAMES_IN_FLIGHT; ++i)
@@ -556,6 +555,12 @@ void Renderer_Shutdown()
         vkDestroySemaphore(renderstate.device, renderstate.frames[i].swapchain_image_acquired_semaphore, NULL);
         vkDestroyFence(renderstate.device, renderstate.frames[i].rendering_complete_fence, NULL);
     }
+
+    // Shutdown FrameGraph subsystem
+    FG_Shutdown();
+
+    // Destroy resources for renderpasses
+    DestroyPassDefinitionsAndResources();
 
     destroy_swapchain();
 
@@ -610,6 +615,13 @@ void _Renderer_OnWindowResize()
 {
     vkDeviceWaitIdle(renderstate.device);
     create_or_recreate_swapchain();
+
+    // Create pass resources and definitions
+    if (renderstate.pass_defs.is_created)
+    {
+        DestroyPassDefinitionsAndResources();
+    }
+    CreatePassDefinitionsAndResources();
 }
 
 void _Renderer_OnWindowMinimize()
@@ -1229,7 +1241,7 @@ void create_or_recreate_swapchain()
         .imageColorSpace        = chosen_format.colorSpace,
         .imageExtent            = chosen_swap_extent,
         .imageArrayLayers       = 1,  // One layer since we aren't making a stereoscopic 3D application
-        .imageUsage             = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT,
+        .imageUsage             = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT,  // Transfer for blit/copy operations
 
         // NOTE: With explicit queue ownership transfers of the swapchain images via pipeline barriers between
         // graphics queue and present queue commands involving the swapchain,

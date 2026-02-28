@@ -90,7 +90,7 @@ PassResourceUsage;
 
 typedef struct RenderPassDesc
 {
-    const char* debug_name;  // TODO: Add to renderdoc with vkDebugMarkerSetObjectNameEXT somehow
+    char debug_name[64];  // TODO: Add to renderdoc with vkDebugMarkerSetObjectNameEXT somehow
 
     // Resource inputs/outputs (buffers and image attachments)
     uint32_t          input_count;
@@ -134,23 +134,29 @@ FG_ResourceType;
 typedef struct ResourceBufferData
 {
     VkBuffer handle;
+
     uint32_t size;
-    void* mapped_data;  // Useful for uniform/storage updates
+    // TODO: Support mapped data:
+    void* mapped_data;  // Useful for uniform/storage updates, e.g. CPU side light assignment
 }
 ResourceBufferData;
 
 typedef struct ResourceImageData
 {
-    VkImage handle;
-    VkImageView view;
-    VkFormat format;
-    VkImageSubresourceRange subresource_range;
+    VkImage                 handle;
+    VkImageView             view;
+
+    // Metadata about the image needed for parts of the frame graph
+    VkFormat                format;
+    VkExtent3D              extent;  // TODO: Use for checking if render_area matches (also can use custom scissor and viewport if it's oversized?)
+    VkImageUsageFlags       usage;   // Tells us if we can go into BindlessHeap (when has SAMPLED_BIT)
+    VkImageSubresourceRange subresource_range;  // Required for barriers
 }
 ResourceImageData;
 
 typedef struct FG_Resource
 {
-    const char* debug_name;  // TODO: Add to renderdoc with vkDebugMarkerSetObjectNameEXT somehow
+    char debug_name[64];  // TODO: Add to renderdoc with vkDebugMarkerSetObjectNameEXT somehow
     FG_ResourceType type;
     union
     {
@@ -160,7 +166,7 @@ typedef struct FG_Resource
     VmaAllocation allocation;  // NOTE: For imported resources like swapchain images set to VK_NULL_HANDLE.
 
     // Shader side access to resources
-    uint32_t image_bindless_index;             // Index into the global texture array
+    uint32_t image_bindless_index;       // Index into the global texture array, UINT32_MAX for nonsamplable images e.g. the swapchain
     VkDeviceAddress buffer_gpu_address;  // Buffer device address for shader
 
     // Sync State

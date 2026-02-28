@@ -5,23 +5,8 @@
 
 #include "internal_structs.h"
 #include "framegraph.h"
+#include "pass_definitions.h"
 // #include "due_rework/internals_due_rework.h"
-
-typedef struct ThreadData
-{
-    // Thread Tracker (provides memory leak checking). NOTE: Make sure all CPU allocations use L_calloc() and L_free().
-    ThreadAllocTracker tt;
-}
-ThreadData;
-
-typedef struct FrameState
-{
-    VkFence rendering_complete_fence;
-    VkSemaphore swapchain_image_acquired_semaphore;
-    VkCommandPool graphics_command_pool;
-    VkCommandBuffer graphics_command_buffer;
-}
-FrameState;
 
 typedef struct RenderState
 {
@@ -52,19 +37,21 @@ typedef struct RenderState
     VkSwapchainKHR swapchain;
     VkFormat swapchain_image_format;
     VkExtent2D swapchain_extent;
-    #define MAX_SWAPCHAIN_IMAGE_COUNT 10
     u32 swapchain_image_count;
     VkImage swapchain_images[MAX_SWAPCHAIN_IMAGE_COUNT];
     VkImageView swapchain_image_views[MAX_SWAPCHAIN_IMAGE_COUNT];
     VkSemaphore swapchain_image_rendering_complete_semaphores[MAX_SWAPCHAIN_IMAGE_COUNT];
 
     // Multiple frames in flight to avoid stalling pipeline between frames
-#define NUM_FRAMES_IN_FLIGHT 2
     FrameState frames[NUM_FRAMES_IN_FLIGHT];
 
     // FrameGraph
     ResourceRegistry registry;
     BindlessHeap heap;
+    VkPipelineLayout global_pipeline_Layout;
+
+    // Defined renderpasses and resources used in framegraph
+    PassDefinitions pass_defs;
 
     // The old stuff that I want to redo, but first need something up on the screen for others to work from.
     // E.g. Get cube rendering running, and then people can work on input and player movement

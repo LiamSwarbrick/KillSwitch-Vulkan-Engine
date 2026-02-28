@@ -7,22 +7,39 @@
 
 void FG_Init()
 {
-    printf("TODO: FrameGraph Subsystem: First thing is to get ONE RENDERPASS working TO SWAPCHAIN.");
-    // So... one pipeline, no CreateResource, only ImportResource (swapchain image)
-    
     FG_BindlessHeap_Init();
+    
+    // Create global pipeline layout that uses this heap
+    {
+        // Push constant range of 128 bytes should be safe across all hardware (Intel/Nvidia/AMD)
+        VkPushConstantRange push_constant_range = {
+            .stageFlags = VK_SHADER_STAGE_ALL,
+            .offset = 0,
+            .size = 128
+        };
+
+        VkPipelineLayoutCreateInfo layout_create_info = {
+            .sType           = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
+            .pNext           = NULL,
+            .flags           = 0,
+            .setLayoutCount  = 1,
+            .pSetLayouts     = &renderstate.heap.set_layout,
+            .pushConstantRangeCount  = 1,
+            .pPushConstantRanges     = &push_constant_range
+        };
+
+        VK_CHECK(vkCreatePipelineLayout(renderstate.device, &layout_create_info, NULL, &renderstate.global_pipeline_Layout));
+    }
 }
 
 void FG_Shutdown()
 {
     FG_BindlessHeap_Shutdown();
+    vkDestroyPipelineLayout(renderstate.device, renderstate.global_pipeline_Layout, NULL);
 }
 
 // FrameGraph Execution
 //
-// TODO(Liam): Still need to analyse the inputs and outputs of all the renderpass descriptions in a FrameGraph in order to execute in the correct order.
-// (topological sort? or manually specified order? I'm not sure what sync info i need for topological sort)
-// E.g. render passes in FrameGraph::passes should be in order of execution, but then analysing it should allow some things to be ordered differently/in parallel?
 
 void FG_ApplyBarriers(VkCommandBuffer cmd, RenderPassDesc* pass)
 {
@@ -234,15 +251,14 @@ uint32_t add_resource_to_registry_and_heap(const char* debug_name, FG_ResourceTy
 
     uint32_t id = renderstate.registry.resource_count++;
     FG_Resource* res = &renderstate.registry.resources[id];
-    res->debug_name = debug_name;
+    strncpy(res->debug_name, debug_name, sizeof(res->debug_name));
     res->type = type;
     res->allocation = resource_info.allocation;
     
     if (type == FG_RESOURCE_TYPE_BUFFER)
     {
-        res->buffer.handle       = resource_info.import_info.buffer.handle;
-        res->buffer.size         = resource_info.import_info.buffer.size;
-        res->buffer.mapped_data  = resource_info.import_info.buffer.mapped_data;
+        printf("Adding BUFFER resource to registry. (%s)\n", res->debug_name);
+        res->buffer = resource_info.import_info.buffer;
 
         // Immediately grab the BDA pointer
         VkBufferDeviceAddressInfo address_info = {
@@ -254,31 +270,42 @@ uint32_t add_resource_to_registry_and_heap(const char* debug_name, FG_ResourceTy
     }
     else
     {
-        res->image.handle  = resource_info.import_info.image.handle;
-        res->image.view    = resource_info.import_info.image.view;
-        res->image.format  = resource_info.import_info.image.format;
-        res->image.subresource_range = resource_info.import_info.image.subresource_range;
+        printf("Adding IMAGE resource to registry. (%s)\n", res->debug_name);
+        res->image = resource_info.import_info.image;
+        
+        // Only images created with SAMPLED_BIT should go in the BindlessHeap
+        // For imported resources (the swapchain), this will be false.
+        b32 can_be_sampled = res->image.usage & VK_IMAGE_USAGE_SAMPLED_BIT;
 
-        // Register in  bindless descriptor array
-        res->image_bindless_index = renderstate.heap.texture_count++;
-        VkDescriptorImageInfo descriptor_image_info = {
-            .imageView    = res->image.view,
-            .imageLayout  = res->current_layout
-        };
+        if (can_be_sampled)
+        {
+            printf("Adding %s to heap (is samplable).\n", res->debug_name);
 
-        VkWriteDescriptorSet descriptor_write = {
-            .sType             = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-            .pNext             = NULL,
-            .dstSet            = renderstate.heap.global_set,
-            .dstBinding        = 0,  // <- Take note, images array is binding=0
-            .dstArrayElement   = res->image_bindless_index,
-            .descriptorCount   = 1,
-            .descriptorType    = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
-            .pImageInfo        = &descriptor_image_info,
-            .pBufferInfo       = NULL,
-            .pTexelBufferView  = NULL
-        };
-        vkUpdateDescriptorSets(renderstate.device, 1, &descriptor_write, 0, NULL);
+            // Register in  bindless descriptor array
+            res->image_bindless_index = renderstate.heap.texture_count++;
+            VkDescriptorImageInfo descriptor_image_info = {
+                .imageView    = res->image.view,
+                .imageLayout  = res->current_layout
+            };
+
+            VkWriteDescriptorSet descriptor_write = {
+                .sType             = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+                .pNext             = NULL,
+                .dstSet            = renderstate.heap.global_set,
+                .dstBinding        = 0,  // <- Take note, images array is binding=0
+                .dstArrayElement   = res->image_bindless_index,
+                .descriptorCount   = 1,
+                .descriptorType    = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
+                .pImageInfo        = &descriptor_image_info,
+                .pBufferInfo       = NULL,
+                .pTexelBufferView  = NULL
+            };
+            vkUpdateDescriptorSets(renderstate.device, 1, &descriptor_write, 0, NULL);
+        }
+        else
+        {
+            res->image_bindless_index = UINT32_MAX;
+        }
     }
 
     // Returns the resource's id into the registry
@@ -291,6 +318,7 @@ uint32_t FG_CreateResource(const char* debug_name, FG_ResourceType type, Resourc
 
     if (type == FG_RESOURCE_TYPE_BUFFER)
     {
+        // Create .buffer.handle, with allocation stored in .allocation
         VmaAllocationCreateInfo alloc_create_info = { .usage = VMA_MEMORY_USAGE_AUTO };
         VK_CHECK(vmaCreateBuffer(
             renderstate.vma_allocator,
@@ -301,11 +329,13 @@ uint32_t FG_CreateResource(const char* debug_name, FG_ResourceType type, Resourc
             NULL
         ));
         
-        resource_info.import_info.buffer.mapped_data = NULL;  // TODO! vmaMapMemory stuff might be useful for CPU side updating of skeletal bones.
+        // Keep metadata
         resource_info.import_info.buffer.size = create_info->buffer_create_info.size;
+        resource_info.import_info.buffer.mapped_data = NULL;  // TODO! vmaMapMemory stuff might be useful for CPU side updating of skeletal bones.
     }
     else
     {
+        // Create .image.handle, with allocation stored in .allocation
         VmaAllocationCreateInfo alloc_create_info = { .usage=VMA_MEMORY_USAGE_AUTO };
         VK_CHECK(vmaCreateImage(
             renderstate.vma_allocator,
@@ -316,14 +346,18 @@ uint32_t FG_CreateResource(const char* debug_name, FG_ResourceType type, Resourc
             NULL
         ));
 
+        // Create .image.view
         VK_CHECK(vkCreateImageView(
             renderstate.device,
             &create_info->image_view_create_info,
             NULL,
             &resource_info.import_info.image.view
         ));
-
+        
+        // Keep metadata
         resource_info.import_info.image.format = create_info->image_create_info.format;
+        resource_info.import_info.image.extent = create_info->image_create_info.extent;
+        resource_info.import_info.image.usage  = create_info->image_create_info.usage;
         resource_info.import_info.image.subresource_range = create_info->image_view_create_info.subresourceRange;
     }
 
@@ -570,16 +604,4 @@ void FG_BindlessHeap_CreateAllSamplers()
 
         VK_CHECK(vkCreateSampler(renderstate.device, &sampler_create_info, NULL, &renderstate.heap.samplers[i]));
     }
-}
-
-void FG_CreateGlobalPipelineLayout()
-{
-    // Push constant range of 128 bytes should be safe across all hardware (Intel/Nvidia/AMD)
-    VkPushConstantRange push_constant = {
-        .stageFlags = VK_SHADER_STAGE_ALL,
-        .offset = 0,
-        .size = 128
-    };
-
-
 }

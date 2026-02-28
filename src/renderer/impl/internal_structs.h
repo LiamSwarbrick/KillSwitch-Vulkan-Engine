@@ -5,6 +5,25 @@
 #include "../renderer.h"
 #include "vulkan_wrapper.h"
 
+#define MAX_SWAPCHAIN_IMAGE_COUNT 10
+#define NUM_FRAMES_IN_FLIGHT 2
+
+typedef struct ThreadData
+{
+    // Thread Tracker (provides memory leak checking). NOTE: Make sure all CPU allocations use L_calloc() and L_free().
+    ThreadAllocTracker tt;
+}
+ThreadData;
+
+typedef struct FrameState
+{
+    VkFence rendering_complete_fence;
+    VkSemaphore swapchain_image_acquired_semaphore;
+    VkCommandPool graphics_command_pool;
+    VkCommandBuffer graphics_command_buffer;
+}
+FrameState;
+
 // This enum exists so NUM_QUEUE_FAMILIES stores the correct value
 enum _Enum_QueueFamilyIndices
 {
