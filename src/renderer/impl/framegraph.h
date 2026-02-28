@@ -40,6 +40,8 @@
 void FG_Init();
 void FG_Shutdown();
 
+void FG_ClearResources();
+
 // Arbitrary predefined array sizes for simplicity
 #define MAX_PASS_RESOURCE_BANDWIDTH  16
 #define MAX_PASSES          64

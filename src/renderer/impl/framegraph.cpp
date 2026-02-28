@@ -285,7 +285,7 @@ uint32_t add_resource_to_registry_and_heap(const char* debug_name, FG_ResourceTy
             res->image_bindless_index = renderstate.heap.texture_count++;
             VkDescriptorImageInfo descriptor_image_info = {
                 .imageView    = res->image.view,
-                .imageLayout  = res->current_layout
+                .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
             };
 
             VkWriteDescriptorSet descriptor_write = {
@@ -346,6 +346,12 @@ uint32_t FG_CreateResource(const char* debug_name, FG_ResourceType type, Resourc
             NULL
         ));
 
+        // Now we actually have the image handle and can set it in the view's create info
+        SDL_assert(create_info->image_view_create_info.image == VK_NULL_HANDLE &&
+            "Just leave image_view_create_info's image handle null when passing to FG_CreateResource"
+        );
+        create_info->image_view_create_info.image = resource_info.import_info.image.handle;
+        
         // Create .image.view
         VK_CHECK(vkCreateImageView(
             renderstate.device,
@@ -604,4 +610,44 @@ void FG_BindlessHeap_CreateAllSamplers()
 
         VK_CHECK(vkCreateSampler(renderstate.device, &sampler_create_info, NULL, &renderstate.heap.samplers[i]));
     }
+}
+
+void FG_ClearResources()
+{
+    vkDeviceWaitIdle(renderstate.device);
+
+    for (uint32_t i = 0; i < renderstate.registry.resource_count; ++i)
+    {
+        FG_Resource* res = &renderstate.registry.resources[i];
+
+        // Imported resources won't have a VMA allocation
+        if (res->allocation == VK_NULL_HANDLE)
+        {
+            continue;  // Imported resources are managed by whoever imported them.
+        }
+
+        if (res->type == FG_RESOURCE_TYPE_BUFFER)
+        {
+            vmaDestroyBuffer(renderstate.vma_allocator, res->buffer.handle, res->allocation);
+        }
+        else
+        {
+            SDL_assert(res->image.view != VK_NULL_HANDLE);
+            vkDestroyImageView(renderstate.device, res->image.view, NULL);
+
+            vmaDestroyImage(renderstate.vma_allocator, res->image.handle, res->allocation);
+        }
+
+        // Wipe the struct memory to prevent accidental reuse
+        memset(res, 0, sizeof(FG_Resource));
+    }
+
+    // Reset counters so the next "Create" call starts from index 0
+    renderstate.registry.resource_count = 0;
+    renderstate.heap.texture_count = 0;
+    
+    // Note: We don't destroy the global_set or samplers here because 
+    // those live for the lifetime of the engine (FG_Init / FG_Shutdown).
+    
+    SDL_Log("FrameGraph Resources Destroyed & Registry Reset.");
 }
