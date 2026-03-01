@@ -257,7 +257,7 @@ uint32_t add_resource_to_registry_and_heap(const char* debug_name, FG_ResourceTy
     
     if (type == FG_RESOURCE_TYPE_BUFFER)
     {
-        printf("Adding BUFFER resource to registry. (%s)\n", res->debug_name);
+        printf("Adding BUFFER resource to registry. (" ANSI_CYAN "%s" ANSI_RESET ")\n", res->debug_name);
         res->buffer = resource_info.import_info.buffer;
 
         // Immediately grab the BDA pointer
@@ -270,7 +270,7 @@ uint32_t add_resource_to_registry_and_heap(const char* debug_name, FG_ResourceTy
     }
     else
     {
-        printf("Adding IMAGE resource to registry. (%s)\n", res->debug_name);
+        printf("Adding IMAGE resource to registry. (" ANSI_CYAN "%s" ANSI_RESET ")\n", res->debug_name);
         res->image = resource_info.import_info.image;
         
         // Only images created with SAMPLED_BIT should go in the BindlessHeap
@@ -279,7 +279,7 @@ uint32_t add_resource_to_registry_and_heap(const char* debug_name, FG_ResourceTy
 
         if (can_be_sampled)
         {
-            printf("Adding %s to heap (is samplable).\n", res->debug_name);
+            printf("Adding " ANSI_CYAN "%s" ANSI_RESET " to heap (is samplable).\n", res->debug_name);
 
             // Register in  bindless descriptor array
             res->image_bindless_index = renderstate.heap.texture_count++;
