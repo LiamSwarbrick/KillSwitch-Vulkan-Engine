@@ -46,40 +46,20 @@ typedef struct RenderState
     FrameState frames[NUM_FRAMES_IN_FLIGHT];
 
     // FrameGraph
+    FrameGraph framegraph;
     ResourceRegistry registry;
     BindlessHeap heap;
     VkPipelineLayout global_pipeline_Layout;
 
-    // Defined renderpasses and resources used in framegraph
-    PassDefinitions pass_defs;
+    // Defined resource ids: Recreated when swapchain changes size
+    ResourcesIDs framegraph_rids;
 
-    // The old stuff that I want to redo, but first need something up on the screen for others to work from.
-    // E.g. Get cube rendering running, and then people can work on input and player movement
-    // Implementing collisions with a physics engine (jolt)
-    // OldRenderState old;
+    // Pipelines: Created lazily, cleaned when swapchain changes format (and remade lazily the next frame).
+    // TODO:...
 }
 RenderState;
 
 extern RenderState renderstate;  // Declared in renderer.cpp
-
-// // In due_rework/:
-// void old_stuff_init(RenderState* renderstate);
-// void old_stuff_clean(RenderState* renderstate);
-// void old_create_swapchain_tied_objects(RenderState* renderstate, VkFormat old_format);
-// void old_destroy_swapchain_tied_objects(RenderState* renderstate);
-// //
-// const char* get_render_mode_name(RenderMode render_mode);
-// VkCommandBuffer  begin_one_time_command(RenderState* renderstate);
-// void             end_one_time_command_and_wait(RenderState* renderstate, VkCommandBuffer command);
-// GPU_Image        create_image_texture2d(RenderState* renderstate, u8* data, u64 data_size, u32 width, u32 height, VkFormat format, VkImageUsageFlags usage);
-// GPU_Image        create_render_target_attachment(RenderState* renderstate, b32 is_depth_attachment, VkFormat desired_format, VkExtent3D extent, VkImageUsageFlags usage);
-// GraphicsPipeline create_graphics_pipeline(RenderState* renderstate, GraphicsPipelineConfigInfo config);
-// void             destroy_graphics_pipeline(RenderState* renderstate, GraphicsPipeline* gp);
-// void             create_all_graphics_pipelines(RenderState* renderstate);
-// void             destroy_all_graphics_pipelines(RenderState* renderstate);
-// // (end of due rework)
-
-// Not in due_rework/:
 
 void _Renderer_OnWindowResize();
 void _Renderer_OnWindowMinimize();

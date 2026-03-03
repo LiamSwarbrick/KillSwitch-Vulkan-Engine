@@ -5,11 +5,11 @@
 // Create an initial pipeline with global_pipeline_layout
 // Implement load spv resources with SDL
 
-void CreatePassDefinitionsAndResources()
+void CreateResources()
 {
-    SDL_assert(!renderstate.pass_defs.is_created);
+    SDL_assert(!renderstate.framegraph_rids.resources_created);
 
-    // Import swapchain resource
+    // Import swapchain images as framegraph resources
     char swapchain_image_name[64] = {};
     for (uint32_t i = 0; i < renderstate.swapchain_image_count; ++i)
     {
@@ -29,11 +29,13 @@ void CreatePassDefinitionsAndResources()
                 }
             }
         };
-        renderstate.pass_defs.swapchain_image_rids[i] = FG_ImportResource(
+        renderstate.framegraph_rids.swapchain_image_rids[i] = FG_ImportResource(
             swapchain_image_name, FG_RESOURCE_TYPE_IMAGE, import_info
         );
     }
 
+
+    // TEST:
     ResourceCreateInfo test_create_info = {
         .image_create_info = {
             .sType        = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
@@ -94,15 +96,15 @@ void CreatePassDefinitionsAndResources()
     uint32_t test_texture_rid = FG_CreateResource("Test texture", FG_RESOURCE_TYPE_IMAGE, &test_create_info);
 
     // Finally
-    renderstate.pass_defs.is_created = 1;
+    renderstate.framegraph_rids.resources_created = 1;
 }
 
-void DestroyPassDefinitionsAndResources()
+void DestroyResources()
 {
-    SDL_assert(renderstate.pass_defs.is_created);
+    SDL_assert(renderstate.framegraph_rids.resources_created);
 
     FG_ClearResources();
 
     // Finally
-    renderstate.pass_defs.is_created = 0;
+    renderstate.framegraph_rids.resources_created = 0;
 }

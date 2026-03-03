@@ -38,6 +38,16 @@ void FG_Shutdown()
     vkDestroyPipelineLayout(renderstate.device, renderstate.global_pipeline_Layout, NULL);
 }
 
+RenderPassDesc* FG_AddPass(FrameGraph* fg, const char* name)
+{
+    SDL_assert(fg->pass_count < MAX_PASSES);
+    RenderPassDesc* pass = &fg->passes[fg->pass_count++];
+    memset(pass, 0, sizeof(RenderPassDesc));
+    strncpy(pass->debug_name, name, sizeof(pass->debug_name));
+
+    return pass;
+}
+
 // FrameGraph Execution
 //
 

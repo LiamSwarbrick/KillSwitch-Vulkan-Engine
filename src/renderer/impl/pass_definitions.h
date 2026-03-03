@@ -4,21 +4,28 @@
 #include "framegraph.h"
 #include "internal_structs.h"
 
-typedef struct PassDefinitions
+// Recreated at each swapchain resize.
+typedef struct ResourcesIDs
 {
-    b32 is_created;
-
-    // NOTE: Should store renderpass descriptions but not pipelines.
-    // Because pipelines don't need to be recreated everytime the swapchain
-    // changes size, but renderpass resources do, so the descriptions and buffers
-    // need recreating.
+    b32 resources_created;
 
     // Resource IDs:
     uint32_t swapchain_image_rids[MAX_SWAPCHAIN_IMAGE_COUNT];
 }
-PassDefinitions;
+ResourcesIDs;
 
-void CreatePassDefinitionsAndResources();
-void DestroyPassDefinitionsAndResources();
+void CreateResources();
+void DestroyResources();
+
+
+// Future
+// // Recreated only when swapchain format changes
+// // In that case, the pipeline hash should just empty all of them.
+// // Then they will be rebuilt lazily.
+// typedef struct PipelineIDs
+// {
+
+// }
+// PipelineIDs;
 
 #endif  // RENDERER_PASS_DEFINITIONS_H

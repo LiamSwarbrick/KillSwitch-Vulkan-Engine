@@ -120,6 +120,8 @@ typedef struct FrameGraph
 }
 FrameGraph;
 
+
+RenderPassDesc* FG_AddPass(FrameGraph* fg, const char* name);
 void FG_ApplyBarriers(VkCommandBuffer cmd, RenderPassDesc* pass);
 void FG_ExecutePass(FrameGraph* fg, uint32_t pass_idx, VkCommandBuffer cmd);
 

@@ -500,7 +500,7 @@ bool Renderer_Init(const Renderer_InitInfo* info)
     FG_Init();
 
     // Create Swapchain, FrameGraph resources and pass descriptions
-    renderstate.pass_defs.is_created = 0;
+    renderstate.framegraph_rids.resources_created = 0;
     _Renderer_OnWindowResize();
 
     // Init per frame structures
@@ -560,7 +560,7 @@ void Renderer_Shutdown()
     FG_Shutdown();
 
     // Destroy resources for renderpasses
-    DestroyPassDefinitionsAndResources();
+    DestroyResources();
 
     destroy_swapchain();
 
@@ -617,11 +617,11 @@ void _Renderer_OnWindowResize()
     create_or_recreate_swapchain();
 
     // Create pass resources and definitions
-    if (renderstate.pass_defs.is_created)
+    if (renderstate.framegraph_rids.resources_created)
     {
-        DestroyPassDefinitionsAndResources();
+        DestroyResources();
     }
-    CreatePassDefinitionsAndResources();
+    CreateResources();
 }
 
 void _Renderer_OnWindowMinimize()
@@ -631,16 +631,38 @@ void _Renderer_OnWindowMinimize()
 
 void Renderer_BeginFrame()
 {
-    // Clear draw call lists
+    /*  Build FrameGraph
+
+        Queries game state to know which renderpasses to use.
+        E.g. game.wearing_pyrovision_goggles would use swap the renderpass
+        that renders flame particles as fire, to a renderpass that makes them bubbles
+        or some shit.
+    */
+
+    // Empty pass descriptions
+    renderstate.framegraph.pass_count = 0;
+    memset(renderstate.framegraph.passes, 0, sizeof(renderstate.framegraph.passes));
+
+    // TODO: Define basic pass for swapchain rendering
+
 }
 
-// TEMP NOTES
-    // clear background
-    // go through draw call lists and render then with vulkan (deferred and forward?)
-    // (hybrid? with clustered shading? lots to think about)
-    // best to support as much via shared code if it's simple, otherwise make an early choice.
 void Renderer_EndFrame()
 {
+    /*  Execute FrameGraph
+
+        Gathers renderables from game state, based on flags, provides each
+        pass their drawlists e.g. renderable with rig and unlit material would
+        go to that specific pass.
+
+        OR I can leave each execute callback to gather their relevant items themselves,
+        which is probably easier
+    
+    */
+
+    // Latency hiding:
+    // Double/triple buffering command buffers allows us to start recording the next
+    // frame's command buffer before the GPU has done with the current frame's one.
     u32 frame_in_flight = renderstate.frame_number % NUM_FRAMES_IN_FLIGHT;
 
     // Wait for rendering to be complete for this frame in flight.
@@ -687,8 +709,8 @@ void Renderer_EndFrame()
     vkResetCommandPool(renderstate.device, renderstate.frames[frame_in_flight].graphics_command_pool, 0);
 
 
-    
-    // Begin info for command buffer
+
+    // Setup graphics command buffer for one time submission
     VkCommandBufferBeginInfo graphics_cmd_begin_info = {
         .sType             = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
         .pNext             = NULL,
