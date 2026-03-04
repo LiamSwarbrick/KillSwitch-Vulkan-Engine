@@ -3,6 +3,7 @@
 
 #include "SDL3/SDL.h"
 #include "SDL3/SDL_main.h"
+#include "assetsys/scene_loader.h"
 
 int main(int argc, char *argv[])
 {
@@ -20,6 +21,10 @@ int main(int argc, char *argv[])
     Renderer_Init(&renderer_info);
 
     bool running = true;
+
+    //load scene
+	load_scene("assets/cube.gltf");
+
     while (running)
     {
         // Event Loop

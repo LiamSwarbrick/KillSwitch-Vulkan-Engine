@@ -13,6 +13,7 @@ include_paths.Vulkan = VULKAN_SDK .. "/include"
 include_paths.volk = EXTERNAL .. "volk"
 include_paths.VMA = EXTERNAL .. "VMA"
 include_paths.glm = EXTERNAL .. "glm"
+include_paths.glm = EXTERNAL .. "cgltf"
 
 lib_dirs = {}
 lib_dirs.SDL3 = SDL_BUILD_DIR
@@ -149,14 +150,18 @@ workspace "AdventureEngine"
 
         files {
             SRC .. "game/**.h",
-            SRC .. "game/**.cpp"
+            SRC .. "game/**.cpp",
+            SRC .. "assetsys/**.c",
+            SRC .. "assetsys/**.h"
         }
 
         includedirs {
             SRC,
             SRC .. "game/include",
+            SRC .. "assetsys",
             include_paths.SDL3,
-            include_paths.glm
+            include_paths.glm,
+            include_paths.cgltf
         }
 
         libdirs {
