@@ -630,11 +630,12 @@ void _Renderer_OnWindowMinimize()
     // TODO: Pause rendering on minimize
 }
 
-void Renderer_BeginFrame()  // TODO: Change begin/end frame to something else.
+void Renderer_BeginFrame()
 {
-    
-    
-
+    // TODO: Change BeginFrame/EndFrame structure to something else.
+    // Realistically, this should collect renderables from the entity system and
+    // treat it as just input data to render.
+    // ...some how. need to figure out this out across the entire game pipeline.
 }
 
 void Renderer_EndFrame()
@@ -769,83 +770,6 @@ void Renderer_EndFrame()
     {
         FG_CmdRenderFrame(gcmd);
         FG_CmdTransitionSwapchainForPresentation(gcmd, swapchain_image_resource_id);
-
-#if 0  // OLD DELETE THIS
-        // Swapchain as output color attachment
-        {
-            VkImageMemoryBarrier2 barrier = {
-                .sType                = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
-                .pNext                = NULL,
-                .srcStageMask         = VK_PIPELINE_STAGE_2_NONE,
-                .srcAccessMask        = VK_ACCESS_2_NONE,
-                .dstStageMask         = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
-                .dstAccessMask        = VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,
-                .oldLayout            = VK_IMAGE_LAYOUT_UNDEFINED,
-                .newLayout            = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-                .srcQueueFamilyIndex  = renderstate.queue_family_indices.present_family,
-                .dstQueueFamilyIndex  = renderstate.queue_family_indices.graphics_family,
-                .image                = renderstate.swapchain_images[swapchain_image_index],
-                .subresourceRange     = {
-                    .aspectMask      = VK_IMAGE_ASPECT_COLOR_BIT,
-                    .baseMipLevel    = 0,
-                    .levelCount      = 1,
-                    .baseArrayLayer  = 0,
-                    .layerCount      = 1
-                }
-            };
-            VkDependencyInfo dependency = {
-                .sType                     = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
-                .pNext                     = NULL,
-                .dependencyFlags           = VK_DEPENDENCY_BY_REGION_BIT,
-                // .memoryBarrierCount        =
-                // .pMemoryBarriers           =
-                // .bufferMemoryBarrierCount  =
-                // .pBufferMemoryBarriers     =
-                .imageMemoryBarrierCount   = 1,
-                .pImageMemoryBarriers      = &barrier
-            };
-            vkCmdPipelineBarrier2(gcmd, &dependency);
-        }
-
-        // Rendering to swapchain for now
-
-
-        // Swapchain to presentable format
-        {
-            VkImageMemoryBarrier2 barrier = {
-                .sType                = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
-                .pNext                = NULL,
-                .srcStageMask         = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
-                .srcAccessMask        = VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,
-                .dstStageMask         = VK_PIPELINE_STAGE_2_NONE,
-                .dstAccessMask        = VK_ACCESS_2_NONE,
-                .oldLayout            = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-                .newLayout            = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
-                .srcQueueFamilyIndex  = renderstate.queue_family_indices.graphics_family,
-                .dstQueueFamilyIndex  = renderstate.queue_family_indices.present_family,
-                .image                = renderstate.swapchain_images[swapchain_image_index],
-                .subresourceRange     = {
-                    .aspectMask      = VK_IMAGE_ASPECT_COLOR_BIT,
-                    .baseMipLevel    = 0,
-                    .levelCount      = 1,
-                    .baseArrayLayer  = 0,
-                    .layerCount      = 1
-                }
-            };
-            VkDependencyInfo dependency = {
-                .sType                     = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
-                .pNext                     = NULL,
-                .dependencyFlags           = VK_DEPENDENCY_BY_REGION_BIT,
-                // .memoryBarrierCount        =
-                // .pMemoryBarriers           =
-                // .bufferMemoryBarrierCount  =
-                // .pBufferMemoryBarriers     =
-                .imageMemoryBarrierCount   = 1,
-                .pImageMemoryBarriers      = &barrier
-            };
-            vkCmdPipelineBarrier2(gcmd, &dependency);
-        }
-#endif  // OLD DELETE THIS
     }
     VK_CHECK(vkEndCommandBuffer(gcmd));
 

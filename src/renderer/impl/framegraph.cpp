@@ -322,9 +322,18 @@ uint32_t add_resource_to_registry_and_heap(const char* debug_name, FG_ResourceTy
 
     uint32_t id = renderstate.registry.resource_count++;
     FG_Resource* res = &renderstate.registry.resources[id];
+
+    // For safety, zero the struct, but this function should manully set all parameters.
+    memset(res, 0, sizeof(FG_Resource));
+
+    // Set shared fields
     strncpy(res->debug_name, debug_name, sizeof(res->debug_name));
     res->type = type;
     res->allocation = resource_info.allocation;
+
+    res->current_access = VK_ACCESS_2_NONE;
+    res->current_stage  = VK_PIPELINE_STAGE_2_NONE;
+    res->current_layout = VK_IMAGE_LAYOUT_UNDEFINED;
     
     if (type == FG_RESOURCE_TYPE_BUFFER)
     {
