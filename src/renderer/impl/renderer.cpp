@@ -81,11 +81,8 @@ InternalVulkanDebugCallback(
     return VK_FALSE;
 }
 
-
 bool Renderer_Init(const Renderer_InitInfo* info)
 {
-    // TODO: Initialize vulkan, storing the stuff from my old renderer into internal render state
-
     // Init the main memory tracker for the main thread which in debug mode we can query it for memory leaks during cleanup
     renderstate.main.tt = init_per_thread_allocation_tracker("Renderer_MainThreadTracker");
 
@@ -360,7 +357,7 @@ bool Renderer_Init(const Renderer_InitInfo* info)
         
         printf("Graphics queue family at index %d\n", renderstate.queue_family_indices.graphics_family);
         printf("Presentation (surface) queue family at index %d\n", renderstate.queue_family_indices.present_family);
-
+        printf("Transfer queue family at index %d\n", renderstate.queue_family_indices.transfer_family);
 
         for (int i = 0; i < NUM_QUEUE_FAMILY_INDICES; ++i)
         {
@@ -373,7 +370,7 @@ bool Renderer_Init(const Renderer_InitInfo* info)
         renderstate.device = VK_NULL_HANDLE;
 
         // Create the queues we will submit commands to
-        VkDeviceQueueCreateInfo* queue_create_infos = (VkDeviceQueueCreateInfo*)L_calloc(NUM_QUEUE_FAMILY_INDICES, sizeof(VkDeviceQueueCreateInfo), &renderstate.main.tt);
+        VkDeviceQueueCreateInfo queue_create_infos[NUM_QUEUE_FAMILY_INDICES] = {};
         float queue_priorities[] = { 1.0f };
 
         // Queues can be available for multiple queue families, so we make sure we only make the unique queues
@@ -467,8 +464,7 @@ bool Renderer_Init(const Renderer_InitInfo* info)
         // Get the queue handles from the device
         vkGetDeviceQueue(renderstate.device, renderstate.queue_family_indices.graphics_family, 0, &renderstate.graphics_queue);
         vkGetDeviceQueue(renderstate.device, renderstate.queue_family_indices.present_family, 0, &renderstate.presentation_queue);
-
-        L_free(queue_create_infos, &renderstate.main.tt);
+        vkGetDeviceQueue(renderstate.device, renderstate.queue_family_indices.transfer_family, 0, &renderstate.transfer_queue);
 
         printf("Created Logcal Device.\n");
 
@@ -495,6 +491,17 @@ bool Renderer_Init(const Renderer_InitInfo* info)
         printf("Vulkan Memory Allocator Initialised\n");
 
         SDL_assert(renderstate.vma_allocator != VK_NULL_HANDLE);
+    }
+
+    // Transfer command buffers per thread
+    {
+        // Create mutex for syncing multithreaded submits to the transfer queue
+        renderstate.transfer_queue_mutex = SDL_CreateMutex();
+        SDL_assert(renderstate.transfer_queue_mutex);
+
+        // TODO: Currently just the main thread will do all the transfering
+        // But it's setup for trivial multithreaded due to thread_safe_submit_cmd()
+        create_thread_staging_objects(&renderstate.main.staging_objects);
     }
 
     // Init FrameGraph subsystem
@@ -565,6 +572,10 @@ void Renderer_Shutdown()
 
     destroy_swapchain();
 
+    // Thread staging objects (only one thread for now)
+    destroy_thread_staging_objects(&renderstate.main.staging_objects);
+    SDL_DestroyMutex(renderstate.transfer_queue_mutex);
+
     // Destroy fundamental Vulkan objects
     vmaDestroyAllocator(renderstate.vma_allocator);
     vkDestroyDevice(renderstate.device, NULL);
@@ -575,9 +586,8 @@ void Renderer_Shutdown()
     }
     vkDestroyInstance(renderstate.instance, NULL);
 
-    // Destroy Window
+    // Destroy Window Surface (core destroys the actual SDL window)
     SDL_DestroyWindowSurface(renderstate.window);
-    SDL_DestroyWindow(renderstate.window);
 
     // Display if we had correct Vulkan API usage
     if (renderstate.using_validation_layers)
@@ -846,16 +856,24 @@ QueueFamilyIndices get_physical_device_queue_family_indices(VkPhysicalDevice phy
     QueueFamilyIndices queue_family_indices = {};
 
     // Each queue family index initialized to UINT32_MAX so we can test for failure
-    memset(&queue_family_indices, UINT32_MAX, sizeof(QueueFamilyIndices));
+    for (u32 i = 0; i < NUM_QUEUE_FAMILY_INDICES; ++i)
+    {
+        queue_family_indices.array[i] = UINT32_MAX;
+    }
 
     u32 queue_family_count = 0;
     vkGetPhysicalDeviceQueueFamilyProperties(physical_device, &queue_family_count, NULL);
-    VkQueueFamilyProperties* queue_families = (VkQueueFamilyProperties*)L_calloc(queue_family_count, sizeof(VkQueueFamilyProperties), &renderstate.main.tt);
+
+    const uint32_t max_queue_families = 32;  // I want to abuse the stack with fixed arrays to keep malloc calls to a minimum. Doing this across the codebase would add up over time.
+    SDL_assert(queue_family_count < max_queue_families);
+
+    VkQueueFamilyProperties queue_families[max_queue_families] = {};
     vkGetPhysicalDeviceQueueFamilyProperties(physical_device, &queue_family_count, queue_families);
 
     // Check for support of each required queue for each queue family
-    b32* queue_families_support_for_graphics = (b32*)L_calloc(queue_family_count, sizeof(b32), &renderstate.main.tt);
-    b32* queue_families_support_for_presentation = (b32*)L_calloc(queue_family_count, sizeof(b32), &renderstate.main.tt);
+    b32 queue_families_support_for_graphics[max_queue_families]     = {};
+    b32 queue_families_support_for_presentation[max_queue_families] = {};
+    b32 queue_families_support_for_transfer[max_queue_families]     = {};
     // etc.
     for (u32 i = 0; i < queue_family_count; ++i)
     {
@@ -872,6 +890,11 @@ QueueFamilyIndices get_physical_device_queue_family_indices(VkPhysicalDevice phy
         if (presentation_support)
         {
             queue_families_support_for_presentation[i] = 1;
+        }
+
+        if (queue_families[i].queueFlags & VK_QUEUE_TRANSFER_BIT)
+        {
+            queue_families_support_for_transfer[i] = 1;
         }
 
         // etc.
@@ -898,11 +921,12 @@ QueueFamilyIndices get_physical_device_queue_family_indices(VkPhysicalDevice phy
         {
             queue_family_indices.present_family = i;
         }
+        if (queue_families_support_for_transfer[i] && queue_family_indices.transfer_family == UINT32_MAX)
+        {
+            queue_family_indices.transfer_family = i;
+        }
         // etc.
     }
-    L_free(queue_families_support_for_graphics, &renderstate.main.tt);
-    L_free(queue_families_support_for_presentation, &renderstate.main.tt);
-    L_free(queue_families, &renderstate.main.tt);
 
     return queue_family_indices;
 }
@@ -1355,4 +1379,59 @@ void destroy_swapchain()
 
     // Swapchain images are automatically destroyed when swapchain is destroyed due to ownership
     vkDestroySwapchainKHR(renderstate.device, renderstate.swapchain, NULL);
+}
+
+void create_thread_staging_objects(ThreadStagingObjects* staging_objects)
+{
+    // Create transfer command pool with flag for resetting command buffers allocated from it
+    VkCommandPoolCreateInfo transfer_cmdpool_create_info = {
+        .sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
+        .pNext = NULL,
+        .flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT,
+        .queueFamilyIndex = renderstate.queue_family_indices.transfer_family
+    };
+    VK_CHECK(vkCreateCommandPool(renderstate.device, &transfer_cmdpool_create_info, NULL, &staging_objects->transfer_command_pool));
+
+    // Create a command buffer we will use for all this thread's copy commands from staging buffers to dedicated ones.
+    VkCommandBufferAllocateInfo upload_buf_alloc_info = {
+        .sType               = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
+        .pNext               = NULL,
+        .commandPool         = staging_objects->transfer_command_pool,
+        .level               = VK_COMMAND_BUFFER_LEVEL_PRIMARY,
+        .commandBufferCount  = 1
+    };
+    vkAllocateCommandBuffers(renderstate.device, &upload_buf_alloc_info, &staging_objects->upload_command_buffer);
+}
+
+void destroy_thread_staging_objects(ThreadStagingObjects* staging_objects)
+{
+    vkDestroyCommandPool(renderstate.device, staging_objects->transfer_command_pool, NULL);   
+}
+
+void thread_safe_submit_cmd(VkCommandBuffer cmd, VkFence fence)
+{
+    SDL_LockMutex(renderstate.transfer_queue_mutex);
+
+    VkCommandBufferSubmitInfo cmd_submit_info = {
+        .sType          = VK_STRUCTURE_TYPE_COMMAND_BUFFER_SUBMIT_INFO,
+        .pNext          = NULL,
+        .commandBuffer  = cmd,
+        .deviceMask     = 0
+    };
+
+    // Submit command buffer to the queue to execute it
+    VkSubmitInfo2 submit_info = {
+        .sType                     = VK_STRUCTURE_TYPE_SUBMIT_INFO_2, 
+        .pNext                     = NULL,
+        .flags                     = 0,
+        .waitSemaphoreInfoCount    = 0,
+        .pWaitSemaphoreInfos       = NULL,
+        .commandBufferInfoCount    = 1,
+        .pCommandBufferInfos       = &cmd_submit_info,
+        .signalSemaphoreInfoCount  = 0,
+        .pSignalSemaphoreInfos     = NULL
+    };
+    VK_CHECK(vkQueueSubmit2(renderstate.transfer_queue, 1, &submit_info, fence));
+
+    SDL_UnlockMutex(renderstate.transfer_queue_mutex);
 }

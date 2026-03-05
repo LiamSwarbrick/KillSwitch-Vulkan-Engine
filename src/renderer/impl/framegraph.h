@@ -226,6 +226,11 @@ typedef union ResourceImportInfo
 ResourceImportInfo;
 uint32_t FG_ImportResource(const char* debug_name, FG_ResourceType type, ResourceImportInfo import_info);
 
+// Staging
+//
+
+void FG_UploadBufferData(uint32_t rid, void* data, uint32_t size);
+
 // Descriptors
 //
 

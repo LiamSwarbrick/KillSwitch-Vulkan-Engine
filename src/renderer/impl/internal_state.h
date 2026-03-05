@@ -35,6 +35,8 @@ typedef struct RenderState
     // Queue handles to VkDevice queues (cleaned up automatically when VkDevice is destroyed)
     VkQueue graphics_queue;
     VkQueue presentation_queue;
+    VkQueue transfer_queue;
+    SDL_Mutex* transfer_queue_mutex;  // Multithreaded submission onto a queue must be synchronised.
 
     // Swapchain
     VkSwapchainKHR swapchain;
@@ -77,6 +79,10 @@ void                    free_swap_chain_support_details(SwapChainSupportDetails 
 
 void create_or_recreate_swapchain();
 void destroy_swapchain();
+
+void create_thread_staging_objects(ThreadStagingObjects* staging_objects);
+void destroy_thread_staging_objects(ThreadStagingObjects* staging_objects);
+void thread_safe_submit_cmd(VkCommandBuffer cmd, VkFence fence);
 
 // GPU_Buffer create_buffer(VmaAllocator vma_allocator, u64 size, VkBufferUsageFlags buffer_usage_flags, VmaAllocationCreateFlags allocation_flags, VmaMemoryUsage memory_usage);
 // void       destroy_buffer(VmaAllocator vma_allocator, const GPU_Buffer* gpu_buffer);

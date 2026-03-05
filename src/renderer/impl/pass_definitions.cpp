@@ -36,6 +36,8 @@ void CreateResources()
     }
 
 
+    #warning TODO: Next step is buffer uploading (via staging buffer), to get vertex data on GPU. Also implement shaders and pipelines now.
+
     // TEST:
     ResourceCreateInfo test_create_info = {
         .image_create_info = {

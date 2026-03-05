@@ -43,14 +43,13 @@ void FG_Shutdown()
 
 uint32_t FG_AddPass(RenderPassDesc pass_description)
 {
-    // printf("DEBUG: Adding pass %s\n", pass_description.debug_name);
     FrameGraph* fg = &renderstate.framegraph;
     SDL_assert(fg->pass_count < MAX_PASSES);
 
+    // Copy pass description to the next slot and return the index.
     uint32_t pass_id = fg->pass_count++;
     RenderPassDesc* pass = &fg->passes[pass_id];
     memcpy(pass, &pass_description, sizeof(RenderPassDesc));
-
     return pass_id;
 }
 
@@ -463,6 +462,54 @@ uint32_t FG_ImportResource(const char* debug_name, FG_ResourceType type, Resourc
     // Returns the resource's id into the registry
     return add_resource_to_registry_and_heap(debug_name, type, resource_info);
 }
+
+// Staging
+//
+
+#if 0
+void FG_UploadBufferData(uint32_t rid, void* data, uint32_t size)
+{
+    FG_Resource* res = &renderstate.registry.resources[rid];
+    SDL_assert(res->type == FG_RESOURCE_TYPE_BUFFER);
+    SDL_assert(size <= res->buffer.size);
+
+    // Create a temporary staging buffer (CPU visible)
+    VkBuffer staging_buffer;
+    VmaAllocation staging_alloc;
+    VkBufferCreateInfo staging_info = {
+        .sType        = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
+        .pNext        = NULL,
+        .flags        = 0,
+        .size         = size,
+        .usage        = VK_IMAGE_USAGE_TRANSFER_SRC_BIT,
+        .sharingMode  = VK_SHARING_MODE_EXCLUSIVE
+    };
+    VmaAllocationCreateInfo staging_alloc_info = {
+        .flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT,
+        .usage = VMA_MEMORY_USAGE_AUTO
+    };
+    
+    VmaAllocationInfo alloc_info;
+    vmaCreateBuffer(renderstate.vma_allocator, &staging_info, &staging_alloc_info, &staging_buffer, &staging_alloc, &alloc_info);
+
+    // Copy CPU data to staging memory
+    memcpy(alloc_info.pMappedData, data, size);
+
+    // Immediate Command (Use a one-time command buffer)
+    VkCommandBuffer cmd = BeginImmediateCommand();
+    
+    VkBufferCopy copy_region = { .srcOffset = 0, .dstOffset = 0, .size = size };
+    vkCmdCopyBuffer(cmd, staging_buffer, res->buffer.handle, 1, &copy_region);
+    
+    EndImmediateCommand(cmd); // Helper to submit and wait for idle
+
+    // Cleanup staging
+    vmaDestroyBuffer(renderstate.vma_allocator, staging_buffer, staging_alloc);
+}
+#endif
+
+// Descriptors
+//
 
 void FG_BindlessHeap_Init()
 {

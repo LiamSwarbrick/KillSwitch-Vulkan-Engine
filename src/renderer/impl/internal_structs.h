@@ -8,10 +8,21 @@
 #define MAX_SWAPCHAIN_IMAGE_COUNT 10
 #define NUM_FRAMES_IN_FLIGHT 2
 
+
+typedef struct ThreadStagingObjects
+{
+    // Command pool with upload buffer for copying assets from staging buffers
+    VkCommandPool transfer_command_pool;
+    VkCommandBuffer upload_command_buffer;
+}
+ThreadStagingObjects;
+
 typedef struct ThreadData
 {
     // Thread Tracker (provides memory leak checking). NOTE: Make sure all CPU allocations use L_calloc() and L_free().
     ThreadAllocTracker tt;
+
+    ThreadStagingObjects staging_objects;
 }
 ThreadData;
 
@@ -29,6 +40,7 @@ enum _Enum_QueueFamilyIndices
 {
     QUEUE_GRAPHICS_FAMILY=0,
     QUEUE_PRESENT_FAMILY,
+    QUEUE_TRANSFER_FAMILY,
     
     NUM_QUEUE_FAMILY_INDICES
 };
@@ -41,6 +53,7 @@ typedef union QueueFamilyIndices
     {
         u32 graphics_family;
         u32 present_family;
+        u32 transfer_family;
     };
     u32 array[NUM_QUEUE_FAMILY_INDICES];
 }

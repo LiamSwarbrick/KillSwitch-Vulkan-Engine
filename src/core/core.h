@@ -16,7 +16,7 @@ typedef struct Core_InitInfo
 Core_InitInfo;
 
 SDL_Window* Core_Init(Core_InitInfo init_info);
-void Core_Shutdown();
+void Core_Shutdown(SDL_Window* window);
 
 SDL_Window* Core_CreateEngineWindow(const char* title, int width, int height);
 void Core_DestroyWindow();
