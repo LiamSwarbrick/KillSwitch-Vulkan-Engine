@@ -23,7 +23,7 @@ int main(int argc, char *argv[])
     bool running = true;
 
     //load scene
-	load_scene("assets/cube.gltf");
+	load_scene("assets/shapes.gltf");
 
     while (running)
     {
