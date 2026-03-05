@@ -43,8 +43,7 @@ void FG_Shutdown()
 
 uint32_t FG_AddPass(RenderPassDesc pass_description)
 {
-    printf("DEBUG: Adding pass %s\n", pass_description.debug_name);
-
+    // printf("DEBUG: Adding pass %s\n", pass_description.debug_name);
     FrameGraph* fg = &renderstate.framegraph;
     SDL_assert(fg->pass_count < MAX_PASSES);
 
@@ -330,7 +329,6 @@ uint32_t add_resource_to_registry_and_heap(const char* debug_name, FG_ResourceTy
     strncpy(res->debug_name, debug_name, sizeof(res->debug_name));
     res->type = type;
     res->allocation = resource_info.allocation;
-
     res->current_access = VK_ACCESS_2_NONE;
     res->current_stage  = VK_PIPELINE_STAGE_2_NONE;
     res->current_layout = VK_IMAGE_LAYOUT_UNDEFINED;
@@ -384,6 +382,7 @@ uint32_t add_resource_to_registry_and_heap(const char* debug_name, FG_ResourceTy
         }
         else
         {
+            // UINT32_MAX to represent nonsamplable images not being part of the bindless heap.
             res->image_bindless_index = UINT32_MAX;
         }
     }

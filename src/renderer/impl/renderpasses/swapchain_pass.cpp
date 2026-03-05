@@ -8,7 +8,7 @@ void SwapchainPass_Execute(VkCommandBuffer cmd, void* user_data)
         renderstate.global_pipeline_layout, 0, 1, &renderstate.heap.global_set, 0, NULL
     );
 
-    printf("DOING SUMMIN\n");
+    // printf("DEBUG: SwapchainPass_Execute called via function pointer: TODO: Shaders and drawing\n");
 
     #if 0  // TODO: Implement temp pipeline:
     // NOTE: Temporary pipeline to get something on the screen.

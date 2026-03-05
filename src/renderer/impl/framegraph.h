@@ -185,8 +185,11 @@ typedef struct FG_Resource
     VmaAllocation allocation;  // NOTE: For imported resources like swapchain images set to VK_NULL_HANDLE.
 
     // Shader side access to resources
-    uint32_t image_bindless_index;       // Index into the global texture array, UINT32_MAX for nonsamplable images e.g. the swapchain
-    VkDeviceAddress buffer_gpu_address;  // Buffer device address for shader
+    union
+    {
+        uint32_t      image_bindless_index;  // Index into the global texture array, UINT32_MAX for nonsamplable images e.g. the swapchain
+        VkDeviceAddress buffer_gpu_address;  // Buffer device address for shader
+    };
 
     // Sync State
     VkAccessFlags2         current_access;
