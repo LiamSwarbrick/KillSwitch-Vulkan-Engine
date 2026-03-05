@@ -57,94 +57,97 @@ uint32_t FG_AddPass(RenderPassDesc pass_description)
 // Graph Execution
 //
 
-void FG_ApplyBarriers(VkCommandBuffer cmd, RenderPassDesc* pass)
+void FG_AddBarrier(FG_Resource* res, PassResourceUsage* usage, 
+                   VkImageMemoryBarrier2* img_barriers, uint32_t* img_count,
+                   VkBufferMemoryBarrier2* buf_barriers, uint32_t* buf_count)
 {
-    VkImageMemoryBarrier2 image_barriers[MAX_PASS_RESOURCE_BANDWIDTH];
-    uint32_t img_count = 0;
-    
-    VkBufferMemoryBarrier2 buffer_barriers[MAX_PASS_RESOURCE_BANDWIDTH];
-    uint32_t buf_count = 0;
-
-    // Analyse outputs (or inputs) to see what needs transitioning
-    for (uint32_t i = 0; i < pass->output_count; i++)
+    // Skip if state already matches (e.g. resource used in same state in consecutive passes)
+    if (res->current_layout == usage->layout && 
+        res->current_access == usage->access && 
+        res->current_stage  == usage->stage)
     {
-        PassResourceUsage* usage = &pass->outputs[i];
-        FG_Resource* res = &renderstate.registry.resources[usage->id];
-
-        if (res->type == FG_RESOURCE_TYPE_IMAGE)
-        {
-            image_barriers[img_count++] = (VkImageMemoryBarrier2){
-                .sType               = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
-                .pNext               = NULL,
-                .srcStageMask        = res->current_stage,
-                .srcAccessMask       = res->current_access,
-                .dstStageMask        = usage->stage,
-                .dstAccessMask       = usage->access,
-                .oldLayout           = res->current_layout,
-                .newLayout           = usage->layout,
-                .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-                .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-                .image               = res->image.handle,
-                .subresourceRange    = {
-                    .aspectMask       = res->image.subresource_range.aspectMask,
-                    .baseMipLevel     = 0,
-                    .levelCount       = 1,
-                    .baseArrayLayer   = 0,
-                    .layerCount       = 1
-                }
-            };
-        } 
-        else if (res->type == FG_RESOURCE_TYPE_BUFFER)
-        {
-            buffer_barriers[buf_count++] = (VkBufferMemoryBarrier2){
-                .sType                = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER_2,
-                .pNext                = NULL,
-                .srcStageMask         = res->current_stage,
-                .srcAccessMask        = res->current_access,
-                .dstStageMask         = usage->stage,
-                .dstAccessMask        = usage->access,
-                .srcQueueFamilyIndex  = VK_QUEUE_FAMILY_IGNORED,
-                .dstQueueFamilyIndex  = VK_QUEUE_FAMILY_IGNORED,
-                .buffer               = res->buffer.handle,
-                .offset               = 0,
-                .size                 = res->buffer.size
-            };
-        }
-
-        // Update the resource sync state post-transition 
-        //
-
-        // Both types share these sync fields
-        res->current_access = usage->access;
-        res->current_stage  = usage->stage;
-
-        // Only images care about layout
-        if (res->type == FG_RESOURCE_TYPE_IMAGE)
-        {
-            res->current_layout = usage->layout;
-        }
+        return;
     }
 
-    SDL_assert(img_count < sizeof(image_barriers) / sizeof(image_barriers[0]));
-    SDL_assert(buf_count < sizeof(buffer_barriers) / sizeof(buffer_barriers[0]));
+    // Add to barrers array and update resource with post-transition sync state
+    if (res->type == FG_RESOURCE_TYPE_IMAGE)
+    {
+        img_barriers[(*img_count)++] = (VkImageMemoryBarrier2){
+            .sType                = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
+            .pNext                = NULL,
+            .srcStageMask         = res->current_stage,
+            .srcAccessMask        = res->current_access,
+            .dstStageMask         = usage->stage,
+            .dstAccessMask        = usage->access,
+            .oldLayout            = res->current_layout,
+            .newLayout            = usage->layout,
+            .srcQueueFamilyIndex  = VK_QUEUE_FAMILY_IGNORED,
+            .dstQueueFamilyIndex  = VK_QUEUE_FAMILY_IGNORED,
+            .image                = res->image.handle,
+            .subresourceRange     = res->image.subresource_range
+        };
+        res->current_layout = usage->layout;
+    } 
+    else
+    {
+        buf_barriers[(*buf_count)++] = (VkBufferMemoryBarrier2){
+            .sType                = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER_2,
+            .pNext                = NULL,
+            .srcStageMask         = res->current_stage,
+            .srcAccessMask        = res->current_access,
+            .dstStageMask         = usage->stage,
+            .dstAccessMask        = usage->access,
+            .srcQueueFamilyIndex  = VK_QUEUE_FAMILY_IGNORED,
+            .dstQueueFamilyIndex  = VK_QUEUE_FAMILY_IGNORED,
+            .buffer               = res->buffer.handle,
+            .offset               = 0,
+            .size                 = res->buffer.size
+        };
+    }
+    res->current_stage = usage->stage;
+    res->current_access = usage->access;
+}
 
-    // One single call to synchronize everything for this pass
-    VkDependencyInfo dep = {
-        .sType                     = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
-        .pNext                     = NULL,
+void FG_ApplyBarriers(VkCommandBuffer cmd, RenderPassDesc* pass)
+{
+    VkImageMemoryBarrier2 image_barriers[MAX_PASS_RESOURCE_BANDWIDTH * 2];  // *2 because each resource could require both an input and output barrier.
+    VkBufferMemoryBarrier2 buffer_barriers[MAX_PASS_RESOURCE_BANDWIDTH * 2];
+    uint32_t img_count = 0;
+    uint32_t buf_count = 0;
 
-        // VK_DEPENDENCY_BY_REGION_BIT is used on tiled GPUs for example.
-        // E.g. the barrier will be local to each tile instead of stalling the whole pipeline.
-        .dependencyFlags           = VK_DEPENDENCY_BY_REGION_BIT,
+    // Transition INPUTS
+    for (uint32_t i = 0; i < pass->input_count; i++)
+    {
+        FG_Resource* res = &renderstate.registry.resources[pass->inputs[i].id];
+        FG_AddBarrier(res, &pass->inputs[i], image_barriers, &img_count, buffer_barriers, &buf_count);
+    }
 
-        .memoryBarrierCount        = 0,
-        .pMemoryBarriers           = NULL,
-        .bufferMemoryBarrierCount  = buf_count,
-        .pBufferMemoryBarriers     = buffer_barriers,
-        .imageMemoryBarrierCount   = img_count, 
-        .pImageMemoryBarriers      = image_barriers
-    };
-    vkCmdPipelineBarrier2(cmd, &dep);
+    // Transition OUTPUTS
+    for (uint32_t i = 0; i < pass->output_count; i++)
+    {
+        FG_Resource* res = &renderstate.registry.resources[pass->outputs[i].id];
+        FG_AddBarrier(res, &pass->outputs[i], image_barriers, &img_count, buffer_barriers, &buf_count);
+    }
+
+    if (img_count > 0 || buf_count > 0)
+    {
+        VkDependencyInfo dep = {
+            .sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
+            .pNext = NULL,
+            
+            // VK_DEPENDENCY_BY_REGION_BIT is used on tiled GPUs for example.
+            // E.g. the barrier will be local to each tile instead of stalling the whole pipeline.
+            .dependencyFlags = VK_DEPENDENCY_BY_REGION_BIT,
+
+            .memoryBarrierCount        = 0,
+            .pMemoryBarriers           = NULL,
+            .bufferMemoryBarrierCount  = buf_count,
+            .pBufferMemoryBarriers     = buffer_barriers,
+            .imageMemoryBarrierCount   = img_count,
+            .pImageMemoryBarriers      = image_barriers
+        };
+        vkCmdPipelineBarrier2(cmd, &dep);
+    }
 }
 
 void FG_ExecutePass(uint32_t pass_idx, VkCommandBuffer cmd)
