@@ -2,12 +2,13 @@
 
 #include "internal_state.h"
 
+// TODO:
 // Create an initial pipeline with global_pipeline_layout
-// Implement load spv resources with SDL
+// Implement load spv with SDL
 
 void CreateResources()
 {
-    SDL_assert(!renderstate.framegraph_rids.resources_created);
+    SDL_assert(!renderstate.rids.resources_created);
 
     // Import swapchain images as framegraph resources
     char swapchain_image_name[64] = {};
@@ -29,7 +30,7 @@ void CreateResources()
                 }
             }
         };
-        renderstate.framegraph_rids.swapchain_image_rids[i] = FG_ImportResource(
+        renderstate.rids.swapchain_image_rids[i] = FG_ImportResource(
             swapchain_image_name, FG_RESOURCE_TYPE_IMAGE, import_info
         );
     }
@@ -96,15 +97,17 @@ void CreateResources()
     uint32_t test_texture_rid = FG_CreateResource("Test texture", FG_RESOURCE_TYPE_IMAGE, &test_create_info);
 
     // Finally
-    renderstate.framegraph_rids.resources_created = 1;
+    renderstate.rids.resources_created = 1;
 }
 
 void DestroyResources()
 {
-    SDL_assert(renderstate.framegraph_rids.resources_created);
+    SDL_assert(renderstate.rids.resources_created);
 
     FG_ClearResources();
 
     // Finally
-    renderstate.framegraph_rids.resources_created = 0;
+    renderstate.rids.resources_created = 0;
 }
+
+

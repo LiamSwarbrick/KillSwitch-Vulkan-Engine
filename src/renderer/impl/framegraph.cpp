@@ -28,27 +28,34 @@ void FG_Init()
             .pPushConstantRanges     = &push_constant_range
         };
 
-        VK_CHECK(vkCreatePipelineLayout(renderstate.device, &layout_create_info, NULL, &renderstate.global_pipeline_Layout));
+        VK_CHECK(vkCreatePipelineLayout(renderstate.device, &layout_create_info, NULL, &renderstate.global_pipeline_layout));
     }
 }
 
 void FG_Shutdown()
 {
     FG_BindlessHeap_Shutdown();
-    vkDestroyPipelineLayout(renderstate.device, renderstate.global_pipeline_Layout, NULL);
+    vkDestroyPipelineLayout(renderstate.device, renderstate.global_pipeline_layout, NULL);
 }
 
-RenderPassDesc* FG_AddPass(FrameGraph* fg, const char* name)
+// Graph Building
+//
+
+uint32_t FG_AddPass(RenderPassDesc pass_description)
 {
-    SDL_assert(fg->pass_count < MAX_PASSES);
-    RenderPassDesc* pass = &fg->passes[fg->pass_count++];
-    memset(pass, 0, sizeof(RenderPassDesc));
-    strncpy(pass->debug_name, name, sizeof(pass->debug_name));
+    printf("DEBUG: Adding pass %s\n", pass_description.debug_name);
 
-    return pass;
+    FrameGraph* fg = &renderstate.framegraph;
+    SDL_assert(fg->pass_count < MAX_PASSES);
+
+    uint32_t pass_id = fg->pass_count++;
+    RenderPassDesc* pass = &fg->passes[pass_id];
+    memcpy(pass, &pass_description, sizeof(RenderPassDesc));
+
+    return pass_id;
 }
 
-// FrameGraph Execution
+// Graph Execution
 //
 
 void FG_ApplyBarriers(VkCommandBuffer cmd, RenderPassDesc* pass)
@@ -141,8 +148,9 @@ void FG_ApplyBarriers(VkCommandBuffer cmd, RenderPassDesc* pass)
     vkCmdPipelineBarrier2(cmd, &dep);
 }
 
-void FG_ExecutePass(FrameGraph* fg, uint32_t pass_idx, VkCommandBuffer cmd)
+void FG_ExecutePass(uint32_t pass_idx, VkCommandBuffer cmd)
 {
+    FrameGraph* fg = &renderstate.framegraph;
     RenderPassDesc* pass = &fg->passes[pass_idx];
     FG_ApplyBarriers(cmd, pass);
     
@@ -243,6 +251,59 @@ void FG_ExecutePass(FrameGraph* fg, uint32_t pass_idx, VkCommandBuffer cmd)
 
         vkCmdEndRendering(cmd);
     }
+}
+
+void FG_CmdRenderFrame(VkCommandBuffer cmd)
+{
+    FrameGraph* fg = &renderstate.framegraph;
+    SDL_assert(fg->pass_count < MAX_PASSES);
+
+    for (uint32_t i = 0; i < fg->pass_count; ++i)
+    {
+        FG_ExecutePass(i, cmd);
+    }
+}
+
+void FG_CmdTransitionSwapchainForPresentation(VkCommandBuffer cmd, uint32_t swapchain_image_rid)
+{
+    SDL_assert(swapchain_image_rid < renderstate.registry.resource_count);
+    FG_Resource* swapchain_resource = &renderstate.registry.resources[swapchain_image_rid];
+
+    VkPipelineStageFlags2 new_stage  = VK_PIPELINE_STAGE_2_NONE;
+    VkAccessFlags2        new_access = VK_ACCESS_2_NONE;
+    VkImageLayout         new_layout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+    
+    // Move swapchain image to present queue with present format.
+    VkImageMemoryBarrier2 barrier = {
+        .sType                = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
+        .pNext                = NULL,
+        .srcStageMask         = swapchain_resource->current_stage,
+        .srcAccessMask        = swapchain_resource->current_access,
+        .dstStageMask         = new_stage,
+        .dstAccessMask        = new_access,
+        .oldLayout            = swapchain_resource->current_layout,
+        .newLayout            = new_layout,
+        .srcQueueFamilyIndex  = renderstate.queue_family_indices.graphics_family,
+        .dstQueueFamilyIndex  = renderstate.queue_family_indices.present_family,
+        .image                = swapchain_resource->image.handle,
+        .subresourceRange     = swapchain_resource->image.subresource_range
+    };
+    VkDependencyInfo dependency = {
+        .sType                     = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
+        .pNext                     = NULL,
+        .dependencyFlags           = VK_DEPENDENCY_BY_REGION_BIT,
+        .imageMemoryBarrierCount   = 1,
+        .pImageMemoryBarriers      = &barrier
+    };
+    vkCmdPipelineBarrier2(cmd, &dependency);
+
+    // Keep track of this new state.
+    // NOTE: Even though swapchain presenting is the last step of rendering.
+    //       We still must update the resources current state, since this
+    //       swapchain image resource gets used again a few frames later.
+    swapchain_resource->current_stage  = new_stage;
+    swapchain_resource->current_access = new_access;
+    swapchain_resource->current_layout = new_layout;
 }
 
 // Resource Tracking

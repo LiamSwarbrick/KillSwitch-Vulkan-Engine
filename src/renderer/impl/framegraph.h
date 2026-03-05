@@ -7,6 +7,17 @@
 // Questions about the renderer, material system, mesh system, different types of shaders.
 // Oh well, will hopefully figure this out.
 
+// Idea for future (ignore):
+// Currently the framegraph, registry and heap are not passed through argument,
+// but instead used from the global renderstate directly.
+// I can change this for a more reusable Vulkan layer to use in my next project.
+// But for now it makes it simpler since less arguments are passed around,
+// specifically, VkDevice, framegraph, registry and heap.
+// Also, multiple framegraphs could allow parts to be reused across frames.
+// And further framegraph analysis could be done like topological sorts,
+// and multi-queue support for concurrent execution of the graph, which
+// gives improves GPU occupancy and allows higher end GPUs to be pushed much further.
+
 
 // How the code works:
 //
@@ -22,6 +33,7 @@
 // - Create resource at startup or scene change (if resources differ there)
 //
 // - Specify render passes in order (inside the FrameGraph::passes array).
+//   Then call FG_CmdRenderFrame, passing an active graphics command buffer as the arg.
 //   Initial implementation will just execute them in the order they are specified.
 //   But with no change to the API, I could implement a topological sort under the hood ..
 //   ..by analysing the inputs and outputs of each pass.
@@ -31,10 +43,6 @@
 
 #include "../renderer.h"
 #include "vulkan_wrapper.h"
-
-// TODO: Still need topological sort and execution of all renderpasses.
-// Lest I just implement one pass after another, in the order it appears.
-// Actually, that's probably nicer.
 
 // Called at the start and end.
 void FG_Init();
@@ -67,14 +75,16 @@ typedef enum
     FG_SAMPLER_LINEAR_REPEAT,
     FG_SAMPLER_ANISOTROPIC_REPEAT,
     FG_SAMPLER_SHADOW,
-    FG_SAMPLER_COUNT
+
+    FG_SAMPLER_COUNT,
+    FG_SAMPLER_NOT_SAMPLABLE,
 }
 FG_SamplerType;
 
 typedef struct PassResourceUsage
 {
-    uint32_t id;               // Index into a resource array (the internal registry)
-    FG_UsageFlags usage_flags; // Tells the graph HOW to use this resource in this pass
+    uint32_t id;                  // Index into a resource array (the internal registry)
+    FG_UsageFlags usage_flags;    // Tells the graph HOW to use this resource in this pass
     FG_SamplerType sampler_type;  // Only for image resources. Not using combined image samplers so we can have different samplers for the same image in different passes
 
     // Sync state
@@ -120,10 +130,15 @@ typedef struct FrameGraph
 }
 FrameGraph;
 
+// Graph Building
+uint32_t FG_AddPass(RenderPassDesc pass_description);
 
-RenderPassDesc* FG_AddPass(FrameGraph* fg, const char* name);
+// Graph Execution
 void FG_ApplyBarriers(VkCommandBuffer cmd, RenderPassDesc* pass);
-void FG_ExecutePass(FrameGraph* fg, uint32_t pass_idx, VkCommandBuffer cmd);
+void FG_ExecutePass(uint32_t pass_idx, VkCommandBuffer cmd);
+
+void FG_CmdRenderFrame(VkCommandBuffer cmd);
+void FG_CmdTransitionSwapchainForPresentation(VkCommandBuffer cmd, uint32_t swapchain_image_rid);
 
 // FrameGraph Resource Tracking Stuff
 //
@@ -207,7 +222,6 @@ typedef union ResourceImportInfo
 }
 ResourceImportInfo;
 uint32_t FG_ImportResource(const char* debug_name, FG_ResourceType type, ResourceImportInfo import_info);
-
 
 // Descriptors
 //

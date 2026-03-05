@@ -10,14 +10,17 @@
 
 typedef struct RenderState
 {
-    // Main thread:
-    ThreadData main;
+    ThreadData main;  // main.tt is the main thread allocation tracker for the renderer.
 
     SDL_Window* window;
     b32 using_validation_layers;
     b32 program_caused_vulkan_validation_layer_errors;
     u64 frame_number;
 
+    // Options
+    // TODO: Instead, just ask core for settings when needed.
+    // Or realistically, each module can have a Settings_Changed callback
+    // Since swapchain will need to be recreated if uncapped_fps is changed.
     b32 uncapped_fps;
 
     VkInstance instance;
@@ -35,10 +38,10 @@ typedef struct RenderState
 
     // Swapchain
     VkSwapchainKHR swapchain;
-    VkFormat swapchain_image_format;
-    VkExtent2D swapchain_extent;
-    u32 swapchain_image_count;
-    VkImage swapchain_images[MAX_SWAPCHAIN_IMAGE_COUNT];
+    VkFormat    swapchain_image_format;
+    VkExtent2D  swapchain_extent;
+    u32         swapchain_image_count;
+    VkImage     swapchain_images[MAX_SWAPCHAIN_IMAGE_COUNT];
     VkImageView swapchain_image_views[MAX_SWAPCHAIN_IMAGE_COUNT];
     VkSemaphore swapchain_image_rendering_complete_semaphores[MAX_SWAPCHAIN_IMAGE_COUNT];
 
@@ -46,16 +49,19 @@ typedef struct RenderState
     FrameState frames[NUM_FRAMES_IN_FLIGHT];
 
     // FrameGraph
-    FrameGraph framegraph;
-    ResourceRegistry registry;
-    BindlessHeap heap;
-    VkPipelineLayout global_pipeline_Layout;
+    FrameGraph        framegraph;
+    ResourceRegistry  registry;
+    BindlessHeap      heap;
+    VkPipelineLayout  global_pipeline_layout;
 
-    // Defined resource ids: Recreated when swapchain changes size
-    ResourcesIDs framegraph_rids;
+    // IDs into registry, framegraph, or pipeline hash
+    ResourceIDs rids;          // Recreated when window/swapchain resizes
+    PassIDs     pass_ids;      // Recreated each frame
+    PipelineIDs pipeline_ids;  // Recreated only when swapchain format changes (so almost never)
 
     // Pipelines: Created lazily, cleaned when swapchain changes format (and remade lazily the next frame).
     // TODO:...
+    VkPipeline temp_pipeline;
 }
 RenderState;
 

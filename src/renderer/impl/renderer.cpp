@@ -1,5 +1,6 @@
 #include "internal_state.h"
 #include "pass_definitions.h"
+#include "renderpasses/metadata.h"
 
 #include "SDL3/SDL_vulkan.h"
 
@@ -500,7 +501,7 @@ bool Renderer_Init(const Renderer_InitInfo* info)
     FG_Init();
 
     // Create Swapchain, FrameGraph resources and pass descriptions
-    renderstate.framegraph_rids.resources_created = 0;
+    renderstate.rids.resources_created = 0;
     _Renderer_OnWindowResize();
 
     // Init per frame structures
@@ -617,7 +618,7 @@ void _Renderer_OnWindowResize()
     create_or_recreate_swapchain();
 
     // Create pass resources and definitions
-    if (renderstate.framegraph_rids.resources_created)
+    if (renderstate.rids.resources_created)
     {
         DestroyResources();
     }
@@ -629,35 +630,19 @@ void _Renderer_OnWindowMinimize()
     // TODO: Pause rendering on minimize
 }
 
-void Renderer_BeginFrame()
+void Renderer_BeginFrame()  // TODO: Change begin/end frame to something else.
 {
-    /*  Build FrameGraph
-
-        Queries game state to know which renderpasses to use.
-        E.g. game.wearing_pyrovision_goggles would use swap the renderpass
-        that renders flame particles as fire, to a renderpass that makes them bubbles
-        or some shit.
-    */
-
-    // Empty pass descriptions
-    renderstate.framegraph.pass_count = 0;
-    memset(renderstate.framegraph.passes, 0, sizeof(renderstate.framegraph.passes));
-
-    // TODO: Define basic pass for swapchain rendering
+    
+    
 
 }
 
 void Renderer_EndFrame()
 {
-    /*  Execute FrameGraph
+    /*  Get current swapchain image, and wait on sync structures
 
-        Gathers renderables from game state, based on flags, provides each
-        pass their drawlists e.g. renderable with rig and unlit material would
-        go to that specific pass.
-
-        OR I can leave each execute callback to gather their relevant items themselves,
-        which is probably easier
-    
+        This happens before building the frame graph, since we need to know
+        what swapchain image index this frame is using.
     */
 
     // Latency hiding:
@@ -710,6 +695,64 @@ void Renderer_EndFrame()
 
 
 
+    
+    /*  Build FrameGraph
+
+        Queries game state to know which renderpasses to use.
+        E.g. game.wearing_pyrovision_goggles would use swap the renderpass
+        that renders flame particles as fire, to a renderpass that makes them bubbles
+        or some shit.
+    */
+
+    // Empty pass descriptions
+    renderstate.framegraph.pass_count = 0;
+    memset(renderstate.framegraph.passes, 0, sizeof(renderstate.framegraph.passes));
+
+    // Get resourceID of this frame's swapchain image
+    uint32_t swapchain_image_resource_id = renderstate.rids.swapchain_image_rids[swapchain_image_index];
+
+    // Temporary basic pass for swapchain rendering
+    RenderPassDesc swapchain_pass_desc = (RenderPassDesc){
+        .debug_name = "Swapchain Pass",
+        .input_count = 0,
+        .inputs = {},
+        .output_count = 1,
+        .outputs = {
+            {
+                .id = swapchain_image_resource_id,
+                .usage_flags = FG_USAGE_COLOR,
+                .sampler_type = FG_SAMPLER_NOT_SAMPLABLE,
+
+                .access = VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,
+                .stage  = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
+                .layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+                
+                .load_op = VK_ATTACHMENT_LOAD_OP_CLEAR,
+                .store_op = VK_ATTACHMENT_STORE_OP_STORE,
+                .clear_value = { .color = { .float32 = { 0.392f, 0.584f, 0.929f, 0.0f } } }
+            }
+        },
+
+        .is_compute = 0,
+        .render_area = { .offset = { 0, 0 }, .extent = renderstate.swapchain_extent },
+        
+        .execute_callback = SwapchainPass_Execute
+    };
+    uint32_t swapchain_pass_id = FG_AddPass(swapchain_pass_desc);
+
+
+
+    /*  Execute FrameGraph
+
+        Gathers renderables from game state, based on flags, provides each
+        pass their drawlists e.g. renderable with rig and unlit material would
+        go to that specific pass.
+
+        OR I can leave each execute callback to gather their relevant items themselves,
+        which is probably easier
+    
+    */
+
     // Setup graphics command buffer for one time submission
     VkCommandBufferBeginInfo graphics_cmd_begin_info = {
         .sType             = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
@@ -724,6 +767,10 @@ void Renderer_EndFrame()
 
     VK_CHECK(vkBeginCommandBuffer(gcmd, &graphics_cmd_begin_info));
     {
+        FG_CmdRenderFrame(gcmd);
+        FG_CmdTransitionSwapchainForPresentation(gcmd, swapchain_image_resource_id);
+
+#if 0  // OLD DELETE THIS
         // Swapchain as output color attachment
         {
             VkImageMemoryBarrier2 barrier = {
@@ -774,8 +821,8 @@ void Renderer_EndFrame()
                 .dstAccessMask        = VK_ACCESS_2_NONE,
                 .oldLayout            = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
                 .newLayout            = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
-                .srcQueueFamilyIndex  = renderstate.queue_family_indices.present_family,
-                .dstQueueFamilyIndex  = renderstate.queue_family_indices.graphics_family,
+                .srcQueueFamilyIndex  = renderstate.queue_family_indices.graphics_family,
+                .dstQueueFamilyIndex  = renderstate.queue_family_indices.present_family,
                 .image                = renderstate.swapchain_images[swapchain_image_index],
                 .subresourceRange     = {
                     .aspectMask      = VK_IMAGE_ASPECT_COLOR_BIT,
@@ -798,6 +845,7 @@ void Renderer_EndFrame()
             };
             vkCmdPipelineBarrier2(gcmd, &dependency);
         }
+#endif  // OLD DELETE THIS
     }
     VK_CHECK(vkEndCommandBuffer(gcmd));
 

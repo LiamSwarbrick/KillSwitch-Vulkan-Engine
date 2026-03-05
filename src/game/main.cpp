@@ -50,4 +50,6 @@ int main(int argc, char *argv[])
 
     Renderer_Shutdown();
     Core_Shutdown();
+
+    return 0;
 }
