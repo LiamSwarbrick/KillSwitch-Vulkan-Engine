@@ -38,6 +38,28 @@ void FG_Shutdown()
     vkDestroyPipelineLayout(renderstate.device, renderstate.global_pipeline_layout, NULL);
 }
 
+void FG_ClearResources()
+{
+    vkDeviceWaitIdle(renderstate.device);
+
+    for (uint32_t i = 0; i < renderstate.registry.resource_count; ++i)
+    {
+        FG_Resource* res = &renderstate.registry.resources[i];
+
+        FG_DeallocateResource(res);
+    }
+
+    // Reset counters so the next "Create" call starts from index 0
+    renderstate.registry.resource_count = 0;
+    renderstate.heap.texture_count = 0;
+    
+    // Note: We don't destroy the global_set or samplers here because 
+    // those live for the lifetime of the engine (FG_Init / FG_Shutdown).
+    
+    SDL_Log("FrameGraph Resources Destroyed & Registry Reset.");
+}
+
+
 // Graph Building
 //
 
@@ -256,6 +278,16 @@ void FG_ExecutePass(uint32_t pass_idx, VkCommandBuffer cmd)
 
 void FG_CmdRenderFrame(VkCommandBuffer cmd)
 {
+    SDL_assert(!renderstate.registry.dirty_because_gaps);
+
+#ifndef NDEBUG
+    // Validation:
+    for (uint32_t i = 0; i < renderstate.registry.resource_count; ++i)
+    {
+        SDL_assert(renderstate.registry.resources[i].type != FG_RESOURCE_TYPE_INVALID);
+    }
+#endif
+
     FrameGraph* fg = &renderstate.framegraph;
     SDL_assert(fg->pass_count < MAX_PASSES);
 
@@ -317,11 +349,43 @@ typedef struct NewResourceInfo
 }
 NewResourceInfo;
 
-uint32_t add_resource_to_registry_and_heap(const char* debug_name, FG_ResourceType type, NewResourceInfo resource_info)
+uint32_t add_resource_to_registry_and_heap(const char* debug_name, FG_ResourceType type, FG_ResourceFlags flags, NewResourceInfo resource_info)
 {
     SDL_assert(renderstate.registry.resource_count < MAX_RESOURCES);
 
-    uint32_t id = renderstate.registry.resource_count++;
+    uint32_t id = UINT32_MAX;
+    if (renderstate.registry.dirty_because_gaps)
+    {
+        b32 found_gap = 0;
+
+        // Linear search to find empty slot (but keep going to end of array to check if it still has gaps
+        for (uint32_t i = 0; i < renderstate.registry.resource_count; ++i)
+        {
+            if (renderstate.registry.resources[i].type == FG_RESOURCE_TYPE_INVALID)
+            {
+                if (found_gap)
+                {
+                    break;  // We now know the registry is still dirty, so no resetting the dirty flag
+                }
+
+                id = i;
+                found_gap = 1;
+            }
+
+            if (i == renderstate.registry.resource_count-1)
+            {
+                // We have searched the whole array, and found no more gaps
+                renderstate.registry.dirty_because_gaps = 0;
+            }
+        }
+    }
+
+    // If we didn't find a gap, or we weren't looking for one.
+    if (id == UINT32_MAX)
+    {
+        id = renderstate.registry.resource_count++;
+    }
+    
     FG_Resource* res = &renderstate.registry.resources[id];
 
     // For safety, zero the struct, but this function should manully set all parameters.
@@ -330,6 +394,7 @@ uint32_t add_resource_to_registry_and_heap(const char* debug_name, FG_ResourceTy
     // Set shared fields
     strncpy(res->debug_name, debug_name, sizeof(res->debug_name));
     res->type = type;
+    res->flags = flags;
     res->allocation = resource_info.allocation;
     res->current_access = VK_ACCESS_2_NONE;
     res->current_stage  = VK_PIPELINE_STAGE_2_NONE;
@@ -393,7 +458,7 @@ uint32_t add_resource_to_registry_and_heap(const char* debug_name, FG_ResourceTy
     return id;
 }
 
-uint32_t FG_CreateResource(const char* debug_name, FG_ResourceType type, ResourceCreateInfo* create_info)
+uint32_t FG_CreateResource(const char* debug_name, FG_ResourceType type, FG_ResourceFlags flags, ResourceCreateInfo* create_info)
 {
     NewResourceInfo resource_info = {};
 
@@ -449,10 +514,10 @@ uint32_t FG_CreateResource(const char* debug_name, FG_ResourceType type, Resourc
     }
 
     // Returns the resource's id into the registry
-    return add_resource_to_registry_and_heap(debug_name, type, resource_info);
+    return add_resource_to_registry_and_heap(debug_name, type, flags, resource_info);
 }
 
-uint32_t FG_ImportResource(const char* debug_name, FG_ResourceType type, ResourceImportInfo import_info)
+uint32_t FG_ImportResource(const char* debug_name, FG_ResourceType type, FG_ResourceFlags flags, ResourceImportInfo import_info)
 {
     NewResourceInfo resource_info = {
         .import_info = import_info,
@@ -460,12 +525,40 @@ uint32_t FG_ImportResource(const char* debug_name, FG_ResourceType type, Resourc
     };
 
     // Returns the resource's id into the registry
-    return add_resource_to_registry_and_heap(debug_name, type, resource_info);
+    return add_resource_to_registry_and_heap(debug_name, type, flags, resource_info);
+}
+
+// NOTE: Only for internal use, this leaves in gaps in the registry which breaks things if you don't replace the hole.
+void FG_DeallocateResource(FG_Resource* res)
+{
+    // Imported resources won't have a VMA allocation, they are managed by whoever imported them.
+    if (res->allocation != VK_NULL_HANDLE)
+    {
+        if (res->type == FG_RESOURCE_TYPE_BUFFER)
+        {
+            vmaDestroyBuffer(renderstate.vma_allocator, res->buffer.handle, res->allocation);
+        }
+        else
+        {
+            SDL_assert(res->image.view != VK_NULL_HANDLE);
+            vkDestroyImageView(renderstate.device, res->image.view, NULL);
+
+            vmaDestroyImage(renderstate.vma_allocator, res->image.handle, res->allocation);
+        }
+    }
+
+    // Wipe the struct memory to prevent accidental reuse
+    memset(res, 0, sizeof(FG_Resource));
+    res->type = FG_RESOURCE_TYPE_INVALID;  // Just to be explicit
+
+    // Set the dirty flag since there is now a gap in the registry
+    renderstate.registry.dirty_because_gaps = 1;
 }
 
 // Staging
 //
 
+#warning TODO Below finish FG_UploadBufferData()
 #if 0
 void FG_UploadBufferData(uint32_t rid, void* data, uint32_t size)
 {
@@ -741,42 +834,3 @@ void FG_BindlessHeap_CreateAllSamplers()
     }
 }
 
-void FG_ClearResources()
-{
-    vkDeviceWaitIdle(renderstate.device);
-
-    for (uint32_t i = 0; i < renderstate.registry.resource_count; ++i)
-    {
-        FG_Resource* res = &renderstate.registry.resources[i];
-
-        // Imported resources won't have a VMA allocation
-        if (res->allocation == VK_NULL_HANDLE)
-        {
-            continue;  // Imported resources are managed by whoever imported them.
-        }
-
-        if (res->type == FG_RESOURCE_TYPE_BUFFER)
-        {
-            vmaDestroyBuffer(renderstate.vma_allocator, res->buffer.handle, res->allocation);
-        }
-        else
-        {
-            SDL_assert(res->image.view != VK_NULL_HANDLE);
-            vkDestroyImageView(renderstate.device, res->image.view, NULL);
-
-            vmaDestroyImage(renderstate.vma_allocator, res->image.handle, res->allocation);
-        }
-
-        // Wipe the struct memory to prevent accidental reuse
-        memset(res, 0, sizeof(FG_Resource));
-    }
-
-    // Reset counters so the next "Create" call starts from index 0
-    renderstate.registry.resource_count = 0;
-    renderstate.heap.texture_count = 0;
-    
-    // Note: We don't destroy the global_set or samplers here because 
-    // those live for the lifetime of the engine (FG_Init / FG_Shutdown).
-    
-    SDL_Log("FrameGraph Resources Destroyed & Registry Reset.");
-}

@@ -630,9 +630,14 @@ void _Renderer_OnWindowResize()
     // Create pass resources and definitions
     if (renderstate.rids.resources_created)
     {
-        DestroyResources();
+        // Just recreate the window dependent resources
+        create_or_recreate_window_dependent_resources();
     }
-    CreateResources();
+    else
+    {
+        // Create all resources since it's the first time
+        CreateResources();
+    }
 }
 
 void _Renderer_OnWindowMinimize()

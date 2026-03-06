@@ -6,9 +6,23 @@
 // Create an initial pipeline with global_pipeline_layout
 // Implement load spv with SDL
 
-void CreateResources()
+void create_or_recreate_window_dependent_resources()
 {
-    SDL_assert(!renderstate.rids.resources_created);
+    if (renderstate.rids.resources_created)
+    {
+        // Loop through and check for window dependent resources
+        // DeallocateResource sets the dirty flag in the registry.
+        // This means FG Import and FG Create Resource will fill in the gaps.
+        for (uint32_t rid = 0; rid < renderstate.registry.resource_count; ++rid)
+        {
+            FG_Resource* res = &renderstate.registry.resources[rid];
+            if (res->flags & FG_RESOURCE_FLAGS_WINDOW_DEPENDENT)
+            {
+                printf("Deallocating resource: %s\n", res->debug_name);
+                FG_DeallocateResource(res);
+            }
+        }
+    }
 
     // Import swapchain images as framegraph resources
     char swapchain_image_name[64] = {};
@@ -31,10 +45,30 @@ void CreateResources()
             }
         };
         renderstate.rids.swapchain_image_rids[i] = FG_ImportResource(
-            swapchain_image_name, FG_RESOURCE_TYPE_IMAGE, import_info
+            swapchain_image_name, FG_RESOURCE_TYPE_IMAGE, FG_RESOURCE_FLAGS_WINDOW_DEPENDENT, import_info
         );
     }
 
+    // Finally... Make sure we haven't left any gaps in the array
+#ifndef NDEBUG
+    for (uint32_t rid = 0; rid < renderstate.registry.resource_count; ++rid)
+    {
+        SDL_assert(renderstate.registry.resources[rid].type != FG_RESOURCE_TYPE_INVALID &&
+            "Not all resources with flag FG_RESOURCE_TYPE_WINDOW_DEPENDENT were created in create_or_recreate_window_dependent_resources(), which is a requirement."
+        );
+    }
+#endif
+}
+
+void CreateResources()
+{
+    SDL_assert(!renderstate.rids.resources_created);
+
+    // Things like rendertargets are window dependent:
+    create_or_recreate_window_dependent_resources();
+
+    // Things like vertex buffers, textures, etc... are not window dependent.
+    // So create them now...
 
     #warning TODO: Next step is buffer uploading (via staging buffer), to get vertex data on GPU. Also implement shaders and pipelines now.
 
@@ -96,7 +130,7 @@ void CreateResources()
             }
         }
     };
-    uint32_t test_texture_rid = FG_CreateResource("Test texture", FG_RESOURCE_TYPE_IMAGE, &test_create_info);
+    uint32_t test_texture_rid = FG_CreateResource("Test texture", FG_RESOURCE_TYPE_IMAGE, FG_RESOURCE_FLAGS_NONE, &test_create_info);
 
     // Finally
     renderstate.rids.resources_created = 1;

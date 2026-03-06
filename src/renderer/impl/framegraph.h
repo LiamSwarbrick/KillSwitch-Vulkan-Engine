@@ -140,15 +140,23 @@ void FG_ExecutePass(uint32_t pass_idx, VkCommandBuffer cmd);
 void FG_CmdRenderFrame(VkCommandBuffer cmd);
 void FG_CmdTransitionSwapchainForPresentation(VkCommandBuffer cmd, uint32_t swapchain_image_rid);
 
-// FrameGraph Resource Tracking Stuff
+// FrameGraph Resources
 //
 
 typedef enum
 {
+    FG_RESOURCE_TYPE_INVALID = 0,
     FG_RESOURCE_TYPE_IMAGE,
     FG_RESOURCE_TYPE_BUFFER
 }
 FG_ResourceType;
+
+typedef enum
+{
+    FG_RESOURCE_FLAGS_NONE = 0,
+    FG_RESOURCE_FLAGS_WINDOW_DEPENDENT = 1 << 0,  // On resize, recreate these.
+}
+FG_ResourceFlags;
 
 typedef struct ResourceBufferData
 {
@@ -173,10 +181,32 @@ typedef struct ResourceImageData
 }
 ResourceImageData;
 
+typedef union ResourceCreateInfo
+{
+    struct
+    {
+        VkImageCreateInfo image_create_info;
+        VkImageViewCreateInfo image_view_create_info;
+    };
+
+    VkBufferCreateInfo buffer_create_info;
+}
+ResourceCreateInfo;
+uint32_t FG_CreateResource(const char* debug_name, FG_ResourceType type, FG_ResourceFlags flags, ResourceCreateInfo* create_info);
+
+typedef union ResourceImportInfo
+{
+    ResourceBufferData buffer;
+    ResourceImageData image;
+}
+ResourceImportInfo;
+uint32_t FG_ImportResource(const char* debug_name, FG_ResourceType type, FG_ResourceFlags flags, ResourceImportInfo import_info);
+
 typedef struct FG_Resource
 {
     char debug_name[64];  // TODO: Add to renderdoc with vkDebugMarkerSetObjectNameEXT somehow
     FG_ResourceType type;
+    FG_ResourceFlags flags;
     union
     {
         ResourceBufferData buffer;
@@ -202,29 +232,12 @@ typedef struct ResourceRegistry
 {
     uint32_t resource_count;
     FG_Resource resources[MAX_RESOURCES];
+
+    b32 dirty_because_gaps;
 }
 ResourceRegistry;
 
-typedef union ResourceCreateInfo
-{
-    struct
-    {
-        VkImageCreateInfo image_create_info;
-        VkImageViewCreateInfo image_view_create_info;
-    };
-
-    VkBufferCreateInfo buffer_create_info;
-}
-ResourceCreateInfo;
-uint32_t FG_CreateResource(const char* debug_name, FG_ResourceType type, ResourceCreateInfo* create_info);
-
-typedef union ResourceImportInfo
-{
-    ResourceBufferData buffer;
-    ResourceImageData image;
-}
-ResourceImportInfo;
-uint32_t FG_ImportResource(const char* debug_name, FG_ResourceType type, ResourceImportInfo import_info);
+void FG_DeallocateResource(FG_Resource* res);
 
 // Staging
 //

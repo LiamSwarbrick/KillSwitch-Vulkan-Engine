@@ -16,6 +16,7 @@ typedef struct ResourceIDs
 }
 ResourceIDs;
 
+void create_or_recreate_window_dependent_resources();
 void CreateResources();
 void DestroyResources();
 
