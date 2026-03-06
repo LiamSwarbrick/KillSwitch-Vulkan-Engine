@@ -42,6 +42,7 @@
 #define RENDERER_FRAMEGRAPH_H
 
 #include "../renderer.h"
+#include "internal_structs.h"
 #include "vulkan_wrapper.h"
 
 // Called at the start and end.
@@ -242,7 +243,8 @@ void FG_DeallocateResource(FG_Resource* res);
 // Staging
 //
 
-void FG_UploadBufferData(uint32_t rid, void* data, uint32_t size);
+void FG_UploadBufferData(ThreadStagingObjects* stg, uint32_t rid, const void* data, uint32_t size);
+void FG_UploadImageData(ThreadStagingObjects* stg, uint32_t rid, const void* data, uint32_t size);
 
 // Descriptors
 //

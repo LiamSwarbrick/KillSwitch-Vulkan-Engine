@@ -500,7 +500,7 @@ bool Renderer_Init(const Renderer_InitInfo* info)
         SDL_assert(renderstate.transfer_queue_mutex);
 
         // TODO: Currently just the main thread will do all the transfering
-        // But it's setup for trivial multithreaded due to thread_safe_submit_cmd()
+        // But this should just work with multithreading when using thread_safe_submit_cmd()
         create_thread_staging_objects(&renderstate.main.staging_objects);
     }
 

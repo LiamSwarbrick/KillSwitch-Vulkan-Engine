@@ -54,7 +54,7 @@ void create_or_recreate_window_dependent_resources()
     for (uint32_t rid = 0; rid < renderstate.registry.resource_count; ++rid)
     {
         SDL_assert(renderstate.registry.resources[rid].type != FG_RESOURCE_TYPE_INVALID &&
-            "Not all resources with flag FG_RESOURCE_TYPE_WINDOW_DEPENDENT were created in create_or_recreate_window_dependent_resources(), which is a requirement."
+            "Not all resources with flag FG_RESOURCE_TYPE_WINDOW_DEPENDENT were created in create_or_recreate_window_dependent_resources(), which is a requirement (inferred from there being gaps in the registry)."
         );
     }
 #endif

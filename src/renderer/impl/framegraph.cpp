@@ -558,7 +558,185 @@ void FG_DeallocateResource(FG_Resource* res)
 // Staging
 //
 
-#warning TODO Below finish FG_UploadBufferData()
+void FG_UploadBufferData(ThreadStagingObjects* stg, uint32_t rid, const void* data, uint32_t size)
+{
+    FG_Resource* res = &renderstate.registry.resources[rid];
+    SDL_assert(res->type == FG_RESOURCE_TYPE_BUFFER);
+    SDL_assert(size <= res->buffer.size);
+
+    VkBuffer      staging_buf   = VK_NULL_HANDLE;
+    VmaAllocation staging_alloc = VK_NULL_HANDLE;
+
+    VkBufferCreateInfo staging_buffer_create_info = {
+        .sType                  = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
+        .size                   = size,
+        .usage                  = VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+        .sharingMode            = VK_SHARING_MODE_EXCLUSIVE
+    };
+    VmaAllocationCreateInfo alloc_create_info = {
+        .flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT,
+        .usage = VMA_MEMORY_USAGE_AUTO
+    };
+
+    VmaAllocationInfo mapped_info;
+    VK_CHECK(vmaCreateBuffer(renderstate.vma_allocator, &staging_buffer_create_info, &alloc_create_info, &staging_buf, &staging_alloc, &mapped_info));
+
+    // Copy data to the mapped memory region
+    memcpy(mapped_info.pMappedData, data, size);
+
+    // Record the copy command from mapped staging region to device local memory of the resource
+    vkResetCommandBuffer(stg->upload_command_buffer, 0);
+    VkCommandBufferBeginInfo begin_info = {
+        .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
+        .flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT
+    };
+    vkBeginCommandBuffer(stg->upload_command_buffer, &begin_info);
+
+    VkBufferCopy copy_region = { .srcOffset = 0, .dstOffset = 0, .size = size };
+    vkCmdCopyBuffer(stg->upload_command_buffer, staging_buf, res->buffer.handle, 1, &copy_region);
+
+    vkEndCommandBuffer(stg->upload_command_buffer);
+
+    // Submit and Wait
+    // NOTE: For the baseline, this uses a temporary fence to avoid GPU-side race conditions,
+    // i.e., this thread must wait CPU side so that we don't try use the command buffer while it's in use.
+    // I've heard of better strategies to hide latency but meh. Can just put this on non-main threads.
+    VkFenceCreateInfo fence_info = { .sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO };
+    VkFence fence;
+    vkCreateFence(renderstate.device, &fence_info, NULL, &fence);
+
+    thread_safe_submit_cmd(stg->upload_command_buffer, fence);
+    vkWaitForFences(renderstate.device, 1, &fence, VK_TRUE, UINT64_MAX);
+    
+    vkDestroyFence(renderstate.device, fence, NULL);
+    vmaDestroyBuffer(renderstate.vma_allocator, staging_buf, staging_alloc);
+}
+
+void FG_UploadImageData(ThreadStagingObjects* stg, uint32_t rid, const void* data, uint32_t size)
+{
+    FG_Resource* res = &renderstate.registry.resources[rid];
+    SDL_assert(res->type == FG_RESOURCE_TYPE_IMAGE);
+    SDL_assert(res->image.usage & VK_IMAGE_USAGE_TRANSFER_DST_BIT && "To copy into an image resource, it must have the TRANSFER_DST usage flag");
+
+    VkDeviceSize image_size = size;
+
+    VkBuffer staging_buf;
+    VmaAllocation staging_alloc;
+
+    VkBufferCreateInfo staging_info = {
+        .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
+        .size  = image_size,
+        .usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+        .sharingMode = VK_SHARING_MODE_EXCLUSIVE
+    };
+    VmaAllocationCreateInfo alloc_info = {
+        .flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT |
+                 VMA_ALLOCATION_CREATE_MAPPED_BIT,
+        .usage = VMA_MEMORY_USAGE_AUTO
+    };
+
+    VmaAllocationInfo mapped_info;
+    VK_CHECK(vmaCreateBuffer(renderstate.vma_allocator, &staging_info, &alloc_info, &staging_buf, &staging_alloc, &mapped_info));
+
+    // Copy data to the mapped memory region
+    memcpy(mapped_info.pMappedData, data, size);
+
+    // Record command to transfer staged data to image buffer
+    vkResetCommandBuffer(stg->upload_command_buffer, 0);
+    VkCommandBufferBeginInfo begin_info = {
+        .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
+        .flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT
+    };
+    vkBeginCommandBuffer(stg->upload_command_buffer, &begin_info);
+
+    // Transition to transfer destination
+    VkImageMemoryBarrier2 barrier = {
+        .sType                = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
+        .pNext                = NULL,
+        .srcStageMask         = res->current_stage,
+        .srcAccessMask        = res->current_access,
+        .dstStageMask         = VK_PIPELINE_STAGE_2_NONE,
+        .dstAccessMask        = VK_ACCESS_2_TRANSFER_WRITE_BIT,
+        .oldLayout            = res->current_layout,
+        .newLayout            = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+        .srcQueueFamilyIndex  = VK_QUEUE_FAMILY_IGNORED,
+        .dstQueueFamilyIndex  = VK_QUEUE_FAMILY_IGNORED,
+        .image                = res->image.handle,
+        .subresourceRange     = res->image.subresource_range
+    };
+    VkDependencyInfo dep_info = {
+        .sType                     = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
+        .pNext                     = NULL,
+        .dependencyFlags           = 0,
+        .imageMemoryBarrierCount   = 1,
+        .pImageMemoryBarriers      = &barrier
+    };
+    vkCmdPipelineBarrier2(stg->upload_command_buffer, &dep_info);
+
+    VkBufferImageCopy region = {
+        .bufferOffset = 0,
+        .bufferRowLength = 0,
+        .bufferImageHeight = 0,
+
+        .imageSubresource = {
+            .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+            .mipLevel = 0,
+            .baseArrayLayer = 0,
+            .layerCount = 1
+        },
+
+        .imageOffset = {0,0,0},
+        .imageExtent = res->image.extent
+    };
+
+    vkCmdCopyBufferToImage(
+        stg->upload_command_buffer,
+        staging_buf,
+        res->image.handle,
+        VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+        1,
+        &region
+    );
+
+    // Transition back
+    VkImageMemoryBarrier2 barrier_b = {
+        .sType                = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
+        .pNext                = NULL,
+        .srcStageMask         = VK_PIPELINE_STAGE_2_NONE,
+        .srcAccessMask        = VK_ACCESS_2_TRANSFER_WRITE_BIT,
+        .dstStageMask         = res->current_stage,
+        .dstAccessMask        = res->current_access,
+        .oldLayout            = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+        .newLayout            = res->current_layout,
+        .srcQueueFamilyIndex  = VK_QUEUE_FAMILY_IGNORED,
+        .dstQueueFamilyIndex  = VK_QUEUE_FAMILY_IGNORED,
+        .image                = res->image.handle,
+        .subresourceRange     = res->image.subresource_range
+    };
+    VkDependencyInfo dep_info_b = {
+        .sType                     = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
+        .pNext                     = NULL,
+        .dependencyFlags           = 0,
+        .imageMemoryBarrierCount   = 1,
+        .pImageMemoryBarriers      = &barrier
+    };
+    vkCmdPipelineBarrier2(stg->upload_command_buffer, &dep_info_b);
+
+    vkEndCommandBuffer(stg->upload_command_buffer);
+
+    
+    VkFenceCreateInfo fence_info = { .sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO };
+    VkFence fence;
+    vkCreateFence(renderstate.device, &fence_info, NULL, &fence);
+
+    thread_safe_submit_cmd(stg->upload_command_buffer, fence);
+    vkWaitForFences(renderstate.device, 1, &fence, VK_TRUE, UINT64_MAX);
+
+    vkDestroyFence(renderstate.device, fence, NULL);
+    vmaDestroyBuffer(renderstate.vma_allocator, staging_buf, staging_alloc);
+}
+
+
 #if 0
 void FG_UploadBufferData(uint32_t rid, void* data, uint32_t size)
 {
@@ -587,10 +765,9 @@ void FG_UploadBufferData(uint32_t rid, void* data, uint32_t size)
 
     // Copy CPU data to staging memory
     memcpy(alloc_info.pMappedData, data, size);
-
-    // Immediate Command (Use a one-time command buffer)
-    VkCommandBuffer cmd = BeginImmediateCommand();
     
+    
+
     VkBufferCopy copy_region = { .srcOffset = 0, .dstOffset = 0, .size = size };
     vkCmdCopyBuffer(cmd, staging_buffer, res->buffer.handle, 1, &copy_region);
     
