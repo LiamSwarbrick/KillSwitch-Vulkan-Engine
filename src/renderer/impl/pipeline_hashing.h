@@ -1,8 +1,31 @@
 #ifndef RENDERER_PIPELINE_HASHING_H
 #define RENDERER_PIPELINE_HASHING_H
 
-#include "../renderer.h"
 #include "vulkan_wrapper.h"
+
+typedef union PipelineKey
+{
+    struct
+    {
+        // This is a bitfield if you haven't seen this syntax before, it's pretty cool!
+        uint64_t pipeline_type : 2;  // Graphics or Compute for now, maybe Raytracing as well in future.
+        uint64_t shader_id     : 16; // Index into a shader array (NPR, PBR, Outline)
+        uint64_t pass_id       : 8;  // To match against PassIDs collected from BuildFrameGraph
+
+        // Graphics Pipeline Bits
+        uint64_t vertex_type   : 4;  // Static, Skinned, possibly Morph (for cloth) etc.
+        uint64_t depth_test    : 1;  // On/Off
+        uint64_t depth_write   : 1;  // On/Off
+        uint64_t depth_op      : 3;  // Less, Equal, Always (for X-ray if we want that)
+        uint64_t stencil_mode  : 4;  // None, Write, Test
+        uint64_t cull_mode     : 2;  // None, Front, Back
+        uint64_t blend_mode    : 4;  // Opaque, Alpha, Additive
+        // ... remaining bits for future use
+    };
+
+    uint64_t value;
+}
+PipelineKey;
 
 typedef struct PipelineEntry
 {
@@ -36,5 +59,11 @@ typedef union PipelineShaders
     };
 }
 PipelineShaders;
+
+// typedef struct ShaderRegistry
+// {
+//     PipelineShaders shaders[]
+// }
+// ShaderRegistry;
 
 #endif  // RENDERER_PIPELINE_HASHING_H

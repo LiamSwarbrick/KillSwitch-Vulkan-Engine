@@ -110,7 +110,7 @@ workspace "AdventureEngine"
 
         files {
             SRC .. "renderer/**.h",
-            SRC .. "renderer/impl/**.cpp",  -- NOTE: Removed **.cpp for now, but put it back when due rework folder is gone
+            SRC .. "renderer/impl/**.cpp",
             EXTERNAL .. "volk/volk.c"
         }
 

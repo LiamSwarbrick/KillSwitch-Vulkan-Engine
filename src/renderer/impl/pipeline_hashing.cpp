@@ -2,6 +2,7 @@
 #include "stb_ds.h"  // NOTE: Implementation defined at top of renderer.cpp
 #include "SDL3/SDL.h"
 #include <stdio.h>
+#include "../render_types.h"
 
 #warning TODO for sunday 8th march:
 #warning Add shader registry
@@ -57,4 +58,10 @@ void PK_Shutdown(PipelineEntry** pipeline_map_ref, VkDevice device)
     }
 
     hmfree(*pipeline_map_ref);  // Frees and sets the pointer to NULL.
+}
+
+uint16_t get_shader_for_material(MaterialType mat, uint8_t pass_id)
+{
+    #warning TODO IMPLEMENT SHADER TABLE
+    return 0;
 }

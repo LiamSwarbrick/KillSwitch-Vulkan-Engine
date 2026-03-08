@@ -42,14 +42,16 @@ int main(int argc, char *argv[])
         uint32_t flags = SDL_GetWindowFlags(window);
         if (!(flags & SDL_WINDOW_MINIMIZED))
         {
-            retry:
-            uint32_t swapchain_image_index = Renderer_BeginFrame();
-            if (swapchain_image_index == UINT32_MAX) goto retry;
-
-            PassIDs pass_ids = Renderer_BuildFrameGraph(swapchain_image_index);
-
+            RenderView render_view = {};
+            // TODO: Gather entity renderables in RenderView
+            // Later TODO: Gather visible entities only for extra optimization.
             
-            Renderer_EndFrame(pass_ids);
+            retry_with_resized_window:
+            if (!Renderer_DrawFrame(&render_view))
+            {
+                // Swapchain was out of date, so try again.
+                goto retry_with_resized_window;
+            }
         }
     }
 

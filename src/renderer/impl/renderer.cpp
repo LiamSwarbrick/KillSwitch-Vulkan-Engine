@@ -91,7 +91,7 @@ InternalVulkanDebugCallback(
     return VK_FALSE;
 }
 
-bool Renderer_Init(const Renderer_InitInfo* info)
+void Renderer_Init(const Renderer_InitInfo* info)
 {
     // Init the main memory tracker for the main thread which in debug mode we can query it for memory leaks during cleanup
     renderstate.main.tt = init_per_thread_allocation_tracker("Renderer_MainThreadTracker");
@@ -105,7 +105,7 @@ bool Renderer_Init(const Renderer_InitInfo* info)
     if (volkGetInstanceVersion() < API_VERSION)
     {
         fprintf(stderr, "Sorry, Vulkan %d.%d is strictly required.\n", VK_API_VERSION_MAJOR(API_VERSION), VK_API_VERSION_MINOR(API_VERSION));
-        return false;
+        exit(1);
     }
 
     // Display Vulkan loader version
@@ -152,7 +152,7 @@ bool Renderer_Init(const Renderer_InitInfo* info)
         if (!found_all_layers)
         {
             fprintf(stderr, "All requested validation layers must be available... Exiting");
-            return false;
+            exit(1);
         }
 
         L_free(available_layers, &renderstate.main.tt);
@@ -288,7 +288,7 @@ bool Renderer_Init(const Renderer_InitInfo* info)
         if (!SDL_Vulkan_CreateSurface(renderstate.window, renderstate.instance, NULL, &renderstate.surface))
         {
             fprintf(stderr, "Failed to create SDL Vulkan Window Surface\n");
-            return false;
+            exit(1);
         }
 
         printf("Created Window Surface\n");
@@ -307,7 +307,7 @@ bool Renderer_Init(const Renderer_InitInfo* info)
         if (device_count == 0)
         {
             fprintf(stderr, "Could not find a GPU with Vulkan support... Exiting");
-            return false;
+            exit(1);
         }
 
         VkPhysicalDevice* devices = (VkPhysicalDevice*)L_calloc(device_count, sizeof(VkPhysicalDevice), &renderstate.main.tt);
@@ -335,7 +335,7 @@ bool Renderer_Init(const Renderer_InitInfo* info)
         if (device_suitability_score[candidate_device_index] < 0)
         {
             fprintf(stderr, "No suitable physical device for this vulkan program :(\n");
-            return false;
+            exit(1);
         }
         renderstate.physical_device = devices[candidate_device_index];
     
@@ -556,8 +556,6 @@ bool Renderer_Init(const Renderer_InitInfo* info)
             VK_CHECK(vkAllocateCommandBuffers(renderstate.device, &cmd_alloc_info, &renderstate.frames[i].graphics_command_buffer));
         }
     }
-
-    return true;
 }
 
 void Renderer_Shutdown()
@@ -658,7 +656,7 @@ void _Renderer_OnWindowMinimize()
 }
 
 
-uint32_t Renderer_BeginFrame()
+bool Renderer_DrawFrame(RenderView* render_view)
 {
     /*  Get current swapchain image, and wait on sync structures
 
@@ -703,7 +701,7 @@ uint32_t Renderer_BeginFrame()
         // since we aren't drawing until the next main loop cycle.
         _Renderer_OnWindowResize();
         --renderstate.frame_number;
-        return UINT32_MAX;
+        return false;
     }
     VK_CHECK(acquire_result);
 
@@ -714,13 +712,7 @@ uint32_t Renderer_BeginFrame()
     // Reset command buffers by resetting the entire pool
     vkResetCommandPool(renderstate.device, renderstate.frames[frame_in_flight].graphics_command_pool, 0);
 
-    return swapchain_image_index;
-}
 
-PassIDs Renderer_BuildFrameGraph(uint32_t swapchain_image_index)
-{
-    PassIDs pass_ids = {};
-    memset(&pass_ids, UINT32_MAX, sizeof(PassIDs));
     
     /*  Build FrameGraph
 
@@ -735,11 +727,9 @@ PassIDs Renderer_BuildFrameGraph(uint32_t swapchain_image_index)
     memset(renderstate.framegraph.passes, 0, sizeof(renderstate.framegraph.passes));
 
     // Swapchain pass
+    uint32_t swapchain_image_resource_id = renderstate.rids.swapchain_image_rids[swapchain_image_index];
+    uint32_t swapchain_pass;
     {
-        // Get resourceID of this frame's swapchain image
-        pass_ids.swapchain_image_index = swapchain_image_index;
-        pass_ids.swapchain_image_resource_id = renderstate.rids.swapchain_image_rids[swapchain_image_index];
-
         // Temporary basic pass for swapchain rendering
         RenderPassDesc swapchain_pass_desc = (RenderPassDesc){
             .debug_name = "Swapchain Pass",
@@ -748,7 +738,7 @@ PassIDs Renderer_BuildFrameGraph(uint32_t swapchain_image_index)
             .output_count = 1,
             .outputs = {
                 {
-                    .id = pass_ids.swapchain_image_resource_id,
+                    .id = swapchain_image_resource_id,
                     .usage_flags = FG_USAGE_COLOR,
                     .sampler_type = FG_SAMPLER_NOT_SAMPLABLE,
 
@@ -767,19 +757,11 @@ PassIDs Renderer_BuildFrameGraph(uint32_t swapchain_image_index)
             
             .execute_callback = SwapchainPass_Execute
         };
-        pass_ids.swapchain_pass = FG_AddPass(swapchain_pass_desc);
+        swapchain_pass = FG_AddPass(swapchain_pass_desc);
     }
 
-    return pass_ids;
-}
 
-void Renderer_Draw(uint32_t entity_id, PipelineKey pipeline_key)
-{
-    // TODO. Add to drawlist or RenderView.
-}
 
-void Renderer_EndFrame(PassIDs pass_ids)
-{
     /*  Execute FrameGraph
 
         Gathers renderables from game state, based on flags, provides each
@@ -790,7 +772,6 @@ void Renderer_EndFrame(PassIDs pass_ids)
         which is probably easier
     
     */
-    u32 frame_in_flight = renderstate.frame_number % NUM_FRAMES_IN_FLIGHT;
 
     // Setup graphics command buffer for one time submission
     VkCommandBufferBeginInfo graphics_cmd_begin_info = {
@@ -807,7 +788,7 @@ void Renderer_EndFrame(PassIDs pass_ids)
     VK_CHECK(vkBeginCommandBuffer(gcmd, &graphics_cmd_begin_info));
     {
         FG_CmdRenderFrame(gcmd);
-        FG_CmdTransitionSwapchainForPresentation(gcmd, pass_ids.swapchain_image_resource_id);
+        FG_CmdTransitionSwapchainForPresentation(gcmd, swapchain_image_resource_id);
     }
     VK_CHECK(vkEndCommandBuffer(gcmd));
 
@@ -834,7 +815,7 @@ void Renderer_EndFrame(PassIDs pass_ids)
         .deviceIndex  = 0
     };
     VkSemaphoreSubmitInfo gcmd_signal_info = gcmd_wait_info;
-    gcmd_signal_info.semaphore = renderstate.swapchain_image_rendering_complete_semaphores[pass_ids.swapchain_image_index];
+    gcmd_signal_info.semaphore = renderstate.swapchain_image_rendering_complete_semaphores[swapchain_image_index];
 
     // Submit command buffer to the queue to execute it
     VkSubmitInfo2 submit_info = {
@@ -857,10 +838,10 @@ void Renderer_EndFrame(PassIDs pass_ids)
         .sType               = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR,
         .pNext               = NULL,
         .waitSemaphoreCount  = 1,
-        .pWaitSemaphores     = &renderstate.swapchain_image_rendering_complete_semaphores[pass_ids.swapchain_image_index],
+        .pWaitSemaphores     = &renderstate.swapchain_image_rendering_complete_semaphores[swapchain_image_index],
         .swapchainCount      = 1,
         .pSwapchains         = &renderstate.swapchain,
-        .pImageIndices       = &pass_ids.swapchain_image_index,
+        .pImageIndices       = &swapchain_image_index,
         .pResults            = NULL  // <- Only relevant when swapchainCount > 1
     };
     VkResult present_result = vkQueuePresentKHR(renderstate.presentation_queue, &present_info);
@@ -875,6 +856,7 @@ void Renderer_EndFrame(PassIDs pass_ids)
 
     // This happens at the very very end:
     ++renderstate.frame_number;
+    return true;
 }
 
 /////////////////
