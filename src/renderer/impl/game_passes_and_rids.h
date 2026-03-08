@@ -16,8 +16,7 @@ typedef struct ResourceIDs
 }
 ResourceIDs;
 
-void create_or_recreate_window_dependent_resources();
-void CreateResources();
+void CreateResources(FG_ResourceFlags types_to_create);
 void DestroyResources();
 
 // Recreated at frame beginning (allows a dynamic render graph)
@@ -28,17 +27,5 @@ typedef struct PassIDs
     uint32_t swapchain_pass;  // Outputs to current swapchain image id.
 }
 PassIDs;
-
-
-// TODO:
-// Recreated only when swapchain format changes
-// Future note:
-// In that case, the pipeline hash should just empty all of them.
-// Then they will be rebuilt lazily.
-typedef struct PipelineIDs
-{
-    int a;
-}
-PipelineIDs;
 
 #endif  // RENDERER_PASS_DEFINITIONS_H

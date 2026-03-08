@@ -13,6 +13,7 @@ include_paths.Vulkan = VULKAN_SDK .. "/include"
 include_paths.volk = EXTERNAL .. "volk"
 include_paths.VMA = EXTERNAL .. "VMA"
 include_paths.glm = EXTERNAL .. "glm"
+include_paths.stb = EXTERNAL .. "stb"
 
 lib_dirs = {}
 lib_dirs.SDL3 = SDL_BUILD_DIR
@@ -125,7 +126,8 @@ workspace "AdventureEngine"
             include_paths.volk,
             include_paths.Vulkan,
             include_paths.VMA,
-            include_paths.glm
+            include_paths.glm,
+            include_paths.stb
         }
 
         libdirs {

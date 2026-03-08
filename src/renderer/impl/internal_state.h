@@ -5,7 +5,8 @@
 
 #include "internal_structs.h"
 #include "framegraph.h"
-#include "pass_definitions.h"
+#include "pipeline_hashing.h"
+#include "game_passes_and_rids.h"
 // #include "due_rework/internals_due_rework.h"
 
 typedef struct RenderState
@@ -56,10 +57,15 @@ typedef struct RenderState
     BindlessHeap      heap;
     VkPipelineLayout  global_pipeline_layout;
 
+    // Pipeline Keying system and shader registry
+    // FUTURE: If multithreading drawcalls are needed, see this article on sharing pipelines while using seperate maps per thread:
+    //         https://ruby0x1.github.io/machinery_blog_archive/post/vulkan-pipelines-and-render-states/index.html    
+    PipelineEntry* pipeline_map;  // Recreated only when swapchain format changes (so never under most circumstances)
+    
+        
     // IDs into registry, framegraph, or pipeline hash
     ResourceIDs rids;          // Recreated when window/swapchain resizes
     PassIDs     pass_ids;      // Recreated each frame
-    PipelineIDs pipeline_ids;  // Recreated only when swapchain format changes (so almost never)
 
     // Pipelines: Created lazily, cleaned when swapchain changes format (and remade lazily the next frame).
     // TODO:...

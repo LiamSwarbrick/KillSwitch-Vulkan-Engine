@@ -135,9 +135,6 @@ FrameGraph;
 uint32_t FG_AddPass(RenderPassDesc pass_description);
 
 // Graph Execution
-void FG_ApplyBarriers(VkCommandBuffer cmd, RenderPassDesc* pass);
-void FG_ExecutePass(uint32_t pass_idx, VkCommandBuffer cmd);
-
 void FG_CmdRenderFrame(VkCommandBuffer cmd);
 void FG_CmdTransitionSwapchainForPresentation(VkCommandBuffer cmd, uint32_t swapchain_image_rid);
 
@@ -259,14 +256,5 @@ typedef struct BindlessHeap
     VkSampler samplers[FG_SAMPLER_COUNT];
 }
 BindlessHeap;
-
-void FG_BindlessHeap_Init();
-void FG_BindlessHeap_Shutdown();
-void FG_BindlessHeap_CreateAllSamplers();
-
-// Pipelines
-//
-
-void FG_CreateGlobalPipelineLayout();
 
 #endif  // RENDERER_FRAMEGRAPH_H

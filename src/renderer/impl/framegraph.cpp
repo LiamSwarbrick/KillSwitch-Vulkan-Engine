@@ -2,12 +2,30 @@
 
 #include "internal_state.h"
 
+void bindless_heap_init();
+void bindless_heap_shutdown();
+void bindless_heap_create_all_samplers();
+
+void fg_add_barrier(FG_Resource* res, PassResourceUsage* usage, 
+                   VkImageMemoryBarrier2* img_barriers, uint32_t* img_count,
+                   VkBufferMemoryBarrier2* buf_barriers, uint32_t* buf_count);
+void fg_apply_barriers(VkCommandBuffer cmd, RenderPassDesc* pass);
+void fg_execute_pass(uint32_t pass_idx, VkCommandBuffer cmd);
+
+typedef struct NewResourceInfo
+{
+    ResourceImportInfo import_info;
+    VmaAllocation allocation;  // For created resources. Use VK_NULL_HANDLE for imported resources.
+}
+NewResourceInfo;
+uint32_t add_resource_to_registry_and_heap(const char* debug_name, FG_ResourceType type, FG_ResourceFlags flags, NewResourceInfo resource_info);
+
 // Init Subsystem
 //
 
 void FG_Init()
 {
-    FG_BindlessHeap_Init();
+    bindless_heap_init();
     
     // Create global pipeline layout that uses this heap
     {
@@ -34,7 +52,7 @@ void FG_Init()
 
 void FG_Shutdown()
 {
-    FG_BindlessHeap_Shutdown();
+    bindless_heap_shutdown();
     vkDestroyPipelineLayout(renderstate.device, renderstate.global_pipeline_layout, NULL);
 }
 
@@ -78,7 +96,7 @@ uint32_t FG_AddPass(RenderPassDesc pass_description)
 // Graph Execution
 //
 
-void FG_AddBarrier(FG_Resource* res, PassResourceUsage* usage, 
+void fg_add_barrier(FG_Resource* res, PassResourceUsage* usage, 
                    VkImageMemoryBarrier2* img_barriers, uint32_t* img_count,
                    VkBufferMemoryBarrier2* buf_barriers, uint32_t* buf_count)
 {
@@ -129,7 +147,7 @@ void FG_AddBarrier(FG_Resource* res, PassResourceUsage* usage,
     res->current_access = usage->access;
 }
 
-void FG_ApplyBarriers(VkCommandBuffer cmd, RenderPassDesc* pass)
+void fg_apply_barriers(VkCommandBuffer cmd, RenderPassDesc* pass)
 {
     VkImageMemoryBarrier2 image_barriers[MAX_PASS_RESOURCE_BANDWIDTH * 2];  // *2 because each resource could require both an input and output barrier.
     VkBufferMemoryBarrier2 buffer_barriers[MAX_PASS_RESOURCE_BANDWIDTH * 2];
@@ -140,14 +158,14 @@ void FG_ApplyBarriers(VkCommandBuffer cmd, RenderPassDesc* pass)
     for (uint32_t i = 0; i < pass->input_count; i++)
     {
         FG_Resource* res = &renderstate.registry.resources[pass->inputs[i].id];
-        FG_AddBarrier(res, &pass->inputs[i], image_barriers, &img_count, buffer_barriers, &buf_count);
+        fg_add_barrier(res, &pass->inputs[i], image_barriers, &img_count, buffer_barriers, &buf_count);
     }
 
     // Transition OUTPUTS
     for (uint32_t i = 0; i < pass->output_count; i++)
     {
         FG_Resource* res = &renderstate.registry.resources[pass->outputs[i].id];
-        FG_AddBarrier(res, &pass->outputs[i], image_barriers, &img_count, buffer_barriers, &buf_count);
+        fg_add_barrier(res, &pass->outputs[i], image_barriers, &img_count, buffer_barriers, &buf_count);
     }
 
     if (img_count > 0 || buf_count > 0)
@@ -171,11 +189,11 @@ void FG_ApplyBarriers(VkCommandBuffer cmd, RenderPassDesc* pass)
     }
 }
 
-void FG_ExecutePass(uint32_t pass_idx, VkCommandBuffer cmd)
+void fg_execute_pass(uint32_t pass_idx, VkCommandBuffer cmd)
 {
     FrameGraph* fg = &renderstate.framegraph;
     RenderPassDesc* pass = &fg->passes[pass_idx];
-    FG_ApplyBarriers(cmd, pass);
+    fg_apply_barriers(cmd, pass);
     
     if (pass->is_compute)
     {
@@ -293,7 +311,7 @@ void FG_CmdRenderFrame(VkCommandBuffer cmd)
 
     for (uint32_t i = 0; i < fg->pass_count; ++i)
     {
-        FG_ExecutePass(i, cmd);
+        fg_execute_pass(i, cmd);
     }
 }
 
@@ -341,13 +359,6 @@ void FG_CmdTransitionSwapchainForPresentation(VkCommandBuffer cmd, uint32_t swap
 
 // Resource Tracking
 //
-
-typedef struct NewResourceInfo
-{
-    ResourceImportInfo import_info;
-    VmaAllocation allocation;  // For created resources. Use VK_NULL_HANDLE for imported resources.
-}
-NewResourceInfo;
 
 uint32_t add_resource_to_registry_and_heap(const char* debug_name, FG_ResourceType type, FG_ResourceFlags flags, NewResourceInfo resource_info)
 {
@@ -737,51 +748,10 @@ void FG_UploadImageData(ThreadStagingObjects* stg, uint32_t rid, const void* dat
 }
 
 
-#if 0
-void FG_UploadBufferData(uint32_t rid, void* data, uint32_t size)
-{
-    FG_Resource* res = &renderstate.registry.resources[rid];
-    SDL_assert(res->type == FG_RESOURCE_TYPE_BUFFER);
-    SDL_assert(size <= res->buffer.size);
-
-    // Create a temporary staging buffer (CPU visible)
-    VkBuffer staging_buffer;
-    VmaAllocation staging_alloc;
-    VkBufferCreateInfo staging_info = {
-        .sType        = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
-        .pNext        = NULL,
-        .flags        = 0,
-        .size         = size,
-        .usage        = VK_IMAGE_USAGE_TRANSFER_SRC_BIT,
-        .sharingMode  = VK_SHARING_MODE_EXCLUSIVE
-    };
-    VmaAllocationCreateInfo staging_alloc_info = {
-        .flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT,
-        .usage = VMA_MEMORY_USAGE_AUTO
-    };
-    
-    VmaAllocationInfo alloc_info;
-    vmaCreateBuffer(renderstate.vma_allocator, &staging_info, &staging_alloc_info, &staging_buffer, &staging_alloc, &alloc_info);
-
-    // Copy CPU data to staging memory
-    memcpy(alloc_info.pMappedData, data, size);
-    
-    
-
-    VkBufferCopy copy_region = { .srcOffset = 0, .dstOffset = 0, .size = size };
-    vkCmdCopyBuffer(cmd, staging_buffer, res->buffer.handle, 1, &copy_region);
-    
-    EndImmediateCommand(cmd); // Helper to submit and wait for idle
-
-    // Cleanup staging
-    vmaDestroyBuffer(renderstate.vma_allocator, staging_buffer, staging_alloc);
-}
-#endif
-
 // Descriptors
 //
 
-void FG_BindlessHeap_Init()
+void bindless_heap_init()
 {
     // Create Layout
     {
@@ -860,7 +830,7 @@ void FG_BindlessHeap_Init()
     }
 
     // Create samplers then write them to descriptor set.
-    FG_BindlessHeap_CreateAllSamplers();
+    bindless_heap_create_all_samplers();
     {
         VkDescriptorImageInfo sampler_infos[FG_SAMPLER_COUNT];
         for (uint32_t i = 0; i < FG_SAMPLER_COUNT; ++i)
@@ -886,7 +856,7 @@ void FG_BindlessHeap_Init()
     }
 }
 
-void FG_BindlessHeap_Shutdown()
+void bindless_heap_shutdown()
 {
     for (uint32_t i = 0; i < FG_SAMPLER_COUNT; ++i)
     {
@@ -896,7 +866,7 @@ void FG_BindlessHeap_Shutdown()
     vkDestroyDescriptorSetLayout(renderstate.device, renderstate.heap.set_layout, NULL);
 }
 
-void FG_BindlessHeap_CreateAllSamplers()
+void bindless_heap_create_all_samplers()
 {
     for (uint32_t i = 0; i < FG_SAMPLER_COUNT; ++i)
     {

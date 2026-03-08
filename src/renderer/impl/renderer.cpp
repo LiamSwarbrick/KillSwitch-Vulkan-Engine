@@ -1,10 +1,19 @@
 #include "internal_state.h"
-#include "pass_definitions.h"
+#include "game_passes_and_rids.h"
 #include "renderpasses/metadata.h"
 
 #include "SDL3/SDL_vulkan.h"
 
 RenderState renderstate;
+
+// STB DS for hash maps (pipeilne hashing), with the main thread alloc tracker.
+void* external_realloc(void* ptr, size_t size) { return L_realloc(ptr, size, &renderstate.main.tt); }
+void external_free(void* ptr) { return L_free(ptr, &renderstate.main.tt); }
+#define STBDS_REALLOC(context,ptr,size) external_realloc(ptr, size)
+#define STBDS_FREE(context,ptr)         external_free(ptr)
+#define STB_DS_IMPLEMENTATION
+#include "stb_ds.h"  // Pipeline keying using this, I'm the STB_DS_IMPLEMENTATION here
+
 
 // NOTE(Liam): The only mutable internal state for renderer is this renderstate.
 // All other global state here should be const
@@ -506,6 +515,7 @@ bool Renderer_Init(const Renderer_InitInfo* info)
 
     // Init FrameGraph subsystem
     FG_Init();
+    PK_Init(&renderstate.pipeline_map);
 
     // Create Swapchain, FrameGraph resources and pass descriptions
     renderstate.rids.resources_created = 0;
@@ -565,6 +575,7 @@ void Renderer_Shutdown()
     }
 
     // Shutdown FrameGraph subsystem
+    PK_Shutdown(&renderstate.pipeline_map, renderstate.device);
     FG_Shutdown();
 
     // Destroy resources for renderpasses
@@ -631,12 +642,12 @@ void _Renderer_OnWindowResize()
     if (renderstate.rids.resources_created)
     {
         // Just recreate the window dependent resources
-        create_or_recreate_window_dependent_resources();
+        CreateResources(FG_RESOURCE_FLAGS_WINDOW_DEPENDENT);
     }
     else
     {
         // Create all resources since it's the first time
-        CreateResources();
+        CreateResources(FG_RESOURCE_FLAGS_NONE);
     }
 }
 
