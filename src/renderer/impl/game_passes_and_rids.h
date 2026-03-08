@@ -19,13 +19,4 @@ ResourceIDs;
 void CreateResources(FG_ResourceFlags types_to_create);
 void DestroyResources();
 
-// Recreated at frame beginning (allows a dynamic render graph)
-typedef struct PassIDs
-{
-    b32 passes_created;
-
-    uint32_t swapchain_pass;  // Outputs to current swapchain image id.
-}
-PassIDs;
-
 #endif  // RENDERER_PASS_DEFINITIONS_H

@@ -1,3 +1,4 @@
+#include "renderer/renderer.h"
 #include "internal_state.h"
 #include "game_passes_and_rids.h"
 #include "renderpasses/metadata.h"
@@ -656,15 +657,8 @@ void _Renderer_OnWindowMinimize()
     // TODO: Pause rendering on minimize
 }
 
-void Renderer_BeginFrame()
-{
-    // TODO: Change BeginFrame/EndFrame structure to something else.
-    // Realistically, this should collect renderables from the entity system and
-    // treat it as just input data to render.
-    // ...some how. need to figure out this out across the entire game pipeline.
-}
 
-void Renderer_EndFrame()
+uint32_t Renderer_BeginFrame()
 {
     /*  Get current swapchain image, and wait on sync structures
 
@@ -709,7 +703,7 @@ void Renderer_EndFrame()
         // since we aren't drawing until the next main loop cycle.
         _Renderer_OnWindowResize();
         --renderstate.frame_number;
-        return;
+        return UINT32_MAX;
     }
     VK_CHECK(acquire_result);
 
@@ -720,8 +714,13 @@ void Renderer_EndFrame()
     // Reset command buffers by resetting the entire pool
     vkResetCommandPool(renderstate.device, renderstate.frames[frame_in_flight].graphics_command_pool, 0);
 
+    return swapchain_image_index;
+}
 
-
+PassIDs Renderer_BuildFrameGraph(uint32_t swapchain_image_index)
+{
+    PassIDs pass_ids = {};
+    memset(&pass_ids, UINT32_MAX, sizeof(PassIDs));
     
     /*  Build FrameGraph
 
@@ -735,40 +734,52 @@ void Renderer_EndFrame()
     renderstate.framegraph.pass_count = 0;
     memset(renderstate.framegraph.passes, 0, sizeof(renderstate.framegraph.passes));
 
-    // Get resourceID of this frame's swapchain image
-    uint32_t swapchain_image_resource_id = renderstate.rids.swapchain_image_rids[swapchain_image_index];
+    // Swapchain pass
+    {
+        // Get resourceID of this frame's swapchain image
+        pass_ids.swapchain_image_index = swapchain_image_index;
+        pass_ids.swapchain_image_resource_id = renderstate.rids.swapchain_image_rids[swapchain_image_index];
 
-    // Temporary basic pass for swapchain rendering
-    RenderPassDesc swapchain_pass_desc = (RenderPassDesc){
-        .debug_name = "Swapchain Pass",
-        .input_count = 0,
-        .inputs = {},
-        .output_count = 1,
-        .outputs = {
-            {
-                .id = swapchain_image_resource_id,
-                .usage_flags = FG_USAGE_COLOR,
-                .sampler_type = FG_SAMPLER_NOT_SAMPLABLE,
+        // Temporary basic pass for swapchain rendering
+        RenderPassDesc swapchain_pass_desc = (RenderPassDesc){
+            .debug_name = "Swapchain Pass",
+            .input_count = 0,
+            .inputs = {},
+            .output_count = 1,
+            .outputs = {
+                {
+                    .id = pass_ids.swapchain_image_resource_id,
+                    .usage_flags = FG_USAGE_COLOR,
+                    .sampler_type = FG_SAMPLER_NOT_SAMPLABLE,
 
-                .access = VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,
-                .stage  = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
-                .layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-                
-                .load_op = VK_ATTACHMENT_LOAD_OP_CLEAR,
-                .store_op = VK_ATTACHMENT_STORE_OP_STORE,
-                .clear_value = { .color = { .float32 = { 0.392f, 0.584f, 0.929f, 0.0f } } }
-            }
-        },
+                    .access = VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,
+                    .stage  = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
+                    .layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+                    
+                    .load_op = VK_ATTACHMENT_LOAD_OP_CLEAR,
+                    .store_op = VK_ATTACHMENT_STORE_OP_STORE,
+                    .clear_value = { .color = { .float32 = { 0.392f, 0.584f, 0.929f, 0.0f } } }
+                }
+            },
 
-        .is_compute = 0,
-        .render_area = { .offset = { 0, 0 }, .extent = renderstate.swapchain_extent },
-        
-        .execute_callback = SwapchainPass_Execute
-    };
-    uint32_t swapchain_pass_id = FG_AddPass(swapchain_pass_desc);
+            .is_compute = 0,
+            .render_area = { .offset = { 0, 0 }, .extent = renderstate.swapchain_extent },
+            
+            .execute_callback = SwapchainPass_Execute
+        };
+        pass_ids.swapchain_pass = FG_AddPass(swapchain_pass_desc);
+    }
 
+    return pass_ids;
+}
 
+void Renderer_Draw(uint32_t entity_id, PipelineKey pipeline_key)
+{
+    // TODO. Add to drawlist or RenderView.
+}
 
+void Renderer_EndFrame(PassIDs pass_ids)
+{
     /*  Execute FrameGraph
 
         Gathers renderables from game state, based on flags, provides each
@@ -779,6 +790,7 @@ void Renderer_EndFrame()
         which is probably easier
     
     */
+    u32 frame_in_flight = renderstate.frame_number % NUM_FRAMES_IN_FLIGHT;
 
     // Setup graphics command buffer for one time submission
     VkCommandBufferBeginInfo graphics_cmd_begin_info = {
@@ -795,7 +807,7 @@ void Renderer_EndFrame()
     VK_CHECK(vkBeginCommandBuffer(gcmd, &graphics_cmd_begin_info));
     {
         FG_CmdRenderFrame(gcmd);
-        FG_CmdTransitionSwapchainForPresentation(gcmd, swapchain_image_resource_id);
+        FG_CmdTransitionSwapchainForPresentation(gcmd, pass_ids.swapchain_image_resource_id);
     }
     VK_CHECK(vkEndCommandBuffer(gcmd));
 
@@ -822,7 +834,7 @@ void Renderer_EndFrame()
         .deviceIndex  = 0
     };
     VkSemaphoreSubmitInfo gcmd_signal_info = gcmd_wait_info;
-    gcmd_signal_info.semaphore = renderstate.swapchain_image_rendering_complete_semaphores[swapchain_image_index];
+    gcmd_signal_info.semaphore = renderstate.swapchain_image_rendering_complete_semaphores[pass_ids.swapchain_image_index];
 
     // Submit command buffer to the queue to execute it
     VkSubmitInfo2 submit_info = {
@@ -845,10 +857,10 @@ void Renderer_EndFrame()
         .sType               = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR,
         .pNext               = NULL,
         .waitSemaphoreCount  = 1,
-        .pWaitSemaphores     = &renderstate.swapchain_image_rendering_complete_semaphores[swapchain_image_index],
+        .pWaitSemaphores     = &renderstate.swapchain_image_rendering_complete_semaphores[pass_ids.swapchain_image_index],
         .swapchainCount      = 1,
         .pSwapchains         = &renderstate.swapchain,
-        .pImageIndices       = &swapchain_image_index,
+        .pImageIndices       = &pass_ids.swapchain_image_index,
         .pResults            = NULL  // <- Only relevant when swapchainCount > 1
     };
     VkResult present_result = vkQueuePresentKHR(renderstate.presentation_queue, &present_info);

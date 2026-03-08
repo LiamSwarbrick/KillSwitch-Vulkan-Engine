@@ -2,7 +2,7 @@
 #define ENGINE_RENDERER_INTERNAL_STRUCTS_H
 
 // NOTE: Must not include internal_state.h
-#include "../renderer.h"
+#include "core/core.h"
 #include "vulkan_wrapper.h"
 
 #define MAX_SWAPCHAIN_IMAGE_COUNT 10
@@ -68,25 +68,6 @@ typedef struct SwapchainSupportDetails
     VkPresentModeKHR* present_modes;
 }
 SwapChainSupportDetails;
-
-// typedef struct GPU_Buffer
-// {
-//     VkBuffer buffer;
-//     VmaAllocation allocation;
-//     VmaAllocationInfo info;
-// }
-// GPU_Buffer;
-
-// typedef struct GPU_Image
-// {
-//     VkImageLayout   current_layout;
-//     VkImage         image;
-//     VkImageView     image_view;
-//     VmaAllocation   allocation;
-//     VkExtent3D      image_extent;
-//     VkFormat        image_format;
-// }
-// GPU_Image;
 
 // typedef struct SPIRVConfig
 // {

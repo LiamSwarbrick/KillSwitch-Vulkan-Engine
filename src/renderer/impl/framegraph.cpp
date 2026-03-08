@@ -15,7 +15,7 @@ void fg_execute_pass(uint32_t pass_idx, VkCommandBuffer cmd);
 typedef struct NewResourceInfo
 {
     ResourceImportInfo import_info;
-    VmaAllocation allocation;  // For created resources. Use VK_NULL_HANDLE for imported resources.
+    VmaAllocation allocation;  // NOTE: Imported resources don't have a VMA allocation so should just use VK_NULL_HANDLE here.
 }
 NewResourceInfo;
 uint32_t add_resource_to_registry_and_heap(const char* debug_name, FG_ResourceType type, FG_ResourceFlags flags, NewResourceInfo resource_info);

@@ -41,7 +41,6 @@
 #ifndef RENDERER_FRAMEGRAPH_H
 #define RENDERER_FRAMEGRAPH_H
 
-#include "../renderer.h"
 #include "internal_structs.h"
 #include "vulkan_wrapper.h"
 

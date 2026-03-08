@@ -1,13 +1,13 @@
 #ifndef ENGINE_RENDERER_RENDER_STATE_H
 #define ENGINE_RENDERER_RENDER_STATE_H
 
-#include "../renderer.h"
-
 #include "internal_structs.h"
 #include "framegraph.h"
+
+#define PIPELINE_HASING_IMPLEMENTATION
 #include "pipeline_hashing.h"
+
 #include "game_passes_and_rids.h"
-// #include "due_rework/internals_due_rework.h"
 
 typedef struct RenderState
 {
@@ -65,7 +65,6 @@ typedef struct RenderState
         
     // IDs into registry, framegraph, or pipeline hash
     ResourceIDs rids;          // Recreated when window/swapchain resizes
-    PassIDs     pass_ids;      // Recreated each frame
 
     // Pipelines: Created lazily, cleaned when swapchain changes format (and remade lazily the next frame).
     // TODO:...
@@ -89,12 +88,5 @@ void destroy_swapchain();
 void create_thread_staging_objects(ThreadStagingObjects* staging_objects);
 void destroy_thread_staging_objects(ThreadStagingObjects* staging_objects);
 void thread_safe_submit_cmd(VkCommandBuffer cmd, VkFence fence);
-
-// GPU_Buffer create_buffer(VmaAllocator vma_allocator, u64 size, VkBufferUsageFlags buffer_usage_flags, VmaAllocationCreateFlags allocation_flags, VmaMemoryUsage memory_usage);
-// void       destroy_buffer(VmaAllocator vma_allocator, const GPU_Buffer* gpu_buffer);
-// GPU_Buffer create_staging_buffer_from_data(VmaAllocator vma_allocator, u8* data, u64 size);
-// void       destroy_image(VkDevice device, VmaAllocator vma_allocator, GPU_Image gpu_image);
-// u32        compute_num_mip_levels(u32 image_level0_width, u32 image_level0_height);
-// GPU_Image  create_attachment_image(RenderState* renderstate, VkExtent3D extent, VkFormat format, VkImageUsageFlags usage, VkImageAspectFlags aspect_flags, b32 has_msaa);
 
 #endif  // ENGINE_RENDERER_RENDER_STATE_H
