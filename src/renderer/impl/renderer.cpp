@@ -6,6 +6,15 @@
 
 RenderState renderstate;
 
+// STB DS for hash maps (pipeilne hashing), with the main thread alloc tracker.
+void* external_realloc(void* ptr, size_t size) { return L_realloc(ptr, size, &renderstate.main.tt); }
+void external_free(void* ptr) { return L_free(ptr, &renderstate.main.tt); }
+#define STBDS_REALLOC(context,ptr,size) external_realloc(ptr, size)
+#define STBDS_FREE(context,ptr)         external_free(ptr)
+#define STB_DS_IMPLEMENTATION
+#include "stb_ds.h"  // Pipeline keying using this, I'm the STB_DS_IMPLEMENTATION here
+
+
 // NOTE(Liam): The only mutable internal state for renderer is this renderstate.
 // All other global state here should be const
 
@@ -504,8 +513,9 @@ bool Renderer_Init(const Renderer_InitInfo* info)
         create_thread_staging_objects(&renderstate.main.staging_objects);
     }
 
-    // Init FrameGraph subsystem
-    FG_Init();
+    // Init FrameGraph subsystem and Pipeline HashMap
+    _FG_Init();  // NOTE: While pipeline_keying.h is self contained, FG is currently not (aka, it uses renderstate directly)
+    PK_Init(&renderstate.pipeline_map);
 
     // Create Swapchain, FrameGraph resources and pass descriptions
     renderstate.rids.resources_created = 0;
@@ -564,8 +574,9 @@ void Renderer_Shutdown()
         vkDestroyFence(renderstate.device, renderstate.frames[i].rendering_complete_fence, NULL);
     }
 
-    // Shutdown FrameGraph subsystem
-    FG_Shutdown();
+    // Shutdown FrameGraph subsystem and Pipeline keying
+    _FG_Shutdown();
+    PK_Shutdown(&renderstate.pipeline_map, renderstate.device);
 
     // Destroy resources for renderpasses
     DestroyResources();
@@ -643,6 +654,11 @@ void _Renderer_OnWindowResize()
 void _Renderer_OnWindowMinimize()
 {
     // TODO: Pause rendering on minimize
+}
+
+VkExtent2D Renderer_GetSwapchainExtent()
+{
+    return renderstate.swapchain_extent;
 }
 
 void Renderer_BeginFrame()
@@ -783,8 +799,8 @@ void Renderer_EndFrame()
 
     VK_CHECK(vkBeginCommandBuffer(gcmd, &graphics_cmd_begin_info));
     {
-        FG_CmdRenderFrame(gcmd);
-        FG_CmdTransitionSwapchainForPresentation(gcmd, swapchain_image_resource_id);
+        _FG_CmdRenderFrame(gcmd);
+        _FG_CmdTransitionSwapchainForPresentation(gcmd, swapchain_image_resource_id);
     }
     VK_CHECK(vkEndCommandBuffer(gcmd));
 

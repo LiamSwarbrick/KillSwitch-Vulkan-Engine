@@ -3,6 +3,8 @@
 
 #include "core/core.h"
 #include "SDL3/SDL.h"
+#include "impl/vulkan_wrapper.h"
+#include "framegraph.h"
 
 // NOTE(Liam): Currently implementing the Renderer backend with
 // a 'quick and dirty' vulkan implementation based on something i already wrote.
@@ -43,12 +45,16 @@ typedef struct Renderer_InitInfo
 {
     SDL_Window* window;
     bool enable_validation;
+    void (*resources_create_callback)(FG_ResourceFlags res_types_to_create_or_recreate);
 }
 RendererInitInfo;
 
 bool Renderer_Init(const Renderer_InitInfo* info);
 void Renderer_Shutdown();
 void Renderer_ListenToWindowEvent(SDL_Event event);
+
+VkExtent2D Renderer_GetSwapchainExtent();
+
 void Renderer_BeginFrame();
 void Renderer_EndFrame();
 

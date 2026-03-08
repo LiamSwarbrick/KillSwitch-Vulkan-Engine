@@ -29,16 +29,4 @@ typedef struct PassIDs
 }
 PassIDs;
 
-
-// TODO:
-// Recreated only when swapchain format changes
-// Future note:
-// In that case, the pipeline hash should just empty all of them.
-// Then they will be rebuilt lazily.
-typedef struct PipelineIDs
-{
-    int a;
-}
-PipelineIDs;
-
 #endif  // RENDERER_PASS_DEFINITIONS_H

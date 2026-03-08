@@ -70,7 +70,7 @@ void CreateResources()
     // Things like vertex buffers, textures, etc... are not window dependent.
     // So create them now...
 
-    #warning TODO: Next step is buffer uploading (via staging buffer), to get vertex data on GPU. Also implement shaders and pipelines now.
+    #warning TODO: Next step is getting some vertex data on GPU. Also implement shaders and pipelines now.
 
     // TEST:
     ResourceCreateInfo test_create_info = {

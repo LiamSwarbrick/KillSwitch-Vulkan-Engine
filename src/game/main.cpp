@@ -1,8 +1,10 @@
+#include "SDL3/SDL.h"
+#include "SDL3/SDL_main.h"
+
 #include "core/core.h"
 #include "renderer/renderer.h"
 
-#include "SDL3/SDL.h"
-#include "SDL3/SDL_main.h"
+#include "render/callbacks.h"
 
 int main(int argc, char *argv[])
 {
@@ -16,7 +18,11 @@ int main(int argc, char *argv[])
         1280, 720
     });
 
-    Renderer_InitInfo renderer_info = { .window = window, .enable_validation = is_debugging };
+    Renderer_InitInfo renderer_info = {
+        .window = window,
+        .enable_validation = is_debugging,
+        .resource_callback = Callback_CreateResources
+    };
     Renderer_Init(&renderer_info);
     
 
