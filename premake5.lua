@@ -16,17 +16,62 @@ include_paths.glm = EXTERNAL .. "glm"
 include_paths.stb = EXTERNAL .. "stb"
 
 lib_dirs = {}
-lib_dirs.SDL3 = SDL_BUILD_DIR
 
+-- SDL
+local sdl_build_type = "Release" -- default (no need to debug SDL right?)
+filter "system:windows"
+    libdirs { SDL_BUILD_DIR .. "/" .. sdl_build_type }
+filter "not system:windows"
+    libdirs { SDL_BUILD_DIR }
+
+-- VULKAN_SDK
 filter "system:windows"
     include_paths.Vulkan = VULKAN_SDK .. "/Include"
     lib_dirs.Vulkan      = VULKAN_SDK .. "/Lib"
-
 filter "not system:windows"
     include_paths.Vulkan = VULKAN_SDK .. "/include"
     lib_dirs.Vulkan      = VULKAN_SDK .. "/lib"
 
 filter {}
+
+-- Clean action: cleanall
+newaction {
+    trigger = "cleanall",
+    description = "Clean all generated build files",
+    execute = function ()
+
+        -- Clean SDL
+        local cmd
+        if os.host() == "windows" then
+            cmd = string.format(
+                "cd %s && cmake --build . --config %s --target clean",
+                SDL_BUILD_DIR, sdl_build_type
+            )
+        else
+            cmd = string.format(
+                "cd %s && cmake --build . --target clean",
+                SDL_BUILD_DIR
+            )
+        end
+        os.execute(cmd)
+        os.rmdir(SDL_BUILD_DIR)
+
+        -- Clean other dirs
+        local dirs = {
+            "bin",
+            "build-artefacts",
+            "shaderspv"
+        }
+
+        for _, dir in ipairs(dirs) do
+            if os.isdir(dir) then
+                print("Removing " .. dir)
+                os.rmdir(dir .. "/**")
+            end
+        end
+    end
+}
+
 
 local function ensure_sdl_built()
     if os.isdir(SDL_BUILD_DIR) then
@@ -38,21 +83,28 @@ local function ensure_sdl_built()
 
     os.mkdir(SDL_BUILD_DIR)
 
-    local build_type = "Release" -- default (no need to debug SDL right?)
-
-    -- Premake knows nothing about cfg here, so pick one or build both
-    local cmd = table.concat({
-        "cd " .. SDL_BUILD_DIR,
-        "cmake .. -DCMAKE_BUILD_TYPE=" .. build_type,
-        "cmake --build . -j"
-    }, " && ")
+    if os.host() == "windows" then
+        cmd = table.concat({
+            "cd " .. SDL_BUILD_DIR,
+            "cmake .. -DSDL_TESTS=OFF",
+            "cmake --build . --config " .. sdl_build_type,
+        }, " && ")
+    else
+        cmd = table.concat({
+            "cd " .. SDL_BUILD_DIR,
+            "cmake .. -DCMAKE_BUILD_TYPE=" .. sdl_build_type .. " -DSDL_TESTS=OFF",
+            "cmake --build . -j"
+        }, " && ")
+    end
 
     local result = os.execute(cmd)
-    if result ~= 0 then
+    if result ~= true and result ~= 0 then
         error("SDL build failed")
     end
 end
-
+if _ACTION ~= "cleanall" then
+    ensure_sdl_built()
+end
 
 workspace "AdventureEngine"
     architecture "x64"
@@ -69,6 +121,11 @@ workspace "AdventureEngine"
         toolset "clang"
     filter "system:macosx"
         toolset "clang"
+    filter {}
+
+    filter "toolset:clang"
+        -- VMA spits out a billion Nullability warnings with clang
+        buildoptions { "-Wno-nullability-completeness" }
     filter {}
 
     -- Shared config for all projects:
@@ -89,8 +146,6 @@ workspace "AdventureEngine"
         kind "StaticLib"
         language "C++"
         cppdialect "C++23"
-
-        ensure_sdl_built()
 
         files {
             SRC .. "core/**.h",
@@ -160,6 +215,9 @@ workspace "AdventureEngine"
         }
 
         -- Shader compilation
+        prebuildcommands {
+            "{MKDIR} shaderspv"
+        }
         filter "files:**.vert or files:**.frag or files:**.comp"
             buildmessage "Compiling shader %{file.relpath}"
             buildcommands {
