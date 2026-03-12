@@ -46,13 +46,12 @@ layout(location = 1) out vec4 out_color;
 void main()
 {
     // Cast pointers
-    SceneBuffer scene = SceneBuffer(pc.scene_ptr);
-    // ObjectBuffer obj   = ObjectBuffer(pc.object_ptr);
+    SceneBuffer scene  = SceneBuffer(pc.scene_ptr);
+    ObjectBuffer obj   = ObjectBuffer(pc.object_ptr);
     VertexBuffer vb    = VertexBuffer(pc.vertex_ptr);
     
     Vertex v = vb.vertices[gl_VertexIndex];
-    // mat4 model_matrix = obj.model;
-    mat4 model_matrix = mat4(1.0);
+    mat4 model_matrix = obj.model;
 
     // Optional Skinning Logic
     if (CURRENT_VERTEX_TYPE == VERTEX_TYPE_SKINNED)
@@ -69,6 +68,5 @@ void main()
 
     out_uv = v.uv;
     out_color = v.color;
-    // gl_Position = scene.view_proj * model_matrix * vec4(v.pos, 1.0);
-    gl_Position = vec4(v.pos, 1.0);
+    gl_Position = scene.view_proj * model_matrix * vec4(v.pos, 1.0);
 }

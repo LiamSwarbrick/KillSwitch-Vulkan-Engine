@@ -26,6 +26,12 @@ typedef struct SceneBufferData
 }
 SceneBufferData;
 
+typedef struct ObjectData
+{
+    glm::mat4 model;
+}
+ObjectData;
+
 typedef struct Vertex
 {
     glm::vec3 pos;
@@ -47,6 +53,21 @@ typedef struct MaterialData
 }
 MaterialData;
 
+// For object transforms
+typedef struct TransientBuffer
+{
+    uint32_t rid;
+    uint64_t gpu_base_address;
+    uint8_t* mapped_data;
+    uint32_t current_offset;
+    uint32_t total_size;
+}
+TransientBuffer;
+
+// TODO: Unexpose this, and use a PrepareRenderView or something that gets entities from the scene
+uint64_t push_object(TransientBuffer* tb, ObjectData object);
+
+TransientBuffer CreateTransientBuffer(uint32_t underlying_resource_id);
 uint64_t GetResourceBufferDeviceAddress(uint32_t rid);
 void SubmitDraw(VkCommandBuffer cmd, Renderable* r, PipelineKey key);
 

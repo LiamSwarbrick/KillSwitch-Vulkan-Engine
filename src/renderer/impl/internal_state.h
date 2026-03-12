@@ -64,6 +64,7 @@ typedef struct RenderState
     //         https://ruby0x1.github.io/machinery_blog_archive/post/vulkan-pipelines-and-render-states/index.html    
     PipelineEntry* pipeline_map;  // Recreated only when swapchain format changes (so never under most circumstances)
     ShaderRegistry shader_registry;
+    TransientBuffer object_transforms;
 
     // IDs into registry, framegraph, or pipeline hash
     ResourceIDs rids;

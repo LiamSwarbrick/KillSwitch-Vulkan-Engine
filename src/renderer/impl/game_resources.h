@@ -14,6 +14,7 @@ typedef struct ResourceIDs
     
     // Global
     uint32_t global_scene_buffer_rid;
+    uint32_t objects_buffer_rid;
     uint32_t material_ssbo_rid;
 
     // Dummy stuff

@@ -6,11 +6,6 @@
 #include "shaders.h"
 #include "internal_state.h"
 
-#warning TODO immediately
-#warning Upload some basic vertex data with FG_Upload...
-#warning Get basic rendering done, with texture sampling.
-
-
 void PK_Init(PipelineEntry** pipeline_map_ref)
 {
     *pipeline_map_ref = NULL;  // Set to NULL so stb_ds will make a new hash map.

@@ -4,26 +4,58 @@
 uint64_t get_resource_buffer_device_address(uint32_t rid)
 {
     if (rid == UINT32_MAX) return 0;
-    FG_Resource* res = &renderstate.registry.resources[rid];
+    return renderstate.registry.resources[rid].buffer_gpu_address;
+}
+
+TransientBuffer CreateTransientBuffer(uint32_t underlying_resource_id)
+{
+    FG_Resource* res = &renderstate.registry.resources[underlying_resource_id];
     
-    VkBufferDeviceAddressInfo info = { VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO };
-    info.buffer = res->buffer.handle;
-    return vkGetBufferDeviceAddress(renderstate.device, &info);
+    return {
+        .rid              = underlying_resource_id,
+        .gpu_base_address = res->buffer_gpu_address,
+        .mapped_data      = (uint8_t*)res->buffer.mapped_data,
+        .current_offset   = 0,
+        .total_size       = res->buffer.size
+    };
+}
+
+void reset_transient_buffer(TransientBuffer* tb)
+{
+    tb->current_offset = 0;
+}
+
+uint64_t push_object(TransientBuffer* tb, ObjectData object)
+{
+    uint32_t size = sizeof(ObjectData);
+    // Align to 64 bytes (Vulkan requirement for many BDA operations)
+    uint32_t aligned_offset = (tb->current_offset + 63) & ~63;
+    SDL_assert(aligned_offset + size <= tb->total_size);
+
+    // Copy object to the mapped pointer
+    memcpy(tb->mapped_data + aligned_offset, &object, size);
+    tb->current_offset = aligned_offset + size;
+    
+    // Return the absolute GPU address for the Push Constant
+    return tb->gpu_base_address + aligned_offset;
 }
 
 void UpdateGlobalSceneData()
 {
     SceneBufferData data = {};
     
-    // Set matrices to Identity for the first "Hello Triangle" test
-    // This ensures Clip Space = World Space
-    data.view = glm::mat4();
-    data.proj = glm::mat4();
-    data.view_proj = glm::mat4();
+    // TODO: Add camera here.
+    data.view = glm::mat4(1.0f);
+    data.view[3][1] = -0.5f;
+    data.proj = glm::mat4(1.0f);
+    data.view_proj = data.proj * data.view;
     FG_UploadBufferData(&renderstate.main.staging_objects, 
                         renderstate.rids.global_scene_buffer_rid, 
                         &data, sizeof(SceneBufferData)
     );
+
+    // Object transforms
+    reset_transient_buffer(&renderstate.object_transforms);
 }
 
 void SubmitDraw(VkCommandBuffer cmd, Renderable* r, PipelineKey key)

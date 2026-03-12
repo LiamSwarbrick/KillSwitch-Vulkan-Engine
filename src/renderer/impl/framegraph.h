@@ -161,7 +161,6 @@ typedef struct ResourceBufferData
     VkBuffer handle;
 
     uint32_t size;
-    // TODO: Support mapped data:
     void* mapped_data;  // Useful for uniform/storage updates, e.g. CPU side light assignment
 }
 ResourceBufferData;
@@ -179,15 +178,13 @@ typedef struct ResourceImageData
 }
 ResourceImageData;
 
-typedef union ResourceCreateInfo
+typedef struct ResourceCreateInfo
 {
-    struct
-    {
-        VkImageCreateInfo image_create_info;
-        VkImageViewCreateInfo image_view_create_info;
-    };
+    VkImageCreateInfo image_create_info;
+    VkImageViewCreateInfo image_view_create_info;
 
     VkBufferCreateInfo buffer_create_info;
+    b32 is_cpu_accessible;
 }
 ResourceCreateInfo;
 uint32_t FG_CreateResource(const char* debug_name, FG_ResourceType type, FG_ResourceFlags flags, ResourceCreateInfo* create_info);
