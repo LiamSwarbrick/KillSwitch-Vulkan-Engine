@@ -81,7 +81,7 @@ InternalVulkanDebugCallback(
         fprintf(stderr, ANSI_CYAN "Validation Layer %s: " ANSI_YELLOW "%s\n" ANSI_RESET,
             messageSeverity == VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT ? "Warning" : "Error",
             pCallbackData->pMessage);
-        // *(volatile int*)0 = 0;  // Crash the program so I can backtrace
+        *(volatile int*)0 = 0;  // Crash the program so I can backtrace
         renderstate.program_caused_vulkan_validation_layer_errors = 1;
         break;
         default: break;
@@ -412,6 +412,7 @@ void Renderer_Init(const Renderer_InitInfo* info)
         VkPhysicalDeviceFeatures device_features = {};
         device_features.samplerAnisotropy = VK_TRUE;
         device_features.geometryShader = VK_TRUE;
+        device_features.shaderInt64 = VK_TRUE;
 
         VkPhysicalDeviceVulkan12Features vk12_features = {};
         vk12_features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES;
@@ -420,6 +421,7 @@ void Renderer_Init(const Renderer_InitInfo* info)
         vk12_features.descriptorBindingPartiallyBound = VK_TRUE;
         vk12_features.descriptorBindingSampledImageUpdateAfterBind = VK_TRUE;
         vk12_features.runtimeDescriptorArray = VK_TRUE;
+        vk12_features.scalarBlockLayout = VK_TRUE;
 
         VkPhysicalDeviceVulkan13Features vk13_features = {};
         vk13_features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES;
@@ -785,6 +787,7 @@ void Renderer_DrawFrame()
 
     VK_CHECK(vkBeginCommandBuffer(gcmd, &graphics_cmd_begin_info));
     {
+        UpdateGlobalSceneData();
         FG_CmdRenderFrame(gcmd);
         FG_CmdTransitionSwapchainForPresentation(gcmd, swapchain_image_resource_id);
     }

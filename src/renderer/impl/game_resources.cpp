@@ -68,9 +68,70 @@ void CreateOrRecreateResources(FG_ResourceFlags types_to_create)
         // have a FG_RESOURCE_FLAGS_SCENE_DEPENDENT
         // so we regenerate such resources on scene change e.g. spash to title screen to in game rooms
 
-        
+        // Global Scene Data
+        ResourceCreateInfo scene_info = {
+            .buffer_create_info = {
+                .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
+                .size = sizeof(SceneBufferData),
+                .usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT |
+                    VK_BUFFER_USAGE_TRANSFER_DST_BIT
+            }
+        };
+        renderstate.rids.global_scene_buffer_rid = FG_CreateResource(
+            "GlobalSceneBuffer", FG_RESOURCE_TYPE_BUFFER, flags, &scene_info
+        );
 
-        // TEST:
+        // Materials SSBO
+        const uint32_t MAX_MATERIALS = 1024;
+        ResourceCreateInfo mat_info = {
+            .buffer_create_info = {
+                .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
+                .size = sizeof(MaterialData) * MAX_MATERIALS,
+                .usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
+            }
+        };
+        renderstate.rids.material_ssbo_rid = FG_CreateResource(
+            "MaterialSSBO", FG_RESOURCE_TYPE_BUFFER, flags, &mat_info
+        );
+
+        // Initial "Dummy" Material Data
+        // Let's set Material 0 to be a simple White material with no texture
+        // MaterialData default_mat = {
+        //     .base_color = { 1.0f, 1.0f, 1.0f, 1.0f },
+        //     .texture_idx = 0xFFFFFFFF,  // Our "No Texture" sentinel
+        //     .alpha_cutoff = 0.5f
+        // };
+        // FG_UploadBufferData(&renderstate.main.staging_objects, 
+        //     renderstate.rids.material_ssbo_rid, &default_mat, sizeof(MaterialData)
+        // );
+
+        // TEST TRIANGLE:
+        Vertex triangle_verts[3] = {
+            {{ 0.0f, -0.5f, 0.0f}, {0.5f, 0.0f}, {0,0,1}, {1,0,0,1}}, 
+            {{ 0.5f,  0.5f, 0.0f}, {1.0f, 1.0f}, {0,0,1}, {0,1,0,1}}, 
+            {{-0.5f,  0.5f, 0.0f}, {0.0f, 1.0f}, {0,0,1}, {0,0,1,1}}  
+        };
+
+        ResourceCreateInfo triangle_info = {
+            .buffer_create_info = {
+                .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
+                .size = sizeof(triangle_verts),
+                // Use DEVICE_LOCAL for speed, plus the flags needed for BDA and pulling
+                .usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | 
+                        VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT | 
+                        VK_BUFFER_USAGE_TRANSFER_DST_BIT 
+            }
+        };
+        renderstate.rids.test_triangle_rid = FG_CreateResource(
+            "TestTriangleBuffer", FG_RESOURCE_TYPE_BUFFER, flags, &triangle_info
+        );
+        FG_UploadBufferData(&renderstate.main.staging_objects, 
+                            renderstate.rids.test_triangle_rid, 
+                            triangle_verts, 
+                            sizeof(triangle_verts));
+
+
+        // TEST EMPTY IMAGE RESOURCE:
         ResourceCreateInfo test_create_info = {
             .image_create_info = {
                 .sType        = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,

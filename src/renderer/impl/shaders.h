@@ -8,13 +8,23 @@
 
 typedef struct PushConstants
 {
-    uint64_t global_ptr;    // Scene data (View/Proj)
+    uint64_t scene_ptr;     // Scene data (View/Proj)
     uint64_t object_ptr;    // Per-instance data (Model matrix)
-    uint64_t vertex_ptr;    // Vertex attributes
+    uint64_t vertex_ptr;    // Vertex attributes (Pulling)
     uint64_t joint_ptr;     // Skinning matrices (0 if static)
-    uint32_t material_idx;  // Index into material SSBO
+    uint64_t material_ptr;  // Material SSBO address
+    uint32_t material_idx;  // Which material in the SSBO
+    uint32_t padding;       // Keep 16-byte alignment
 }
 PushConstants;
+
+typedef struct SceneBufferData
+{
+    glm::mat4 view;
+    glm::mat4 proj;
+    glm::mat4 view_proj;
+}
+SceneBufferData;
 
 typedef struct Vertex
 {
@@ -27,6 +37,18 @@ typedef struct Vertex
 }
 Vertex;
 
+// Temp, simpler material
+typedef struct MaterialData
+{
+    glm::vec4 base_color;
+    uint32_t texture_idx;  // Index into Bindless Heap
+    float alpha_cutoff;
+    uint32_t padding[2];
+}
+MaterialData;
+
+uint64_t GetResourceBufferDeviceAddress(uint32_t rid);
+void SubmitDraw(VkCommandBuffer cmd, Renderable* r, PipelineKey key);
 
 // Shader Registry
 //
@@ -63,6 +85,9 @@ typedef struct PipelineShaderSet
     };
 }
 PipelineShaderSet;
+
+void UpdateGlobalSceneData();
+void SubmitDraw(VkCommandBuffer cmd, Renderable* r, PipelineKey key);
 
 // Used when pipeline hashing has to create a new pipeline.
 // shader_id is part of PipelineKey and indexes into this array

@@ -30,12 +30,15 @@ MaterialType;
 
 typedef struct Renderable
 {
-    uint32_t mesh_rid;      // RID from the registry
-    uint32_t material_id;   // Index into bindless SSBO for colors/textures
-    MaterialType type;
-    glm::mat4 transform;    // Model matrix.
-    // NOTE: If it's a UI material then we can infer an ortho or identity projection,
-    // else it's the camera projection that gets applied on top of it. Aka, the camera matrix is dependent on the renderpass, not the renderable.
+    uint32_t mesh_rid;      // Buffer containing Vertex data
+    uint32_t material_id;   // Index into the global Material SSBO
+    
+    uint64_t object_ptr;    // GPU Address of the mat4 Model Matrix
+    uint64_t joint_ptr;     // GPU Address of Joint matrices (0 if static)
+    
+    uint32_t vertex_type;
+    MaterialType mat_type;
+    float sort_depth;
 }
 Renderable;
 

@@ -159,12 +159,10 @@ L_realloc(void* ptr, size_t size, ThreadAllocTracker* alloc_tracker)
         // Following the man page for realloc:
         if (ptr == NULL)
         {
-            assert(0 && "ptr == NULL is valid realloc but shitty allocation code, what are you doing. If there is actually a valid reason, then feel free to get rid of this assertion.");
             return L_calloc(1, size, alloc_tracker);
         }
         else if (size == 0)
         {
-            assert(0 && "size of 0 is valid realloc but shitty allocation code, what are you doing. If there is actually a valid reason, then feel free to get rid of this assertion.");
             L_free(ptr, alloc_tracker);
             return NULL;
         }

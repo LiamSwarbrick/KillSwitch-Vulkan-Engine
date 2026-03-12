@@ -22,12 +22,13 @@ layout(buffer_reference, scalar) readonly buffer MaterialBuffer { MaterialData m
 
 layout(push_constant, scalar) uniform PushConstants
 {
-    uint64_t global_ptr;
+    uint64_t scene_ptr;
     uint64_t object_ptr;
     uint64_t vertex_ptr;
     uint64_t joint_ptr;
     uint64_t material_ptr;
     uint32_t material_idx;
+    uint32_t padding;
 } pc;
 
 layout(location = 0) in vec2 in_uv;
@@ -37,24 +38,26 @@ layout(location = 0) out vec4 out_color;
 
 void main()
 {
-    MaterialBuffer mb = MaterialBuffer(pc.material_ptr);
-    MaterialData mat = mb.materials[pc.material_idx];
+    // MaterialBuffer mb = MaterialBuffer(pc.material_ptr);
+    // MaterialData mat = mb.materials[pc.material_idx];
 
-    vec4 final_color = mat.base_color * in_vcolor;
+    // vec4 final_color = mat.base_color * in_vcolor;
 
     // Bindless Sampling
-    if (mat.texture_idx != 0xFFFFFFFF)  // UINT32_MAX for 'no texture'
-    {
-        // GL_EXT_nonuniform_qualifier's nonuniformEXT() is required when indexing a descriptor array with a dynamic variable
-        final_color *= texture(global_textures[nonuniformEXT(mat.texture_idx)], in_uv);
-    }
+    // if (mat.texture_idx != 0xFFFFFFFF)  // UINT32_MAX for 'no texture'
+    // {
+    //     // GL_EXT_nonuniform_qualifier's nonuniformEXT() is required when indexing a descriptor array with a dynamic variable
+    //     final_color *= texture(global_textures[nonuniformEXT(mat.texture_idx)], in_uv);
+    // }
 
-    if (CURRENT_BLEND_MODE == BLEND_MODE_MASKED)
-    {
-        if (final_color.a < mat.alpha_cutoff) {
-            discard;
-        }
-    }
+    // if (CURRENT_BLEND_MODE == BLEND_MODE_MASKED)
+    // {
+    //     if (final_color.a < mat.alpha_cutoff) {
+    //         discard;
+    //     }
+    // }
 
-    out_color = final_color;
+    // out_color = final_color;
+
+    out_color = vec4(1.0, 0.0, 0.0, 1.0);
 }

@@ -9,9 +9,15 @@ typedef struct ResourceIDs
 {
     b32 resources_created;
 
-    // Resource IDs:
+    // Window Dependent
     uint32_t swapchain_image_rids[MAX_SWAPCHAIN_IMAGE_COUNT];
-    uint32_t test_v_buffer_rid;
+    
+    // Global
+    uint32_t global_scene_buffer_rid;
+    uint32_t material_ssbo_rid;
+
+    // Dummy stuff
+    uint32_t test_triangle_rid;
 }
 ResourceIDs;
 

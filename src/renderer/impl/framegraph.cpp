@@ -747,7 +747,7 @@ void FG_UploadImageData(ThreadStagingObjects* stg, uint32_t rid, const void* dat
         .pNext                     = NULL,
         .dependencyFlags           = 0,
         .imageMemoryBarrierCount   = 1,
-        .pImageMemoryBarriers      = &barrier
+        .pImageMemoryBarriers      = &barrier_b
     };
     vkCmdPipelineBarrier2(stg->upload_command_buffer, &dep_info_b);
 
