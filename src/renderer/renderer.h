@@ -15,8 +15,6 @@ RendererInitInfo;
 void Renderer_Init(const Renderer_InitInfo* info);
 void Renderer_Shutdown();
 void Renderer_ListenToWindowEvent(SDL_Event event);
-
-// NOTE: Returns false when swapchain invalidated some how.
-bool Renderer_DrawFrame(RenderView* render_view);
+void Renderer_DrawFrame();
 
 #endif  // ENGINE_RENDERER_H

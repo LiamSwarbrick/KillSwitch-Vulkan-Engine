@@ -1,12 +1,17 @@
-#include "game_passes_and_rids.h"
+#include "game_resources.h"
 
 #include "internal_state.h"
 
 
-void CreateResources(FG_ResourceFlags types_to_create)
+void CreateOrRecreateResources(FG_ResourceFlags types_to_create)
 {
     if (types_to_create == FG_RESOURCE_FLAGS_NONE)
+    {
+        // NOTE: types_to_create=NONE means create all resources,
+        // because it's saying the prerequestites to resource creation is NONE.
+        // This should only happen on once, on init, where certain permanent resources are allocated.
         SDL_assert(!renderstate.rids.resources_created);
+    }
 
     if (renderstate.rids.resources_created)
     {
@@ -59,10 +64,11 @@ void CreateResources(FG_ResourceFlags types_to_create)
     if ((flags & types_to_create) == types_to_create)
     {
         // Resources that only need to be made once.
-        // Currently thats our vertex buffer n shit, but at some point we will
+        // Currently thats where vertex buffers will go, but at some point we will
         // have a FG_RESOURCE_FLAGS_SCENE_DEPENDENT
         // so we regenerate such resources on scene change e.g. spash to title screen to in game rooms
 
+        
 
         // TEST:
         ResourceCreateInfo test_create_info = {

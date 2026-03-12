@@ -11,12 +11,11 @@ typedef struct ResourceIDs
 
     // Resource IDs:
     uint32_t swapchain_image_rids[MAX_SWAPCHAIN_IMAGE_COUNT];
-
     uint32_t test_v_buffer_rid;
 }
 ResourceIDs;
 
-void CreateResources(FG_ResourceFlags types_to_create);
+void CreateOrRecreateResources(FG_ResourceFlags types_to_create);
 void DestroyResources();
 
 #endif  // RENDERER_PASS_DEFINITIONS_H

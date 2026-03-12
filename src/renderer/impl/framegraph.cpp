@@ -29,11 +29,10 @@ void FG_Init()
     
     // Create global pipeline layout that uses this heap
     {
-        // Push constant range of 128 bytes should be safe across all hardware (Intel/Nvidia/AMD)
         VkPushConstantRange push_constant_range = {
             .stageFlags = VK_SHADER_STAGE_ALL,
             .offset = 0,
-            .size = 128
+            .size = 128  // NOTE: Vulkan 1.4 guaruntees 256, before that is only 128. So we could make it 256 if we never intend on supporting earlier versions.
         };
 
         VkPipelineLayoutCreateInfo layout_create_info = {
@@ -81,7 +80,20 @@ void FG_ClearResources()
 // Graph Building
 //
 
-uint32_t FG_AddPass(RenderPassDesc pass_description)
+void FG_Empty()
+{
+    // Empty pass descriptions
+    renderstate.framegraph.pass_count = 0;
+    memset(renderstate.framegraph.passes, 0, sizeof(renderstate.framegraph.passes));
+
+    // Empty table
+    for (uint32_t i = 0; i < PASS_TYPE_COUNT; ++i)
+    {
+        renderstate.pass_id_from_type[i] = PASS_TYPE_INVALID;
+    }
+}
+
+uint32_t FG_AddPass(RenderPassDesc pass_description, uint32_t pass_type)
 {
     FrameGraph* fg = &renderstate.framegraph;
     SDL_assert(fg->pass_count < MAX_PASSES);
@@ -90,6 +102,13 @@ uint32_t FG_AddPass(RenderPassDesc pass_description)
     uint32_t pass_id = fg->pass_count++;
     RenderPassDesc* pass = &fg->passes[pass_id];
     memcpy(pass, &pass_description, sizeof(RenderPassDesc));
+
+    // Add to table
+    SDL_assert(renderstate.pass_id_from_type[pass_type] == PASS_TYPE_INVALID &&
+        "Can't add the same pass twice, give it a unique PassType enumeration"
+    );
+    renderstate.pass_id_from_type[pass_type] = pass_id;
+
     return pass_id;
 }
 
@@ -157,14 +176,14 @@ void fg_apply_barriers(VkCommandBuffer cmd, RenderPassDesc* pass)
     // Transition INPUTS
     for (uint32_t i = 0; i < pass->input_count; i++)
     {
-        FG_Resource* res = &renderstate.registry.resources[pass->inputs[i].id];
+        FG_Resource* res = &renderstate.registry.resources[pass->inputs[i].rid];
         fg_add_barrier(res, &pass->inputs[i], image_barriers, &img_count, buffer_barriers, &buf_count);
     }
 
     // Transition OUTPUTS
     for (uint32_t i = 0; i < pass->output_count; i++)
     {
-        FG_Resource* res = &renderstate.registry.resources[pass->outputs[i].id];
+        FG_Resource* res = &renderstate.registry.resources[pass->outputs[i].rid];
         fg_add_barrier(res, &pass->outputs[i], image_barriers, &img_count, buffer_barriers, &buf_count);
     }
 
@@ -215,8 +234,8 @@ void fg_execute_pass(uint32_t pass_idx, VkCommandBuffer cmd)
         {
             PassResourceUsage* usage = &pass->outputs[i];
 
-            SDL_assert(usage->id < renderstate.registry.resource_count);
-            FG_Resource* res = &renderstate.registry.resources[usage->id];
+            SDL_assert(usage->rid < renderstate.registry.resource_count);
+            FG_Resource* res = &renderstate.registry.resources[usage->rid];
 
             VkRenderingAttachmentInfo attachment = {
                 .sType               = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
@@ -391,7 +410,6 @@ uint32_t add_resource_to_registry_and_heap(const char* debug_name, FG_ResourceTy
         }
     }
 
-    // If we didn't find a gap, or we weren't looking for one.
     if (id == UINT32_MAX)
     {
         id = renderstate.registry.resource_count++;
@@ -399,7 +417,7 @@ uint32_t add_resource_to_registry_and_heap(const char* debug_name, FG_ResourceTy
     
     FG_Resource* res = &renderstate.registry.resources[id];
 
-    // For safety, zero the struct, but this function should manully set all parameters.
+    // For safety, zero the struct, but this function should manully set all parameters so it shouldn't matter.
     memset(res, 0, sizeof(FG_Resource));
 
     // Set shared fields

@@ -111,7 +111,12 @@ workspace "AdventureEngine"
         files {
             SRC .. "renderer/**.h",
             SRC .. "renderer/impl/**.cpp",
-            EXTERNAL .. "volk/volk.c"
+            EXTERNAL .. "volk/volk.c",
+
+            -- Shader src
+            SRC .. "renderer/shadersrc/**.vert",
+            SRC .. "renderer/shadersrc/**.frag",
+            SRC .. "renderer/shadersrc/**.comp"
         }
 
         defines {
@@ -139,6 +144,17 @@ workspace "AdventureEngine"
             "core",
             "SDL3"
         }
+
+        -- Shader compilation
+        filter "files:**.vert or files:**.frag or files:**.comp"
+            buildmessage "Compiling shader %{file.relpath}"
+            buildcommands {
+                "glslc %{file.relpath} -o shaderspv/%{file.name}.spv"
+            }
+            buildoutputs {
+                "shaderspv/%{file.name}.spv"
+            }
+        filter {}
 
 
     -- --------------------------------------------------------------------

@@ -7,7 +7,7 @@
 // Questions about the renderer, material system, mesh system, different types of shaders.
 // Oh well, will hopefully figure this out.
 
-// Idea for future (ignore):
+// Idea for future:
 // Currently the framegraph, registry and heap are not passed through argument,
 // but instead used from the global renderstate directly.
 // I can change this for a more reusable Vulkan layer to use in my next project.
@@ -52,7 +52,7 @@ void FG_ClearResources();
 
 // Arbitrary predefined array sizes for simplicity
 #define MAX_PASS_RESOURCE_BANDWIDTH  16
-#define MAX_PASSES          64
+#define MAX_PASSES          256
 #define MAX_RESOURCES       1024
 
 #define NUM_BINDLESS_TEXTURE_SLOTS 100000   // Ample descriptor slots to never worry about again.
@@ -83,7 +83,7 @@ FG_SamplerType;
 
 typedef struct PassResourceUsage
 {
-    uint32_t id;                  // Index into a resource array (the internal registry)
+    uint32_t rid;                 // Index into a resource array (the internal registry)
     FG_UsageFlags usage_flags;    // Tells the graph HOW to use this resource in this pass
     FG_SamplerType sampler_type;  // Only for image resources. Not using combined image samplers so we can have different samplers for the same image in different passes
 
@@ -111,7 +111,7 @@ typedef struct RenderPassDesc
     PassResourceUsage outputs[MAX_PASS_RESOURCE_BANDWIDTH];
 
     // Rendering intent (for dynamic rendering begin info)
-    b32 is_compute;        // Compute can ignore other intent parameters (leave them 0).
+    b32 is_compute;  // Compute passes can ignore the render_area/viewport/scissor params
     VkRect2D render_area;
     b32 use_custom_viewport_scissor;  // Can leave custom_viewport/scissor 0 if false to simply infer them from render_area
     VkViewport custom_viewport;
@@ -131,7 +131,8 @@ typedef struct FrameGraph
 FrameGraph;
 
 // Graph Building
-uint32_t FG_AddPass(RenderPassDesc pass_description);
+void FG_Empty();
+uint32_t FG_AddPass(RenderPassDesc pass_description, uint32_t pass_type);
 
 // Graph Execution
 void FG_CmdRenderFrame(VkCommandBuffer cmd);

@@ -1,6 +1,5 @@
 #include "renderer/renderer.h"
 #include "internal_state.h"
-#include "game_passes_and_rids.h"
 #include "renderpasses/metadata.h"
 
 #include "SDL3/SDL_vulkan.h"
@@ -641,12 +640,12 @@ void _Renderer_OnWindowResize()
     if (renderstate.rids.resources_created)
     {
         // Just recreate the window dependent resources
-        CreateResources(FG_RESOURCE_FLAGS_WINDOW_DEPENDENT);
+        CreateOrRecreateResources(FG_RESOURCE_FLAGS_WINDOW_DEPENDENT);
     }
     else
     {
         // Create all resources since it's the first time
-        CreateResources(FG_RESOURCE_FLAGS_NONE);
+        CreateOrRecreateResources(FG_RESOURCE_FLAGS_NONE);
     }
 }
 
@@ -656,7 +655,7 @@ void _Renderer_OnWindowMinimize()
 }
 
 
-bool Renderer_DrawFrame(RenderView* render_view)
+void Renderer_DrawFrame()
 {
     /*  Get current swapchain image, and wait on sync structures
 
@@ -682,6 +681,7 @@ bool Renderer_DrawFrame(RenderView* render_view)
     // Get next swapchain image
     // NOTE: If another frame isn't finished with the swapchain image, the GPU must't execute commands on the next swapchain image.
     //       so it must have attained the image_aquired semaphore first.
+    retry_with_resized_window:
     u32 swapchain_image_index;
     VkResult acquire_result = vkAcquireNextImageKHR(
         renderstate.device,
@@ -695,13 +695,13 @@ bool Renderer_DrawFrame(RenderView* render_view)
     {
         // NOTE: This handles resizes explicitly for drivers that don't explicitly trigger
         // VK_ERROR_OUT_OF_DATE_KHR automatically on window resize (hence not triggering the SDL callback)
-        // I don't get this issue on my laptop but it seems like it may be needed for some machines.
+        // Haven't personally encountered this issue on my laptop but it seems like it may be needed for some machines.
 
-        // Return from draw function, marking the window to be resized and subtracting the framenumber
-        // since we aren't drawing until the next main loop cycle.
+        // Window to be resized.
         _Renderer_OnWindowResize();
-        --renderstate.frame_number;
-        return false;
+        
+        // Swapchain was out of date, so try again.
+        goto retry_with_resized_window;
     }
     VK_CHECK(acquire_result);
 
@@ -722,9 +722,7 @@ bool Renderer_DrawFrame(RenderView* render_view)
         or some shit.
     */
 
-    // Empty pass descriptions
-    renderstate.framegraph.pass_count = 0;
-    memset(renderstate.framegraph.passes, 0, sizeof(renderstate.framegraph.passes));
+    FG_Empty();
 
     // Swapchain pass
     uint32_t swapchain_image_resource_id = renderstate.rids.swapchain_image_rids[swapchain_image_index];
@@ -738,7 +736,7 @@ bool Renderer_DrawFrame(RenderView* render_view)
             .output_count = 1,
             .outputs = {
                 {
-                    .id = swapchain_image_resource_id,
+                    .rid = swapchain_image_resource_id,
                     .usage_flags = FG_USAGE_COLOR,
                     .sampler_type = FG_SAMPLER_NOT_SAMPLABLE,
 
@@ -757,7 +755,7 @@ bool Renderer_DrawFrame(RenderView* render_view)
             
             .execute_callback = SwapchainPass_Execute
         };
-        swapchain_pass = FG_AddPass(swapchain_pass_desc);
+        swapchain_pass = FG_AddPass(swapchain_pass_desc, PASS_TYPE_SWAPCHAIN_PASS);
     }
 
 
@@ -856,7 +854,6 @@ bool Renderer_DrawFrame(RenderView* render_view)
 
     // This happens at the very very end:
     ++renderstate.frame_number;
-    return true;
 }
 
 /////////////////

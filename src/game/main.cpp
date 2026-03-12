@@ -42,16 +42,17 @@ int main(int argc, char *argv[])
         uint32_t flags = SDL_GetWindowFlags(window);
         if (!(flags & SDL_WINDOW_MINIMIZED))
         {
-            RenderView render_view = {};
-            // TODO: Gather entity renderables in RenderView
+            // NOTE: Passes will gather their own renderables, reason being, some passes will just draw a hardcoded full screen triangle,
+            // others will draw from the lights perspective, and others will only draw the toon shaded characters for example
+            //
+            // TODO: Gather entity renderables in RenderView, put this as a function in renderer/renderpasses/gather_renderables.cpp or something
             // Later TODO: Gather visible entities only for extra optimization.
+            // with support for different passes e.g. shadows from lights perspective will require different entity lists.
+            // In future, when entity system sorted out, can move entity gathering
+            // to inside the Renderer_DrawFrame function, and this can use core
+            // systems to gather relevant entities per each render pass.
             
-            retry_with_resized_window:
-            if (!Renderer_DrawFrame(&render_view))
-            {
-                // Swapchain was out of date, so try again.
-                goto retry_with_resized_window;
-            }
+            Renderer_DrawFrame();
         }
     }
 

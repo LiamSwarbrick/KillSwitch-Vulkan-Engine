@@ -1,8 +1,12 @@
 #include "../framegraph.h"
 #include "../internal_state.h"
+#include "../../render_types.h"
 
 void SwapchainPass_Execute(VkCommandBuffer cmd, void* user_data)
 {
+    RenderView view = {};
+    #warning Implement gather entities into renderview
+
     // Bind the Global Bindless Set (Binding 0: Textures, Binding 1: Samplers)
     vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS,
         renderstate.global_pipeline_layout, 0, 1, &renderstate.heap.global_set, 0, NULL
@@ -10,6 +14,7 @@ void SwapchainPass_Execute(VkCommandBuffer cmd, void* user_data)
 
     // printf("DEBUG: SwapchainPass_Execute called via function pointer: TODO: Shaders and drawing\n");
 
+    #warning SwapchainPass_Execute implement pipeline.
     #if 0  // TODO: Implement temp pipeline:
     // NOTE: Temporary pipeline to get something on the screen.
     vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, renderstate.temp_pipeline);
