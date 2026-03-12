@@ -208,8 +208,13 @@ workspace "AdventureEngine"
             lib_dirs.Vulkan
         }
 
+        filter "system:windows"
+            links { "vulkan-1" }
+        filter "not system:windows"
+            links { "vulkan" }
+        filter "*"
+
         links {
-            "vulkan",  -- System vulkan folder
             "core",
             "SDL3"
         }
@@ -258,3 +263,9 @@ workspace "AdventureEngine"
             "core",
             "SDL3"
         }
+
+        filter "system:windows"
+            postbuildcommands {
+                "{COPYFILE} " .. path.getabsolute(SDL_BUILD_DIR .. "/" .. sdl_build_type .. "/SDL3.dll") .. " %{cfg.targetdir}"
+            }
+        filter "*"
