@@ -438,7 +438,7 @@ uint32_t add_resource_to_registry_and_heap(const char* debug_name, FG_ResourceTy
         VkBufferDeviceAddressInfo address_info = {
             .sType   = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO,
             .pNext   = NULL,
-            .buffer  = res->buffer.handle,
+            .buffer  = res->buffer.handle
         };
         res->buffer_gpu_address = vkGetBufferDeviceAddress(renderstate.device, &address_info);
     }
@@ -495,18 +495,25 @@ uint32_t FG_CreateResource(const char* debug_name, FG_ResourceType type, FG_Reso
     {
         // Create .buffer.handle, with allocation stored in .allocation
         VmaAllocationCreateInfo alloc_create_info = { .usage = VMA_MEMORY_USAGE_AUTO };
+        if (create_info->is_cpu_accessible)
+        {
+            alloc_create_info.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | 
+                                      VMA_ALLOCATION_CREATE_MAPPED_BIT;
+        }
+
+        VmaAllocationInfo alloc_info = {};
         VK_CHECK(vmaCreateBuffer(
             renderstate.vma_allocator,
             &create_info->buffer_create_info,
             &alloc_create_info,
             &resource_info.import_info.buffer.handle,
             &resource_info.allocation,
-            NULL
+            &alloc_info
         ));
         
         // Keep metadata
         resource_info.import_info.buffer.size = create_info->buffer_create_info.size;
-        resource_info.import_info.buffer.mapped_data = NULL;  // TODO! vmaMapMemory stuff might be useful for CPU side updating of skeletal bones.
+        resource_info.import_info.buffer.mapped_data = alloc_info.pMappedData;
     }
     else
     {

@@ -68,18 +68,35 @@ void CreateOrRecreateResources(FG_ResourceFlags types_to_create)
         // have a FG_RESOURCE_FLAGS_SCENE_DEPENDENT
         // so we regenerate such resources on scene change e.g. spash to title screen to in game rooms
 
-        // Global Scene Data
+        // Scene Buffer
         ResourceCreateInfo scene_info = {
             .buffer_create_info = {
                 .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
                 .size = sizeof(SceneBufferData),
                 .usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT |
                     VK_BUFFER_USAGE_TRANSFER_DST_BIT
-            }
+            },
         };
         renderstate.rids.global_scene_buffer_rid = FG_CreateResource(
             "GlobalSceneBuffer", FG_RESOURCE_TYPE_BUFFER, flags, &scene_info
         );
+
+        // Objects Buffer (Mapped so we rapidly upload transforms each frame)
+        const uint32_t MAX_RENDERED_OBJECTS = 100000;
+        ResourceCreateInfo objects_info = {
+            .buffer_create_info = {
+                .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
+                .size = MAX_RENDERED_OBJECTS * sizeof(ObjectData),
+                .usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT
+                    | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT
+                    | VK_BUFFER_USAGE_TRANSFER_DST_BIT
+            },
+            .is_cpu_accessible = 1
+        };
+        renderstate.rids.objects_buffer_rid = FG_CreateResource(
+            "ObjectsBuffer", FG_RESOURCE_TYPE_BUFFER, flags, &objects_info
+        );
+        renderstate.object_transforms = CreateTransientBuffer(renderstate.rids.objects_buffer_rid);
 
         // Materials SSBO
         const uint32_t MAX_MATERIALS = 1024;
