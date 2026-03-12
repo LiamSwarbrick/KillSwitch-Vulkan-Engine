@@ -17,12 +17,16 @@ include_paths.stb = EXTERNAL .. "stb"
 
 lib_dirs = {}
 lib_dirs.SDL3 = SDL_BUILD_DIR
-lib_dirs.Vulkan = VULKAN_SDK .. "/lib"
 
 filter "system:windows"
     include_paths.Vulkan = VULKAN_SDK .. "/Include"
-    lib_dirs.Vulkan = VULKAN_SDK .. "/Lib"
-filter "*"
+    lib_dirs.Vulkan      = VULKAN_SDK .. "/Lib"
+
+filter "not system:windows"
+    include_paths.Vulkan = VULKAN_SDK .. "/include"
+    lib_dirs.Vulkan      = VULKAN_SDK .. "/lib"
+
+filter {}
 
 local function ensure_sdl_built()
     if os.isdir(SDL_BUILD_DIR) then
@@ -53,9 +57,19 @@ end
 workspace "AdventureEngine"
     architecture "x64"
     configurations { "debug", "release" }
+    startproject "game"
 
     targetdir ("bin")
     objdir ("build-artefacts/%{cfg.buildcfg}")
+
+    -- Using clang
+    filter "system:windows"
+        toolset "clang"
+    filter "system:linux"
+        toolset "clang"
+    filter "system:macosx"
+        toolset "clang"
+    filter {}
 
     -- Shared config for all projects:
     filter "configurations:Debug"
