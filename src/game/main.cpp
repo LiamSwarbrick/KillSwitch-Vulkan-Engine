@@ -3,7 +3,7 @@
 
 #include "SDL3/SDL.h"
 #include "SDL3/SDL_main.h"
-#include "assetsys/scene_loader.h"
+#include "assetsys/assetsys.h"
 
 int main(int argc, char *argv[])
 {
@@ -23,7 +23,8 @@ int main(int argc, char *argv[])
     bool running = true;
 
     //load scene
-	load_scene("assets/shapes.gltf");
+	Asset* asset1 = load_asset("assets/levels/shapes.gltf");
+    Asset* asset2 = load_asset("assets/props/cube.gltf");
 
     while (running)
     {
