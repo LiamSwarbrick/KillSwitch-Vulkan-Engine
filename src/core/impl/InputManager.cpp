@@ -1,6 +1,8 @@
 #include "../InputManager.h"
 #include <iostream>
 #include <cstring>
+#include <cmath>
+#include <cstdio>
 #include <SDL3/SDL_gamepad.h>
 
 InputManager& InputManager::GetInstance()
@@ -221,13 +223,11 @@ void InputManager::UpdateGamepadState()
 {
     if (m_gamepadId < 0) return;
     
- 
     m_prevGamepadButtonState.clear();
     
     SDL_Gamepad* gamepad = SDL_GetGamepadFromID(m_gamepadId);
     if (!gamepad) return;
     
-
     SDL_GamepadButton buttons[] = {
         SDL_GAMEPAD_BUTTON_SOUTH, SDL_GAMEPAD_BUTTON_EAST, SDL_GAMEPAD_BUTTON_WEST, SDL_GAMEPAD_BUTTON_NORTH,
         SDL_GAMEPAD_BUTTON_BACK, SDL_GAMEPAD_BUTTON_GUIDE, SDL_GAMEPAD_BUTTON_START,
@@ -240,4 +240,128 @@ void InputManager::UpdateGamepadState()
     for (auto btn : buttons) {
         m_prevGamepadButtonState[btn] = SDL_GetGamepadButton(gamepad, btn) != 0;
     }
+}
+
+// === 调试函数实现 ===
+
+const char* InputManager::SafeString(const char* value, const char* fallback)
+{
+    return (value && value[0] != '\0') ? value : fallback;
+}
+
+const char* InputManager::MouseButtonName(Uint8 button)
+{
+    switch (button)
+    {
+        case SDL_BUTTON_LEFT:   return "Left";
+        case SDL_BUTTON_MIDDLE: return "Middle";
+        case SDL_BUTTON_RIGHT:  return "Right";
+        case SDL_BUTTON_X1:     return "X1";
+        case SDL_BUTTON_X2:     return "X2";
+        default:                return "Unknown";
+    }
+}
+
+float InputManager::NormalizeGamepadAxis(Uint8 axis, Sint16 value)
+{
+    if (axis == SDL_GAMEPAD_AXIS_LEFT_TRIGGER || axis == SDL_GAMEPAD_AXIS_RIGHT_TRIGGER)
+    {
+        return static_cast<float>(value) / 32767.0f;
+    }
+    return static_cast<float>(value) / 32768.0f;
+}
+
+bool InputManager::ShouldPrintAxisChange(Sint16 previous, Sint16 current)
+{
+    constexpr int kDeadzone = 8000;
+    constexpr int kDeltaThreshold = 4000;
+
+    const bool previous_active = std::abs(previous) >= kDeadzone;
+    const bool current_active = std::abs(current) >= kDeadzone;
+    if (previous_active != current_active)
+    {
+        return true;
+    }
+
+    return current_active && std::abs(current - previous) >= kDeltaThreshold;
+}
+
+void InputManager::PrintKeyboardEvent(const SDL_KeyboardEvent& key)
+{
+    std::printf(
+        "[Keyboard] %s scancode=%s key=%s repeat=%s\n",
+        key.down ? "down" : "up",
+        SafeString(SDL_GetScancodeName(key.scancode), "Unknown"),
+        SafeString(SDL_GetKeyName(key.key), "Unknown"),
+        key.repeat ? "yes" : "no"
+    );
+}
+
+void InputManager::PrintMouseMotionEvent(const SDL_MouseMotionEvent& motion)
+{
+    std::printf(
+        "[Mouse] motion x=%.1f y=%.1f dx=%.1f dy=%.1f\n",
+        motion.x,
+        motion.y,
+        motion.xrel,
+        motion.yrel
+    );
+}
+
+void InputManager::PrintMouseButtonEvent(const SDL_MouseButtonEvent& button)
+{
+    std::printf(
+        "[Mouse] %s button=%s clicks=%u x=%.1f y=%.1f\n",
+        button.down ? "down" : "up",
+        MouseButtonName(button.button),
+        static_cast<unsigned>(button.clicks),
+        button.x,
+        button.y
+    );
+}
+
+void InputManager::PrintMouseWheelEvent(const SDL_MouseWheelEvent& wheel)
+{
+    std::printf(
+        "[Mouse] wheel x=%.2f y=%.2f ticks=(%d,%d)\n",
+        wheel.x,
+        wheel.y,
+        wheel.integer_x,
+        wheel.integer_y
+    );
+}
+
+void InputManager::PrintGamepadButtonEvent(const SDL_GamepadButtonEvent& button)
+{
+    std::printf(
+        "[Gamepad %d] %s button=%s\n",
+        button.which,
+        button.down ? "down" : "up",
+        SafeString(SDL_GetGamepadStringForButton(static_cast<SDL_GamepadButton>(button.button)), "unknown-button")
+    );
+}
+
+void InputManager::PrintGamepadAxisEvent(const SDL_GamepadAxisEvent& axis_event)
+{
+    if (m_gamepadId != axis_event.which)
+    {
+        m_gamepadId = axis_event.which;
+        std::fill(m_lastGamepadAxisValues.begin(), m_lastGamepadAxisValues.end(), 0);
+    }
+
+    const Sint16 previous = m_lastGamepadAxisValues[axis_event.axis];
+    m_lastGamepadAxisValues[axis_event.axis] = axis_event.value;
+
+    if (!ShouldPrintAxisChange(previous, axis_event.value))
+    {
+        return;
+    }
+
+    std::printf(
+        "[Gamepad %d] axis=%s value=%d normalized=%.3f\n",
+        axis_event.which,
+        SafeString(SDL_GetGamepadStringForAxis(static_cast<SDL_GamepadAxis>(axis_event.axis)), "unknown-axis"),
+        static_cast<int>(axis_event.value),
+        NormalizeGamepadAxis(axis_event.axis, axis_event.value)
+    );
 }

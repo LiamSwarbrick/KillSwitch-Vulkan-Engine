@@ -17,7 +17,6 @@ public:
     bool IsKeyPressed(SDL_Scancode key) const;   
     bool IsKeyReleased(SDL_Scancode key) const;
 
-
     bool IsMouseButtonDown(Uint8 button) const;
     bool IsMouseButtonPressed(Uint8 button) const;   
     bool IsMouseButtonReleased(Uint8 button) const;
@@ -32,9 +31,15 @@ public:
     bool IsGamepadButtonDown(SDL_GamepadButton btn) const;
     bool IsGamepadButtonPressed(SDL_GamepadButton btn) const; 
     bool IsGamepadButtonReleased(SDL_GamepadButton btn) const;
-    
- 
     float GetGamepadAxis(SDL_GamepadAxis axis) const;
+
+    // === 调试功能 ===
+    void PrintKeyboardEvent(const SDL_KeyboardEvent& key);
+    void PrintMouseMotionEvent(const SDL_MouseMotionEvent& motion);
+    void PrintMouseButtonEvent(const SDL_MouseButtonEvent& button);
+    void PrintMouseWheelEvent(const SDL_MouseWheelEvent& wheel);
+    void PrintGamepadButtonEvent(const SDL_GamepadButtonEvent& button);
+    void PrintGamepadAxisEvent(const SDL_GamepadAxisEvent& axis);
 
 private:
     InputManager();
@@ -55,7 +60,14 @@ private:
     std::unordered_map<std::string, ActionMapping> m_actionMap;
 
     SDL_JoystickID m_gamepadId = -1;
-    std::unordered_map<int, bool> m_prevGamepadButtonState; 
+    std::unordered_map<int, bool> m_prevGamepadButtonState;
+    std::array<Sint16, SDL_GAMEPAD_AXIS_COUNT> m_lastGamepadAxisValues{};
 
     SDL_Gamepad* m_gamepad = nullptr;
+
+    // === 私有调试辅助函数 ===
+    static const char* SafeString(const char* value, const char* fallback);
+    static const char* MouseButtonName(Uint8 button);
+    static float NormalizeGamepadAxis(Uint8 axis, Sint16 value);
+    static bool ShouldPrintAxisChange(Sint16 previous, Sint16 current);
 };
