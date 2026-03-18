@@ -33,7 +33,6 @@ public:
     bool IsGamepadButtonReleased(SDL_GamepadButton btn) const;
     float GetGamepadAxis(SDL_GamepadAxis axis) const;
 
-    // === 调试功能 ===
     void PrintKeyboardEvent(const SDL_KeyboardEvent& key);
     void PrintMouseMotionEvent(const SDL_MouseMotionEvent& motion);
     void PrintMouseButtonEvent(const SDL_MouseButtonEvent& button);
@@ -65,7 +64,7 @@ private:
 
     SDL_Gamepad* m_gamepad = nullptr;
 
-    // === 私有调试辅助函数 ===
+    
     static const char* SafeString(const char* value, const char* fallback);
     static const char* MouseButtonName(Uint8 button);
     static float NormalizeGamepadAxis(Uint8 axis, Sint16 value);

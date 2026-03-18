@@ -10,7 +10,7 @@ InputManager& InputManager::GetInstance()
     static InputManager instance;
     return instance;
 }
-
+// Initialize keyboard and gamepad states, and set up SDL gamepad subsystem.
 InputManager::InputManager()
     : m_gamepadId(-1)
 {
@@ -35,7 +35,7 @@ InputManager::~InputManager()
     }
     SDL_Quit();
 }
-
+// Update keyboard and mouse states. Called once per frame.
 void InputManager::Update()
 {
     int count = 0;
@@ -54,7 +54,7 @@ void InputManager::Update()
     m_mouseDeltaX = 0;
     m_mouseDeltaY = 0;
 }
-
+// Process SDL events to update input states and handle gamepad connections.
 void InputManager::ProcessEvent(const SDL_Event& e)
 {
     switch (e.type) {
@@ -81,7 +81,7 @@ void InputManager::ProcessEvent(const SDL_Event& e)
             break;
     }
 }
-
+// Keyboard state def
 bool InputManager::IsKeyDown(SDL_Scancode key) const
 {
     if (!m_currentKeyboardState) return false;
@@ -99,7 +99,7 @@ bool InputManager::IsKeyReleased(SDL_Scancode key) const
     if (!m_currentKeyboardState) return false;
     return m_currentKeyboardState[key] == 0 && m_prevKeyboardState[key] != 0;
 }
-
+// Mouse button state def
 bool InputManager::IsMouseButtonDown(Uint8 button) const
 {
     return (m_currentMouseState & SDL_BUTTON_MASK(button)) != 0;
@@ -116,7 +116,7 @@ bool InputManager::IsMouseButtonReleased(Uint8 button) const
     return ((m_currentMouseState & SDL_BUTTON_MASK(button)) == 0) &&
            ((m_prevMouseState & SDL_BUTTON_MASK(button)) != 0);
 }
-
+// Cursor Movement
 void InputManager::GetMouseDelta(int& dx, int& dy) const
 {
     dx = m_mouseDeltaX;
@@ -129,6 +129,7 @@ void InputManager::GetMousePosition(int& x, int& y) const
     y = m_mouseY;
 }
 
+// Action Mapping for button rebind stuff
 void InputManager::AddAction(const std::string& actionName, SDL_Scancode key, Uint8 mouseBtn)
 {
     m_actionMap[actionName] = ActionMapping{ key, mouseBtn };
@@ -165,7 +166,7 @@ bool InputManager::IsActionHeld(const std::string& actionName) const
     
     return false;
 }
-
+// Gamepad stuff
 bool InputManager::IsGamepadConnected() const
 {
     return m_gamepadId >= 0;
@@ -242,8 +243,7 @@ void InputManager::UpdateGamepadState()
     }
 }
 
-// === 调试函数实现 ===
-
+// extra debug helpers
 const char* InputManager::SafeString(const char* value, const char* fallback)
 {
     return (value && value[0] != '\0') ? value : fallback;
@@ -261,7 +261,7 @@ const char* InputManager::MouseButtonName(Uint8 button)
         default:                return "Unknown";
     }
 }
-
+// Normalize gamepad axis value to [-1.0, 1.0] for sticks and [0.0, 1.0] for triggers.
 float InputManager::NormalizeGamepadAxis(Uint8 axis, Sint16 value)
 {
     if (axis == SDL_GAMEPAD_AXIS_LEFT_TRIGGER || axis == SDL_GAMEPAD_AXIS_RIGHT_TRIGGER)
@@ -285,7 +285,7 @@ bool InputManager::ShouldPrintAxisChange(Sint16 previous, Sint16 current)
 
     return current_active && std::abs(current - previous) >= kDeltaThreshold;
 }
-
+// Input checking
 void InputManager::PrintKeyboardEvent(const SDL_KeyboardEvent& key)
 {
     std::printf(

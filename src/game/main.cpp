@@ -73,13 +73,15 @@ int main(int argc, char *argv[])
             Renderer_ListenToWindowEvent(event);
         }
 
-        // Update input state
-        input.Update();
-        input.UpdateGamepadState();
+        
 
         // Game ticks
         // TODO:
 
+        // Update input state
+        input.Update();
+        input.UpdateGamepadState();
+        
         // Rendering
         uint32_t flags = SDL_GetWindowFlags(window);
         if (!(flags & SDL_WINDOW_MINIMIZED))
