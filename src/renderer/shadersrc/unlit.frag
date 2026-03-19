@@ -10,7 +10,7 @@
 // Bindless Texture Heap (Set 0, Binding 0)
 layout(set = 0, binding = 0) uniform sampler2D global_textures[];
 
-struct MaterialData
+struct MaterialData  // TODO: Change this to a standard glTF pbr thingy probs
 {
     vec4 base_color;
     uint32_t texture_idx;
