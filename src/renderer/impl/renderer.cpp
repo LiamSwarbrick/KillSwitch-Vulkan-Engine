@@ -60,9 +60,9 @@ const u32 device_extensions_count = sizeof(device_extensions) / sizeof(char*);
 
 
 // Vulkan Physical Device Features
-// (In future, we could dynamically change our featureset based on the user's hardware)
+// FUTURE: In future, we could dynamically change our featureset based on the user's hardware
 VkPhysicalDeviceFeatures physical_device_features = {
-    .geometryShader    = VK_TRUE,
+    // .geometryShader    = VK_TRUE,
     .samplerAnisotropy = VK_TRUE,
     .shaderInt64       = VK_TRUE
 };
@@ -90,8 +90,7 @@ VkPhysicalDeviceVulkan14Features vk14_features = {
 void* physical_device_features_pNext_chain = &vk14_features;  // Set pNext chain for VkDeviceCreateInfo
 
 
-static VKAPI_ATTR VkBool32 VKAPI_CALL
-InternalVulkanDebugCallback(
+static VKAPI_ATTR VkBool32 VKAPI_CALL InternalVulkanDebugCallback(
     VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity,
     VkDebugUtilsMessageTypeFlagsEXT messageTypes,
     const VkDebugUtilsMessengerCallbackDataEXT* pCallbackData,
@@ -481,9 +480,7 @@ void Renderer_Init(const Renderer_InitInfo* info)
         allocator_create_info.physicalDevice = renderstate.physical_device;
         allocator_create_info.device = renderstate.device;
         allocator_create_info.instance = renderstate.instance;
-        allocator_create_info.flags =
-            VMA_ALLOCATOR_CREATE_BUFFER_DEVICE_ADDRESS_BIT  // For GPU pointers
-        ;
+        allocator_create_info.flags = VMA_ALLOCATOR_CREATE_BUFFER_DEVICE_ADDRESS_BIT;
   
         VmaVulkanFunctions vulkan_functions;
         VK_CHECK(vmaImportVulkanFunctionsFromVolk(&allocator_create_info, &vulkan_functions));
@@ -501,18 +498,29 @@ void Renderer_Init(const Renderer_InitInfo* info)
         renderstate.transfer_queue_mutex = SDL_CreateMutex();
         SDL_assert(renderstate.transfer_queue_mutex);
 
-        // TODO: Currently just the main thread will do all the transfering
-        // But this should just work with multithreading when using thread_safe_submit_cmd()
+        // Command pool/buffer for this worker thread (Main thread only at the moment)
         create_thread_staging_objects(&renderstate.main.staging_objects);
+        // FUTURE: Currently just the main thread will do all the transfering
+        // But this should just work with multithreading when using thread_safe_submit_cmd()
     }
 
-    // Init FrameGraph subsystem
+    // Init Subsystems
+    //
+    //   FrameGraph:
+    //   - Orders and executes renderpasses with automatic resource synchronisation (pipeline barriers).
+    //   - Contains ResourceRegistry for all textures and buffers (the GPU resources)
+    //
+    //   Pipeline Keying:
+    //   - During rendering, if a renderable requires a new pipeline, it lazily creates it.
+    //   - Also responsible for shaders.
+    //
     FG_Init();
     PK_Init(&renderstate.pipeline_map);
 
-    // Create Swapchain, FrameGraph resources and pass descriptions
-    renderstate.rids.resources_created = 0;
-    _Renderer_OnWindowResize();
+    renderstate.rids.window_resources_created = 0;
+    renderstate.rids.startup_resources_created = 0;
+    _Renderer_OnWindowResize();  // <-- Creates swapchain and window dependent resources
+    CreateOrRecreateResources(FG_RESOURCE_FLAGS_ON_STARTUP);
 
     // Init per frame structures
     {
@@ -565,11 +573,11 @@ void Renderer_Shutdown()
         vkDestroyFence(renderstate.device, renderstate.frames[i].rendering_complete_fence, NULL);
     }
 
-    // Shutdown FrameGraph subsystem
+    // Shutdown Pipeline Keying and Frame Graph subsystems
     PK_Shutdown(&renderstate.pipeline_map, renderstate.device);
     FG_Shutdown();
 
-    // Destroy resources for renderpasses
+    // Destroy GPU resources
     DestroyResources();
 
     destroy_swapchain();
@@ -626,20 +634,15 @@ void Renderer_ListenToWindowEvent(SDL_Event event)
 
 void _Renderer_OnWindowResize()
 {
+    // TODO: Change this so that it pauses rendering until stopped resizing
+    // This way it'll performs one single resize at the end instead of constantly while resizing
+    // Cuz right now it's super slow since resizing it reallocating huge render targets over and over...
+
     vkDeviceWaitIdle(renderstate.device);
     create_or_recreate_swapchain();
 
-    // Create pass resources and definitions
-    if (renderstate.rids.resources_created)
-    {
-        // Just recreate the window dependent resources
-        CreateOrRecreateResources(FG_RESOURCE_FLAGS_WINDOW_DEPENDENT);
-    }
-    else
-    {
-        // Create all resources since it's the first time
-        CreateOrRecreateResources(FG_RESOURCE_FLAGS_NONE);
-    }
+    // Create or recreate window size dependent resources
+    CreateOrRecreateResources(FG_RESOURCE_FLAGS_WINDOW_DEPENDENT);
 }
 
 void _Renderer_OnWindowMinimize()

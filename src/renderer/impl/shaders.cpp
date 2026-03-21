@@ -1,52 +1,13 @@
 #include "shaders.h"
 #include "internal_state.h"
 
-uint64_t get_resource_buffer_device_address(uint32_t rid)
-{
-    if (rid == UINT32_MAX) return 0;
-    return renderstate.registry.resources[rid].buffer_gpu_address;
-}
-
-TransientBuffer CreateTransientBuffer(uint32_t underlying_resource_id)
-{
-    FG_Resource* res = &renderstate.registry.resources[underlying_resource_id];
-    
-    return {
-        .rid              = underlying_resource_id,
-        .gpu_base_address = res->buffer_gpu_address,
-        .mapped_data      = (uint8_t*)res->buffer.mapped_data,
-        .current_offset   = 0,
-        .total_size       = res->buffer.size
-    };
-}
-
-void reset_transient_buffer(TransientBuffer* tb)
-{
-    tb->current_offset = 0;
-}
-
-uint64_t push_object(TransientBuffer* tb, ObjectData object)
-{
-    uint32_t size = sizeof(ObjectData);
-    // Align to 64 bytes (Vulkan requirement for many BDA operations)
-    uint32_t aligned_offset = (tb->current_offset + 63) & ~63;
-    SDL_assert(aligned_offset + size <= tb->total_size);
-
-    // Copy object to the mapped pointer
-    memcpy(tb->mapped_data + aligned_offset, &object, size);
-    tb->current_offset = aligned_offset + size;
-    
-    // Return the absolute GPU address for the Push Constant
-    return tb->gpu_base_address + aligned_offset;
-}
-
 void UpdateGlobalSceneData()
 {
     SceneBufferData data = {};
     
     // TODO: Add camera here.
     data.view = glm::mat4(1.0f);
-    data.view[3][1] = -0.5f;
+    // data.view[3][1] = -0.5f;
     data.proj = glm::mat4(1.0f);
     data.view_proj = data.proj * data.view;
     FG_UploadBufferData(&renderstate.main.staging_objects, 
@@ -55,7 +16,7 @@ void UpdateGlobalSceneData()
     );
 
     // Object transforms
-    reset_transient_buffer(&renderstate.object_transforms);
+    ResetMappedArena(&renderstate.object_transforms);
 }
 
 void SubmitDraw(VkCommandBuffer cmd, Renderable* r, PipelineKey key)
@@ -71,9 +32,9 @@ void SubmitDraw(VkCommandBuffer cmd, Renderable* r, PipelineKey key)
 
     // Prepare Push Constants
     PushConstants pc = {};
-    pc.scene_ptr    = get_resource_buffer_device_address(renderstate.rids.global_scene_buffer_rid);
-    pc.material_ptr = get_resource_buffer_device_address(renderstate.rids.material_ssbo_rid);
-    pc.vertex_ptr   = get_resource_buffer_device_address(r->mesh_rid);
+    pc.scene_ptr    = renderstate.registry.resources[renderstate.rids.global_scene_buffer_rid].buffer_gpu_address;
+    pc.material_ptr = renderstate.registry.resources[renderstate.rids.material_ssbo_rid].buffer_gpu_address;
+    pc.vertex_ptr   = renderstate.registry.resources[r->mesh_rid].buffer_gpu_address;
     
     pc.object_ptr   = r->object_ptr;
     pc.joint_ptr    = r->vertex_type == VERTEX_TYPE_SKINNED ? r->joint_ptr : 0;

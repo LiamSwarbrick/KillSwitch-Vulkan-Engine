@@ -7,7 +7,8 @@
 // Recreated at each swapchain resize.
 typedef struct ResourceIDs
 {
-    b32 resources_created;
+    b32 startup_resources_created;
+    b32 window_resources_created;
 
     // Window Dependent
     uint32_t swapchain_image_rids[MAX_SWAPCHAIN_IMAGE_COUNT];
