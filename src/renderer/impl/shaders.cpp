@@ -3,7 +3,7 @@
 
 void UpdateGlobalSceneData()
 {
-    SceneBufferData data = {};
+    SceneData data = {};
     
     // TODO: Add camera here.
     data.view = glm::mat4(1.0f);
@@ -12,7 +12,7 @@ void UpdateGlobalSceneData()
     data.view_proj = data.proj * data.view;
     FG_UploadBufferData(&renderstate.main.staging_objects, 
                         renderstate.rids.global_scene_buffer_rid, 
-                        &data, sizeof(SceneBufferData)
+                        &data, sizeof(SceneData)
     );
 
     // Object transforms
@@ -31,7 +31,7 @@ void SubmitDraw(VkCommandBuffer cmd, Renderable* r, PipelineKey key)
     );
 
     // Prepare Push Constants
-    PushConstants pc = {};
+    GraphicsPushConstants pc = {};
     pc.scene_ptr    = renderstate.registry.resources[renderstate.rids.global_scene_buffer_rid].buffer_gpu_address;
     pc.material_ptr = renderstate.registry.resources[renderstate.rids.material_ssbo_rid].buffer_gpu_address;
     pc.vertex_ptr   = renderstate.registry.resources[r->mesh_rid].buffer_gpu_address;
@@ -42,7 +42,7 @@ void SubmitDraw(VkCommandBuffer cmd, Renderable* r, PipelineKey key)
 
     vkCmdPushConstants(cmd, renderstate.global_pipeline_layout, 
                        VK_SHADER_STAGE_ALL, 
-                       0, sizeof(PushConstants), &pc);
+                       0, sizeof(GraphicsPushConstants), &pc);
 
     // Draw
     // Since we use Vertex Pulling, we don't bind vertex buffers.

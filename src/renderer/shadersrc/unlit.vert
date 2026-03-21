@@ -6,39 +6,10 @@
 #extension GL_GOOGLE_include_directive : require
 #include "shared_constants.glsl"
 
-struct Vertex
-{
-    vec3 pos;
-    vec2 uv;
-    vec3 normal;
-    vec4 color;
-    uvec4 joint_ids;  // Future: For skinning
-    vec4 weights;     // Future: For skinning
-};
-
-layout(buffer_reference, scalar) readonly buffer SceneBuffer
-{
-    mat4 view;
-    mat4 proj;
-    mat4 view_proj;
-};
-layout(buffer_reference, scalar) readonly buffer ObjectBuffer
-{
-    mat4 model;
-};
-layout(buffer_reference, scalar) readonly buffer VertexBuffer { Vertex vertices[]; };
-layout(buffer_reference, scalar) readonly buffer JointBuffer { mat4 joints[]; };
-
 layout(push_constant, scalar) uniform PushConstants
 {
-    uint64_t scene_ptr;
-    uint64_t object_ptr;
-    uint64_t vertex_ptr;
-    uint64_t joint_ptr;
-    uint64_t material_ptr;
-    uint32_t material_idx;
-    uint32_t padding;
-} pc;
+    GraphicsPushConstants pc;
+};
 
 layout(location = 0) out vec2 out_uv;
 layout(location = 1) out vec4 out_color;
@@ -46,9 +17,9 @@ layout(location = 1) out vec4 out_color;
 void main()
 {
     // Cast pointers
-    SceneBuffer scene  = SceneBuffer(pc.scene_ptr);
-    ObjectBuffer obj   = ObjectBuffer(pc.object_ptr);
-    VertexBuffer vb    = VertexBuffer(pc.vertex_ptr);
+    SceneData scene  = SceneBuffer(pc.scene_ptr).scene;
+    ObjectData obj   = ObjectBuffer(pc.object_ptr).object;
+    VertexBuffer vb  = VertexBuffer(pc.vertex_ptr);
     
     Vertex v = vb.vertices[gl_VertexIndex];
     mat4 model_matrix = obj.model;

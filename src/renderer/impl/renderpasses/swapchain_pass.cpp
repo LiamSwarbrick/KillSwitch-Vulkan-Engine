@@ -6,7 +6,7 @@
 
 void SwapchainPass_Execute(VkCommandBuffer cmd, void* user_data)
 {
-    int N = 60;
+    int N = 30;
     for (int i = 0; i < N; ++i)
     {
         // TEMP: Hardcode our Test Renderable
@@ -15,11 +15,11 @@ void SwapchainPass_Execute(VkCommandBuffer cmd, void* user_data)
         tri.mesh_rid    = renderstate.rids.test_triangle_rid;
         tri.material_id = 0;  // The white material we created in CreateOrRecreateResources
         
-        ObjectData tri_object_data = { glm::mat4(2.0f / (float)N) };
-        tri_object_data.model[0][0] *= 10.0f;
-        tri_object_data.model[3][3] = 1.0f;
-        tri_object_data.model[3][0] = sinf(2.0f * M_PIf * (float)(renderstate.frame_number + i) / 60.0f);
-        tri_object_data.model[3][1] = -1.0f + (float)((2*i) / (float)N);
+        ObjectData tri_object_data = { glm::mat4(1.0f) };
+        tri_object_data.model[0][0] *= 2.0f/(float)N;
+        tri_object_data.model[1][1] *= 2.0f/(float)N;
+        tri_object_data.model[3][1] = -1.0f + 2.0f*(float)i/(float)N;
+        tri_object_data.model[3][0] = -1.0f + ((float)(N-1)/(float)N)*(1.0f + sinf(2.0f*M_PIf*(((float)i/(float)N) + (float)(renderstate.frame_number) / 600.0f)));
         
         tri.object_ptr  = PushToMappedArena(&renderstate.object_transforms, &tri_object_data, sizeof(tri_object_data));
         tri.joint_ptr   = 0;

@@ -76,7 +76,7 @@ void create_startup_resources()
     ResourceCreateInfo scene_info = {
         .buffer_create_info = {
             .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
-            .size = sizeof(SceneBufferData),
+            .size = sizeof(SceneData),
             .usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT |
                 VK_BUFFER_USAGE_TRANSFER_DST_BIT
         },
@@ -108,7 +108,9 @@ void create_startup_resources()
         .buffer_create_info = {
             .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
             .size = sizeof(MaterialData) * MAX_MATERIALS,
-            .usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
+            .usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT
+                   | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT
+                   | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
         }
     };
     renderstate.rids.material_ssbo_rid = FG_CreateResource(
@@ -116,19 +118,22 @@ void create_startup_resources()
     );
 
 
+
+    /////////////////////
     #warning BELOW IS DUMMY DATA, THAT SHOULD NOT BE PART OF startup_resources()
 
+    // TODO: Change to PBR material
     // Initial "Dummy" Material Data
     // Let's set Material 0 to be a simple White material with no texture
-    // MaterialData default_mat = {
-    //     .base_color = { 1.0f, 1.0f, 1.0f, 1.0f },
-    //     .texture_idx = 0xFFFFFFFF,  // Our "No Texture" sentinel
-    //     .alpha_cutoff = 0.5f
-    // };
-    // FG_UploadBufferData(&renderstate.main.staging_objects, 
-    //     renderstate.rids.material_ssbo_rid, &default_mat, sizeof(MaterialData)
-    // );
-    #warning Default mat wasn't working right? and texture sentinel not checked for either right?
+    MaterialData default_mat = {
+        .base_color = { 1.0f, 1.0f, 1.0f, 1.0f },
+        .texture_idx = 0xFFFFFFFF,  // Our "No Texture" sentinel
+        .sampler_idx = FG_SAMPLER_LINEAR_REPEAT,
+        .alpha_cutoff = 0.5f
+    };
+    FG_UploadBufferData(&renderstate.main.staging_objects, 
+        renderstate.rids.material_ssbo_rid, &default_mat, sizeof(MaterialData)
+    );
 
     // TEST TRIANGLE:
     #warning This is not indexed data. Switch to indexed meshes

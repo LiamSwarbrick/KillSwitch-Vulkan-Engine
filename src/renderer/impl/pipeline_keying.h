@@ -4,7 +4,7 @@
 #include "vulkan_wrapper.h"
 #include "../render_types.h"
 
-#include "../shadersrc/shared_constants.glsl"
+#include "renderer/shadersrc/shared_constants.glsl"
 
 typedef enum
 {

@@ -70,6 +70,7 @@ VkPhysicalDeviceVulkan12Features vk12_features = {
     .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES,
     .pNext = NULL,
     .descriptorIndexing                           = VK_TRUE,
+    .shaderSampledImageArrayNonUniformIndexing    = VK_TRUE,
     .descriptorBindingSampledImageUpdateAfterBind = VK_TRUE,
     .descriptorBindingPartiallyBound              = VK_TRUE,
     .runtimeDescriptorArray                       = VK_TRUE,
