@@ -5,7 +5,7 @@
 #extension GL_EXT_shader_explicit_arithmetic_types_int64 : require
 #extension GL_EXT_nonuniform_qualifier : require
 #extension GL_GOOGLE_include_directive : require
-#include "shared_constants.glsl.h"
+#include "shared_constants.glsl"
 
 // Bindless heap for textures and samplers is the only use of descriptor sets here
 layout(set = 0, binding = 0) uniform texture2D global_textures[];
@@ -17,7 +17,7 @@ layout(push_constant, scalar) uniform PushConstants
 };
 
 layout(location = 0) in vec2 in_uv;
-layout(location = 1) in vec4 in_vcolor;
+layout(location = 1) in vec3 in_vcolor;
 
 layout(location = 0) out vec4 out_color;
 
@@ -26,7 +26,7 @@ void main()
     MaterialBuffer mb = MaterialBuffer(pc.material_ptr);
     MaterialData mat = mb.materials[pc.material_idx];
 
-    vec4 final_color = mat.base_color * in_vcolor;
+    vec4 final_color = mat.base_color * vec4(in_vcolor, 1.0);
 
     // Bindless Sampling
     if (mat.texture_idx != 0xFFFFFFFF)  // UINT32_MAX for 'no texture'

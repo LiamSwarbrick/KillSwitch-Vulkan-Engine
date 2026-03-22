@@ -33,13 +33,19 @@ void SubmitDraw(VkCommandBuffer cmd, Renderable* r, PipelineKey key)
     // Prepare Push Constants
     GraphicsPushConstants pc = {};
     pc.scene_ptr    = renderstate.registry.resources[renderstate.rids.global_scene_buffer_rid].buffer_gpu_address;
-    pc.material_ptr = renderstate.registry.resources[renderstate.rids.material_ssbo_rid].buffer_gpu_address;
-    pc.vertex_ptr   = renderstate.registry.resources[r->vertex_rid].buffer_gpu_address;
-    pc.index_ptr    = renderstate.registry.resources[r->index_rid].buffer_gpu_address;
-    
     pc.object_ptr   = r->object_ptr;
+    pc.material_ptr = renderstate.registry.resources[renderstate.rids.material_ssbo_rid].buffer_gpu_address;
+    pc.material_idx = r->material_idx;
     pc.joint_ptr    = r->vertex_type == VERTEX_TYPE_SKINNED ? r->joint_ptr : 0;
-    pc.material_idx = r->material_id;
+
+    pc.index_ptr    = renderstate.registry.resources[r->mesh_rids.index_buf_rid].buffer_gpu_address;
+    pc.v_positions_ptr      = renderstate.registry.resources[r->mesh_rids.v_pos_buf_rid].buffer_gpu_address;
+    pc.v_texcoords_ptr      = renderstate.registry.resources[r->mesh_rids.v_texcoord_buf_rid].buffer_gpu_address;
+    pc.v_normals_ptr        = renderstate.registry.resources[r->mesh_rids.v_normal_buf_rid].buffer_gpu_address;
+    pc.v_colors_ptr         = renderstate.registry.resources[r->mesh_rids.v_color_buf_rid].buffer_gpu_address;
+    pc.v_joint_ids_ptr     = renderstate.registry.resources[r->mesh_rids.v_joint_ids_buf_rid].buffer_gpu_address;
+    pc.v_joint_weights_ptr  = renderstate.registry.resources[r->mesh_rids.v_joint_weights_buf_rid].buffer_gpu_address;
+
 
     vkCmdPushConstants(cmd, renderstate.global_pipeline_layout, 
                        VK_SHADER_STAGE_ALL, 
@@ -49,7 +55,7 @@ void SubmitDraw(VkCommandBuffer cmd, Renderable* r, PipelineKey key)
     // NOTE: Since we use Vertex Pulling, we don't bind vertex or index buffers.
     //       In fact, here we gotta use vkCmdDraw, but with the index count.
     //       Not using vkCmdDrawIndexed because the index buffer is not the one part of pipeline pVertexInputState
-    uint32_t index_count = renderstate.registry.resources[r->index_rid].buffer.size / sizeof(uint32_t);
+    uint32_t index_count = renderstate.registry.resources[r->mesh_rids.index_buf_rid].buffer.size / sizeof(uint32_t);
     uint32_t instance_count = 1;  // TODO: Instanced rendering
 
     vkCmdDraw(cmd, index_count, instance_count, 0, 0);

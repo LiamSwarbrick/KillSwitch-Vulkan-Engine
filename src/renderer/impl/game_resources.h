@@ -3,6 +3,7 @@
 
 #include "framegraph.h"
 #include "internal_structs.h"
+#include "renderer/render_types.h"
 
 // Recreated at each swapchain resize.
 typedef struct ResourceIDs
@@ -19,8 +20,7 @@ typedef struct ResourceIDs
     uint32_t material_ssbo_rid;
 
     // Dummy stuff
-    uint32_t quad_verts_rid;
-    uint32_t quad_index_rid;
+    MeshBufferRIDs dummy_mesh;
 }
 ResourceIDs;
 

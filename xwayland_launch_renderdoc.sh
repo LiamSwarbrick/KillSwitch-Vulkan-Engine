@@ -1,0 +1,1 @@
+SDL_VIDEO_DRIVER=x11 qrenderdoc

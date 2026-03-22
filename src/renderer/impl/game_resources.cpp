@@ -5,6 +5,12 @@
 void create_startup_resources();
 void create_window_dependent_resources();
 
+uint32_t create_resource_with_buffer_data(const char* debug_name, FG_ResourceFlags flags, VkBufferUsageFlags usage, size_t size, void* data);
+MeshRIDs create_mesh_resources(const char* debug_name, FG_ResourceFlags shared_flags, uint32_t index_count, uint32_t vertex_count,
+    uint32_t* indices,
+    glm::vec3* positions, glm::vec2* texcoords, glm::vec3* normals, glm::vec3* colors,
+    glm::uvec4* joint_ids, glm::vec4* joint_weights);
+
 void CreateOrRecreateResources(FG_ResourceFlags types_to_create)
 {
     // Recreation step: Deallocate all preexisting resources of the requested type
@@ -137,49 +143,39 @@ void create_startup_resources()
     );
 
     // TEST QUAD (TODO: Change to create_mesh_resource or something):
-    Vertex quad_verts[4] = {
-        {{ 0.0f, 0.0f, 0.0f}, {0.0f, 0.0f}, {0,0,1}, {1,0,0,1}, {0,0,0,0}, {0,0,0,0}}, 
-        {{ 1.0f, 1.0f, 0.0f}, {1.0f, 1.0f}, {0,0,1}, {0,1,0,1}, {0,0,0,0}, {0,0,0,0}}, 
-        {{ 0.0f, 1.0f, 0.0f}, {0.0f, 1.0f}, {0,0,1}, {0,0,1,1}, {0,0,0,0}, {0,0,0,0}},
-        {{ 1.0f, 0.0f, 0.0f}, {1.0f, 0.0f}, {0,0,1}, {0,1,1,1}, {0,0,0,0}, {0,0,0,0}},
-    };
+    // Vertex quad_verts[4] = {
+    //     {{ 0.0f, 0.0f, 0.0f}, {0.0f, 0.0f}, {0,0,1}, {1,0,0,1}, {0,0,0,0}, {0,0,0,0}}, 
+    //     {{ 1.0f, 1.0f, 0.0f}, {1.0f, 1.0f}, {0,0,1}, {0,1,0,1}, {0,0,0,0}, {0,0,0,0}}, 
+    //     {{ 0.0f, 1.0f, 0.0f}, {0.0f, 1.0f}, {0,0,1}, {0,0,1,1}, {0,0,0,0}, {0,0,0,0}},
+    //     {{ 1.0f, 0.0f, 0.0f}, {1.0f, 0.0f}, {0,0,1}, {0,1,1,1}, {0,0,0,0}, {0,0,0,0}},
+    // };
     uint32_t quad_indices[6] = { 0, 1, 2, 0, 3, 1 };
-
-    ResourceCreateInfo quad_verts_info = {
-        .buffer_create_info = {
-            .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
-            .size = sizeof(quad_verts),
-            // Use DEVICE_LOCAL for speed, plus the flags needed for BDA and pulling
-            .usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | 
-                    VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT | 
-                    VK_BUFFER_USAGE_TRANSFER_DST_BIT 
-        }
+    glm::vec3 quad_positions[4] = {
+        { 0.0f, 0.0f, 0.0f},
+        { 1.0f, 1.0f, 0.0f},
+        { 0.0f, 1.0f, 0.0f},
+        { 1.0f, 0.0f, 0.0f}
     };
-    renderstate.rids.quad_verts_rid = FG_CreateResource(
-        "TriangleVertexBuffer", FG_RESOURCE_TYPE_BUFFER, flags, &quad_verts_info
-    );
-    FG_UploadBufferData(&renderstate.main.staging_objects, 
-                        renderstate.rids.quad_verts_rid, 
-                        quad_verts, 
-                        sizeof(quad_verts)
-    );
-    ResourceCreateInfo quad_index_info = {
-        .buffer_create_info = {
-            .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
-            .size = sizeof(quad_indices),
-            // Use DEVICE_LOCAL for speed, plus the flags needed for BDA and pulling
-            .usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | 
-                    VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT | 
-                    VK_BUFFER_USAGE_TRANSFER_DST_BIT 
-        }
+    glm::vec2 quad_uvs[4] = {
+        {0.0f, 0.0f},
+        {1.0f, 1.0f},
+        {0.0f, 1.0f},
+        {1.0f, 0.0f}
     };
-    renderstate.rids.quad_index_rid = FG_CreateResource(
-        "TriangleIndexBuffer", FG_RESOURCE_TYPE_BUFFER, flags, &quad_index_info
-    );
-    FG_UploadBufferData(&renderstate.main.staging_objects, 
-                        renderstate.rids.quad_index_rid, 
-                        quad_indices, 
-                        sizeof(quad_indices)
+    glm::vec3 quad_normals[4] = {
+        {0,0,1},
+        {0,0,1},
+        {0,0,1},
+        {0,0,1}
+    };
+    glm::vec3 quad_colors[4] = {
+        {1,0,0},
+        {0,1,0},
+        {0,0,1},
+        {0,1,1}
+    };
+    create_mesh_resources("QuadMesh", flags, 6, 4, quad_indices,
+        quad_positions, quad_uvs, quad_normals, quad_colors, NULL, NULL
     );
 
 
@@ -276,4 +272,87 @@ void create_window_dependent_resources()
     }
 }
 
+uint32_t create_resource_with_buffer_data(const char* debug_name, FG_ResourceFlags flags, VkBufferUsageFlags usage, size_t size, void* data)
+{
+    ResourceCreateInfo res_create_info = {
+        .buffer_create_info = {
+            .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
+            .size = size,
+            .usage = usage
+        }
+    };
+    uint32_t rid = FG_CreateResource(debug_name, FG_RESOURCE_TYPE_BUFFER, flags, &res_create_info);
+    FG_UploadBufferData(&renderstate.main.staging_objects, rid, data, size);
 
+    return rid;
+}
+
+MeshRIDs create_mesh_resources(const char* debug_name, FG_ResourceFlags shared_flags, uint32_t index_count, uint32_t vertex_count,
+    uint32_t* indices,
+    glm::vec3* positions, glm::vec2* texcoords, glm::vec3* normals, glm::vec3* colors,
+    glm::uvec4* joint_ids, glm::vec4* joint_weights)
+{
+    // Required vertex attributes
+    SDL_assert(positions && texcoords && normals && colors);
+
+    // Each buffer has the same usage flags
+    VkBufferUsageFlags usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | 
+                               VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT | 
+                               VK_BUFFER_USAGE_TRANSFER_DST_BIT;
+
+
+    MeshRIDs mesh_rids = {};
+    char debug_resource_name[256] = {};
+
+    // Index buffer
+    snprintf(debug_resource_name, sizeof(debug_resource_name), "%s_IndexBuffer", debug_name);
+    mesh_rids.index_buf_rid = create_resource_with_buffer_data(
+        debug_resource_name, shared_flags, usage, index_count * sizeof(uint32_t), indices
+    );
+
+    // Positions
+    snprintf(debug_resource_name, sizeof(debug_resource_name), "%s_PositionBuffer", debug_name);
+    mesh_rids.v_pos_buf_rid = create_resource_with_buffer_data(
+        debug_resource_name, shared_flags, usage, vertex_count * sizeof(glm::vec3), positions
+    );
+
+    // Texcoords
+    snprintf(debug_resource_name, sizeof(debug_resource_name), "%s_TexcoordBuffer", debug_name);
+    mesh_rids.v_texcoord_buf_rid = create_resource_with_buffer_data(
+        debug_resource_name, shared_flags, usage, vertex_count * sizeof(glm::vec2), texcoords
+    );
+    
+    // Normals
+    snprintf(debug_resource_name, sizeof(debug_resource_name), "%s_NormalBuffer", debug_name);
+    mesh_rids.v_normal_buf_rid = create_resource_with_buffer_data(
+        debug_resource_name, shared_flags, usage, vertex_count * sizeof(glm::vec3), normals
+    );
+
+    // Colors
+    snprintf(debug_resource_name, sizeof(debug_resource_name), "%s_ColorBuffer", debug_name);
+    mesh_rids.v_color_buf_rid = create_resource_with_buffer_data(
+        debug_resource_name, shared_flags, usage, vertex_count * sizeof(glm::vec3), colors
+    );
+
+    mesh_rids.v_joint_ids_buf_rid = UINT32_MAX;
+    if (joint_ids)
+    {
+        // Joint IDs
+        snprintf(debug_resource_name, sizeof(debug_resource_name), "%s_JointIDsBuffer", debug_name);
+        mesh_rids.v_joint_ids_buf_rid = create_resource_with_buffer_data(
+            debug_resource_name, shared_flags, usage, vertex_count * sizeof(glm::uvec4), joint_ids
+        );
+    }
+
+    mesh_rids.v_joint_weights_buf_rid = UINT32_MAX;
+    if (joint_weights)
+    {
+        // Joint weights
+        snprintf(debug_resource_name, sizeof(debug_resource_name), "%s_JointWeights", debug_name);
+        mesh_rids.v_joint_weights_buf_rid = create_resource_with_buffer_data(
+            debug_resource_name, shared_flags, usage, vertex_count * sizeof(glm::vec4), joint_weights
+        );
+    }
+
+    return mesh_rids;
+}

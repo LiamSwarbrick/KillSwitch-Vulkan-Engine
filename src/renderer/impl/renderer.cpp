@@ -523,17 +523,12 @@ void Renderer_Init(const Renderer_InitInfo* info)
     _Renderer_OnWindowResize();  // <-- Creates swapchain and window dependent resources
     CreateOrRecreateResources(FG_RESOURCE_FLAGS_ON_STARTUP);
 
-    // Init per frame structures
+    // Init per frame structures (except for swapchain_image_acquired_semaphore, which is handled by create_or_recreate_swapchain)
     {
         VkFenceCreateInfo render_fence_create_info = {
             .sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO,
             .pNext = NULL,
             .flags = VK_FENCE_CREATE_SIGNALED_BIT,
-        };
-        VkSemaphoreCreateInfo semaphore_create_info = {
-            .sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO,
-            .pNext = NULL,
-            .flags = 0
         };
         VkCommandPoolCreateInfo gfx_cmdpool_create_info = {
             .sType             = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
@@ -545,7 +540,6 @@ void Renderer_Init(const Renderer_InitInfo* info)
         for (u32 i = 0; i < NUM_FRAMES_IN_FLIGHT; ++i)
         {
             VK_CHECK(vkCreateFence(renderstate.device, &render_fence_create_info, NULL, &renderstate.frames[i].rendering_complete_fence));
-            VK_CHECK(vkCreateSemaphore(renderstate.device, &semaphore_create_info, NULL, &renderstate.frames[i].swapchain_image_acquired_semaphore));
             VK_CHECK(vkCreateCommandPool(renderstate.device, &gfx_cmdpool_create_info, NULL, &renderstate.frames[i].graphics_command_pool));
             VkCommandBufferAllocateInfo cmd_alloc_info = {
                 .sType               = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
@@ -570,7 +564,6 @@ void Renderer_Shutdown()
     for (int i = 0; i < NUM_FRAMES_IN_FLIGHT; ++i)
     {
         vkDestroyCommandPool(renderstate.device, renderstate.frames[i].graphics_command_pool, NULL);
-        vkDestroySemaphore(renderstate.device, renderstate.frames[i].swapchain_image_acquired_semaphore, NULL);
         vkDestroyFence(renderstate.device, renderstate.frames[i].rendering_complete_fence, NULL);
     }
 
@@ -693,7 +686,7 @@ void Renderer_DrawFrame()
         // NOTE: This handles resizes explicitly for drivers that don't explicitly trigger
         // VK_ERROR_OUT_OF_DATE_KHR automatically on window resize (hence not triggering the SDL callback)
         // Haven't personally encountered this issue on my laptop but it seems like it may be needed for some machines.
-
+        
         // Window to be resized.
         _Renderer_OnWindowResize();
         
@@ -806,7 +799,7 @@ void Renderer_DrawFrame()
         .sType        = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO,
         .pNext        = NULL,
         .semaphore    = renderstate.frames[frame_in_flight].swapchain_image_acquired_semaphore,
-        .value        = 1,
+        .value        = 0,  // Ignored if not a timeline semaphore
         .stageMask    = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
         .deviceIndex  = 0
     };
@@ -1508,7 +1501,10 @@ void create_or_recreate_swapchain()
     {
         VK_CHECK(vkCreateSemaphore(renderstate.device, &semaphore_create_info, NULL, &renderstate.swapchain_image_rendering_complete_semaphores[i]));
     }
-    
+    for (u32 i = 0; i < NUM_FRAMES_IN_FLIGHT; ++i)
+    {
+        VK_CHECK(vkCreateSemaphore(renderstate.device, &semaphore_create_info, NULL, &renderstate.frames[i].swapchain_image_acquired_semaphore));
+    }
 
     // Swapchain creation is completed
     printf("- created %d swapchain image views.\n", renderstate.swapchain_image_count);
@@ -1521,6 +1517,11 @@ void destroy_swapchain()
     {
         vkDestroyImageView(renderstate.device, renderstate.swapchain_image_views[i], NULL);
         vkDestroySemaphore(renderstate.device, renderstate.swapchain_image_rendering_complete_semaphores[i], NULL);
+    }
+
+    for (u32 i = 0; i < NUM_FRAMES_IN_FLIGHT; ++i)
+    {
+        vkDestroySemaphore(renderstate.device, renderstate.frames[i].swapchain_image_acquired_semaphore, NULL);
     }
 
     // Swapchain images are automatically destroyed when swapchain is destroyed due to ownership

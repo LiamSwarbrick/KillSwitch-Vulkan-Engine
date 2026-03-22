@@ -186,6 +186,7 @@ workspace "AdventureEngine"
             SRC .. "renderer/shadersrc/**.vert",
             SRC .. "renderer/shadersrc/**.frag",
             SRC .. "renderer/shadersrc/**.comp"
+            SRC .. "renderer/shadersrc/**.glsl"
         }
 
         defines {

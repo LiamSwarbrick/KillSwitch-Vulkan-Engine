@@ -4,7 +4,7 @@
 #include "vulkan_wrapper.h"
 #include "../render_types.h"
 
-#include "renderer/shadersrc/shared_constants.glsl.h"
+#include "renderer/shadersrc/shared_constants.glsl"
 
 typedef enum
 {
@@ -29,7 +29,7 @@ typedef union PipelineKey
         uint64_t depth_op      : 3;  // VkCompareOp
         uint64_t stencil_mode  : 4;  // None, (TODO) Write, Test since VkStencilOpState not implemented/needed yet
         uint64_t cull_mode     : 2;  // VkCullModeFlagBits
-        uint64_t blend_mode    : 4;  // Opaque, Alpha, Additive (see shadersrc/shared_constants.glsl.h)
+        uint64_t blend_mode    : 4;  // Opaque, Alpha, Additive (see shadersrc/shared_constants.glsl)
         uint64_t polygon_mode  : 2;  // VkPolygonMode
         uint64_t front_face    : 1;  // VkFrontFace (we'll use CCW but things like mirrored objects would flip winding)
         // ... remaining bits for future use

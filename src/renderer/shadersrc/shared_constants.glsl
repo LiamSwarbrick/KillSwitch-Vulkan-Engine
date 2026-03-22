@@ -20,12 +20,18 @@ struct GraphicsPushConstants
 {
     uint64_t scene_ptr;     // Scene data (View/Proj)
     uint64_t object_ptr;    // Per-instance data (Model matrix)
-    uint64_t vertex_ptr;    // Vertex attributes (Pulling)
-    uint64_t index_ptr;     // Index buffer (Pulling)
-    uint64_t joint_ptr;     // Skinning matrices (0 if static)
     uint64_t material_ptr;  // Material SSBO address
     uint32_t material_idx;  // Which material in the SSBO
     uint32_t _padding;
+    uint64_t joint_ptr;     // Skinning matrices (0 if static)
+    
+    uint64_t index_ptr;     // Index buffer (Pulling)
+    uint64_t v_positions_ptr;
+    uint64_t v_texcoords_ptr;
+    uint64_t v_normals_ptr;
+    uint64_t v_colors_ptr;
+    uint64_t v_joint_ids_ptr;     // Only for skinned meshes
+    uint64_t v_joint_weights_ptr;  // Only for skinned meshes
 };
 struct SceneData
 {
@@ -37,15 +43,15 @@ struct ObjectData
 {
     mat4 model;
 };
-struct Vertex
-{
-    vec3 pos;
-    vec2 uv;
-    vec3 normal;
-    vec4 color;       // TODO: Probably remove color?
-    uvec4 joint_ids;  // Future: For skinning
-    vec4 weights;     // Future: For skinning
-};
+// struct Vertex
+// {
+//     vec3 pos;
+//     vec2 uv;
+//     vec3 normal;
+//     vec4 color;       // TODO: Probably remove color?
+//     uvec4 joint_ids;  // Future: For skinning
+//     vec4 weights;     // Future: For skinning
+// };
 struct MaterialData
 {
     // TODO: Change this to a standard glTF pbr material instead of this shit
@@ -72,7 +78,7 @@ struct MaterialData
     layout(constant_id = 0) const uint CURRENT_VERTEX_TYPE = 0;
     layout(constant_id = 1) const uint CURRENT_BLEND_MODE = 0;
 
-    // Pointer types
+    // Pointer types for global buffers
     layout(buffer_reference, scalar) readonly buffer SceneBuffer
     {
         SceneData scene;
@@ -81,11 +87,18 @@ struct MaterialData
     {
         ObjectData object;
     };
-    layout(buffer_reference, scalar) readonly buffer VertexBuffer
+    layout(buffer_reference, scalar) readonly buffer MaterialBuffer
     {
-        Vertex vertices[];
+        MaterialData materials[];
     };
-    layout (buffer_reference, scalar) readonly buffer IndexBuffer
+
+    // layout(buffer_reference, scalar) readonly buffer VertexBuffer
+    // {
+    //     Vertex vertices[];
+    // };
+
+    // Pointer types for current mesh:
+    layout(buffer_reference, scalar) readonly buffer IndexBuffer
     {
         uint indices[];
     };
@@ -93,9 +106,12 @@ struct MaterialData
     {
         mat4 joints[];
     };
-    layout(buffer_reference, scalar) readonly buffer MaterialBuffer
-    {
-        MaterialData materials[];
-    };
-#endif
+    // Vertex attributes seperated into their own buffers:
+    layout(buffer_reference, scalar) readonly buffer VPositionBuffer { vec3 positions[]; };
+    layout(buffer_reference, scalar) readonly buffer VTexcoordBuffer { vec2 texcoords[]; };
+    layout(buffer_reference, scalar) readonly buffer VNormalBuffer   { vec3 normals[]; };
+    layout(buffer_reference, scalar) readonly buffer VColorBuffer    { vec3 colors[]; };
+    layout(buffer_reference, scalar) readonly buffer VJointIDsBuffer { uvec4 joint_ids[]; };
+    layout(buffer_reference, scalar) readonly buffer VJointWeightsBuffer { vec4 weights[]; };
 
+#endif
