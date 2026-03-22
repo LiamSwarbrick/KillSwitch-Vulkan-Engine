@@ -122,6 +122,7 @@ void create_startup_resources()
     /////////////////////
     #warning BELOW IS DUMMY DATA, THAT SHOULD NOT BE PART OF startup_resources()
 
+    // TODO IMPORTANT: ONLY SLOT 0 OF THE MATERIAL SSBO WILL BE WRITTEN TO WITH THIS LOGIC
     // TODO: Change to PBR material
     // Initial "Dummy" Material Data
     // Let's set Material 0 to be a simple White material with no texture
@@ -135,31 +136,51 @@ void create_startup_resources()
         renderstate.rids.material_ssbo_rid, &default_mat, sizeof(MaterialData)
     );
 
-    // TEST TRIANGLE:
+    // TEST QUAD (TODO: Change to create_mesh_resource or something):
     #warning This is not indexed data. Switch to indexed meshes
-    Vertex triangle_verts[3] = {
-        {{ 0.0f, 0.0f, 0.0f}, {0.5f, 0.0f}, {0,0,1}, {1,0,0,1}}, 
-        {{ 1.0f, 1.0f, 0.0f}, {1.0f, 1.0f}, {0,0,1}, {0,1,0,1}}, 
-        {{ 0.0f, 1.0f, 0.0f}, {0.0f, 1.0f}, {0,0,1}, {0,0,1,1}}  
+    Vertex quad_verts[4] = {
+        {{ 0.0f, 0.0f, 0.0f}, {0.0f, 0.0f}, {0,0,1}, {1,0,0,1}, {0,0,0,0}, {0,0,0,0}}, 
+        {{ 1.0f, 1.0f, 0.0f}, {1.0f, 1.0f}, {0,0,1}, {0,1,0,1}, {0,0,0,0}, {0,0,0,0}}, 
+        {{ 0.0f, 1.0f, 0.0f}, {0.0f, 1.0f}, {0,0,1}, {0,0,1,1}, {0,0,0,0}, {0,0,0,0}},
+        {{ 1.0f, 0.0f, 0.0f}, {1.0f, 0.0f}, {0,0,1}, {0,1,1,1}, {0,0,0,0}, {0,0,0,0}},
     };
+    uint32_t quad_indices[6] = { 0, 1, 2, 0, 3, 1 };
 
-    ResourceCreateInfo triangle_info = {
+    ResourceCreateInfo quad_verts_info = {
         .buffer_create_info = {
             .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
-            .size = sizeof(triangle_verts),
+            .size = sizeof(quad_verts),
             // Use DEVICE_LOCAL for speed, plus the flags needed for BDA and pulling
             .usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | 
                     VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT | 
                     VK_BUFFER_USAGE_TRANSFER_DST_BIT 
         }
     };
-    renderstate.rids.test_triangle_rid = FG_CreateResource(
-        "TestTriangleBuffer", FG_RESOURCE_TYPE_BUFFER, flags, &triangle_info
+    renderstate.rids.quad_verts_rid = FG_CreateResource(
+        "TriangleVertexBuffer", FG_RESOURCE_TYPE_BUFFER, flags, &quad_verts_info
     );
     FG_UploadBufferData(&renderstate.main.staging_objects, 
-                        renderstate.rids.test_triangle_rid, 
-                        triangle_verts, 
-                        sizeof(triangle_verts)
+                        renderstate.rids.quad_verts_rid, 
+                        quad_verts, 
+                        sizeof(quad_verts)
+    );
+    ResourceCreateInfo quad_index_info = {
+        .buffer_create_info = {
+            .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
+            .size = sizeof(quad_indices),
+            // Use DEVICE_LOCAL for speed, plus the flags needed for BDA and pulling
+            .usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | 
+                    VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT | 
+                    VK_BUFFER_USAGE_TRANSFER_DST_BIT 
+        }
+    };
+    renderstate.rids.quad_index_rid = FG_CreateResource(
+        "TriangleIndexBuffer", FG_RESOURCE_TYPE_BUFFER, flags, &quad_index_info
+    );
+    FG_UploadBufferData(&renderstate.main.staging_objects, 
+                        renderstate.rids.quad_index_rid, 
+                        quad_indices, 
+                        sizeof(quad_indices)
     );
 
 

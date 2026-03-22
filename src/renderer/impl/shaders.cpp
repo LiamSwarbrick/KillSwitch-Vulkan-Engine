@@ -34,7 +34,8 @@ void SubmitDraw(VkCommandBuffer cmd, Renderable* r, PipelineKey key)
     GraphicsPushConstants pc = {};
     pc.scene_ptr    = renderstate.registry.resources[renderstate.rids.global_scene_buffer_rid].buffer_gpu_address;
     pc.material_ptr = renderstate.registry.resources[renderstate.rids.material_ssbo_rid].buffer_gpu_address;
-    pc.vertex_ptr   = renderstate.registry.resources[r->mesh_rid].buffer_gpu_address;
+    pc.vertex_ptr   = renderstate.registry.resources[r->vertex_rid].buffer_gpu_address;
+    pc.index_ptr    = renderstate.registry.resources[r->index_rid].buffer_gpu_address;
     
     pc.object_ptr   = r->object_ptr;
     pc.joint_ptr    = r->vertex_type == VERTEX_TYPE_SKINNED ? r->joint_ptr : 0;
@@ -45,12 +46,13 @@ void SubmitDraw(VkCommandBuffer cmd, Renderable* r, PipelineKey key)
                        0, sizeof(GraphicsPushConstants), &pc);
 
     // Draw
-    // Since we use Vertex Pulling, we don't bind vertex buffers.
-    // We just need the count of vertices in the buffer.
-    FG_Resource* mesh_res = &renderstate.registry.resources[r->mesh_rid];
-    uint32_t vertex_count = mesh_res->buffer.size / sizeof(Vertex);
-    
-    vkCmdDraw(cmd, vertex_count, 1, 0, 0);
+    // NOTE: Since we use Vertex Pulling, we don't bind vertex or index buffers.
+    //       In fact, here we gotta use vkCmdDraw, but with the index count.
+    //       Not using vkCmdDrawIndexed because the index buffer is not the one part of pipeline pVertexInputState
+    uint32_t index_count = renderstate.registry.resources[r->index_rid].buffer.size / sizeof(uint32_t);
+    uint32_t instance_count = 1;  // TODO: Instanced rendering
+
+    vkCmdDraw(cmd, index_count, instance_count, 0, 0);
 }
 
 // Shader Registry

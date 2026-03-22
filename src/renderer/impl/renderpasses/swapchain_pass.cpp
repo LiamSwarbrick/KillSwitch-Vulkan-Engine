@@ -6,25 +6,30 @@
 
 void SwapchainPass_Execute(VkCommandBuffer cmd, void* user_data)
 {
-    int N = 30;
+    int N = 45;
     for (int i = 0; i < N; ++i)
     {
         // TEMP: Hardcode our Test Renderable
         // ALSO TODO: Use depth buffer, and amend pipeline key.
         Renderable tri = {};
-        tri.mesh_rid    = renderstate.rids.test_triangle_rid;
+
+        tri.vertex_type = VERTEX_TYPE_STATIC;
+        tri.mat_type    = MAT_UNLIT;
+        tri.sort_depth  = 0;  // <- unused.
+
+        tri.vertex_rid    = renderstate.rids.quad_verts_rid;
+        tri.index_rid     = renderstate.rids.quad_index_rid;
         tri.material_id = 0;  // The white material we created in CreateOrRecreateResources
         
         ObjectData tri_object_data = { glm::mat4(1.0f) };
         tri_object_data.model[0][0] *= 2.0f/(float)N;
-        tri_object_data.model[1][1] *= 2.0f/(float)N;
+        tri_object_data.model[1][1] *= 4.0f/(float)N;
         tri_object_data.model[3][1] = -1.0f + 2.0f*(float)i/(float)N;
         tri_object_data.model[3][0] = -1.0f + ((float)(N-1)/(float)N)*(1.0f + sinf(2.0f*M_PIf*(((float)i/(float)N) + (float)(renderstate.frame_number) / 600.0f)));
+        tri_object_data.model[0][0] *= fabsf(-1.0f + 8.0f * tri_object_data.model[3][0]);
         
         tri.object_ptr  = PushToMappedArena(&renderstate.object_transforms, &tri_object_data, sizeof(tri_object_data));
         tri.joint_ptr   = 0;
-        tri.vertex_type = VERTEX_TYPE_STATIC;
-        tri.mat_type    = MAT_UNLIT;
 
 
         // Define the Pipeline State (The "Key")

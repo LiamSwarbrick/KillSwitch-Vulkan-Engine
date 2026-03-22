@@ -4,6 +4,7 @@
 #include "vulkan_wrapper.h"
 #include "pipeline_keying.h"
 
+void UpdateGlobalSceneData();
 void SubmitDraw(VkCommandBuffer cmd, Renderable* r, PipelineKey key);
 
 // Shader Registry
@@ -41,9 +42,6 @@ typedef struct PipelineShaderSet
     };
 }
 PipelineShaderSet;
-
-void UpdateGlobalSceneData();
-void SubmitDraw(VkCommandBuffer cmd, Renderable* r, PipelineKey key);
 
 // Used when pipeline hashing has to create a new pipeline.
 // shader_id is part of PipelineKey and indexes into this array

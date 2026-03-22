@@ -19,7 +19,8 @@ typedef struct ResourceIDs
     uint32_t material_ssbo_rid;
 
     // Dummy stuff
-    uint32_t test_triangle_rid;
+    uint32_t quad_verts_rid;
+    uint32_t quad_index_rid;
 }
 ResourceIDs;
 

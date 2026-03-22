@@ -20,11 +20,13 @@ void main()
     SceneData scene  = SceneBuffer(pc.scene_ptr).scene;
     ObjectData obj   = ObjectBuffer(pc.object_ptr).object;
     VertexBuffer vb  = VertexBuffer(pc.vertex_ptr);
+    IndexBuffer ib   = IndexBuffer(pc.index_ptr);
     
-    Vertex v = vb.vertices[gl_VertexIndex];
+    uint index = ib.indices[gl_VertexIndex];
+    Vertex v = vb.vertices[index];
     mat4 model_matrix = obj.model;
 
-    // Optional Skinning Logic
+    // Optional Skinning Logic (shader specialization constants, btw)
     if (CURRENT_VERTEX_TYPE == VERTEX_TYPE_SKINNED)
     {
         JointBuffer jb = JointBuffer(pc.joint_ptr);

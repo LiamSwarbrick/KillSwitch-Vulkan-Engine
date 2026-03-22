@@ -30,15 +30,15 @@ MaterialType;
 
 typedef struct Renderable
 {
-    uint32_t mesh_rid;      // Buffer containing Vertex data
+    uint32_t     vertex_type;  // Static or skinned (FUTURE: morph target?)
+    MaterialType mat_type;     // Selects which shader to use (or multiple shaders if it's a multipass material type)
+    float        sort_depth;   // <-TODO unused.
+
+    uint32_t vertex_rid;    // Buffer of vertices  (TODO: Switch to structure of arrays, to avoid unused attributes i.e. positions_rid, uvs_rid, normals_rids, joints_rid, etc...)
+    uint32_t index_rid;     // Buffer of vertex indices
     uint32_t material_id;   // Index into the global Material SSBO
-    
-    uint64_t object_ptr;    // GPU Address of the mat4 Model Matrix
+    uint64_t object_ptr;    // GPU Address of the ObjectData (e.g. model matrix)
     uint64_t joint_ptr;     // GPU Address of Joint matrices (0 if static)
-    
-    uint32_t vertex_type;
-    MaterialType mat_type;
-    float sort_depth;
 }
 Renderable;
 

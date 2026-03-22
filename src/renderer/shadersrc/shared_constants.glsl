@@ -21,10 +21,11 @@ struct GraphicsPushConstants
     uint64_t scene_ptr;     // Scene data (View/Proj)
     uint64_t object_ptr;    // Per-instance data (Model matrix)
     uint64_t vertex_ptr;    // Vertex attributes (Pulling)
+    uint64_t index_ptr;     // Index buffer (Pulling)
     uint64_t joint_ptr;     // Skinning matrices (0 if static)
     uint64_t material_ptr;  // Material SSBO address
     uint32_t material_idx;  // Which material in the SSBO
-    uint32_t padding;       // Keep 16-byte alignment
+    uint32_t _padding;
 };
 struct SceneData
 {
@@ -41,7 +42,7 @@ struct Vertex
     vec3 pos;
     vec2 uv;
     vec3 normal;
-    vec4 color;
+    vec4 color;       // TODO: Probably remove color?
     uvec4 joint_ids;  // Future: For skinning
     vec4 weights;     // Future: For skinning
 };
@@ -52,7 +53,7 @@ struct MaterialData
     uint32_t texture_idx;
     uint32_t sampler_idx;
     float alpha_cutoff;
-    uint32_t padding[2];
+    uint32_t padding[1];
 };
 
 
@@ -83,6 +84,10 @@ struct MaterialData
     layout(buffer_reference, scalar) readonly buffer VertexBuffer
     {
         Vertex vertices[];
+    };
+    layout (buffer_reference, scalar) readonly buffer IndexBuffer
+    {
+        uint indices[];
     };
     layout(buffer_reference, scalar) readonly buffer JointBuffer
     {
