@@ -122,7 +122,7 @@ void create_startup_resources()
     /////////////////////
     #warning BELOW IS DUMMY DATA, THAT SHOULD NOT BE PART OF startup_resources()
 
-    // TODO IMPORTANT: ONLY SLOT 0 OF THE MATERIAL SSBO WILL BE WRITTEN TO WITH THIS LOGIC
+    // TODO IMPORTANT: ONLY SLOT 0 OF THE MATERIAL SSBO WILL BE WRITTEN TO WITH THIS LOGIC, CHANGE THIS NEXT
     // TODO: Change to PBR material
     // Initial "Dummy" Material Data
     // Let's set Material 0 to be a simple White material with no texture
@@ -137,7 +137,6 @@ void create_startup_resources()
     );
 
     // TEST QUAD (TODO: Change to create_mesh_resource or something):
-    #warning This is not indexed data. Switch to indexed meshes
     Vertex quad_verts[4] = {
         {{ 0.0f, 0.0f, 0.0f}, {0.0f, 0.0f}, {0,0,1}, {1,0,0,1}, {0,0,0,0}, {0,0,0,0}}, 
         {{ 1.0f, 1.0f, 0.0f}, {1.0f, 1.0f}, {0,0,1}, {0,1,0,1}, {0,0,0,0}, {0,0,0,0}}, 

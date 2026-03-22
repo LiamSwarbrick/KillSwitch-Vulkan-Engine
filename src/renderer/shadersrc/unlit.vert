@@ -4,7 +4,7 @@
 #extension GL_EXT_shader_explicit_arithmetic_types_int32 : require
 #extension GL_EXT_shader_explicit_arithmetic_types_int64 : require
 #extension GL_GOOGLE_include_directive : require
-#include "shared_constants.glsl"
+#include "shared_constants.glsl.h"
 
 layout(push_constant, scalar) uniform PushConstants
 {

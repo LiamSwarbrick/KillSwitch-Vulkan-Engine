@@ -5,7 +5,7 @@
 #extension GL_EXT_shader_explicit_arithmetic_types_int64 : require
 #extension GL_EXT_nonuniform_qualifier : require
 #extension GL_GOOGLE_include_directive : require
-#include "shared_constants.glsl"
+#include "shared_constants.glsl.h"
 
 // Bindless heap for textures and samplers is the only use of descriptor sets here
 layout(set = 0, binding = 0) uniform texture2D global_textures[];
