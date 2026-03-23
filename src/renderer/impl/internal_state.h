@@ -8,6 +8,7 @@
 #include "pipeline_keying.h"
 
 #include "shaders.h"
+#include "mapped_linear_allocator.h"
 #include "renderpasses/metadata.h"
 #include "game_resources.h"
 
@@ -63,11 +64,11 @@ typedef struct RenderState
     // FUTURE: If multithreading drawcalls are needed, see this article on sharing pipelines while using seperate maps per thread:
     //         https://ruby0x1.github.io/machinery_blog_archive/post/vulkan-pipelines-and-render-states/index.html    
     PipelineEntry* pipeline_map;  // Recreated only when swapchain format changes (so never under most circumstances)
-    ShaderRegistry shader_registry;
-    TransientBuffer object_transforms;
 
-    // IDs into registry, framegraph, or pipeline hash
-    ResourceIDs rids;
+    // TODO: Move this shit to a more game local directory instead of internal state
+    ShaderRegistry shader_registry;
+    MappedArena object_transforms;
+    ResourceIDs rids;  // IDs into registry, framegraph, or pipeline hash
 
     // Per Frame Table for converting Pass Type into framegraph.passes array index
     uint32_t pass_id_from_type[PASS_TYPE_COUNT];  // ONLY use after framegraph has been build that frame

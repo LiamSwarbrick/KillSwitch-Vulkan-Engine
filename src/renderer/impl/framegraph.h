@@ -151,21 +151,21 @@ FG_ResourceType;
 
 typedef enum
 {
-    FG_RESOURCE_FLAGS_NONE = 0,
     FG_RESOURCE_FLAGS_WINDOW_DEPENDENT = 1 << 0,  // On resize, recreate these.
+    FG_RESOURCE_FLAGS_ON_STARTUP       = 1 << 1,  // E.g. shader storage buffers, the splash screen texture, also font bitmaps maybe.
+    FG_RESOURCE_FLAGS_SCENE_DEPENDENT  = 1 << 2,  // Loads for current scene (unloads things from last scene automatically)
 }
 FG_ResourceFlags;
 
-typedef struct ResourceBufferData
+typedef struct BufferResourceData
 {
     VkBuffer handle;
-
     uint32_t size;
-    void* mapped_data;  // Useful for uniform/storage updates, e.g. CPU side light assignment
+    void* mapped_data;  // NULL if not CPU mapped. Useful for uniform/storage updates, e.g. CPU side light assignment
 }
-ResourceBufferData;
+BufferResourceData;
 
-typedef struct ResourceImageData
+typedef struct ImageResourceData
 {
     VkImage                 handle;
     VkImageView             view;
@@ -176,7 +176,7 @@ typedef struct ResourceImageData
     VkImageUsageFlags       usage;   // Tells us if we can go into BindlessHeap (when has SAMPLED_BIT)
     VkImageSubresourceRange subresource_range;  // Required for barriers
 }
-ResourceImageData;
+ImageResourceData;
 
 typedef struct ResourceCreateInfo
 {
@@ -191,8 +191,8 @@ uint32_t FG_CreateResource(const char* debug_name, FG_ResourceType type, FG_Reso
 
 typedef union ResourceImportInfo
 {
-    ResourceBufferData buffer;
-    ResourceImageData image;
+    BufferResourceData buffer;
+    ImageResourceData image;
 }
 ResourceImportInfo;
 uint32_t FG_ImportResource(const char* debug_name, FG_ResourceType type, FG_ResourceFlags flags, ResourceImportInfo import_info);
@@ -204,8 +204,8 @@ typedef struct FG_Resource
     FG_ResourceFlags flags;
     union
     {
-        ResourceBufferData buffer;
-        ResourceImageData image;
+        BufferResourceData buffer;
+        ImageResourceData image;
     }; 
     VmaAllocation allocation;  // NOTE: For imported resources like swapchain images set to VK_NULL_HANDLE.
 

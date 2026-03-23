@@ -28,17 +28,31 @@ typedef enum
 }
 MaterialType;
 
+typedef struct MeshBufferRIDs
+{
+    uint32_t index_buf_rid;
+    uint32_t joints_buffer_rid;
+
+    // Set to UINT32_MAX for unused attribute (specifically cuz static meshes don't have joints)
+    uint32_t v_pos_buf_rid;
+    uint32_t v_texcoord_buf_rid;
+    uint32_t v_normal_buf_rid;
+    uint32_t v_color_buf_rid;
+    uint32_t v_joint_ids_buf_rid;
+    uint32_t v_joint_weights_buf_rid;    
+}
+MeshRIDs;
+
 typedef struct Renderable
 {
-    uint32_t mesh_rid;      // Buffer containing Vertex data
-    uint32_t material_id;   // Index into the global Material SSBO
-    
-    uint64_t object_ptr;    // GPU Address of the mat4 Model Matrix
-    uint64_t joint_ptr;     // GPU Address of Joint matrices (0 if static)
-    
-    uint32_t vertex_type;
-    MaterialType mat_type;
-    float sort_depth;
+    uint32_t     vertex_type;  // Static or skinned (FUTURE: morph target?)
+    MaterialType mat_type;     // Selects which shader to use (or multiple shaders if it's a multipass material type)
+    float        sort_depth;   // <-TODO unused.
+
+    MeshBufferRIDs mesh_rids;  // The buffers containing the vertex and index data
+    uint32_t material_idx;     // Index into the global Material SSBO
+    uint64_t object_ptr;       // GPU Address of the ObjectData (e.g. model matrix)
+    uint64_t joint_ptr;        // GPU Address of Joint matrices (0 if static)
 }
 Renderable;
 

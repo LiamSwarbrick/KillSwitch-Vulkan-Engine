@@ -214,7 +214,8 @@ workspace "AdventureEngine"
             -- Shader src
             SRC .. "renderer/shadersrc/**.vert",
             SRC .. "renderer/shadersrc/**.frag",
-            SRC .. "renderer/shadersrc/**.comp"
+            SRC .. "renderer/shadersrc/**.comp",
+            SRC .. "renderer/shadersrc/**.glsl"
         }
 
         defines {
