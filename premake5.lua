@@ -178,7 +178,10 @@ workspace "AdventureEngine"
 
         files {
             SRC .. "ecs/**.hpp",
+            SRC .. "ecs/**.h",
             SRC .. "ecs/impl/**.hpp"
+            SRC .. "ecs/impl/**.cpp",
+            SRC .. "ecs/impl/**.h",
         }
 
         includedirs { 
