@@ -19,12 +19,11 @@ void main()
     // Cast pointers
     SceneData scene  = SceneBuffer(pc.scene_ptr).scene;
     ObjectData obj   = ObjectBuffer(pc.object_ptr).object;
-    // VertexBuffer vb  = VertexBuffer(pc.vertex_ptr);
-    IndexBuffer ib   = IndexBuffer(pc.index_ptr);
     
     // Pull vertex data
+    IndexBuffer ib   = IndexBuffer(pc.index_ptr);
     uint index = ib.indices[gl_VertexIndex];
-    // Vertex v = vb.vertices[index];
+
     vec3 v_pos    = VPositionBuffer(pc.v_positions_ptr).positions[index];
     vec2 v_uv     = VTexcoordBuffer(pc.v_texcoords_ptr).texcoords[index];
     vec3 v_normal = VNormalBuffer(pc.v_normals_ptr).normals[index];
@@ -32,7 +31,7 @@ void main()
     
     mat4 model_matrix = obj.model;
 
-    // Optional Skinning Logic (shader specialization constants, btw)
+    // Optional Skinning Logic (shader specialization constants btw)
     if (CURRENT_VERTEX_TYPE == VERTEX_TYPE_SKINNED)
     {
         // Pull skinned vertex data

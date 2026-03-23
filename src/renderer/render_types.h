@@ -41,7 +41,7 @@ typedef struct MeshBufferRIDs
     uint32_t v_joint_ids_buf_rid;
     uint32_t v_joint_weights_buf_rid;    
 }
-MeshRIDs;
+MeshBufferRIDs;
 
 typedef struct Renderable
 {
