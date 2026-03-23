@@ -86,7 +86,7 @@ local function ensure_sdl_built()
     if os.host() == "windows" then
         cmd = table.concat({
             "cd " .. SDL_BUILD_DIR,
-            "cmake .. -DSDL_TESTS=OFF",
+            "cmake .. -G \"Visual Studio 17 2022\" -DSDL_TESTS=OFF",
             "cmake --build . --config " .. sdl_build_type,
         }, " && ")
     else
