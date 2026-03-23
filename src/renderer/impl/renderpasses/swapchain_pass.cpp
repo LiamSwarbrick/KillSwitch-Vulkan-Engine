@@ -6,7 +6,7 @@
 
 void SwapchainPass_Execute(VkCommandBuffer cmd, void* user_data)
 {
-    int N = 45;
+    int N = 32;
     for (int i = 0; i < N; ++i)
     {
         // TEMP: Hardcode our Test Renderable

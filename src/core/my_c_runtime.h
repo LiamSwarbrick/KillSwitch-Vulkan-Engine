@@ -5,10 +5,6 @@
 extern "C" {
 #endif
 
-#ifndef __clang__
-    #define _Nullable  // <- When not using clang, set _Nullable to nothing.
-#endif
-
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>

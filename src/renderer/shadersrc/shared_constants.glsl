@@ -64,6 +64,8 @@ struct MaterialData
 
 
 #ifdef __cplusplus
+    static_assert(sizeof(GraphicsPushConstants) <= 128);
+
     // I want to keep this C compatiable.
     typedef struct GraphicsPushConstants GraphicsPushConstants;
     typedef struct SceneData SceneData;

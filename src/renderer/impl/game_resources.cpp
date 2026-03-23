@@ -151,10 +151,10 @@ void create_startup_resources()
     // };
     uint32_t quad_indices[6] = { 0, 1, 2, 0, 3, 1 };
     glm::vec3 quad_positions[4] = {
-        { 0.0f, 0.0f, 0.0f},
-        { 1.0f, 1.0f, 0.0f},
-        { 0.0f, 1.0f, 0.0f},
-        { 1.0f, 0.0f, 0.0f}
+        { 0.0f, 0.0f, 0.0f },
+        { 1.0f, 1.0f, 0.0f },
+        { 0.0f, 1.0f, 0.0f },
+        { 1.0f, 0.0f, 0.0f }
     };
     glm::vec2 quad_uvs[4] = {
         {0.0f, 0.0f},
@@ -174,7 +174,7 @@ void create_startup_resources()
         {0,0,1},
         {0,1,1}
     };
-    create_mesh_resources("QuadMesh", flags, 6, 4, quad_indices,
+    renderstate.rids.dummy_mesh = create_mesh_resources("QuadMesh", flags, 6, 4, quad_indices,
         quad_positions, quad_uvs, quad_normals, quad_colors, NULL, NULL
     );
 
