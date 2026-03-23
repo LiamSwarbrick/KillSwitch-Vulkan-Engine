@@ -4,10 +4,45 @@ bl_info = {
     "category": "Object",
 }
 
-
-import bpy
+import bpy, math
 from bpy_extras.io_utils import ExportHelper
 
+
+
+COMPONENT_PROPERTIES = {
+
+    'PLAYER': {
+    "game_player": True,
+    "game_health": 100
+     },
+     
+    'ENEMY_SPAWNPOINT': {
+    "game_enemy_spawnpoint": True,
+    "game_enemy_type": "ZOMBIE", 
+    "game_spawnrate": 5
+    }
+    
+}
+
+
+COMPONENT_UI = [
+    ('PLAYER', "Player", "Add Health"),
+    ('ENEMY_SPAWNPOINT', "Enemy Spawnpoint", "Add Enemy Type and Spawn rate"),
+]
+
+
+# --- COMPONENTS DROPDOWN ---
+def components():
+    bpy.types.Scene.active_component_type = bpy.props.EnumProperty(
+        name="Component",
+        items=COMPONENT_UI,
+        default='PLAYER'
+    )
+    bpy.types.Object.show_custom_properties = bpy.props.BoolProperty(
+        name="Show Custom Properties",
+        default=True
+    )
+    
 
 # --- COLLIDER TYPES DROPDOWN ---
 def collider_types():
@@ -21,6 +56,55 @@ def collider_types():
         ],
         default='BOX'
     )
+    
+
+# --- CREATING ROOM BASE ------------------------
+class MESH_OT_create_room_template(bpy.types.Operator):
+    bl_idname = "object.create_room_template"
+    bl_label = "Generate Basic Room"
+    bl_options = {'REGISTER', 'UNDO'}
+
+    def create_wall(self, name, loc, scale, parent):
+        # Create a wall mesh
+        bpy.ops.mesh.primitive_cube_add(size=1.0, location=loc)
+        wall = bpy.context.active_object
+        wall.name = name
+        wall.scale = scale
+        bpy.ops.object.transform_apply(location=False, rotation=False, scale=True)
+        wall.parent = parent
+        
+        # Create a wall collider
+        bpy.ops.mesh.primitive_cube_add(size=1.0, location=(0, 0, 0))
+        wall_col = bpy.context.active_object
+        wall_col.name = "COL_" + name
+        wall_col.scale = scale
+        bpy.ops.object.transform_apply(location=False, rotation=False, scale=True)
+        wall_col.parent = wall
+        
+        # Apply custom collider properties
+        wall_col["game_is_collider"] = True
+        wall_col["game_collider_type"] = "BOX"
+        wall_col.display_type = 'WIRE'
+        wall_col.color = (0.15, 1.0, 0.95, 1.0) # Cyan
+
+    def execute(self, context):
+        # Create a root object
+        bpy.ops.object.empty_add(type='SPHERE', location=(0,0,0))
+        root = bpy.context.active_object
+        root.name = "ROOM_Prefab"
+        root.show_in_front = True
+        
+        # Create the floor (10x10x0.2)
+        self.create_wall("Floor", (0, 0, -0.1), (10, 10, 0.2), root)
+
+        # Create the walls (10x3x0.2)
+        self.create_wall("Wall_N", (0, 5, 1.5), (10, 0.2, 3), root)
+        self.create_wall("Wall_S", (0, -5, 1.5), (10, 0.2, 3), root)
+        self.create_wall("Wall_E", (5, 0, 1.5), (0.2, 10, 3), root)
+        self.create_wall("Wall_W", (-5, 0, 1.5), (0.2, 10, 3), root)
+
+        self.report({'INFO'}, "10x10 Room Template Generated")
+        return {'FINISHED'}
 
 
 # --- COLLIDER TYPE SETTING ----------------
@@ -99,6 +183,57 @@ class MESH_OT_assign_trigger(bpy.types.Operator):
         
         self.report({'INFO'}, f"Converted {obj.name} to {trigger_type} trigger")
         return {'FINISHED'}
+    
+    
+# --- ADD OBJECT COMPONENT -------------------
+class MESH_OT_add_component(bpy.types.Operator):
+    bl_idname = "object.add_component"
+    bl_label = "Add Component"
+    bl_options = {'REGISTER', 'UNDO'}
+    
+    def execute(self, context):
+        obj = context.active_object
+        
+        if obj is None:
+            self.report({'ERROR'}, "Select an object")
+            return {'CANCELLED'}
+        
+        # Get currently selected component properties from dictionary
+        component = context.scene.active_component_type
+        properties = COMPONENT_PROPERTIES.get(component, {})
+        
+        # Create new chosen custom properties 
+        for key, value in properties.items():
+            obj[key] = value
+            
+        self.report({'INFO'}, f"Added {component} properties to {obj.name}")
+        return {'FINISHED'}
+    
+    
+# --- REMOVE OBJECT COMPONENT -------------------
+class MESH_OT_remove_component(bpy.types.Operator):
+    bl_idname = "object.remove_component"
+    bl_label = "Remove Component"
+    bl_options = {'REGISTER', 'UNDO'}
+    
+    def execute(self, context):
+        obj = context.active_object
+        
+        if obj is None:
+            self.report({'ERROR'}, "Select an object")
+            return {'CANCELLED'}
+        
+        # Get currently selected component properties from dictionary
+        component = context.scene.active_component_type
+        properties = COMPONENT_PROPERTIES.get(component, {})
+        
+        # Create new chosen custom properties 
+        for key in properties.keys():
+            if key in obj:
+                del obj[key]
+            
+        self.report({'INFO'}, f"Removed {component} properties from {obj.name}")
+        return {'FINISHED'}
 
 
 # --- TOGGLE PHYSICS VIEW ------------
@@ -149,7 +284,7 @@ class EXPORT_OT_level_glb(bpy.types.Operator, ExportHelper):
     filename_ext = ".glb"
 
     def execute(self, context):
-        # All custom properties that want exporting should have this prefix! -----
+        # All custom properties that want exporting should have this prefix!!!!!
         prefix = "game_"
         
         # Clean all BlenderKit metadata from nodes custom properties
@@ -201,8 +336,47 @@ class LEVEL_PT_editor_panel(bpy.types.Panel):
     def draw(self, context):
         layout = self.layout
         scene = context.scene
+        obj = context.active_object
         
-        # Assigning colliders from the dropdown
+        # Creating a basic room structure
+        box = layout.box()
+        box.label(text="Create Room", icon='CHECKMARK')
+        box.operator("object.create_room_template", icon='PRESET')
+        
+        layout.separator()
+        
+        # Assigning custom properties for components
+        box = layout.box()
+        box.label(text="Add Components", icon='ADD')
+        box.prop(scene, "active_component_type")
+        box.operator("object.add_component", icon='PLUS')
+        box.operator("object.remove_component", icon='TRASH')
+        box.separator(factor=3.0)
+        
+        # Easy editing of current custom properties for selected object
+        if obj:
+            # Make the list collapsible
+            row = box.row(align=True)
+            row.prop(obj, "show_custom_properties", text="", icon='TRIA_DOWN')
+            row.label(text=f"OBJECT PROPERTIES: {obj.name}", icon='PROPERTIES')
+            
+            # If visible, get all user-added custom properties
+            if obj.show_custom_properties:
+                custom_properties = []
+                for key in obj.keys():
+                    if key.startswith("game_"):
+                        custom_properties.append(key)
+                
+                # List references to all found custom properties so they are editable
+                if len(custom_properties) > 0:
+                    for property in custom_properties:
+                        box.prop(obj, f'["{property}"]', text=property)
+                else:
+                    box.label(text="No game components found.", icon='INFO')
+        
+        layout.separator()
+        
+        # Assigning colliders/triggers from the dropdown
         box = layout.box()
         box.label(text="Collision Setup", icon='MOD_PHYSICS')
         box.prop(scene, "active_collision_type")
@@ -228,9 +402,13 @@ class LEVEL_PT_editor_panel(bpy.types.Panel):
 
 # --- REGISTRATION ---
 def register():
+    components()
     collider_types()
+    bpy.utils.register_class(MESH_OT_create_room_template)
     bpy.utils.register_class(MESH_OT_assign_collider)
     bpy.utils.register_class(MESH_OT_assign_trigger)
+    bpy.utils.register_class(MESH_OT_add_component)
+    bpy.utils.register_class(MESH_OT_remove_component)
     bpy.utils.register_class(VIEW_OT_toggle_physics_visual)
     bpy.utils.register_class(LEVEL_PT_editor_panel)
     bpy.utils.register_class(EXPORT_OT_level_glb)
