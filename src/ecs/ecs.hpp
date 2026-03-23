@@ -1,7 +1,10 @@
 #ifndef ECS_HPP
 #define ECS_HPP
 
-#include "registry.hpp"
-#include "view.hpp"
+
+#include "impl/registry.hpp"
+#include "impl/view.hpp"
+#include "impl/entity.hpp"
+
 
 #endif //ECS_HPP

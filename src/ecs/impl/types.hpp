@@ -1,7 +1,7 @@
 #ifndef ECS_TYPES_HPP
 #define ECS_TYPES_HPP
 
-#include "my_c_runtime.h"
+#include "core/my_c_runtime.h"
 
 #include <bitset>
 #include <limits>

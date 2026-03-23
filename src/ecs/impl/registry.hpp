@@ -1,6 +1,8 @@
 #ifndef ECS_REGISTRY_HPP
 #define ECS_REGISTRY_HPP
 
+#include "SDL3/SDL.h"
+
 #include "types.hpp"
 #include "sparse_set.hpp"
 
@@ -16,6 +18,12 @@ namespace AdvEng
 	{
 
 	private:
+
+		// forward declaring View
+		template <typename...>
+		class View;
+
+		class Entity;
 
 		// Just for debugging.
 		// Needs to be inline
@@ -98,7 +106,7 @@ namespace AdvEng
 
 		ComponentMask& GetEntityMask(EntityID id)
 		{
-			// SDL_assert(IsEntityValid(id));
+			SDL_assert(IsEntityValid(id));
 
 			ComponentMask* mask = m_entityMasks.GetPtr(id);
 			return *mask;
@@ -133,8 +141,8 @@ namespace AdvEng
 			{
 				if (m_maxID >= MAX_ENTITIES)
 				{
-					// SDL_log("Max number of entities reached");
-					// SDL_assert(false);
+					// SDL_ log (not logarithm) ("Max number of entities reached");
+					SDL_assert(false);
 				}
 				// Don't forget to increment the maxID
 				id = m_maxID++;
@@ -153,7 +161,6 @@ namespace AdvEng
 			if (!tag.empty())
 				m_entityTags.Set(id, tag);
 
-			//SEECS_INFO("Created entity " << ENTITY_INFO(id));
 			return id;
 		}
 
@@ -165,7 +172,7 @@ namespace AdvEng
 
 		std::string GetEntityTag(EntityID id)
 		{
-			// SDL_assert(IsEntityValid(id));
+			SDL_assert(IsEntityValid(id));
 
 			std::string* tag = m_entityTags.GetPtr(id);
 			if (tag)
@@ -177,7 +184,7 @@ namespace AdvEng
 
 		void DeleteEntity(EntityID id)
 		{
-			// SDL_assert(IsEntityValid(id));
+			SDL_assert(IsEntityValid(id));
 
 			std::string tag = GetEntityTag(id);
 			ComponentMask& mask = GetEntityMask(id);
@@ -207,20 +214,18 @@ namespace AdvEng
 			if (index >= m_componentPools.size())
 				m_componentPools.resize(index + 1);
 
-			/*SEECS_ASSERT(!m_componentPools[index],
-				"Attempting to register component '" << typeid(T).tag() << "' twice");*/
+			// Check if we're not registering a component twice
+			SDL_assert(!m_componentPools[index]);
 
 			m_componentPools[index] = std::make_unique<SparseSet<T>>();
-
-			//SEECS_INFO("Registered component '" << typeid(T).tag() << "'");
 		}
 
 		// Adds a component to an entity
-		// ecs.Add<RenderableComponent>(id, Renderable{...data...});
+		// ecs.AddComponent<RenderableComponent>(id, Renderable{...data...});
 		template <typename T>
-		T& Add(EntityID id, T&& component = {})
+		T& AddComponent(EntityID id, T&& component = {})
 		{
-			// SDL_assert(IsEntityValid(id));
+			SDL_assert(IsEntityValid(id));
 
 			SparseSet<T>& pool = GetComponentPool<T>();
 
@@ -235,11 +240,11 @@ namespace AdvEng
 		}
 
 		// Removes a component from an entity
-		// ecs.Remove<RenderableComponent>(id);
+		// ecs.RemoveComponent<RenderableComponent>(id);
 		template <typename T>
-		void Remove(EntityID id)
+		void RemoveComponent(EntityID id)
 		{
-			// SDL_assert(IsEntityValid(id));
+			SDL_assert(IsEntityValid(id));
 
 			SparseSet<T>& pool = GetComponentPool<T>();
 
@@ -252,12 +257,12 @@ namespace AdvEng
 		}
 
 		template <typename T>
-		T& Get(EntityID id)
+		T& GetComponent(EntityID id)
 		{
-			// SDL_assert(IsEntityValid(id));
+			SDL_assert(IsEntityValid(id));
 			// We could check the pointer after returning if this is not too performant
-			// SDL_assert(GetComponentBit<T>(mask));
-			// SDL_assert(component); // after calling pool.Get(id);
+			SDL_assert(GetComponentBit<T>(mask));
+			SDL_assert(component); // after calling pool.GetComponent(id);
 
 			SparseSet<T>& pool = GetComponentPool<T>();
 			T& component = pool.Get(id);
@@ -267,10 +272,10 @@ namespace AdvEng
 
 		// Returns the component pointer of the entity
 		template <typename T>
-		T* GetPtr(EntityID id)
+		T* GetComponentPtr(EntityID id)
 		{
-			// SDL_assert(IsEntityValid(id));
-			// SDL_assert(GetComponentBit<T>(mask));
+			SDL_assert(IsEntityValid(id));
+			SDL_assert(GetComponentBit<T>(mask));
 
 			SparseSet<T>& pool = GetComponentPool<T>();
 			return pool.GetPtr(id);
@@ -307,12 +312,12 @@ namespace AdvEng
 		}
 
 		template <typename... Types>
-		friend class View;
-
-		template <typename... Types>
-		View<Types...> View()
+		View<Types...> GetView()
 		{
-			return { this };
+			// default constructor using our ECS
+			// return
+			return View<Types...>(this);
+			//return { this };
 		}
 
 	};

@@ -1,11 +1,11 @@
 #ifndef ECS_VIEW_HPP
 #define ECS_VIEW_HPP
 
+#include "SDL3/SDL.h"
 
 #include "types.hpp"
 #include "sparse_set.hpp"
 #include "registry.hpp"
-//#include "entity.hpp"
 
 #include <vector>
 #include <algorithm>
@@ -115,7 +115,7 @@ namespace AdvEng
 
 					else
 					{
-						// SDL_assert(false);
+						SDL_assert(false);
 					}
 				}
 			}
@@ -131,7 +131,7 @@ namespace AdvEng
 			m_ecs(ecs), m_viewPools{ ecs->GetComponentPoolPtr<Components>()... }
 		{
 			// Should not happen if we're using Component Types that ARE in the ECS
-			// SDL_assert(m_viewPools.size() == componentTypes::size)
+			SDL_assert(m_viewPools.size() == componentTypes::size)
 
 			// Determines the smallest pool of all the component pools given via template.
 			// This will work cause in the ForEach loop, we check if the EntityID is contained / not excluded in the rest of the pools
@@ -140,7 +140,8 @@ namespace AdvEng
 				[](ISparseSet* a, ISparseSet* b) { return a->Size() < b->Size(); }
 			);
 
-			//SEECS_ASSERT(smallestPool != m_viewPools.end(), "Initializing invalid/empty view");
+		
+			SDL_assert(smallestPool != m_viewPools.end());
 
 			m_smallest = *smallestPool;
 		}
