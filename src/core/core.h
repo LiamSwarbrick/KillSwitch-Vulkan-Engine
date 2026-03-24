@@ -2,6 +2,7 @@
 #define ENGINE_CORE_H
 
 #include "my_c_runtime.h"
+#include "assetsys.h"
 #include <stdbool.h>
 
 #include "SDL3/SDL.h"

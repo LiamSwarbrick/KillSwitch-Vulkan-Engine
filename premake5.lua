@@ -155,7 +155,8 @@ workspace "AdventureEngine"
 
         files {
             SRC .. "core/**.h",
-            SRC .. "core/impl/**.cpp"
+            SRC .. "core/impl/**.cpp",
+            SRC .. "core/assetsys/**.c"
         }
 
         includedirs { 
@@ -163,7 +164,8 @@ workspace "AdventureEngine"
             SRC .. "core",
             SRC .. "core/impl",  -- Internal include headers
             include_paths.SDL3,
-            include_paths.glm
+            include_paths.glm,
+            include_paths.cgltf
         }
 
         libdirs {
@@ -241,7 +243,8 @@ workspace "AdventureEngine"
             include_paths.Vulkan,
             include_paths.VMA,
             include_paths.glm,
-            include_paths.stb
+            include_paths.stb,
+            include_paths.cgltf
         }
 
         libdirs {
@@ -284,15 +287,12 @@ workspace "AdventureEngine"
 
         files {
             SRC .. "game/**.h",
-            SRC .. "game/**.cpp",
-            SRC .. "assetsys/**.c",
-            SRC .. "assetsys/**.h"
+            SRC .. "game/**.cpp"
         }
 
         includedirs {
             SRC,
             SRC .. "game/include",
-            SRC .. "assetsys",
             include_paths.SDL3,
             include_paths.glm,
             include_paths.cgltf
