@@ -3,6 +3,7 @@
 
 #include "SDL3/SDL.h"
 #include "SDL3/SDL_main.h"
+#include "assetsys/assetsys.h"
 
 int main(int argc, char *argv[])
 {
@@ -24,6 +25,13 @@ int main(int argc, char *argv[])
     // uint16_t shader_id = Renderer_RegisterShaders()
 
     bool running = true;
+
+    //load scene
+	Asset* asset1 = load_asset("assets/levels/shapes.gltf");
+    Asset* asset2 = load_asset("assets/props/cube.gltf");
+    Asset* asset3 = load_asset("assets/animations/ExtrasTest.gltf");
+    SDL_Log("Asset 3 Extras: %s\n", asset3->nodes[0].extras_json);
+
     while (running)
     {
         // Event Loop
