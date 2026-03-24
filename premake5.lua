@@ -174,6 +174,39 @@ workspace "AdventureEngine"
             "SDL3"   -- The lib we just built via cmake in prebuildcommands
         }
 
+     -- --------------------------------------------------------------------
+    -- ECS Module
+    -- --------------------------------------------------------------------
+    project "ecs"
+        kind "StaticLib"
+        language "C++"
+        cppdialect "C++23"
+
+        files {
+            SRC .. "ecs/**.hpp",
+            SRC .. "ecs/**.h",
+            SRC .. "ecs/impl/**.hpp",
+            SRC .. "ecs/impl/**.cpp",
+            SRC .. "ecs/impl/**.h"
+        }
+
+        includedirs { 
+            SRC,  -- Exported API headers
+            SRC .. "ecs",
+            SRC .. "ecs/impl",  -- Internal include headers
+            include_paths.SDL3
+        }
+
+        libdirs {
+            lib_dirs.SDL3
+        }
+
+        links {
+            "core",
+            "SDL3"   -- The lib we just built via cmake in prebuildcommands
+        }
+
+
 
     -- --------------------------------------------------------------------
     -- Renderer Module (Vulkan implementation)
