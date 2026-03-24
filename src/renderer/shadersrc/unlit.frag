@@ -29,12 +29,12 @@ void main()
     vec4 final_color = mat.base_color * vec4(in_vcolor, 1.0);
 
     // Bindless Sampling
-    if (mat.texture_idx != 0xFFFFFFFF)  // UINT32_MAX for 'no texture'
+    if (mat.texture_idx_basecolor != 0xFFFFFFFF)  // UINT32_MAX for 'no texture'
     {
         // As per GL_EXT_nonuniform_qualifier
         // "nonuniformEXT()" is required when indexing a descriptor array with a dynamic variable
         final_color *= texture(sampler2D(
-            global_textures[nonuniformEXT(mat.texture_idx)],
+            global_textures[nonuniformEXT(mat.texture_idx_basecolor)],
             global_samplers[mat.sampler_idx]),
             in_uv
         );
@@ -48,6 +48,5 @@ void main()
     }
 
     out_color = final_color;
-
     // out_color = vec4(1.0, 0.0, 0.0, 1.0);
 }

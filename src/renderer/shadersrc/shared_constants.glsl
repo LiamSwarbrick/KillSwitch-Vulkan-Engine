@@ -56,7 +56,8 @@ struct MaterialData
 {
     // TODO: Change this to a standard glTF pbr material instead of this shit
     vec4 base_color;
-    uint32_t texture_idx;
+    uint32_t texture_idx_basecolor;
+    
     uint32_t sampler_idx;
     float alpha_cutoff;
     uint32_t padding[1];

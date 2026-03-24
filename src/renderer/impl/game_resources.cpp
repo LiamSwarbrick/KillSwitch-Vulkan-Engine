@@ -6,10 +6,14 @@ void create_startup_resources();
 void create_window_dependent_resources();
 
 uint32_t create_resource_with_buffer_data(const char* debug_name, FG_ResourceFlags flags, VkBufferUsageFlags usage, size_t size, void* data);
-MeshRIDs create_mesh_resources(const char* debug_name, FG_ResourceFlags shared_flags, uint32_t index_count, uint32_t vertex_count,
+MeshBufferRIDs create_mesh_resources(
+    const char* debug_name, FG_ResourceFlags shared_flags, uint32_t index_count, uint32_t vertex_count,
     uint32_t* indices,
     glm::vec3* positions, glm::vec2* texcoords, glm::vec3* normals, glm::vec3* colors,
-    glm::uvec4* joint_ids, glm::vec4* joint_weights);
+    glm::uvec4* joint_ids, glm::vec4* joint_weights  // Joints only for skinned meshes
+);
+
+
 
 void CreateOrRecreateResources(FG_ResourceFlags types_to_create)
 {
@@ -125,16 +129,15 @@ void create_startup_resources()
 
 
 
-    /////////////////////
+    /////// MOVE BELOW TO create_scene_resources(scene resource list?) /////////////
     #warning BELOW IS DUMMY DATA, THAT SHOULD NOT BE PART OF startup_resources()
-
     // TODO IMPORTANT: ONLY SLOT 0 OF THE MATERIAL SSBO WILL BE WRITTEN TO WITH THIS LOGIC, CHANGE THIS NEXT
-    // TODO: Change to PBR material
-    // Initial "Dummy" Material Data
+
     // Let's set Material 0 to be a simple White material with no texture
     MaterialData default_mat = {
         .base_color = { 1.0f, 1.0f, 1.0f, 1.0f },
-        .texture_idx = 0xFFFFFFFF,  // Our "No Texture" sentinel
+        .texture_idx_basecolor = 0xFFFFFFFF,
+
         .sampler_idx = FG_SAMPLER_LINEAR_REPEAT,
         .alpha_cutoff = 0.5f
     };
@@ -143,12 +146,6 @@ void create_startup_resources()
     );
 
     // TEST QUAD (TODO: Change to create_mesh_resource or something):
-    // Vertex quad_verts[4] = {
-    //     {{ 0.0f, 0.0f, 0.0f}, {0.0f, 0.0f}, {0,0,1}, {1,0,0,1}, {0,0,0,0}, {0,0,0,0}}, 
-    //     {{ 1.0f, 1.0f, 0.0f}, {1.0f, 1.0f}, {0,0,1}, {0,1,0,1}, {0,0,0,0}, {0,0,0,0}}, 
-    //     {{ 0.0f, 1.0f, 0.0f}, {0.0f, 1.0f}, {0,0,1}, {0,0,1,1}, {0,0,0,0}, {0,0,0,0}},
-    //     {{ 1.0f, 0.0f, 0.0f}, {1.0f, 0.0f}, {0,0,1}, {0,1,1,1}, {0,0,0,0}, {0,0,0,0}},
-    // };
     uint32_t quad_indices[6] = { 0, 1, 2, 0, 3, 1 };
     glm::vec3 quad_positions[4] = {
         { 0.0f, 0.0f, 0.0f },
@@ -287,7 +284,7 @@ uint32_t create_resource_with_buffer_data(const char* debug_name, FG_ResourceFla
     return rid;
 }
 
-MeshRIDs create_mesh_resources(const char* debug_name, FG_ResourceFlags shared_flags, uint32_t index_count, uint32_t vertex_count,
+MeshBufferRIDs create_mesh_resources(const char* debug_name, FG_ResourceFlags shared_flags, uint32_t index_count, uint32_t vertex_count,
     uint32_t* indices,
     glm::vec3* positions, glm::vec2* texcoords, glm::vec3* normals, glm::vec3* colors,
     glm::uvec4* joint_ids, glm::vec4* joint_weights)
@@ -301,7 +298,7 @@ MeshRIDs create_mesh_resources(const char* debug_name, FG_ResourceFlags shared_f
                                VK_BUFFER_USAGE_TRANSFER_DST_BIT;
 
 
-    MeshRIDs mesh_rids = {};
+    MeshBufferRIDs mesh_rids = {};
     char debug_resource_name[256] = {};
 
     // Index buffer

@@ -3,6 +3,7 @@ local SRC = "src/"
 
 local SDL_DIR = EXTERNAL .. "SDL"
 local SDL_BUILD_DIR = SDL_DIR .. "/build"
+local SDL_BUILD_FLAGS = "" -- initialized later in the SDL section
 
 local VULKAN_SDK = os.getenv("VULKAN_SDK") or ""
 -- TODO: Check for good enough Vulkan SDK version. e.g. 1.4
@@ -13,6 +14,7 @@ include_paths.Vulkan = VULKAN_SDK .. "/include"
 include_paths.volk = EXTERNAL .. "volk"
 include_paths.VMA = EXTERNAL .. "VMA"
 include_paths.glm = EXTERNAL .. "glm"
+include_paths.cgltf = EXTERNAL .. "cgltf"
 include_paths.stb = EXTERNAL .. "stb"
 
 lib_dirs = {}
@@ -23,6 +25,10 @@ filter "system:windows"
     libdirs { SDL_BUILD_DIR .. "/" .. sdl_build_type }
 filter "not system:windows"
     libdirs { SDL_BUILD_DIR }
+
+if _ACTION == "vs2022" then
+    SDL_BUILD_FLAGS = "-G \"Visual Studio 17 2022\""
+end
 
 -- VULKAN_SDK
 filter "system:windows"
@@ -86,7 +92,7 @@ local function ensure_sdl_built()
     if os.host() == "windows" then
         cmd = table.concat({
             "cd " .. SDL_BUILD_DIR,
-            "cmake .. -DSDL_TESTS=OFF",
+            "cmake " .. SDL_BUILD_FLAGS .. " .. -DSDL_TESTS=OFF",
             "cmake --build . --config " .. sdl_build_type,
         }, " && ")
     else
@@ -137,7 +143,7 @@ workspace "AdventureEngine"
             defines { "NDEBUG" }
             targetprefix "release-"
         filter "*"
-
+    
 
     -- --------------------------------------------------------------------
     -- Core Module (Windowing, Input)
@@ -149,7 +155,8 @@ workspace "AdventureEngine"
 
         files {
             SRC .. "core/**.h",
-            SRC .. "core/impl/**.cpp"
+            SRC .. "core/impl/**.cpp",
+            SRC .. "core/assetsys/**.c"
         }
 
         includedirs { 
@@ -157,7 +164,8 @@ workspace "AdventureEngine"
             SRC .. "core",
             SRC .. "core/impl",  -- Internal include headers
             include_paths.SDL3,
-            include_paths.glm
+            include_paths.glm,
+            include_paths.cgltf
         }
 
         libdirs {
@@ -167,6 +175,39 @@ workspace "AdventureEngine"
         links {
             "SDL3"   -- The lib we just built via cmake in prebuildcommands
         }
+
+     -- --------------------------------------------------------------------
+    -- ECS Module
+    -- --------------------------------------------------------------------
+    project "ecs"
+        kind "StaticLib"
+        language "C++"
+        cppdialect "C++23"
+
+        files {
+            SRC .. "ecs/**.hpp",
+            SRC .. "ecs/**.h",
+            SRC .. "ecs/impl/**.hpp",
+            SRC .. "ecs/impl/**.cpp",
+            SRC .. "ecs/impl/**.h"
+        }
+
+        includedirs { 
+            SRC,  -- Exported API headers
+            SRC .. "ecs",
+            SRC .. "ecs/impl",  -- Internal include headers
+            include_paths.SDL3
+        }
+
+        libdirs {
+            lib_dirs.SDL3
+        }
+
+        links {
+            "core",
+            "SDL3"   -- The lib we just built via cmake in prebuildcommands
+        }
+
 
 
     -- --------------------------------------------------------------------
@@ -202,7 +243,8 @@ workspace "AdventureEngine"
             include_paths.Vulkan,
             include_paths.VMA,
             include_paths.glm,
-            include_paths.stb
+            include_paths.stb,
+            include_paths.cgltf
         }
 
         libdirs {
@@ -252,7 +294,8 @@ workspace "AdventureEngine"
             SRC,
             SRC .. "game/include",
             include_paths.SDL3,
-            include_paths.glm
+            include_paths.glm,
+            include_paths.cgltf
         }
 
         libdirs {
