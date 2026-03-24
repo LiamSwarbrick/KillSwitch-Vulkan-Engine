@@ -13,6 +13,7 @@ static int get_node_index(cgltf_data* data, cgltf_node* target) { return target 
 static int get_material_index(cgltf_data* data, cgltf_material* target) { return target ? (int)(target - data->materials) : -1; }
 static int get_texture_index(cgltf_data* data, cgltf_texture* target) { return target ? (int)(target - data->textures) : -1; }
 static int get_image_index(cgltf_data* data, cgltf_image* target) { return target ? (int)(target - data->images) : -1; }
+static int get_sampler_index(cgltf_animation* anim, cgltf_animation_sampler* target) { return target ? (int)(target - anim->samplers) : -1; }
 
 // Helper for copying strings
 static char* duplicate_string(const char* src) {
@@ -61,6 +62,7 @@ Asset* load_asset(const char* filename) {
 	asset->camera_count = data->cameras_count;
 	asset->light_count = data->lights_count;
 	asset->node_count = data->nodes_count;
+	asset->animation_count = data->animations_count;
 
 	// Allocate arrays
 	if (asset->mesh_count > 0) asset->meshes = (Mesh*)calloc(asset->mesh_count, sizeof(Mesh));
@@ -70,6 +72,7 @@ Asset* load_asset(const char* filename) {
 	if (asset->camera_count > 0) asset->cameras = (Camera*)calloc(asset->camera_count, sizeof(Camera));
 	if (asset->light_count > 0) asset->lights = (Light*)calloc(asset->light_count, sizeof(Light));
 	if (asset->node_count > 0) asset->nodes = (Node*)calloc(asset->node_count, sizeof(Node));
+	if (asset->animation_count > 0) asset->animations = (Animation*)calloc(asset->animation_count, sizeof(Animation));
 
 	// Copy Images
 	for (size_t i = 0; i < asset->image_count; i++) {
@@ -92,7 +95,11 @@ Asset* load_asset(const char* filename) {
 			tex->wrap_t = gltf_tex->sampler->wrap_t;
 		}
 		else {
-			// Set defaults
+			// Set defaults in renderer
+			tex->mag_filter = 0;
+			tex->min_filter = 0;
+			tex->wrap_s = 0;
+			tex->wrap_t = 0;
 		}
 	}
 
@@ -104,9 +111,11 @@ Asset* load_asset(const char* filename) {
 		mat->name = duplicate_string(gltf_mat->name);
 
 		// Map textures
-		mat->base_color_texture_index = gltf_mat->has_pbr_metallic_roughness ? get_texture_index(data, gltf_mat->pbr_metallic_roughness.base_color_texture.texture) : -1;
-		mat->metallic_roughness_texture_index = gltf_mat->has_pbr_metallic_roughness ? get_texture_index(data, gltf_mat->pbr_metallic_roughness.metallic_roughness_texture.texture) : -1;
-		mat->specular_glossiness_texture_index = -1;
+		mat->base_color_texture_index = gltf_mat->has_pbr_metallic_roughness && gltf_mat->pbr_metallic_roughness.base_color_texture.texture ? get_texture_index(data, gltf_mat->pbr_metallic_roughness.base_color_texture.texture) : -1;
+		mat->metallic_roughness_texture_index = gltf_mat->has_pbr_metallic_roughness && gltf_mat->pbr_metallic_roughness.metallic_roughness_texture.texture ? get_texture_index(data, gltf_mat->pbr_metallic_roughness.metallic_roughness_texture.texture) : -1;
+		mat->normal_map_texture_index = gltf_mat->normal_texture.texture ? get_texture_index(data, gltf_mat->normal_texture.texture) : -1;
+		mat->emissive_texture_index = gltf_mat->emissive_texture.texture ? get_texture_index(data, gltf_mat->emissive_texture.texture) : -1;
+		mat->occlusion_texture_index = gltf_mat->occlusion_texture.texture ? get_texture_index(data, gltf_mat->occlusion_texture.texture) : -1;
 
 		if (gltf_mat->has_pbr_metallic_roughness) {
 			memcpy(mat->base_color, gltf_mat->pbr_metallic_roughness.base_color_factor, sizeof(float) * 4);
@@ -118,6 +127,9 @@ Asset* load_asset(const char* filename) {
 			mat->metallic = 1.0f;
 			mat->roughness = 1.0f;
 		}
+
+		memcpy(mat->emissive_factor, gltf_mat->emissive_factor, sizeof(float) * 3);
+		mat->alpha_cutoff = gltf_mat->alpha_cutoff;
 	}
 
 	// Copy Cameras
@@ -220,6 +232,57 @@ Asset* load_asset(const char* filename) {
 					cgltf_accessor_unpack_floats(attr->data, prim->texcoords, attr->data->count * 2);
 				}
 			}
+		}
+	}
+
+	// Copy Animations
+	for (size_t i = 0; i < asset->animation_count; i++) {
+		cgltf_animation* gltf_anim = &data->animations[i];
+		Animation* anim = &asset->animations[i];
+
+		anim->name = duplicate_string(gltf_anim->name);
+		anim->sampler_count = gltf_anim->samplers_count;
+		anim->channel_count = gltf_anim->channels_count;
+
+		anim->samplers = (AnimationSampler*)calloc(anim->sampler_count, sizeof(AnimationSampler));
+		anim->channels = (AnimationChannel*)calloc(anim->channel_count, sizeof(AnimationChannel));
+
+		for (size_t s = 0; s < anim->sampler_count; s++) {
+			cgltf_animation_sampler* gltf_samp = &gltf_anim->samplers[s];
+			AnimationSampler* samp = &anim->samplers[s];
+
+			samp->interpolation = gltf_samp->interpolation;
+
+			// Input times
+			if (gltf_samp->input) {
+				samp->input_count = gltf_samp->input->count;
+
+				samp->inputs = (float*)malloc(samp->input_count * sizeof(float));
+				cgltf_accessor_unpack_floats(gltf_samp->input, samp->inputs, samp->input_count);
+			}
+
+			// Output values
+			if (gltf_samp->output) {
+				size_t num_components = cgltf_num_components(gltf_samp->output->type);
+				samp->output_count = gltf_samp->output->count * num_components;
+
+				samp->outputs = (float*)malloc(samp->output_count * sizeof(float));
+				cgltf_accessor_unpack_floats(gltf_samp->output, samp->outputs, samp->output_count);
+			}
+		}
+
+		for (size_t c = 0; c < anim->channel_count; c++) {
+			cgltf_animation_channel* gltf_chan = &gltf_anim->channels[c];
+			AnimationChannel* chan = &anim->channels[c];
+
+			chan->sampler_index = get_sampler_index(gltf_anim, gltf_chan->sampler);
+			chan->target_node_index = get_node_index(data, gltf_chan->target_node);
+
+			// 0=translation, 1=rotation, 2=scale, 3=weights, 4=color
+			if (gltf_chan->target_path == cgltf_animation_path_type_translation) chan->target_path = 0;
+			else if (gltf_chan->target_path == cgltf_animation_path_type_rotation) chan->target_path = 1;
+			else if (gltf_chan->target_path == cgltf_animation_path_type_scale) chan->target_path = 2;
+			else if (gltf_chan->target_path == cgltf_animation_path_type_weights) chan->target_path = 3;
 		}
 	}
 

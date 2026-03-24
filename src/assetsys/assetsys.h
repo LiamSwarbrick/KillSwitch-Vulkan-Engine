@@ -32,18 +32,18 @@ typedef struct Material {
     const char* name;
 
     // PBR properties
-    float base_color[4]; //gltf uses RGBA
+    float base_color[4];  // RGBA
     float metallic;
     float roughness;
+    float emissive_factor[3]; // RGB 
+    float alpha_cutoff;      
 
-    float alpha_mask;
-    float normal_map;
-    float emissive;
-
-    // Texture indices (if any)
-    int base_color_texture_index;
-    int metallic_roughness_texture_index;
-    int specular_glossiness_texture_index;
+    // Texture indices (-1 if not used)
+    int base_color_texture_index;           // Albedo/Diffuse map
+    int metallic_roughness_texture_index;   // Metal/Rough map
+    int normal_map_texture_index;           // Normal map
+    int emissive_texture_index;             // Emission/glow map
+    int occlusion_texture_index;            // Ambient Occlusion map
     
 } Material;
 
@@ -109,10 +109,36 @@ typedef struct Node {
     char* extras_json;
 } Node;
 
+typedef struct AnimationSampler {
+    float* inputs;
+    size_t input_count;
+
+    float* outputs;
+    size_t output_count;
+
+    // Interpolation type: 0 = Linear, 1 = Step, 2 = CubicSpline 
+    int interpolation;
+} AnimationSampler;
+
+typedef struct AnimationChannel {
+    int sampler_index;
+    int target_node_index; // which node is moving
+
+    // Path: 0 = translation, 1 = rotation, 2 = scale, 3 = weights
+    int target_path;
+} AnimationChannel;
+
+typedef struct Animation {
+    const char* name;
+
+    AnimationSampler* samplers;
+    size_t sampler_count;
+
+    AnimationChannel* channels;
+    size_t channel_count;
+} Animation;
 
 typedef struct Asset {
-	Primitive* primitives;
-	size_t primitive_count;
 
     Mesh* meshes;
     size_t mesh_count;
@@ -134,6 +160,9 @@ typedef struct Asset {
 
     Node* nodes;
     size_t node_count;
+
+    Animation* animations;
+    size_t animation_count;
 
 } Asset;
 
