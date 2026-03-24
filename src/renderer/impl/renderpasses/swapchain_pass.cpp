@@ -2,6 +2,8 @@
 #include "../internal_state.h"
 #include "../../render_types.h"
 #include "glm/glm.hpp"
+
+#define _USE_MATH_DEFINES
 #include <math.h>
 
 void SwapchainPass_Execute(VkCommandBuffer cmd, void* user_data)
@@ -15,7 +17,7 @@ void SwapchainPass_Execute(VkCommandBuffer cmd, void* user_data)
         tri_object_data.model[0][0] *= 2.0f/(float)N;
         tri_object_data.model[1][1] *= 4.0f/(float)N;
         tri_object_data.model[3][1] = -1.0f + 2.0f*(float)i/(float)N;
-        tri_object_data.model[3][0] = -1.0f + ((float)(N-1)/(float)N)*(1.0f + sinf(2.0f*M_PIf*(((float)i/(float)N) + (float)(renderstate.frame_number) / 600.0f)));
+        tri_object_data.model[3][0] = -1.0f + ((float)(N-1)/(float)N)*(1.0f + sinf(2.0f*(float)M_PI*(((float)i/(float)N) + (float)(renderstate.frame_number) / 600.0f)));
         tri_object_data.model[0][0] *= fabsf(-1.0f + 8.0f * tri_object_data.model[3][0]);
     
         Renderable tri = {
