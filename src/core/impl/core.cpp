@@ -25,8 +25,9 @@ SDL_Window* Core_Init(Core_InitInfo init_info)
     return window;
 }
 
-void Core_Shutdown()
+void Core_Shutdown(SDL_Window* window)
 {
+    SDL_DestroyWindow(window);
     SDL_Quit();
 
     SDL_Log("Core Shutdown.\n");

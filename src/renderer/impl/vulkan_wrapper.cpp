@@ -1,5 +1,6 @@
 #include "vulkan_wrapper.h"
 #include "core/my_c_runtime.h"
+#include "core/core.h"
 
 // VMA implementation only specified in this one file.
 #define VMA_IMPLEMENTATION

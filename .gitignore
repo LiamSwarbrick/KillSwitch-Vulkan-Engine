@@ -29,6 +29,7 @@ Makefile
 *.dylib
 *.pdb
 *.exe
+!premake5.exe
 
 # --- IDE & System Junk ---
 .vscode/
