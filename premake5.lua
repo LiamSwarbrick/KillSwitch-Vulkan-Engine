@@ -3,6 +3,7 @@ local SRC = "src/"
 
 local SDL_DIR = EXTERNAL .. "SDL"
 local SDL_BUILD_DIR = SDL_DIR .. "/build"
+local SDL_BUILD_FLAGS = "" -- initialized later in the SDL section
 
 local VULKAN_SDK = os.getenv("VULKAN_SDK") or ""
 -- TODO: Check for good enough Vulkan SDK version. e.g. 1.4
@@ -24,6 +25,10 @@ filter "system:windows"
     libdirs { SDL_BUILD_DIR .. "/" .. sdl_build_type }
 filter "not system:windows"
     libdirs { SDL_BUILD_DIR }
+
+if _ACTION == "vs2022" then
+    SDL_BUILD_FLAGS = "-G \"Visual Studio 17 2022\""
+end
 
 -- VULKAN_SDK
 filter "system:windows"
@@ -87,7 +92,7 @@ local function ensure_sdl_built()
     if os.host() == "windows" then
         cmd = table.concat({
             "cd " .. SDL_BUILD_DIR,
-            "cmake .. -DSDL_TESTS=OFF",
+            "cmake " .. SDL_BUILD_FLAGS .. " .. -DSDL_TESTS=OFF",
             "cmake --build . --config " .. sdl_build_type,
         }, " && ")
     else
@@ -138,7 +143,7 @@ workspace "AdventureEngine"
             defines { "NDEBUG" }
             targetprefix "release-"
         filter "*"
-
+    
 
     -- --------------------------------------------------------------------
     -- Core Module (Windowing, Input)
