@@ -14,6 +14,7 @@ static int get_material_index(cgltf_data* data, cgltf_material* target) { return
 static int get_texture_index(cgltf_data* data, cgltf_texture* target) { return target ? (int)(target - data->textures) : -1; }
 static int get_image_index(cgltf_data* data, cgltf_image* target) { return target ? (int)(target - data->images) : -1; }
 static int get_sampler_index(cgltf_animation* anim, cgltf_animation_sampler* target) { return target ? (int)(target - anim->samplers) : -1; }
+static int get_skin_index(cgltf_data* data, cgltf_skin* target) { return target ? (int)(target - data->skins) : -1; }
 
 // Helper for copying strings
 static char* duplicate_string(const char* src) {
@@ -62,6 +63,7 @@ Asset* load_asset(const char* filename) {
 	asset->camera_count = data->cameras_count;
 	asset->light_count = data->lights_count;
 	asset->node_count = data->nodes_count;
+	asset->skin_count = data->skins_count;
 	asset->animation_count = data->animations_count;
 
 	// Allocate arrays
@@ -72,6 +74,7 @@ Asset* load_asset(const char* filename) {
 	if (asset->camera_count > 0) asset->cameras = (Camera*)calloc(asset->camera_count, sizeof(Camera));
 	if (asset->light_count > 0) asset->lights = (Light*)calloc(asset->light_count, sizeof(Light));
 	if (asset->node_count > 0) asset->nodes = (Node*)calloc(asset->node_count, sizeof(Node));
+	if (asset->skin_count > 0) asset->skins = (Skin*)calloc(asset->skin_count, sizeof(Skin));
 	if (asset->animation_count > 0) asset->animations = (Animation*)calloc(asset->animation_count, sizeof(Animation));
 
 	// Copy Images
@@ -160,6 +163,29 @@ Asset* load_asset(const char* filename) {
 		light->range = gltf_light->range;
 	}
 
+	// Copy Skins
+	for (size_t i = 0; i < asset->skin_count; i++) {
+		cgltf_skin* gltf_skin = &data->skins[i];
+		Skin* skin = &asset->skins[i];
+
+		skin->name = duplicate_string(gltf_skin->name);
+		skin->skeleton_root_node_index = get_node_index(data, gltf_skin->skeleton);
+		skin->joint_count = gltf_skin->joints_count;
+
+		if (skin->joint_count > 0) {
+			skin->joint_node_indices = (int*)malloc(skin->joint_count * sizeof(int));
+			for (size_t j = 0; j < skin->joint_count; j++) {
+				skin->joint_node_indices[j] = get_node_index(data, gltf_skin->joints[j]);
+			}
+
+			// Unpack inverse bind matrices (16 floats per joint)
+			if (gltf_skin->inverse_bind_matrices) {
+				skin->inverse_bind_matrices = (float*)malloc(skin->joint_count * 16 * sizeof(float));
+				cgltf_accessor_unpack_floats(gltf_skin->inverse_bind_matrices, skin->inverse_bind_matrices, skin->joint_count * 16);
+			}
+		}
+	}
+
 	// Copy Nodes
 	for (size_t i = 0; i < asset->node_count; i++) {
 		cgltf_node* gltf_node = &data->nodes[i];
@@ -231,6 +257,22 @@ Asset* load_asset(const char* filename) {
 					prim->texcoords = (float*)malloc(attr->data->count * 2 * sizeof(float));
 					cgltf_accessor_unpack_floats(attr->data, prim->texcoords, attr->data->count * 2);
 				}
+				else if (attr->type == cgltf_attribute_type_joints) {
+					prim->joints = (uint16_t*)malloc(attr->data->count * 4 * sizeof(uint16_t));
+					// Reading joint indices as uint16_t, but they might be stored as uint8_t or uint32_t in the glTF. We need to read them as uint and then cast to uint16_t.
+					for (size_t v = 0; v < attr->data->count; ++v) {
+						cgltf_uint tmp[4];
+						cgltf_accessor_read_uint(attr->data, v, tmp, 4);
+						prim->joints[v * 4 + 0] = (uint16_t)tmp[0];
+						prim->joints[v * 4 + 1] = (uint16_t)tmp[1];
+						prim->joints[v * 4 + 2] = (uint16_t)tmp[2];
+						prim->joints[v * 4 + 3] = (uint16_t)tmp[3];
+					}
+				}
+				else if (attr->type == cgltf_attribute_type_weights) {
+					prim->weights = (float*)malloc(attr->data->count * 4 * sizeof(float));
+					cgltf_accessor_unpack_floats(attr->data, prim->weights, attr->data->count * 4);
+				}
 			}
 		}
 	}
@@ -301,6 +343,8 @@ void free_asset(Asset* asset) {
 			if (prim->positions) free(prim->positions);
 			if (prim->normals) free(prim->normals);
 			if (prim->texcoords) free(prim->texcoords);
+			if (prim->joints) free(prim->joints);
+			if (prim->weights) free(prim->weights);
 			if (prim->indices) free(prim->indices);
 		}
 		if (mesh->primitives) free(mesh->primitives);
@@ -325,6 +369,14 @@ void free_asset(Asset* asset) {
 	for (size_t i = 0; i < asset->light_count; i++) free((void*)asset->lights[i].name);
 	if (asset->lights) free(asset->lights);
 
+	for (size_t i = 0; i < asset->skin_count; i++) {
+		Skin* skin = &asset->skins[i];
+		free((void*)skin->name);
+		if (skin->joint_node_indices) free(skin->joint_node_indices);
+		if (skin->inverse_bind_matrices) free(skin->inverse_bind_matrices);
+	}
+	if (asset->skins) free(asset->skins);
+
 	for (size_t i = 0; i < asset->node_count; i++) {
 		Node* node = &asset->nodes[i];
 		free((void*)node->name);
@@ -332,6 +384,18 @@ void free_asset(Asset* asset) {
 		if (node->extras_json) free(node->extras_json);
 	}
 	if (asset->nodes) free(asset->nodes);
+
+	for (size_t i = 0; i < asset->animation_count; i++) {
+		Animation* anim = &asset->animations[i];
+		free((void*)anim->name);
+		for (size_t s = 0; s < anim->sampler_count; s++) {
+			if (anim->samplers[s].inputs) free(anim->samplers[s].inputs);
+			if (anim->samplers[s].outputs) free(anim->samplers[s].outputs);
+		}
+		if (anim->samplers) free(anim->samplers);
+		if (anim->channels) free(anim->channels);
+	}
+	if (asset->animations) free(asset->animations);
 
 	free(asset);
 }

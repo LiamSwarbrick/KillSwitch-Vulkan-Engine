@@ -12,6 +12,11 @@ typedef struct Primitive {
     float* positions;
     float* normals;
     float* texcoords;
+
+    // Skinning data
+    uint16_t* joints;
+    float* weights;
+
     size_t vertex_count;
 
     // Index data
@@ -85,6 +90,16 @@ typedef struct Light {
     float range;
 } Light;
 
+typedef struct Skin {
+    const char* name;
+    int skeleton_root_node_index;
+
+    int* joint_node_indices;
+    size_t joint_count;
+
+    float* inverse_bind_matrices;
+} Skin;
+
 typedef struct Node {
     const char* name;
 
@@ -102,6 +117,7 @@ typedef struct Node {
     int mesh_index;
     int camera_index;
     int light_index;
+    int skin_index;
 
     // IMPORTANT: Custom properties from Blender are stored here
     // cgltf stores this as raw JSON data in `node->extras`, 
@@ -160,6 +176,9 @@ typedef struct Asset {
 
     Node* nodes;
     size_t node_count;
+
+    Skin* skins;
+    size_t skin_count;
 
     Animation* animations;
     size_t animation_count;
