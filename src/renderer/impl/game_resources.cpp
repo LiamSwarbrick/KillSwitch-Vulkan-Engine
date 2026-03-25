@@ -363,6 +363,25 @@ MeshBufferRIDs create_mesh_resources(const char* debug_name, FG_ResourceFlags sh
 
 uint32_t compute_num_mip_levels(uint32_t image_level0_width, uint32_t image_level0_height)
 {
+    uint32_t bits = image_level0_width | image_level0_height;
+
+    uint32_t leading_zeros = 0;
+
+    if (bits == 0)
+        return 0;  // Edge case, though shouldn't happen for valid textures
+
+    // Count leading zeros the silly way
+    for (int i = 31; i >= 0; --i)
+    {
+        if (bits & (1u << i))
+            break;
+        leading_zeros++;
+    }
+
+    return 32 - leading_zeros;
+
+#if 0  // NOTE(Liam): std::countl_zero not working on Jaime's machines at the moment
+
     // Counting number of mipmaps an image needs
     //
     // Let N := Num mip levels.
@@ -384,6 +403,7 @@ uint32_t compute_num_mip_levels(uint32_t image_level0_width, uint32_t image_leve
     const uint32_t  leading_zeros = std::countl_zero(bits);  // C++
     // const u32  leading_zeros = stdc_leading_zeros(bits);  // C23
     return 32 - leading_zeros;
+#endif
 }
 
 
