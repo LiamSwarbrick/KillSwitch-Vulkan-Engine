@@ -20,7 +20,7 @@ typedef union MaterialConfigs
     struct
     {
         #define X(name) MaterialPipelineInfo name;
-        MATERIAL_LIST
+        MATERIAL_LIST  // See render_types.h
         #undef X
     } by_name;  // Required because stupid C++ doesn't have C99 array designators for const initialization.
 }

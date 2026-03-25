@@ -12,7 +12,14 @@ MeshBufferRIDs create_mesh_resources(
     glm::vec3* positions, glm::vec2* texcoords, glm::vec3* normals, glm::vec3* colors,
     glm::uvec4* joint_ids, glm::vec4* joint_weights  // Joints only for skinned meshes
 );
+uint32_t create_material_texture2d_resource(const char* debug_name, FG_ResourceFlags flags,
+     uint8_t* data, uint64_t data_size,
+     uint32_t width, uint32_t height, VkFormat format
+);
 
+#include <bit>  // compute_num_mip_levels() uses std::countl_zero()
+// NOTE: If porting to C, C23 has stdc_leading_zeros() in <stdbit.h> header
+uint32_t compute_num_mip_levels(uint32_t image_level0_width, uint32_t image_level0_height);
 
 
 void CreateOrRecreateResources(FG_ResourceFlags types_to_create)
@@ -352,4 +359,103 @@ MeshBufferRIDs create_mesh_resources(const char* debug_name, FG_ResourceFlags sh
     }
 
     return mesh_rids;
+}
+
+uint32_t compute_num_mip_levels(uint32_t image_level0_width, uint32_t image_level0_height)
+{
+    // Counting number of mipmaps an image needs
+    //
+    // Let N := Num mip levels.
+    // Let L := max(width, height) of base image (level 0).
+    // Each mip level is half resolution of previous one, e.g.:
+    // - Mip level 0: length = L    = L / (2^0)
+    // - Mip level 1: length = L/2  = L / (2^1)
+    // - Mip level 2: length = L/4  = L / (2^2)
+    // - Mip level 3: length = L/8  = L / (2^3)
+    //
+    // Highest mip level has length of 1 pixel so num mip levels N is:
+    //    N = 1 + floor( log2( max(width, height) ) )
+    // => N = 1 + position of most significant bit set in max(width, height)
+    // For 32 bit integers:
+    // => N = 1 + (32 - (num leading zeroes + 1))
+    // => N = 32 - num leading zeroes
+
+    const uint32_t bits = image_level0_width | image_level0_height;
+    const uint32_t  leading_zeros = std::countl_zero(bits);  // C++
+    // const u32  leading_zeros = stdc_leading_zeros(bits);  // C23
+    return 32 - leading_zeros;
+}
+
+
+uint32_t create_material_texture2d_resource(const char* debug_name, FG_ResourceFlags flags,
+     uint8_t* data, uint64_t data_size,
+     uint32_t width, uint32_t height, VkFormat format
+)
+{
+    uint32_t miplevel_count = compute_num_mip_levels(width, height);
+
+    ResourceCreateInfo texture_create_info = {
+        .image_create_info = {
+            .sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
+            .pNext = NULL,
+            .flags = 0,
+            .imageType = VK_IMAGE_TYPE_2D,
+            .format = format,
+
+            .extent = {
+                .width  = width,
+                .height = height,
+                .depth  = 1
+            },
+
+            .mipLevels = miplevel_count,
+            .arrayLayers = 1,
+
+            .samples = VK_SAMPLE_COUNT_1_BIT,
+            .tiling = VK_IMAGE_TILING_OPTIMAL,
+
+            .usage =
+                VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT |
+                VK_IMAGE_USAGE_SAMPLED_BIT |
+                VK_IMAGE_USAGE_TRANSFER_SRC_BIT |
+                VK_IMAGE_USAGE_TRANSFER_DST_BIT,
+
+            .sharingMode = VK_SHARING_MODE_EXCLUSIVE,
+            .queueFamilyIndexCount = 0,
+            .pQueueFamilyIndices = NULL,
+
+            // These normally won't be part of the framegraph's input and outputs
+            // So we set it's initial (and usually final-) image layout to read only.
+            .initialLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
+        },
+        .image_view_create_info = {
+            .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
+            .pNext = NULL,
+            .flags = 0,
+
+            .image = VK_NULL_HANDLE,  // <- This gets set in the registry code in FG_CreateResource
+            .viewType = VK_IMAGE_VIEW_TYPE_2D,
+            .format = format,
+
+            .components = {
+                .r = VK_COMPONENT_SWIZZLE_IDENTITY,
+                .g = VK_COMPONENT_SWIZZLE_IDENTITY,
+                .b = VK_COMPONENT_SWIZZLE_IDENTITY,
+                .a = VK_COMPONENT_SWIZZLE_IDENTITY
+            },
+
+            .subresourceRange = {
+                .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+                .baseMipLevel = 0,
+                .levelCount = 1,
+                .baseArrayLayer = 0,
+                .layerCount = 1
+            }
+        }
+    };
+    uint32_t texture_rid = FG_CreateResource(debug_name, FG_RESOURCE_TYPE_IMAGE, flags, &texture_create_info);
+
+    // TODO: Upload image, create mipmaps return rid
+    #warning create_material_texture2d_resource unfinished
+    return texture_rid;
 }

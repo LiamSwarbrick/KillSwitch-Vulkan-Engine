@@ -772,6 +772,16 @@ void FG_UploadImageData(ThreadStagingObjects* stg, uint32_t rid, const void* dat
     vmaDestroyBuffer(renderstate.vma_allocator, staging_buf, staging_alloc);
 }
 
+void FG_GenMipmaps(uint32_t image_rid, uint32_t num_mip_levels)
+{
+    FG_Resource* res = &renderstate.registry.resources[image_rid];
+
+    // NOTE: We require these to upload image data
+    SDL_assert(res->image.usage & VK_IMAGE_USAGE_TRANSFER_SRC_BIT && res->image.usage & VK_IMAGE_USAGE_TRANSFER_DST_BIT);
+    SDL_assert(res->image.subresource_range.levelCount == num_mip_levels);
+
+    #warning TODO complete genmipmaps
+}
 
 // Descriptors
 //

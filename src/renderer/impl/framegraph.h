@@ -239,6 +239,7 @@ void FG_DeallocateResource(FG_Resource* res);
 
 void FG_UploadBufferData(ThreadStagingObjects* stg, uint32_t rid, const void* data, uint32_t size);
 void FG_UploadImageData(ThreadStagingObjects* stg, uint32_t rid, const void* data, uint32_t size);
+void FG_GenMipmaps(uint32_t image_rid);
 
 // Descriptors
 //
