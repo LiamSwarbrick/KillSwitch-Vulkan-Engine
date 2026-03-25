@@ -1,10 +1,10 @@
-#ifndef ECS_REGISTRY_HPP
-#define ECS_REGISTRY_HPP
+#ifndef ECS_REGISTRY_H
+#define ECS_REGISTRY_H
 
 #include "SDL3/SDL.h"
 
-#include "types.hpp"
-#include "sparse_set.hpp"
+#include "types.h"
+#include "sparse_set.h"
 
 #include <limits>
 #include <vector>
@@ -326,4 +326,4 @@ namespace AdvEng
 
 }
 
-#endif //ECS_REGISTRY_HPP
+#endif //ECS_REGISTRY_H

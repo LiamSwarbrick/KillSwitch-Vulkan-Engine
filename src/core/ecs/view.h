@@ -1,11 +1,11 @@
-#ifndef ECS_VIEW_HPP
-#define ECS_VIEW_HPP
+#ifndef ECS_VIEW_H
+#define ECS_VIEW_H
 
 #include "SDL3/SDL.h"
 
-#include "types.hpp"
-#include "sparse_set.hpp"
-#include "registry.hpp"
+#include "types.h"
+#include "sparse_set.h"
+#include "registry.h"
 
 #include <vector>
 #include <algorithm>
@@ -208,4 +208,4 @@ namespace AdvEng
 }
 
 
-#endif // !ECS_VIEW_HPP
+#endif // !ECS_VIEW_H

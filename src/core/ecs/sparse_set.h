@@ -1,8 +1,8 @@
-#ifndef ECS_SPARSE_SET_HPP
-#define ECS_SPARSE_SET_HPP
+#ifndef ECS_SPARSE_SET_H
+#define ECS_SPARSE_SET_H
 
 
-#include "types.hpp"
+#include "types.h"
 
 #include <vector>
 #include <limits>
@@ -190,4 +190,4 @@ namespace AdvEng
 
 }
 
-#endif // !ECS_SPARSE_SET_HPP
+#endif // !ECS_SPARSE_SET_H

@@ -1,8 +1,8 @@
-#ifndef ECS_ENTITY_HPP
-#define ECS_ENTITY_HPP
+#ifndef ECS_ENTITY_H
+#define ECS_ENTITY_H
 
-#include "types.hpp"
-#include "registry.hpp"
+#include "types.h"
+#include "registry.h"
 
 namespace AdvEng
 {
@@ -41,4 +41,4 @@ namespace AdvEng
 	};
 }
 
-#endif // !ECS_ENTITY_HPP
+#endif // !ECS_ENTITY_H

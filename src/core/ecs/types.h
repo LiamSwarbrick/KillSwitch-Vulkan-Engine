@@ -1,5 +1,5 @@
-#ifndef ECS_TYPES_HPP
-#define ECS_TYPES_HPP
+#ifndef ECS_TYPES_H
+#define ECS_TYPES_H
 
 #include "core/my_c_runtime.h"
 
@@ -22,4 +22,4 @@ namespace AdvEng
 	using SparsePage = std::array<EntityID, PAGE_SIZE>;
 }
 
-#endif // !ECS_TYPES_HPP
+#endif // !ECS_TYPES_H
