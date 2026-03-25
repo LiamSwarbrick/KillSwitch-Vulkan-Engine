@@ -25,18 +25,6 @@ int main(int argc, char *argv[])
 
     bool running = true;
 
-    //load scene
-	//Asset* asset1 = load_asset("assets/levels/shapes.gltf");
-    //Asset* asset2 = load_asset("assets/props/cube.gltf");
-    Asset* asset3 = load_asset("assets/animations/ExtrasTest.gltf");
-    SDL_Log("Asset 3 Extras: %s\n", asset3->nodes[0].extras_json);
-    printf("Asset mesh count: %u\n", asset3->mesh_count);
-    for (uint32_t i = 0; i < asset3->mesh_count; ++i)
-    {
-        Mesh* m = &asset3->meshes[i];
-        printf("Mesh: %s", m->name);
-    }
-
     while (running)
     {
         // Event Loop
