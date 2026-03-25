@@ -258,15 +258,14 @@ Asset* load_asset(const char* filename) {
 					cgltf_accessor_unpack_floats(attr->data, prim->texcoords, attr->data->count * 2);
 				}
 				else if (attr->type == cgltf_attribute_type_joints) {
-					prim->joints = (uint16_t*)malloc(attr->data->count * 4 * sizeof(uint16_t));
-					// Reading joint indices as uint16_t, but they might be stored as uint8_t or uint32_t in the glTF. We need to read them as uint and then cast to uint16_t.
+					prim->joints = (uint32_t*)malloc(attr->data->count * 4 * sizeof(uint32_t));
 					for (size_t v = 0; v < attr->data->count; ++v) {
 						cgltf_uint tmp[4];
 						cgltf_accessor_read_uint(attr->data, v, tmp, 4);
-						prim->joints[v * 4 + 0] = (uint16_t)tmp[0];
-						prim->joints[v * 4 + 1] = (uint16_t)tmp[1];
-						prim->joints[v * 4 + 2] = (uint16_t)tmp[2];
-						prim->joints[v * 4 + 3] = (uint16_t)tmp[3];
+						prim->joints[v * 4 + 0] = (uint32_t)tmp[0];
+						prim->joints[v * 4 + 1] = (uint32_t)tmp[1];
+						prim->joints[v * 4 + 2] = (uint32_t)tmp[2];
+						prim->joints[v * 4 + 3] = (uint32_t)tmp[3];
 					}
 				}
 				else if (attr->type == cgltf_attribute_type_weights) {

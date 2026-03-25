@@ -14,7 +14,7 @@ typedef struct Primitive {
     float* texcoords;
 
     // Skinning data
-    uint16_t* joints;
+    uint32_t* joints;
     float* weights;
 
     size_t vertex_count;
