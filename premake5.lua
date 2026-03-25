@@ -1,3 +1,11 @@
+-- University lab machines are super locked down, so build slightly differently
+-- E.g. Use gcc instead of clang, and use the included ./glslc instead of the one in the user's path.
+newoption {
+    trigger     = "uni",
+    description = "Build for university lab environment"
+}
+print "NOTE FOR UNIVERSITY LAB MACHINES: use ./premake5 gmake --uni"
+
 local EXTERNAL = "extern/"
 local SRC = "src/"
 
@@ -19,26 +27,29 @@ include_paths.stb = EXTERNAL .. "stb"
 
 lib_dirs = {}
 
--- SDL
-local sdl_build_type = "Release" -- default (no need to debug SDL right?)
-filter "system:windows"
-    libdirs { SDL_BUILD_DIR .. "/" .. sdl_build_type }
-filter "not system:windows"
-    libdirs { SDL_BUILD_DIR }
+-- VULKAN_SDK
+if os.host() == "windows" then
+    include_paths.Vulkan = VULKAN_SDK .. "/Include"
+    lib_dirs.Vulkan      = VULKAN_SDK .. "/Lib"
+    lib_dirs.SDL3        = SDL_BUILD_DIR .. "/" .. sdl_build_type
+else
+    include_paths.Vulkan = VULKAN_SDK .. "/include"
+    lib_dirs.Vulkan      = VULKAN_SDK .. "/lib"
+    lib_dirs.SDL3        = SDL_BUILD_DIR
+end
 
+-- SDL build flags
+local sdl_build_type = "Release" -- default (no need to debug SDL right?)
 if _ACTION == "vs2022" then
     SDL_BUILD_FLAGS = "-G \"Visual Studio 17 2022\""
 end
 
--- VULKAN_SDK
-filter "system:windows"
-    include_paths.Vulkan = VULKAN_SDK .. "/Include"
-    lib_dirs.Vulkan      = VULKAN_SDK .. "/Lib"
-filter "not system:windows"
-    include_paths.Vulkan = VULKAN_SDK .. "/include"
-    lib_dirs.Vulkan      = VULKAN_SDK .. "/lib"
-
-filter {}
+-- Google's glsl compiler (by default we expect it installed)
+glslc_cmd = "glslc"
+if _OPTIONS["uni"] then
+    -- But on lab machines we use the included executable
+    glslc_cmd = "./glslc"
+end
 
 -- Clean action: cleanall
 newaction {
@@ -98,7 +109,7 @@ local function ensure_sdl_built()
     else
         cmd = table.concat({
             "cd " .. SDL_BUILD_DIR,
-            "cmake .. -DCMAKE_BUILD_TYPE=" .. sdl_build_type .. " -DSDL_TESTS=OFF",
+            "cmake .. -DCMAKE_BUILD_TYPE=" .. sdl_build_type .. " -DSDL_TESTS=OFF -DSDL_X11_XSCRNSAVER=OFF",
             "cmake --build . -j"
         }, " && ")
     end
@@ -127,6 +138,8 @@ workspace "AdventureEngine"
         toolset "clang"
     filter "system:macosx"
         toolset "clang"
+    filter "options:uni"
+        toolset "gcc"
     filter {}
 
     filter "toolset:clang"
@@ -215,7 +228,8 @@ workspace "AdventureEngine"
         }
 
         libdirs {
-            lib_dirs.Vulkan
+            lib_dirs.Vulkan,
+            lib_dirs.SDL3
         }
 
         filter "system:windows"
@@ -236,7 +250,7 @@ workspace "AdventureEngine"
         filter "files:**.vert or files:**.frag or files:**.comp"
             buildmessage "Compiling shader %{file.relpath}"
             buildcommands {
-                "glslc %{file.relpath} -o shaderspv/%{file.name}.spv"
+                "%{glslc_cmd} %{file.relpath} -o shaderspv/%{file.name}.spv"
             }
             buildoutputs {
                 "shaderspv/%{file.name}.spv"
