@@ -176,7 +176,7 @@ workspace "AdventureEngine"
             "SDL3"   -- The lib we just built via cmake in prebuildcommands
         }
 
-     -- --------------------------------------------------------------------
+    -- --------------------------------------------------------------------
     -- ECS Module
     -- --------------------------------------------------------------------
     project "ecs"
@@ -187,9 +187,7 @@ workspace "AdventureEngine"
         files {
             SRC .. "ecs/**.hpp",
             SRC .. "ecs/**.h",
-            SRC .. "ecs/impl/**.hpp",
-            SRC .. "ecs/impl/**.cpp",
-            SRC .. "ecs/impl/**.h"
+            SRC .. "ecs/**.cpp"
         }
 
         includedirs { 
@@ -208,6 +206,34 @@ workspace "AdventureEngine"
             "SDL3"   -- The lib we just built via cmake in prebuildcommands
         }
 
+    -- --------------------------------------------------------------------
+    -- Physics Module
+    -- --------------------------------------------------------------------
+    project "physics"
+        kind "StaticLib"
+        language "C++"
+        cppdialect "C++23"
+
+        files {
+            SRC .. "physics/**.hpp",
+            SRC .. "physics/**.h",
+            SRC .. "physics/**.cpp"
+        }
+
+        includedirs { 
+            SRC,  -- Exported API headers
+            SRC .. "physics/**",
+            include_paths.SDL3 -- Assertions (in case)
+        }
+
+        libdirs {
+            lib_dirs.SDL3
+        }
+
+        links {
+            "core",
+            "SDL3"   -- The lib we just built via cmake in prebuildcommands
+        }
 
 
     -- --------------------------------------------------------------------
