@@ -6,8 +6,32 @@
 #define _USE_MATH_DEFINES
 #include <math.h>
 
+/*
+TODO IMPORTANT:
+Remember, framegraph has a bunch of renderpasses.
+Each renderpass executes the draws for that specific shader.
+
+SubmitDrawCalls
+{
+    Renderables 
+}
+
+E.g.
+PBR_Opaque_Pass_Execute()
+{
+    for all 
+}
+*/
+
 void SwapchainPass_Execute(VkCommandBuffer cmd, void* user_data)
 {
+    // TODO: The pass itself should set the camera matrices
+    // Because shadow passes and ui passes don't use the same camera
+
+    // for loop for unlit shader for now
+    // TODO: During week where we integrate with entity system.
+    
+    // OLD SHIT: Move this to renderer.cpp where the warning is about drawcalls
     int N = 32;
     for (int i = 0; i < N; ++i)
     {
@@ -30,6 +54,20 @@ void SwapchainPass_Execute(VkCommandBuffer cmd, void* user_data)
             .object_ptr = PushToMappedArena(&renderstate.object_transforms, &tri_object_data, sizeof(tri_object_data)),
             .joint_ptr = 0
         };
+
+        #warning Pipeline key currently defined here, but instead renderables (see comment)
+        /*
+            Renderables should be added to drawcall arrays, and then we use the material's
+            type (see materials.h/cpp) to add it to arrays for each shader relevant shader type.
+            I.e.
+
+            Renderable R with material type: MAT_PBR_WITH_OUTLINE:
+            - primary shader id is SHADER_PBR
+            - secondary shader id is SHADER_OUTLINE
+            So SubmitDraw for R should add two DrawCalls.
+
+            HOLD UP I'm just gonna write about this at the top
+        */
 
         // Define the Pipeline State (The "Key")
         // This identifies which PSO to pull from the cache (or create)

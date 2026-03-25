@@ -703,7 +703,28 @@ void Renderer_DrawFrame()
     vkResetCommandPool(renderstate.device, renderstate.frames[frame_in_flight].graphics_command_pool, 0);
 
 
-    
+    /* Sort Drawcalls into arrays per shader
+
+        Add to Renderable renderables_per_shader[SHADER_COUNT][MAX_RENDERABLES]
+
+        Example, Renderable r with MAT_PBR_WITH_OUTLINE:
+        r could be added to many different shaders:
+            renderables_per_shader[SHADER_PBR].append(r);
+            renderables_per_shader[SHADER_OUTLINE].append(r);
+            renderables_per_shader[SHADER_SHADOWMAP].append(r);
+        
+        Importantly, drawcalls aren't tied to game objects's assets.
+        For instance, an outline is togglable in gameplay code.
+        Same with visibility.
+    */
+
+    #warning TODO: Drawcalls contain the transform mesh ids, material_type and skeleton data
+    #warning TODO: Here we need to use them to build renderables.
+
+    {
+        // TODO During week where we integrate with entity system
+    }
+
     /*  Build FrameGraph
 
         Queries game state to know which renderpasses to use.
@@ -747,6 +768,8 @@ void Renderer_DrawFrame()
         };
         swapchain_pass = FG_AddPass(swapchain_pass_desc, PASS_TYPE_SWAPCHAIN_PASS);
     }
+
+
 
 
 
