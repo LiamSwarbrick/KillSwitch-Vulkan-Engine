@@ -2,18 +2,23 @@
 
 #include "internal_state.h"
 
+void create_startup_resources();
+void create_window_dependent_resources();
+
+uint32_t create_resource_with_buffer_data(const char* debug_name, FG_ResourceFlags flags, VkBufferUsageFlags usage, size_t size, void* data);
+MeshBufferRIDs create_mesh_resources(
+    const char* debug_name, FG_ResourceFlags shared_flags, uint32_t index_count, uint32_t vertex_count,
+    uint32_t* indices,
+    glm::vec3* positions, glm::vec2* texcoords, glm::vec3* normals, glm::vec3* colors,
+    glm::uvec4* joint_ids, glm::vec4* joint_weights  // Joints only for skinned meshes
+);
+
+
 
 void CreateOrRecreateResources(FG_ResourceFlags types_to_create)
 {
-    if (types_to_create == FG_RESOURCE_FLAGS_NONE)
-    {
-        // NOTE: types_to_create=NONE means create all resources,
-        // because it's saying the prerequestites to resource creation is NONE.
-        // This should only happen on once, on init, where certain permanent resources are allocated.
-        SDL_assert(!renderstate.rids.resources_created);
-    }
-
-    if (renderstate.rids.resources_created)
+    // Recreation step: Deallocate all preexisting resources of the requested type
+    if (renderstate.rids.startup_resources_created)
     {
         // Loop through and check for resources of the types to recreate
         // DeallocateResource sets the dirty flag in the registry.
@@ -29,190 +34,28 @@ void CreateOrRecreateResources(FG_ResourceFlags types_to_create)
         }
     }
 
+
     FG_ResourceFlags flags;
 
     flags = FG_RESOURCE_FLAGS_WINDOW_DEPENDENT;
     if ((flags & types_to_create) == types_to_create)
     {
-        // Import swapchain images as framegraph resources
-        char swapchain_image_name[64] = {};
-        for (uint32_t i = 0; i < renderstate.swapchain_image_count; ++i)
-        {
-            snprintf(swapchain_image_name, sizeof(swapchain_image_name), "SwapchainImage_%d", i);
-
-            ResourceImportInfo import_info = {
-                .image = {
-                    .handle  = renderstate.swapchain_images[i],
-                    .view    = renderstate.swapchain_image_views[i],
-                    .format  = renderstate.swapchain_image_format,
-                    .subresource_range = {
-                        .aspectMask      = VK_IMAGE_ASPECT_COLOR_BIT,
-                        .baseMipLevel    = 0,
-                        .levelCount      = 1,
-                        .baseArrayLayer  = 0,
-                        .layerCount      = 1
-                    }
-                }
-            };
-            renderstate.rids.swapchain_image_rids[i] = FG_ImportResource(
-                swapchain_image_name, FG_RESOURCE_TYPE_IMAGE, flags, import_info
-            );
-        }
+        create_window_dependent_resources();
+        renderstate.rids.window_resources_created = 1;
     }
 
-    flags = FG_RESOURCE_FLAGS_NONE;
+
+    flags = FG_RESOURCE_FLAGS_ON_STARTUP;
     if ((flags & types_to_create) == types_to_create)
     {
-        // Resources that only need to be made once.
-        // Currently thats where vertex buffers will go, but at some point we will
-        // have a FG_RESOURCE_FLAGS_SCENE_DEPENDENT
-        // so we regenerate such resources on scene change e.g. spash to title screen to in game rooms
-
-        // Scene Buffer
-        ResourceCreateInfo scene_info = {
-            .buffer_create_info = {
-                .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
-                .size = sizeof(SceneBufferData),
-                .usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT |
-                    VK_BUFFER_USAGE_TRANSFER_DST_BIT
-            },
-        };
-        renderstate.rids.global_scene_buffer_rid = FG_CreateResource(
-            "GlobalSceneBuffer", FG_RESOURCE_TYPE_BUFFER, flags, &scene_info
-        );
-
-        // Objects Buffer (Mapped so we rapidly upload transforms each frame)
-        const uint32_t MAX_RENDERED_OBJECTS = 100000;
-        ResourceCreateInfo objects_info = {
-            .buffer_create_info = {
-                .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
-                .size = MAX_RENDERED_OBJECTS * sizeof(ObjectData),
-                .usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT
-                    | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT
-                    | VK_BUFFER_USAGE_TRANSFER_DST_BIT
-            },
-            .is_cpu_accessible = 1
-        };
-        renderstate.rids.objects_buffer_rid = FG_CreateResource(
-            "ObjectsBuffer", FG_RESOURCE_TYPE_BUFFER, flags, &objects_info
-        );
-        renderstate.object_transforms = CreateTransientBuffer(renderstate.rids.objects_buffer_rid);
-
-        // Materials SSBO
-        const uint32_t MAX_MATERIALS = 1024;
-        ResourceCreateInfo mat_info = {
-            .buffer_create_info = {
-                .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
-                .size = sizeof(MaterialData) * MAX_MATERIALS,
-                .usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
-            }
-        };
-        renderstate.rids.material_ssbo_rid = FG_CreateResource(
-            "MaterialSSBO", FG_RESOURCE_TYPE_BUFFER, flags, &mat_info
-        );
-
-        // Initial "Dummy" Material Data
-        // Let's set Material 0 to be a simple White material with no texture
-        // MaterialData default_mat = {
-        //     .base_color = { 1.0f, 1.0f, 1.0f, 1.0f },
-        //     .texture_idx = 0xFFFFFFFF,  // Our "No Texture" sentinel
-        //     .alpha_cutoff = 0.5f
-        // };
-        // FG_UploadBufferData(&renderstate.main.staging_objects, 
-        //     renderstate.rids.material_ssbo_rid, &default_mat, sizeof(MaterialData)
-        // );
-
-        // TEST TRIANGLE:
-        Vertex triangle_verts[3] = {
-            {{ 0.0f, -0.5f, 0.0f}, {0.5f, 0.0f}, {0,0,1}, {1,0,0,1}}, 
-            {{ 0.5f,  0.5f, 0.0f}, {1.0f, 1.0f}, {0,0,1}, {0,1,0,1}}, 
-            {{-0.5f,  0.5f, 0.0f}, {0.0f, 1.0f}, {0,0,1}, {0,0,1,1}}  
-        };
-
-        ResourceCreateInfo triangle_info = {
-            .buffer_create_info = {
-                .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
-                .size = sizeof(triangle_verts),
-                // Use DEVICE_LOCAL for speed, plus the flags needed for BDA and pulling
-                .usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | 
-                        VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT | 
-                        VK_BUFFER_USAGE_TRANSFER_DST_BIT 
-            }
-        };
-        renderstate.rids.test_triangle_rid = FG_CreateResource(
-            "TestTriangleBuffer", FG_RESOURCE_TYPE_BUFFER, flags, &triangle_info
-        );
-        FG_UploadBufferData(&renderstate.main.staging_objects, 
-                            renderstate.rids.test_triangle_rid, 
-                            triangle_verts, 
-                            sizeof(triangle_verts));
-
-
-        // TEST EMPTY IMAGE RESOURCE:
-        ResourceCreateInfo test_create_info = {
-            .image_create_info = {
-                .sType        = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
-                .pNext = NULL,
-                .flags = 0,
-                .imageType = VK_IMAGE_TYPE_2D,
-                .format = VK_FORMAT_R16G16B16A16_SFLOAT,
-
-                .extent = {
-                    .width  = renderstate.swapchain_extent.width,
-                    .height = renderstate.swapchain_extent.height,
-                    .depth  = 1
-                },
-
-                .mipLevels = 1,
-                .arrayLayers = 1,
-
-                .samples = VK_SAMPLE_COUNT_1_BIT,
-                .tiling = VK_IMAGE_TILING_OPTIMAL,
-
-                .usage =
-                    VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT |
-                    VK_IMAGE_USAGE_SAMPLED_BIT |
-                    VK_IMAGE_USAGE_TRANSFER_SRC_BIT |
-                    VK_IMAGE_USAGE_TRANSFER_DST_BIT,
-
-                .sharingMode = VK_SHARING_MODE_EXCLUSIVE,
-                .queueFamilyIndexCount = 0,
-                .pQueueFamilyIndices = NULL,
-
-                .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED
-            },
-            .image_view_create_info = {
-                .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
-                .pNext = NULL,
-                .flags = 0,
-
-                .image = VK_NULL_HANDLE,  // <- This gets set in the registry code
-                .viewType = VK_IMAGE_VIEW_TYPE_2D,
-                .format = VK_FORMAT_R16G16B16A16_SFLOAT,
-
-                .components = {
-                    .r = VK_COMPONENT_SWIZZLE_IDENTITY,
-                    .g = VK_COMPONENT_SWIZZLE_IDENTITY,
-                    .b = VK_COMPONENT_SWIZZLE_IDENTITY,
-                    .a = VK_COMPONENT_SWIZZLE_IDENTITY
-                },
-
-                .subresourceRange = {
-                    .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-                    .baseMipLevel = 0,
-                    .levelCount = 1,
-                    .baseArrayLayer = 0,
-                    .layerCount = 1
-                }
-            }
-        };
-        uint32_t test_texture_rid = FG_CreateResource("Test texture", FG_RESOURCE_TYPE_IMAGE, FG_RESOURCE_FLAGS_NONE, &test_create_info);
-
-
+        SDL_assert(!renderstate.rids.startup_resources_created && "Startup resources should not be recreated at any point.");
+        SDL_assert(renderstate.rids.window_resources_created && "Window resources must be created firstly.");
+        create_startup_resources();
+        renderstate.rids.startup_resources_created = 1;
     }
 
+
     
-    // Finally
 #ifndef NDEBUG
     // Check we haven't left any gaps in the array
     for (uint32_t rid = 0; rid < renderstate.registry.resource_count; ++rid)
@@ -222,17 +65,291 @@ void CreateOrRecreateResources(FG_ResourceFlags types_to_create)
         );
     }
 #endif
-    renderstate.rids.resources_created = 1;
 }
 
 void DestroyResources()
 {
-    SDL_assert(renderstate.rids.resources_created);
+    SDL_assert(renderstate.rids.startup_resources_created);
 
     FG_ClearResources();
 
     // Finally
-    renderstate.rids.resources_created = 0;
+    renderstate.rids.startup_resources_created = 0;
 }
 
 
+void create_startup_resources()
+{
+    FG_ResourceFlags flags = FG_RESOURCE_FLAGS_ON_STARTUP;
+
+    // Scene Buffer
+    ResourceCreateInfo scene_info = {
+        .buffer_create_info = {
+            .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
+            .size = sizeof(SceneData),
+            .usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT |
+                VK_BUFFER_USAGE_TRANSFER_DST_BIT
+        },
+    };
+    renderstate.rids.global_scene_buffer_rid = FG_CreateResource(
+        "GlobalSceneBuffer", FG_RESOURCE_TYPE_BUFFER, flags, &scene_info
+    );
+
+    // Objects Buffer (Mapped so we rapidly upload transforms each frame)
+    const uint32_t MAX_RENDERED_OBJECTS = 100000;
+    ResourceCreateInfo objects_info = {
+        .buffer_create_info = {
+            .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
+            .size = MAX_RENDERED_OBJECTS * sizeof(ObjectData),
+            .usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT
+                | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT
+                | VK_BUFFER_USAGE_TRANSFER_DST_BIT
+        },
+        .is_cpu_accessible = 1  // <- Hence mapped
+    };
+    renderstate.rids.objects_buffer_rid = FG_CreateResource(
+        "ObjectsBuffer", FG_RESOURCE_TYPE_BUFFER, flags, &objects_info
+    );
+    renderstate.object_transforms = MakeArenaOnBufferResource(renderstate.rids.objects_buffer_rid);
+
+    // Materials SSBO
+    const uint32_t MAX_MATERIALS = 1024;
+    ResourceCreateInfo mat_info = {
+        .buffer_create_info = {
+            .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
+            .size = sizeof(MaterialData) * MAX_MATERIALS,
+            .usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT
+                   | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT
+                   | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+        }
+    };
+    renderstate.rids.material_ssbo_rid = FG_CreateResource(
+        "MaterialSSBO", FG_RESOURCE_TYPE_BUFFER, flags, &mat_info
+    );
+
+
+
+    /////// MOVE BELOW TO create_scene_resources(scene resource list?) /////////////
+    #warning BELOW IS DUMMY DATA, THAT SHOULD NOT BE PART OF startup_resources()
+    // TODO IMPORTANT: ONLY SLOT 0 OF THE MATERIAL SSBO WILL BE WRITTEN TO WITH THIS LOGIC, CHANGE THIS NEXT
+
+    // Let's set Material 0 to be a simple White material with no texture
+    MaterialData default_mat = {
+        .base_color = { 1.0f, 1.0f, 1.0f, 1.0f },
+        .texture_idx_basecolor = 0xFFFFFFFF,
+
+        .sampler_idx = FG_SAMPLER_LINEAR_REPEAT,
+        .alpha_cutoff = 0.5f
+    };
+    FG_UploadBufferData(&renderstate.main.staging_objects, 
+        renderstate.rids.material_ssbo_rid, &default_mat, sizeof(MaterialData)
+    );
+
+    // TEST QUAD (TODO: Change to create_mesh_resource or something):
+    uint32_t quad_indices[6] = { 0, 1, 2, 0, 3, 1 };
+    glm::vec3 quad_positions[4] = {
+        { 0.0f, 0.0f, 0.0f },
+        { 1.0f, 1.0f, 0.0f },
+        { 0.0f, 1.0f, 0.0f },
+        { 1.0f, 0.0f, 0.0f }
+    };
+    glm::vec2 quad_uvs[4] = {
+        {0.0f, 0.0f},
+        {1.0f, 1.0f},
+        {0.0f, 1.0f},
+        {1.0f, 0.0f}
+    };
+    glm::vec3 quad_normals[4] = {
+        {0,0,1},
+        {0,0,1},
+        {0,0,1},
+        {0,0,1}
+    };
+    glm::vec3 quad_colors[4] = {
+        {1,0,0},
+        {0,1,0},
+        {0,0,1},
+        {0,1,1}
+    };
+    renderstate.rids.dummy_mesh = create_mesh_resources("QuadMesh", flags, 6, 4, quad_indices,
+        quad_positions, quad_uvs, quad_normals, quad_colors, NULL, NULL
+    );
+
+
+    // TEST EMPTY IMAGE RESOURCE:
+    ResourceCreateInfo test_create_info = {
+        .image_create_info = {
+            .sType        = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
+            .pNext = NULL,
+            .flags = 0,
+            .imageType = VK_IMAGE_TYPE_2D,
+            .format = VK_FORMAT_R16G16B16A16_SFLOAT,
+
+            .extent = {
+                .width  = renderstate.swapchain_extent.width,
+                .height = renderstate.swapchain_extent.height,
+                .depth  = 1
+            },
+
+            .mipLevels = 1,
+            .arrayLayers = 1,
+
+            .samples = VK_SAMPLE_COUNT_1_BIT,
+            .tiling = VK_IMAGE_TILING_OPTIMAL,
+
+            .usage =
+                VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT |
+                VK_IMAGE_USAGE_SAMPLED_BIT |
+                VK_IMAGE_USAGE_TRANSFER_SRC_BIT |
+                VK_IMAGE_USAGE_TRANSFER_DST_BIT,
+
+            .sharingMode = VK_SHARING_MODE_EXCLUSIVE,
+            .queueFamilyIndexCount = 0,
+            .pQueueFamilyIndices = NULL,
+
+            .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED
+        },
+        .image_view_create_info = {
+            .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
+            .pNext = NULL,
+            .flags = 0,
+
+            .image = VK_NULL_HANDLE,  // <- This gets set in the registry code
+            .viewType = VK_IMAGE_VIEW_TYPE_2D,
+            .format = VK_FORMAT_R16G16B16A16_SFLOAT,
+
+            .components = {
+                .r = VK_COMPONENT_SWIZZLE_IDENTITY,
+                .g = VK_COMPONENT_SWIZZLE_IDENTITY,
+                .b = VK_COMPONENT_SWIZZLE_IDENTITY,
+                .a = VK_COMPONENT_SWIZZLE_IDENTITY
+            },
+
+            .subresourceRange = {
+                .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+                .baseMipLevel = 0,
+                .levelCount = 1,
+                .baseArrayLayer = 0,
+                .layerCount = 1
+            }
+        }
+    };
+    uint32_t test_texture_rid = FG_CreateResource("Test texture", FG_RESOURCE_TYPE_IMAGE, flags, &test_create_info);
+
+}
+
+
+void create_window_dependent_resources()
+{
+    FG_ResourceFlags flags = FG_RESOURCE_FLAGS_WINDOW_DEPENDENT;
+
+    // Import swapchain images as framegraph resources
+    char swapchain_image_name[64] = {};
+    for (uint32_t i = 0; i < renderstate.swapchain_image_count; ++i)
+    {
+        snprintf(swapchain_image_name, sizeof(swapchain_image_name), "SwapchainImage_%d", i);
+
+        ResourceImportInfo import_info = {
+            .image = {
+                .handle  = renderstate.swapchain_images[i],
+                .view    = renderstate.swapchain_image_views[i],
+                .format  = renderstate.swapchain_image_format,
+                .subresource_range = {
+                    .aspectMask      = VK_IMAGE_ASPECT_COLOR_BIT,
+                    .baseMipLevel    = 0,
+                    .levelCount      = 1,
+                    .baseArrayLayer  = 0,
+                    .layerCount      = 1
+                }
+            }
+        };
+        renderstate.rids.swapchain_image_rids[i] = FG_ImportResource(
+            swapchain_image_name, FG_RESOURCE_TYPE_IMAGE, flags, import_info
+        );
+    }
+}
+
+uint32_t create_resource_with_buffer_data(const char* debug_name, FG_ResourceFlags flags, VkBufferUsageFlags usage, size_t size, void* data)
+{
+    ResourceCreateInfo res_create_info = {
+        .buffer_create_info = {
+            .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
+            .size = size,
+            .usage = usage
+        }
+    };
+    uint32_t rid = FG_CreateResource(debug_name, FG_RESOURCE_TYPE_BUFFER, flags, &res_create_info);
+    FG_UploadBufferData(&renderstate.main.staging_objects, rid, data, size);
+
+    return rid;
+}
+
+MeshBufferRIDs create_mesh_resources(const char* debug_name, FG_ResourceFlags shared_flags, uint32_t index_count, uint32_t vertex_count,
+    uint32_t* indices,
+    glm::vec3* positions, glm::vec2* texcoords, glm::vec3* normals, glm::vec3* colors,
+    glm::uvec4* joint_ids, glm::vec4* joint_weights)
+{
+    // Required vertex attributes
+    SDL_assert(positions && texcoords && normals && colors);
+
+    // Each buffer has the same usage flags
+    VkBufferUsageFlags usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | 
+                               VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT | 
+                               VK_BUFFER_USAGE_TRANSFER_DST_BIT;
+
+
+    MeshBufferRIDs mesh_rids = {};
+    char debug_resource_name[256] = {};
+
+    // Index buffer
+    snprintf(debug_resource_name, sizeof(debug_resource_name), "%s_IndexBuffer", debug_name);
+    mesh_rids.index_buf_rid = create_resource_with_buffer_data(
+        debug_resource_name, shared_flags, usage, index_count * sizeof(uint32_t), indices
+    );
+
+    // Positions
+    snprintf(debug_resource_name, sizeof(debug_resource_name), "%s_PositionBuffer", debug_name);
+    mesh_rids.v_pos_buf_rid = create_resource_with_buffer_data(
+        debug_resource_name, shared_flags, usage, vertex_count * sizeof(glm::vec3), positions
+    );
+
+    // Texcoords
+    snprintf(debug_resource_name, sizeof(debug_resource_name), "%s_TexcoordBuffer", debug_name);
+    mesh_rids.v_texcoord_buf_rid = create_resource_with_buffer_data(
+        debug_resource_name, shared_flags, usage, vertex_count * sizeof(glm::vec2), texcoords
+    );
+    
+    // Normals
+    snprintf(debug_resource_name, sizeof(debug_resource_name), "%s_NormalBuffer", debug_name);
+    mesh_rids.v_normal_buf_rid = create_resource_with_buffer_data(
+        debug_resource_name, shared_flags, usage, vertex_count * sizeof(glm::vec3), normals
+    );
+
+    // Colors
+    snprintf(debug_resource_name, sizeof(debug_resource_name), "%s_ColorBuffer", debug_name);
+    mesh_rids.v_color_buf_rid = create_resource_with_buffer_data(
+        debug_resource_name, shared_flags, usage, vertex_count * sizeof(glm::vec3), colors
+    );
+
+    mesh_rids.v_joint_ids_buf_rid = UINT32_MAX;
+    if (joint_ids)
+    {
+        // Joint IDs
+        snprintf(debug_resource_name, sizeof(debug_resource_name), "%s_JointIDsBuffer", debug_name);
+        mesh_rids.v_joint_ids_buf_rid = create_resource_with_buffer_data(
+            debug_resource_name, shared_flags, usage, vertex_count * sizeof(glm::uvec4), joint_ids
+        );
+    }
+
+    mesh_rids.v_joint_weights_buf_rid = UINT32_MAX;
+    if (joint_weights)
+    {
+        // Joint weights
+        snprintf(debug_resource_name, sizeof(debug_resource_name), "%s_JointWeights", debug_name);
+        mesh_rids.v_joint_weights_buf_rid = create_resource_with_buffer_data(
+            debug_resource_name, shared_flags, usage, vertex_count * sizeof(glm::vec4), joint_weights
+        );
+    }
+
+    return mesh_rids;
+}

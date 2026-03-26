@@ -3,11 +3,13 @@
 
 #include "framegraph.h"
 #include "internal_structs.h"
+#include "renderer/render_types.h"
 
 // Recreated at each swapchain resize.
 typedef struct ResourceIDs
 {
-    b32 resources_created;
+    b32 startup_resources_created;
+    b32 window_resources_created;
 
     // Window Dependent
     uint32_t swapchain_image_rids[MAX_SWAPCHAIN_IMAGE_COUNT];
@@ -18,7 +20,7 @@ typedef struct ResourceIDs
     uint32_t material_ssbo_rid;
 
     // Dummy stuff
-    uint32_t test_triangle_rid;
+    MeshBufferRIDs dummy_mesh;
 }
 ResourceIDs;
 
