@@ -28,6 +28,7 @@ typedef struct Primitive {
 
 typedef struct Mesh {
     const char* name;
+    int type; // 0 = static, 1 = animated
 
     Primitive* primitives;
     size_t primitive_count;
@@ -90,6 +91,19 @@ typedef struct Light {
     float range;
 } Light;
 
+typedef struct Bone {
+    const char* name;
+
+    // transforms
+    float translation[3];
+    float rotation[4];
+
+    // Hierarchy
+    int parent_index;
+    int* children_indices;
+    size_t child_count;
+} Bone;
+
 typedef struct Skin {
     const char* name;
     int skeleton_root_node_index;
@@ -98,6 +112,8 @@ typedef struct Skin {
     size_t joint_count;
 
     float* inverse_bind_matrices;
+
+    Bone* bones;
 } Skin;
 
 typedef struct Node {
