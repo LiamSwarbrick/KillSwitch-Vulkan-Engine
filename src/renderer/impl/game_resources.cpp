@@ -17,8 +17,9 @@ uint32_t create_material_texture2d_resource(const char* debug_name, FG_ResourceF
      uint32_t width, uint32_t height, VkFormat format
 );
 
-#include <bit>  // compute_num_mip_levels() uses std::countl_zero()
-// NOTE: If porting to C, C23 has stdc_leading_zeros() in <stdbit.h> header
+
+// #include <bit>  // compute_num_mip_levels() uses std::countl_zero()
+// // NOTE: If porting to C, C23 has stdc_leading_zeros() in <stdbit.h> header
 uint32_t compute_num_mip_levels(uint32_t image_level0_width, uint32_t image_level0_height);
 
 
