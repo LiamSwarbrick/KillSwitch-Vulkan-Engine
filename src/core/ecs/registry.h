@@ -261,8 +261,8 @@ namespace AdvEng
 		{
 			SDL_assert(IsEntityValid(id));
 			// We could check the pointer after returning if this is not too performant
-			SDL_assert(GetComponentBit<T>(mask));
-			SDL_assert(component); // after calling pool.GetComponent(id);
+			// SDL_assert(GetComponentBit<T>(id));
+			// SDL_assert(component); // after calling pool.GetComponent(id);
 
 			SparseSet<T>& pool = GetComponentPool<T>();
 			T& component = pool.Get(id);
@@ -275,7 +275,7 @@ namespace AdvEng
 		T* GetComponentPtr(EntityID id)
 		{
 			SDL_assert(IsEntityValid(id));
-			SDL_assert(GetComponentBit<T>(mask));
+			// SDL_assert(GetComponentBit<T>(mask));
 
 			SparseSet<T>& pool = GetComponentPool<T>();
 			return pool.GetPtr(id);

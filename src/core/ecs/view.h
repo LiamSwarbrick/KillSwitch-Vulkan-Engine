@@ -131,7 +131,7 @@ namespace AdvEng
 			m_ecs(ecs), m_viewPools{ ecs->GetComponentPoolPtr<Components>()... }
 		{
 			// Should not happen if we're using Component Types that ARE in the ECS
-			SDL_assert(m_viewPools.size() == componentTypes::size)
+			SDL_assert(m_viewPools.size() == componentTypes::size);
 
 			// Determines the smallest pool of all the component pools given via template.
 			// This will work cause in the ForEach loop, we check if the EntityID is contained / not excluded in the rest of the pools
