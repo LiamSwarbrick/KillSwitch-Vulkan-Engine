@@ -4,48 +4,43 @@ bl_info = {
     "category": "Object",
 }
 
-import bpy, math
-from bpy_extras.io_utils import ExportHelper
+import bpy, math, json, os
+from bpy_extras.io_utils import ImportHelper, ExportHelper
 
+# Global cache of components
+COMPONENTS_LIST = {}
 
-
-COMPONENT_PROPERTIES = {
-
-    'PLAYER': {
-    "game_player": True,
-    "game_health": 100
-     },
-     
-    'ENEMY_SPAWNPOINT': {
-    "game_enemy_spawnpoint": True,
-    "game_enemy_type": "ZOMBIE", 
-    "game_spawnrate": 5
-    }
+# Reads components from JSON, stores and generates UI list
+def load_json(self, context):
+    global COMPONENTS_LIST
+    items = []
     
-}
-
-
-COMPONENT_UI = [
-    ('PLAYER', "Player", "Add Health"),
-    ('ENEMY_SPAWNPOINT', "Enemy Spawnpoint", "Add Enemy Type and Spawn rate"),
-]
-
-
-# --- COMPONENTS DROPDOWN ---
-def components():
-    bpy.types.Scene.active_component_type = bpy.props.EnumProperty(
-        name="Component",
-        items=COMPONENT_UI,
-        default='PLAYER'
-    )
-    bpy.types.Object.show_custom_properties = bpy.props.BoolProperty(
-        name="Show Custom Properties",
-        default=True
-    )
+    # Get the path to the current .blend file
+    blend_dir = bpy.path.abspath("//")
+    if not blend_dir:
+        return [('NONE', 'SAVE .BLEND', 'SAVE YOUR BLEND FILE IN SAME DIR AS JSON')]
     
+    # Load json into global components list
+    json_path = os.path.join(blend_dir, "..", "components.json")
+    if os.path.exists(json_path):
+        try:
+            with open(json_path, 'r') as f:
+                COMPONENTS_LIST = json.load(f)
+                
+            # Generate dropdown text from the data
+            for key in COMPONENTS_LIST.keys():
+                items.append((key, key.replace("_", " ").title(), f"Properties: {list(COMPONENTS_LIST[key].keys())}"))
+            return items
+        
+        except Exception as e:
+            return [('ERROR', 'JSON INVALID', str(e))]
+    else:
+        return [('JSON NOT FOUND', '.JSON INCORRECTLY PLACED', 'MAKE SURE ITS IN SAME DIR AS .BLEND')]
 
-# --- COLLIDER TYPES DROPDOWN ---
-def collider_types():
+
+# --- DROPDOWNS ---
+def dropdown_types():
+    # Different types of colliders/triggers
     bpy.types.Scene.active_collision_type = bpy.props.EnumProperty(
         name="Collision Type",
         description="Select which type of collision to apply",
@@ -55,6 +50,18 @@ def collider_types():
             ('CAPSULE', "Capsule", "Human-akin geometry"),
         ],
         default='BOX'
+    )
+    
+    # JSON components in more readable format
+    bpy.types.Scene.active_component_type = bpy.props.EnumProperty(
+        name="Component",
+        items=load_json
+    )
+    
+    # Enabling/disabling properties dropdown
+    bpy.types.Object.show_custom_properties = bpy.props.BoolProperty(
+        name="Show Custom Properties",
+        default=True
     )
     
 
@@ -184,29 +191,33 @@ class MESH_OT_assign_trigger(bpy.types.Operator):
         self.report({'INFO'}, f"Converted {obj.name} to {trigger_type} trigger")
         return {'FINISHED'}
     
-    
-# --- ADD OBJECT COMPONENT -------------------
+
+# --- ADD OBJECT COMPONENT ----------------------
 class MESH_OT_add_component(bpy.types.Operator):
     bl_idname = "object.add_component"
     bl_label = "Add Component"
     bl_options = {'REGISTER', 'UNDO'}
-    
+
     def execute(self, context):
+        global COMPONENTS_LIST
         obj = context.active_object
         
         if obj is None:
             self.report({'ERROR'}, "Select an object")
             return {'CANCELLED'}
         
-        # Get currently selected component properties from dictionary
+        # Get currently selected component properties from global
         component = context.scene.active_component_type
-        properties = COMPONENT_PROPERTIES.get(component, {})
-        
-        # Create new chosen custom properties 
-        for key, value in properties.items():
-            obj[key] = value
-            
-        self.report({'INFO'}, f"Added {component} properties to {obj.name}")
+        properties = COMPONENTS_LIST.get(component)
+
+        # Create new custom properties for current object
+        if properties:
+            for key, value in properties.items():
+                obj[key] = value
+            self.report({'INFO'}, f"Applied {component}")
+        else:
+            self.report({'ERROR'}, "Component data missing from cache")
+
         return {'FINISHED'}
     
     
@@ -217,17 +228,18 @@ class MESH_OT_remove_component(bpy.types.Operator):
     bl_options = {'REGISTER', 'UNDO'}
     
     def execute(self, context):
+        global COMPONENTS_LIST
         obj = context.active_object
         
         if obj is None:
             self.report({'ERROR'}, "Select an object")
             return {'CANCELLED'}
         
-        # Get currently selected component properties from dictionary
+        # Get currently selected component properties from global
         component = context.scene.active_component_type
-        properties = COMPONENT_PROPERTIES.get(component, {})
+        properties = COMPONENTS_LIST.get(component, {})
         
-        # Create new chosen custom properties 
+        # Remove chosen custom properties 
         for key in properties.keys():
             if key in obj:
                 del obj[key]
@@ -245,7 +257,7 @@ class VIEW_OT_toggle_physics_visual(bpy.types.Operator):
         
         # Add and update new custom property to scene to track view type
         if "physics_view_active" not in context.scene:
-            context.scene["physics_view_active"] = False
+            context.scene["physics_view_active"] = True
         is_active = not context.scene["physics_view_active"]
         context.scene["physics_view_active"] = is_active
         
@@ -277,11 +289,48 @@ class VIEW_OT_toggle_physics_visual(bpy.types.Operator):
         return {'FINISHED'}
 
 
+# --- IMPORT FROM GLTF ---
+class IMPORT_OT_import_gltf(bpy.types.Operator, ImportHelper):
+    bl_idname = "object.import_gltf"
+    bl_label = "Import Level (.gltf)"
+    filename_ext = ".gltf"
+    filter_glob: bpy.props.StringProperty(
+        default="*.gltf;*.glb",
+        options={'HIDDEN'},
+        maxlen=255,
+    )
+
+    def execute(self, context):
+        
+        bpy.ops.import_scene.gltf(filepath=self.filepath)
+    
+        for screen in bpy.data.screens:
+            for area in screen.areas:
+                if area.type == 'VIEW_3D':
+                    for space in area.spaces:
+                        if space.type == 'VIEW_3D':
+                            space.shading.wireframe_color_type = 'OBJECT'
+                            space.shading.color_type = 'OBJECT'
+
+
+        # Sets the colliders and triggers to correct colours/display types
+        for obj in bpy.data.objects:
+            if obj.name.startswith("COL_"):
+                obj.display_type = 'WIRE'
+                obj.color = (0.15, 1.0, 0.95, 1.0)
+            elif obj.name.startswith("TRIG_"):
+                obj.display_type = 'WIRE'
+                obj.color = (1.0, 0.6, 0.0, 1.0)
+                
+        self.report({'INFO'}, f"Level imported successfully to {self.filepath}")
+        return {'FINISHED'}
+
+
 # --- EXPORT TO GLTF ----------------------
-class EXPORT_OT_level_glb(bpy.types.Operator, ExportHelper):
-    bl_idname = "export.level_glb"
-    bl_label = "Build Level (.glb)"
-    filename_ext = ".glb"
+class EXPORT_OT_level_gltf(bpy.types.Operator, ExportHelper):
+    bl_idname = "export.level_gltf"
+    bl_label = "Export Level (.gltf)"
+    filename_ext = ".gltf"
 
     def execute(self, context):
         # All custom properties that want exporting should have this prefix!!!!!
@@ -318,7 +367,10 @@ class EXPORT_OT_level_glb(bpy.types.Operator, ExportHelper):
             export_extras=True,
             
             # Apply all modifiers before export
-            export_apply=True
+            export_apply=True,
+            
+            export_animations=True,
+            export_skins=True
         )
         
         self.report({'INFO'}, f"Level exported successfully to {self.filepath}")
@@ -393,17 +445,18 @@ class LEVEL_PT_editor_panel(bpy.types.Panel):
         
         layout.separator()
         
-        # Exporting the scene
+        # Importing and exporting a glTF file
         box = layout.box()
-        box.label(text="Export:")
-        box.operator("export.level_glb", icon='EXPORT')
+        box.label(text="Import/Export:")
+        box.operator("object.import_gltf", icon='IMPORT')
+        box.operator("export.level_gltf", icon='EXPORT')
 
 
 
 # --- REGISTRATION ---
 def register():
-    components()
-    collider_types()
+    dropdown_types()
+    bpy.utils.register_class(IMPORT_OT_import_gltf)
     bpy.utils.register_class(MESH_OT_create_room_template)
     bpy.utils.register_class(MESH_OT_assign_collider)
     bpy.utils.register_class(MESH_OT_assign_trigger)
@@ -411,7 +464,7 @@ def register():
     bpy.utils.register_class(MESH_OT_remove_component)
     bpy.utils.register_class(VIEW_OT_toggle_physics_visual)
     bpy.utils.register_class(LEVEL_PT_editor_panel)
-    bpy.utils.register_class(EXPORT_OT_level_glb)
+    bpy.utils.register_class(EXPORT_OT_level_gltf)
 
 if __name__ == "__main__":
     register()

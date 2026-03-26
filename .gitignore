@@ -38,3 +38,8 @@ Makefile
 *.swp
 *.swo
 .DS_Store
+
+# --- Blender backups ---
+*.blend1
+*.blend2
+*.blend3
