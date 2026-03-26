@@ -27,6 +27,12 @@ include_paths.stb = EXTERNAL .. "stb"
 
 lib_dirs = {}
 
+-- SDL build flags
+local sdl_build_type = "Release" -- default (no need to debug SDL right?)
+if _ACTION == "vs2022" then
+    SDL_BUILD_FLAGS = "-G \"Visual Studio 17 2022\""
+end
+
 -- VULKAN_SDK
 if os.host() == "windows" then
     include_paths.Vulkan = VULKAN_SDK .. "/Include"
@@ -36,12 +42,6 @@ else
     include_paths.Vulkan = VULKAN_SDK .. "/include"
     lib_dirs.Vulkan      = VULKAN_SDK .. "/lib"
     lib_dirs.SDL3        = SDL_BUILD_DIR
-end
-
--- SDL build flags
-local sdl_build_type = "Release" -- default (no need to debug SDL right?)
-if _ACTION == "vs2022" then
-    SDL_BUILD_FLAGS = "-G \"Visual Studio 17 2022\""
 end
 
 -- Google's glsl compiler (by default we expect it installed)
