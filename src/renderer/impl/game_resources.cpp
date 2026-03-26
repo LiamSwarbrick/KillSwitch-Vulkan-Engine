@@ -2,16 +2,26 @@
 
 #include "internal_state.h"
 
+#include "core/assetsys.h"  // CPU-side asset data
+
 void create_startup_resources();
 void create_window_dependent_resources();
 
-uint32_t create_resource_with_buffer_data(const char* debug_name, FG_ResourceFlags flags, VkBufferUsageFlags usage, size_t size, void* data);
-MeshBufferRIDs create_mesh_resources(
-    const char* debug_name, FG_ResourceFlags shared_flags, uint32_t index_count, uint32_t vertex_count,
+uint32_t create_resource_with_buffer_data(
+    const char* debug_name, FG_ResourceFlags flags,
+    VkBufferUsageFlags usage, size_t size, void* data
+    );
+PrimitiveRIDs create_primitive_resources(
+    const char* debug_name, FG_ResourceFlags shared_flags, uint32_t material_index,
+    uint32_t index_count, uint32_t vertex_count,
     uint32_t* indices,
     glm::vec3* positions, glm::vec2* texcoords, glm::vec3* normals, glm::vec3* colors,
     glm::uvec4* joint_ids, glm::vec4* joint_weights  // Joints only for skinned meshes
-);
+    );
+MeshRIDs create_mesh_resources(
+    const char* debug_name, FG_ResourceFlags shared_flags, 
+    );
+
 uint32_t create_material_texture2d_resource(const char* debug_name, FG_ResourceFlags flags,
      uint8_t* data, uint64_t data_size,
      uint32_t width, uint32_t height, VkFormat format
@@ -301,10 +311,17 @@ uint32_t create_resource_with_buffer_data(const char* debug_name, FG_ResourceFla
     return rid;
 }
 
-MeshBufferRIDs create_mesh_resources(const char* debug_name, FG_ResourceFlags shared_flags, uint32_t index_count, uint32_t vertex_count,
+// MeshBufferRIDs create_mesh_resources(const char* debug_name, FG_ResourceFlags shared_flags, uint32_t index_count, uint32_t vertex_count,
+//     uint32_t* indices,
+//     glm::vec3* positions, glm::vec2* texcoords, glm::vec3* normals, glm::vec3* colors,
+    // glm::uvec4* joint_ids, glm::vec4* joint_weights)
+PrimitiveRIDs create_primitive_resources(
+    const char* debug_name, FG_ResourceFlags shared_flags, uint32_t material_index,
+    uint32_t index_count, uint32_t vertex_count,
     uint32_t* indices,
     glm::vec3* positions, glm::vec2* texcoords, glm::vec3* normals, glm::vec3* colors,
-    glm::uvec4* joint_ids, glm::vec4* joint_weights)
+    glm::uvec4* joint_ids, glm::vec4* joint_weights  // Joints only for skinned meshes
+)
 {
     // Required vertex attributes
     SDL_assert(positions && texcoords && normals);
@@ -315,64 +332,66 @@ MeshBufferRIDs create_mesh_resources(const char* debug_name, FG_ResourceFlags sh
                                VK_BUFFER_USAGE_TRANSFER_DST_BIT;
 
 
-    MeshBufferRIDs mesh_rids = {};
+    PrimitiveRIDs prim_rids = {};
+    prim_rids.material_index = material_index;
+
     char debug_resource_name[256] = {};
 
     // Index buffer
     snprintf(debug_resource_name, sizeof(debug_resource_name), "%s_IndexBuffer", debug_name);
-    mesh_rids.index_buf_rid = create_resource_with_buffer_data(
+    prim_rids.index_buf_rid = create_resource_with_buffer_data(
         debug_resource_name, shared_flags, usage, index_count * sizeof(uint32_t), indices
     );
 
     // Positions
     snprintf(debug_resource_name, sizeof(debug_resource_name), "%s_PositionBuffer", debug_name);
-    mesh_rids.v_pos_buf_rid = create_resource_with_buffer_data(
+    prim_rids.v_pos_buf_rid = create_resource_with_buffer_data(
         debug_resource_name, shared_flags, usage, vertex_count * sizeof(glm::vec3), positions
     );
 
     // Texcoords
     snprintf(debug_resource_name, sizeof(debug_resource_name), "%s_TexcoordBuffer", debug_name);
-    mesh_rids.v_texcoord_buf_rid = create_resource_with_buffer_data(
+    prim_rids.v_texcoord_buf_rid = create_resource_with_buffer_data(
         debug_resource_name, shared_flags, usage, vertex_count * sizeof(glm::vec2), texcoords
     );
     
     // Normals
     snprintf(debug_resource_name, sizeof(debug_resource_name), "%s_NormalBuffer", debug_name);
-    mesh_rids.v_normal_buf_rid = create_resource_with_buffer_data(
+    prim_rids.v_normal_buf_rid = create_resource_with_buffer_data(
         debug_resource_name, shared_flags, usage, vertex_count * sizeof(glm::vec3), normals
     );
 
     // Colors (Optional) TODO: Probably remove
-    mesh_rids.v_color_buf_rid = UINT32_MAX;
+    prim_rids.v_color_buf_rid = UINT32_MAX;
     if (colors)
     {
         snprintf(debug_resource_name, sizeof(debug_resource_name), "%s_ColorBuffer", debug_name);
-        mesh_rids.v_color_buf_rid = create_resource_with_buffer_data(
+        prim_rids.v_color_buf_rid = create_resource_with_buffer_data(
             debug_resource_name, shared_flags, usage, vertex_count * sizeof(glm::vec3), colors
         );
     }
 
     // Joint IDs (Optional)
-    mesh_rids.v_joint_ids_buf_rid = UINT32_MAX;
+    prim_rids.v_joint_ids_buf_rid = UINT32_MAX;
     if (joint_ids)
     {
         snprintf(debug_resource_name, sizeof(debug_resource_name), "%s_JointIDsBuffer", debug_name);
-        mesh_rids.v_joint_ids_buf_rid = create_resource_with_buffer_data(
+        prim_rids.v_joint_ids_buf_rid = create_resource_with_buffer_data(
             debug_resource_name, shared_flags, usage, vertex_count * sizeof(glm::uvec4), joint_ids
         );
     }
 
     // Joint weights (Optional)
-    mesh_rids.v_joint_weights_buf_rid = UINT32_MAX;
+    prim_rids.v_joint_weights_buf_rid = UINT32_MAX;
     if (joint_weights)
     {
         snprintf(debug_resource_name, sizeof(debug_resource_name), "%s_JointWeights", debug_name);
-        mesh_rids.v_joint_weights_buf_rid = create_resource_with_buffer_data(
+        prim_rids.v_joint_weights_buf_rid = create_resource_with_buffer_data(
             debug_resource_name, shared_flags, usage, vertex_count * sizeof(glm::vec4), joint_weights
         );
     }
 
-    return mesh_rids;
+    return prim_rids;
 }
 
 uint32_t compute_num_mip_levels(uint32_t image_level0_width, uint32_t image_level0_height)
