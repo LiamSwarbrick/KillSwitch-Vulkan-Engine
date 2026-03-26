@@ -1,6 +1,6 @@
 #include "core/core.h"
 #include "renderer/renderer.h"
-
+#include "core/resource_manager.h"
 #include "SDL3/SDL.h"
 #include "SDL3/SDL_main.h"
 
@@ -18,6 +18,29 @@ int main(int argc, char *argv[])
 
     Renderer_InitInfo renderer_info = { .window = window, .enable_validation = is_debugging };
     Renderer_Init(&renderer_info);
+    ResourceManager resource_manager = ResourceManager_Create((ResourceManagerCreateInfo){
+        .debug_name = "GameAssets",
+        .initial_capacity = 32
+    });
+
+    ResourceHandle boot_vert = ResourceManager_RequestBinary(
+        &resource_manager,
+        RESOURCE_TYPE_SHADER_BYTECODE,
+        RESOURCE_RESIDENCY_BOOT,
+        "shader.unlit.vert",
+        "shaderspv/unlit.vert.spv"
+    );
+
+    ResourceHandle boot_frag = ResourceManager_RequestBinary(
+        &resource_manager,
+        RESOURCE_TYPE_SHADER_BYTECODE,
+        RESOURCE_RESIDENCY_BOOT,
+        "shader.unlit.frag",
+        "shaderspv/unlit.frag.spv"
+    );
+
+    (void)boot_vert;
+    (void)boot_frag;
     
     // Testing shader upload api.
     // const uint32_t* test_vert_spv = {};    
@@ -28,8 +51,18 @@ int main(int argc, char *argv[])
     //load scene
 	//Asset* asset1 = load_asset("assets/levels/shapes.gltf");
     //Asset* asset2 = load_asset("assets/props/cube.gltf");
-    Asset* asset3 = load_asset("assets/animations/ExtrasTest.gltf");
-    SDL_Log("Asset 3 Extras: %s\n", asset3->nodes[0].extras_json);
+    ResourceHandle asset3_handle = ResourceManager_RequestGLTFAsset(
+        &resource_manager,
+        RESOURCE_RESIDENCY_TRANSIENT,
+        "anim.extras_test",
+        "assets/animations/ExtrasTest.gltf"
+    );
+
+    Asset* asset3 = ResourceManager_GetGLTFAsset(&resource_manager, asset3_handle);
+    if (asset3 && asset3->node_count > 0 && asset3->nodes[0].extras_json)
+    {
+        SDL_Log("Asset 3 Extras: %s\n", asset3->nodes[0].extras_json);
+    }
 
     while (running)
     {
@@ -62,7 +95,13 @@ int main(int argc, char *argv[])
             Renderer_DrawFrame();
         }
     }
+    ResourceManager_UnloadByResidency(
+        &resource_manager,
+        RESOURCE_RESIDENCY_TRANSIENT,
+        1
+    );
 
+    ResourceManager_Destroy(&resource_manager);
     Renderer_Shutdown();
     Core_Shutdown(window);
 
