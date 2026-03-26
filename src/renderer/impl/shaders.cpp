@@ -91,7 +91,12 @@ void SubmitDraw(VkCommandBuffer cmd, Renderable* r, PipelineKey key)
     pc.v_positions_ptr      = renderstate.registry.resources[r->mesh_rids.v_pos_buf_rid].buffer_gpu_address;
     pc.v_texcoords_ptr      = renderstate.registry.resources[r->mesh_rids.v_texcoord_buf_rid].buffer_gpu_address;
     pc.v_normals_ptr        = renderstate.registry.resources[r->mesh_rids.v_normal_buf_rid].buffer_gpu_address;
-    pc.v_colors_ptr         = renderstate.registry.resources[r->mesh_rids.v_color_buf_rid].buffer_gpu_address;
+
+    // TODO: Remove vertex colors probably
+    if (r->mesh_rids.v_color_buf_rid != UINT32_MAX)
+        pc.v_colors_ptr         = renderstate.registry.resources[r->mesh_rids.v_color_buf_rid].buffer_gpu_address;
+    else
+        pc.v_colors_ptr = 0;
 
     if (r->mesh_rids.v_joint_ids_buf_rid != UINT32_MAX)
         pc.v_joint_ids_ptr = renderstate.registry.resources[r->mesh_rids.v_joint_ids_buf_rid].buffer_gpu_address;

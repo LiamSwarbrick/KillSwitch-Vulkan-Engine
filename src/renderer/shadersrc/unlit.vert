@@ -27,7 +27,9 @@ void main()
     vec3 v_pos    = VPositionBuffer(pc.v_positions_ptr).positions[index];
     vec2 v_uv     = VTexcoordBuffer(pc.v_texcoords_ptr).texcoords[index];
     vec3 v_normal = VNormalBuffer(pc.v_normals_ptr).normals[index];
-    vec3 v_color  = VColorBuffer(pc.v_colors_ptr).colors[index];
+    vec3 v_color  = vec3(1.0);
+    if (pc.v_colors_ptr != 0)
+        v_color  = VColorBuffer(pc.v_colors_ptr).colors[index];
     
     mat4 model_matrix = obj.model;
 

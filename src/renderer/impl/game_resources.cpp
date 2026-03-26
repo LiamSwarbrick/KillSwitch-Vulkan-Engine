@@ -182,6 +182,15 @@ void create_startup_resources()
         quad_positions, quad_uvs, quad_normals, quad_colors, NULL, NULL
     );
 
+    Primitive* test_prim = &renderstate.temp_test_mesh->primitives[0];
+    float* test_colors = (float*)L_calloc(test_prim->vertex_count, 3 * sizeof(float) * test_prim->vertex_count, &renderstate.main.tt);
+    for (int i = 0; i < test_prim->vertex_count * 3; ++i) test_colors[i] = fabsf(sinf((float)i));
+    renderstate.rids.temp_test_mesh = create_mesh_resources(renderstate.temp_test_mesh->name, flags,
+        test_prim->index_count, test_prim->vertex_count, test_prim->indices,
+        (glm::vec3*)test_prim->positions, (glm::vec2*)test_prim->texcoords, (glm::vec3*)test_prim->normals,
+        (glm::vec3*)test_colors, NULL, NULL
+    );
+    L_free(test_colors, &renderstate.main.tt);
 
     // TEST EMPTY IMAGE RESOURCE:
     ResourceCreateInfo test_create_info = {
@@ -297,7 +306,7 @@ MeshBufferRIDs create_mesh_resources(const char* debug_name, FG_ResourceFlags sh
     glm::uvec4* joint_ids, glm::vec4* joint_weights)
 {
     // Required vertex attributes
-    SDL_assert(positions && texcoords && normals && colors);
+    SDL_assert(positions && texcoords && normals);
 
     // Each buffer has the same usage flags
     VkBufferUsageFlags usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | 
@@ -332,26 +341,30 @@ MeshBufferRIDs create_mesh_resources(const char* debug_name, FG_ResourceFlags sh
         debug_resource_name, shared_flags, usage, vertex_count * sizeof(glm::vec3), normals
     );
 
-    // Colors
-    snprintf(debug_resource_name, sizeof(debug_resource_name), "%s_ColorBuffer", debug_name);
-    mesh_rids.v_color_buf_rid = create_resource_with_buffer_data(
-        debug_resource_name, shared_flags, usage, vertex_count * sizeof(glm::vec3), colors
-    );
+    // Colors (Optional) TODO: Probably remove
+    mesh_rids.v_color_buf_rid = UINT32_MAX;
+    if (colors)
+    {
+        snprintf(debug_resource_name, sizeof(debug_resource_name), "%s_ColorBuffer", debug_name);
+        mesh_rids.v_color_buf_rid = create_resource_with_buffer_data(
+            debug_resource_name, shared_flags, usage, vertex_count * sizeof(glm::vec3), colors
+        );
+    }
 
+    // Joint IDs (Optional)
     mesh_rids.v_joint_ids_buf_rid = UINT32_MAX;
     if (joint_ids)
     {
-        // Joint IDs
         snprintf(debug_resource_name, sizeof(debug_resource_name), "%s_JointIDsBuffer", debug_name);
         mesh_rids.v_joint_ids_buf_rid = create_resource_with_buffer_data(
             debug_resource_name, shared_flags, usage, vertex_count * sizeof(glm::uvec4), joint_ids
         );
     }
 
+    // Joint weights (Optional)
     mesh_rids.v_joint_weights_buf_rid = UINT32_MAX;
     if (joint_weights)
     {
-        // Joint weights
         snprintf(debug_resource_name, sizeof(debug_resource_name), "%s_JointWeights", debug_name);
         mesh_rids.v_joint_weights_buf_rid = create_resource_with_buffer_data(
             debug_resource_name, shared_flags, usage, vertex_count * sizeof(glm::vec4), joint_weights

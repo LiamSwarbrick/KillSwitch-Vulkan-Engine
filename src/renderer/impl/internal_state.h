@@ -72,6 +72,10 @@ typedef struct RenderState
 
     // Per Frame Table for converting Pass Type into framegraph.passes array index
     uint32_t pass_id_from_type[PASS_TYPE_COUNT];  // ONLY use after framegraph has been build that frame
+
+
+    #warning TEMP Mesh state in internal_state.h for assetsys integration
+    Mesh* temp_test_mesh;
 }
 RenderState;
 
