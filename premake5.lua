@@ -164,7 +164,7 @@ workspace "AdventureEngine"
     project "core"
         kind "StaticLib"
         language "C++"
-        cppdialect "C++23"
+        cppdialect "C++latest"
 
         files {
             SRC .. "core/**.h",
@@ -196,7 +196,7 @@ workspace "AdventureEngine"
     project "renderer"
         kind "StaticLib"
         language "C++"
-        cppdialect "C++23"
+        cppdialect "C++latest"
 
         files {
             SRC .. "renderer/**.h",
@@ -264,7 +264,7 @@ workspace "AdventureEngine"
     project "game"
         kind "ConsoleApp"
         language "C++"
-        cppdialect "C++23"
+        cppdialect "C++latest"
 
         files {
             SRC .. "game/**.h",
@@ -273,7 +273,8 @@ workspace "AdventureEngine"
 
         includedirs {
             SRC,
-            SRC .. "game/include",
+            SRC .. "game",
+            SRC .. "game/foundations",
             include_paths.SDL3,
             include_paths.glm,
             include_paths.cgltf
