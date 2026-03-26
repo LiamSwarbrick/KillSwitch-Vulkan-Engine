@@ -243,7 +243,7 @@ void fg_execute_pass(uint32_t pass_idx, VkCommandBuffer cmd)
                 .imageView           = res->image.view,
                 .imageLayout         = usage->layout,
 
-                // Currently no MSAA
+                // TODO: Currently no MSAA
                 .resolveMode         = VK_RESOLVE_MODE_NONE,
                 .resolveImageView    = VK_NULL_HANDLE,
                 .resolveImageLayout  = VK_IMAGE_LAYOUT_UNDEFINED,
@@ -438,7 +438,7 @@ uint32_t add_resource_to_registry_and_heap(const char* debug_name, FG_ResourceTy
         VkBufferDeviceAddressInfo address_info = {
             .sType   = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO,
             .pNext   = NULL,
-            .buffer  = res->buffer.handle,
+            .buffer  = res->buffer.handle
         };
         res->buffer_gpu_address = vkGetBufferDeviceAddress(renderstate.device, &address_info);
     }
@@ -495,18 +495,25 @@ uint32_t FG_CreateResource(const char* debug_name, FG_ResourceType type, FG_Reso
     {
         // Create .buffer.handle, with allocation stored in .allocation
         VmaAllocationCreateInfo alloc_create_info = { .usage = VMA_MEMORY_USAGE_AUTO };
+        if (create_info->is_cpu_accessible)
+        {
+            alloc_create_info.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | 
+                                      VMA_ALLOCATION_CREATE_MAPPED_BIT;
+        }
+
+        VmaAllocationInfo alloc_info = {};
         VK_CHECK(vmaCreateBuffer(
             renderstate.vma_allocator,
             &create_info->buffer_create_info,
             &alloc_create_info,
             &resource_info.import_info.buffer.handle,
             &resource_info.allocation,
-            NULL
+            &alloc_info
         ));
         
         // Keep metadata
         resource_info.import_info.buffer.size = create_info->buffer_create_info.size;
-        resource_info.import_info.buffer.mapped_data = NULL;  // TODO! vmaMapMemory stuff might be useful for CPU side updating of skeletal bones.
+        resource_info.import_info.buffer.mapped_data = alloc_info.pMappedData;
     }
     else
     {
@@ -627,7 +634,7 @@ void FG_UploadBufferData(ThreadStagingObjects* stg, uint32_t rid, const void* da
     vkEndCommandBuffer(stg->upload_command_buffer);
 
     // Submit and Wait
-    // NOTE: For the baseline, this uses a temporary fence to avoid GPU-side race conditions,
+    // TODO:: For the baseline, this uses a temporary fence to avoid GPU-side race conditions,
     // i.e., this thread must wait CPU side so that we don't try use the command buffer while it's in use.
     // I've heard of better strategies to hide latency but meh. Can just put this on non-main threads.
     VkFenceCreateInfo fence_info = { .sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO };
@@ -771,7 +778,7 @@ void FG_UploadImageData(ThreadStagingObjects* stg, uint32_t rid, const void* dat
 
 void bindless_heap_init()
 {
-    // Create Layout
+    // One single descriptor set layout for renderpass shaders
     {
         // Binding 0: Texture Array (Sampled Images)
         // Binding 1: Sampler Array
@@ -793,13 +800,12 @@ void bindless_heap_init()
         };
 
         VkDescriptorBindingFlags flags[2] = {
-            // Sampled Images:
+            // Binding 0: Textures (Sampled Images):
             // The array of image descriptors won't be full. And we want update which are used depending on renderpass.
             VK_DESCRIPTOR_BINDING_PARTIALLY_BOUND_BIT | VK_DESCRIPTOR_BINDING_UPDATE_AFTER_BIND_BIT,
 
-            // Samplers:
-            // Just fully bind the fixed array array of samplers before command buffer recording:
-            0
+            // Binding 1: Samplers
+            0  // Default descriptor set behaviour. Just fully bind the fixed array array of samplers before command buffer recording
         };
 
         VkDescriptorSetLayoutBindingFlagsCreateInfo flags_create_info = {

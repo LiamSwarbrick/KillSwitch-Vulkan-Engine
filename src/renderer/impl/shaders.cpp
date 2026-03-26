@@ -1,29 +1,22 @@
 #include "shaders.h"
 #include "internal_state.h"
 
-uint64_t get_resource_buffer_device_address(uint32_t rid)
-{
-    if (rid == UINT32_MAX) return 0;
-    FG_Resource* res = &renderstate.registry.resources[rid];
-    
-    VkBufferDeviceAddressInfo info = { VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO };
-    info.buffer = res->buffer.handle;
-    return vkGetBufferDeviceAddress(renderstate.device, &info);
-}
-
 void UpdateGlobalSceneData()
 {
-    SceneBufferData data = {};
+    SceneData data = {};
     
-    // Set matrices to Identity for the first "Hello Triangle" test
-    // This ensures Clip Space = World Space
-    data.view = glm::mat4();
-    data.proj = glm::mat4();
-    data.view_proj = glm::mat4();
+    // TODO: Add camera here.
+    data.view = glm::mat4(1.0f);
+    // data.view[3][1] = -0.5f;
+    data.proj = glm::mat4(1.0f);
+    data.view_proj = data.proj * data.view;
     FG_UploadBufferData(&renderstate.main.staging_objects, 
                         renderstate.rids.global_scene_buffer_rid, 
-                        &data, sizeof(SceneBufferData)
+                        &data, sizeof(SceneData)
     );
+
+    // Object transforms
+    ResetMappedArena(&renderstate.object_transforms);
 }
 
 void SubmitDraw(VkCommandBuffer cmd, Renderable* r, PipelineKey key)
@@ -38,26 +31,42 @@ void SubmitDraw(VkCommandBuffer cmd, Renderable* r, PipelineKey key)
     );
 
     // Prepare Push Constants
-    PushConstants pc = {};
-    pc.scene_ptr    = get_resource_buffer_device_address(renderstate.rids.global_scene_buffer_rid);
-    pc.material_ptr = get_resource_buffer_device_address(renderstate.rids.material_ssbo_rid);
-    pc.vertex_ptr   = get_resource_buffer_device_address(r->mesh_rid);
-    
+    GraphicsPushConstants pc = {};
+    pc.scene_ptr    = renderstate.registry.resources[renderstate.rids.global_scene_buffer_rid].buffer_gpu_address;
     pc.object_ptr   = r->object_ptr;
+    pc.material_ptr = renderstate.registry.resources[renderstate.rids.material_ssbo_rid].buffer_gpu_address;
+    pc.material_idx = r->material_idx;
     pc.joint_ptr    = r->vertex_type == VERTEX_TYPE_SKINNED ? r->joint_ptr : 0;
-    pc.material_idx = r->material_id;
+
+    pc.index_ptr    = renderstate.registry.resources[r->mesh_rids.index_buf_rid].buffer_gpu_address;
+    pc.v_positions_ptr      = renderstate.registry.resources[r->mesh_rids.v_pos_buf_rid].buffer_gpu_address;
+    pc.v_texcoords_ptr      = renderstate.registry.resources[r->mesh_rids.v_texcoord_buf_rid].buffer_gpu_address;
+    pc.v_normals_ptr        = renderstate.registry.resources[r->mesh_rids.v_normal_buf_rid].buffer_gpu_address;
+    pc.v_colors_ptr         = renderstate.registry.resources[r->mesh_rids.v_color_buf_rid].buffer_gpu_address;
+
+    if (r->mesh_rids.v_joint_ids_buf_rid != UINT32_MAX)
+        pc.v_joint_ids_ptr = renderstate.registry.resources[r->mesh_rids.v_joint_ids_buf_rid].buffer_gpu_address;
+    else
+        pc.v_joint_ids_ptr = 0;
+
+    if (r->mesh_rids.v_joint_weights_buf_rid != UINT32_MAX)
+        pc.v_joint_weights_ptr = renderstate.registry.resources[r->mesh_rids.v_joint_weights_buf_rid].buffer_gpu_address;
+    else
+        pc.v_joint_weights_ptr = 0;
+
 
     vkCmdPushConstants(cmd, renderstate.global_pipeline_layout, 
                        VK_SHADER_STAGE_ALL, 
-                       0, sizeof(PushConstants), &pc);
+                       0, sizeof(GraphicsPushConstants), &pc);
 
     // Draw
-    // Since we use Vertex Pulling, we don't bind vertex buffers.
-    // We just need the count of vertices in the buffer.
-    FG_Resource* mesh_res = &renderstate.registry.resources[r->mesh_rid];
-    uint32_t vertex_count = mesh_res->buffer.size / sizeof(Vertex);
-    
-    vkCmdDraw(cmd, vertex_count, 1, 0, 0);
+    // NOTE: Since we use Vertex Pulling, we don't bind vertex or index buffers.
+    //       In fact, here we gotta use vkCmdDraw, but with the index count.
+    //       Not using vkCmdDrawIndexed because the index buffer is not the one part of pipeline pVertexInputState
+    uint32_t index_count = renderstate.registry.resources[r->mesh_rids.index_buf_rid].buffer.size / sizeof(uint32_t);
+    uint32_t instance_count = 1;  // TODO: Instanced rendering
+
+    vkCmdDraw(cmd, index_count, instance_count, 0, 0);
 }
 
 // Shader Registry
