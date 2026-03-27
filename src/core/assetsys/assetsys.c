@@ -196,6 +196,7 @@ Asset* load_asset(const char* filename) {
 		node->mesh_index = get_mesh_index(data, gltf_node->mesh);
 		node->camera_index = get_camera_index(data, gltf_node->camera);
 		node->light_index = get_light_index(data, gltf_node->light);
+		node->skin_index = get_skin_index(data, gltf_node->skin);
 
 		memcpy(node->translation, gltf_node->translation, sizeof(float) * 3);
 		memcpy(node->rotation, gltf_node->rotation, sizeof(float) * 4);

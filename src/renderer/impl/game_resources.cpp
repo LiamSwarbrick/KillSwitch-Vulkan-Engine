@@ -182,6 +182,15 @@ void create_startup_resources()
         quad_positions, quad_uvs, quad_normals, quad_colors, NULL, NULL
     );
 
+    Primitive* test_prim = &renderstate.temp_test_mesh->primitives[0];
+    float* test_colors = (float*)L_calloc(test_prim->vertex_count, 3 * sizeof(float) * test_prim->vertex_count, &renderstate.main.tt);
+    for (int i = 0; i < test_prim->vertex_count * 3; ++i) test_colors[i] = fabsf(sinf((float)i));
+    renderstate.rids.temp_test_mesh = create_mesh_resources(renderstate.temp_test_mesh->name, flags,
+        test_prim->index_count, test_prim->vertex_count, test_prim->indices,
+        (glm::vec3*)test_prim->positions, (glm::vec2*)test_prim->texcoords, (glm::vec3*)test_prim->normals,
+        (glm::vec3*)test_colors, (glm::uvec4*)test_prim->joints, (glm::vec4*)test_prim->weights
+    );
+    L_free(test_colors, &renderstate.main.tt);
 
     // TEST EMPTY IMAGE RESOURCE:
     ResourceCreateInfo test_create_info = {

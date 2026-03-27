@@ -39,7 +39,8 @@ void main()
         vec4 v_weights    = VJointWeightsBuffer(pc.v_joint_weights_ptr).weights[index];
 
         JointBuffer jb = JointBuffer(pc.joint_ptr);
-        mat4 skin = 
+
+         mat4 skin = 
             jb.joints[v_joint_ids.x] * v_weights.x +
             jb.joints[v_joint_ids.y] * v_weights.y +
             jb.joints[v_joint_ids.z] * v_weights.z +
