@@ -1,6 +1,7 @@
 #include "materials.h"
 #include "shaders.h"
 
+// Remember if tertiary or more shader's are needed, update drawcall.cpp::AddDrawCall
 extern const MaterialConfigs g_material_configs = {
     .by_name = {
         .MAT_UNLIT = {

@@ -12,39 +12,55 @@
 #endif
 
 #ifndef __cplusplus
-#define VERTEX_TYPE_STATIC 0
-#define VERTEX_TYPE_SKINNED 1
+    #define VERTEX_TYPE_STATIC 0
+    #define VERTEX_TYPE_SKINNED 1
 #else
-typedef enum
-{
-    VERTEX_TYPE_STATIC = 0,
-    VERTEX_TYPE_SKINNED = 1,
+    typedef enum
+    {
+        VERTEX_TYPE_STATIC = 0,
+        VERTEX_TYPE_SKINNED = 1,
 
-    VERETX_TYPE_COUNT
-}
-VertexType;
+        VERETX_TYPE_COUNT
+    }
+    VertexType;
 #endif
 
-#define BLEND_MODE_OPAQUE   0
-#define BLEND_MODE_MASKED   1
-#define BLEND_MODE_BLEND    2
-#define BLEND_MODE_ADDITIVE 3
+#ifndef __cplusplus
+    #define BLEND_MODE_OPAQUE   0
+    #define BLEND_MODE_MASKED   1
+    #define BLEND_MODE_BLEND    2
+    #define BLEND_MODE_ADDITIVE 3
+#else
+    typedef enum
+    {
+        BLEND_MODE_OPAQUE   = 0,
+        BLEND_MODE_MASKED   = 1,
+        BLEND_MODE_BLEND    = 2,
+        BLEND_MODE_ADDITIVE = 3,
+
+        BLEND_MODE_COUNT
+    }
+    BlendMode;
+#endif
 
 struct GraphicsPushConstants
 {
     uint64_t scene_ptr;     // Scene data (View/Proj)
-    uint64_t object_ptr;    // Per-instance data (Model matrix)
     uint64_t material_ptr;  // Material SSBO address
+
+    // Per mesh
+    uint64_t object_ptr;    // Per-instance data (Model matrix)
+    uint64_t joints_ptr;     // Skinning matrices (0 if static)
+
+    // Per primitive:
     uint32_t material_idx;  // Which material in the SSBO
     uint32_t _padding;
-    uint64_t joint_ptr;     // Skinning matrices (0 if static)
-    
-    uint64_t index_ptr;     // Index buffer (Pulling)
+    uint64_t index_ptr;      // Index buffer (Pulling)
     uint64_t v_positions_ptr;
     uint64_t v_texcoords_ptr;
     uint64_t v_normals_ptr;
     uint64_t v_colors_ptr;
-    uint64_t v_joint_ids_ptr;     // Only for skinned meshes
+    uint64_t v_joint_ids_ptr;      // Only for skinned meshes
     uint64_t v_joint_weights_ptr;  // Only for skinned meshes
 };
 struct SceneData
@@ -57,15 +73,6 @@ struct ObjectData
 {
     mat4 model;
 };
-// struct Vertex
-// {
-//     vec3 pos;
-//     vec2 uv;
-//     vec3 normal;
-//     vec4 color;       // TODO: Probably remove color?
-//     uvec4 joint_ids;  // Future: For skinning
-//     vec4 weights;     // Future: For skinning
-// };
 struct MaterialData
 {
     // TODO: Change this to a standard glTF pbr material instead of this shit

@@ -20,8 +20,8 @@ typedef struct ResourceIDs
     uint32_t material_ssbo_rid;
 
     // Dummy stuff
-    MeshRIDs dummy_mesh;
-    MeshRIDs temp_test_mesh;
+    MeshPrefab dummy_mesh;
+    MeshPrefab temp_test_mesh;
 }
 ResourceIDs;
 

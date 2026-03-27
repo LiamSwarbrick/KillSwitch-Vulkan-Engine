@@ -23,14 +23,7 @@ void Renderer_Shutdown();
 void Renderer_ListenToWindowEvent(SDL_Event event);
 void Renderer_DrawFrame();
 
-typedef struct RenderPrefab
-{
-    VertexType vertex_type;
-    MaterialType mat_type;
-    MeshRIDs mesh_rids;
-}
-RenderPrefab;
 
-void Renderer_LoadSceneResource()
+// void Renderer_LoadSceneResource()
 
 #endif  // ENGINE_RENDERER_H

@@ -18,9 +18,9 @@ PrimitiveRIDs create_primitive_resources(
     glm::vec3* positions, glm::vec2* texcoords, glm::vec3* normals, glm::vec3* colors,
     glm::uvec4* joint_ids, glm::vec4* joint_weights  // Joints only for skinned meshes
     );
-MeshRIDs create_mesh_resources(
-    const char* debug_name, FG_ResourceFlags shared_flags, 
-    );
+// MeshRIDs create_mesh_resources(
+//     const char* debug_name, FG_ResourceFlags shared_flags, 
+//     );
 
 uint32_t create_material_texture2d_resource(const char* debug_name, FG_ResourceFlags flags,
      uint8_t* data, uint64_t data_size,
@@ -189,19 +189,37 @@ void create_startup_resources()
         {0,0,1},
         {0,1,1}
     };
-    renderstate.rids.dummy_mesh = create_mesh_resources("QuadMesh", flags, 6, 4, quad_indices,
-        quad_positions, quad_uvs, quad_normals, quad_colors, NULL, NULL
-    );
+    renderstate.rids.dummy_mesh = {
+        .vertex_type = VERTEX_TYPE_STATIC,
+        .mat_type    = MAT_UNLIT,
+        .mesh_rids = {
+            .primitive_count = 1,
+            .primitives = {
+                create_primitive_resources(
+                    "Dummy Primitive",
+                    flags,
+                    0,  // material index
+                    sizeof(quad_indices) / sizeof(quad_indices[0]),
+                    sizeof(quad_positions) / sizeof(quad_positions[0]),
+                    quad_indices, quad_positions, quad_uvs, quad_normals, quad_colors, NULL, NULL
+                )
+            },
+            .joints_buffer_rid = UINT32_MAX
+        }
+    };
+    //  = create_mesh_resources("QuadMesh", flags, 6, 4, quad_indices,
+    //     quad_positions, quad_uvs, quad_normals, quad_colors, NULL, NULL
+    // );
 
-    Primitive* test_prim = &renderstate.temp_test_mesh->primitives[0];
-    float* test_colors = (float*)L_calloc(test_prim->vertex_count, 3 * sizeof(float) * test_prim->vertex_count, &renderstate.main.tt);
-    for (int i = 0; i < test_prim->vertex_count * 3; ++i) test_colors[i] = fabsf(sinf((float)i));
-    renderstate.rids.temp_test_mesh = create_mesh_resources(renderstate.temp_test_mesh->name, flags,
-        test_prim->index_count, test_prim->vertex_count, test_prim->indices,
-        (glm::vec3*)test_prim->positions, (glm::vec2*)test_prim->texcoords, (glm::vec3*)test_prim->normals,
-        (glm::vec3*)test_colors, NULL, NULL
-    );
-    L_free(test_colors, &renderstate.main.tt);
+    // Primitive* test_prim = &renderstate.temp_test_mesh->primitives[0];
+    // float* test_colors = (float*)L_calloc(test_prim->vertex_count, 3 * sizeof(float) * test_prim->vertex_count, &renderstate.main.tt);
+    // for (int i = 0; i < test_prim->vertex_count * 3; ++i) test_colors[i] = fabsf(sinf((float)i));
+    // renderstate.rids.temp_test_mesh = create_mesh_resources(renderstate.temp_test_mesh->name, flags,
+    //     test_prim->index_count, test_prim->vertex_count, test_prim->indices,
+    //     (glm::vec3*)test_prim->positions, (glm::vec2*)test_prim->texcoords, (glm::vec3*)test_prim->normals,
+    //     (glm::vec3*)test_colors, NULL, NULL
+    // );
+    // L_free(test_colors, &renderstate.main.tt);
 
     // TEST EMPTY IMAGE RESOURCE:
     ResourceCreateInfo test_create_info = {

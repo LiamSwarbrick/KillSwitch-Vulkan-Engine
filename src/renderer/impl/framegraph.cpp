@@ -328,6 +328,11 @@ void FG_CmdRenderFrame(VkCommandBuffer cmd)
     FrameGraph* fg = &renderstate.framegraph;
     SDL_assert(fg->pass_count < MAX_PASSES);
 
+    // Bind the Global Bindless Set (textures & samplers)
+    vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, 
+        renderstate.global_pipeline_layout, 0, 1, &renderstate.heap.global_set, 0, NULL
+    );
+
     for (uint32_t i = 0; i < fg->pass_count; ++i)
     {
         fg_execute_pass(i, cmd);

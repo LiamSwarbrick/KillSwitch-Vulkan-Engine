@@ -6,6 +6,21 @@
 #include "shaders.h"
 #include "internal_state.h"
 
+/*
+Intelligent pipeline creation by inspecting input and output attachments
+of the renderpass set in the pipeline key in order to set the 
+attachments for VkGraphicsPipelineCreateInfo.
+
+IMPORTANT IMPLEMENTATION NOTE:
+- A specific renderpass type must be consistent in terms of attachment count and formats from frame to frame.
+  because it would fuck with the above mentioned thing (the pipeline is hashed based on pass_id not attachment formats).
+  The framegraph is built every frame but this just means the inputs and outputs can change
+  The number of inputs/outputs to a specific pass along with their VkFormat's must be hard set.
+
+DONE: Graphics Pipelines creation
+TODO: Compute Pipeline creation (wayyy fucking simpler, but not needed compute shaders yet)
+*/
+
 void PK_Init(PipelineEntry** pipeline_map_ref)
 {
     *pipeline_map_ref = NULL;  // Set to NULL so stb_ds will make a new hash map.

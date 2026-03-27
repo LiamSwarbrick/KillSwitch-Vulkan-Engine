@@ -77,7 +77,7 @@ typedef enum
     FG_SAMPLER_SHADOW,
 
     FG_SAMPLER_COUNT,
-    FG_SAMPLER_NOT_SAMPLABLE,
+    FG_SAMPLER_NOT_SAMPLABLE,  // For output resources
 }
 FG_SamplerType;
 

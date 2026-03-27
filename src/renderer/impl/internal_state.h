@@ -8,6 +8,7 @@
 #include "pipeline_keying.h"
 
 #include "shaders.h"
+#include "drawcall.h"
 #include "mapped_linear_allocator.h"
 #include "renderpasses/metadata.h"
 #include "game_resources.h"
@@ -63,12 +64,19 @@ typedef struct RenderState
     // Pipeline Keying system and shader registry
     // FUTURE: If multithreading drawcalls are needed, see this article on sharing pipelines while using seperate maps per thread:
     //         https://ruby0x1.github.io/machinery_blog_archive/post/vulkan-pipelines-and-render-states/index.html    
-    PipelineEntry* pipeline_map;  // Recreated only when swapchain format changes (so never under most circumstances)
+    PipelineEntry* pipeline_map;          // Recreated only when swapchain format changes (so never under most circumstances)
+
+    // Renderer execution state:
+    VkPipeline currently_bound_pipeline;  // Used to avoid  vkCmdBindPipeline call if it's already bound
+
 
     // TODO: Move this shit to a more game local directory instead of internal state
     ShaderRegistry shader_registry;
     MappedArena object_transforms;
     ResourceIDs rids;  // IDs into registry, framegraph, or pipeline hash
+
+    // Draw call collection (drawcall.h)
+    DrawCallsPerShader drawcalls_collection;
 
     // Per Frame Table for converting Pass Type into framegraph.passes array index
     uint32_t pass_id_from_type[PASS_TYPE_COUNT];  // ONLY use after framegraph has been build that frame

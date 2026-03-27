@@ -527,6 +527,10 @@ void Renderer_Init(const Renderer_InitInfo* info)
     _Renderer_OnWindowResize();  // <-- Creates swapchain and window dependent resources
     CreateOrRecreateResources(FG_RESOURCE_FLAGS_ON_STARTUP);
 
+    // Using arrays of drawcalls per shader type.
+    // E.g. MAT_PBR_WITH_OUTLINE renderable to add a drawcall to both SHADER_PBR and SHADER_OUTLINE
+    InitDrawCallCollections();
+
     // Init per frame structures (except for swapchain_image_acquired_semaphore, which is handled by create_or_recreate_swapchain)
     {
         VkFenceCreateInfo render_fence_create_info = {
@@ -570,6 +574,8 @@ void Renderer_Shutdown()
         vkDestroyCommandPool(renderstate.device, renderstate.frames[i].graphics_command_pool, NULL);
         vkDestroyFence(renderstate.device, renderstate.frames[i].rendering_complete_fence, NULL);
     }
+
+    DestroyDrawCallCollections();
 
     // Shutdown Pipeline Keying and Frame Graph subsystems
     PK_Shutdown(&renderstate.pipeline_map, renderstate.device);
@@ -706,27 +712,44 @@ void Renderer_DrawFrame()
     vkResetCommandPool(renderstate.device, renderstate.frames[frame_in_flight].graphics_command_pool, 0);
 
 
+
+
+
     /* Sort Drawcalls into arrays per shader
 
-        Add to Renderable renderables_per_shader[SHADER_COUNT][MAX_RENDERABLES]
-
         Example, Renderable r with MAT_PBR_WITH_OUTLINE:
-        r could be added to many different shaders:
+        r could be added to many different shaders: (pseudocode)
             renderables_per_shader[SHADER_PBR].append(r);
             renderables_per_shader[SHADER_OUTLINE].append(r);
             renderables_per_shader[SHADER_SHADOWMAP].append(r);
         
-        Importantly, drawcalls aren't tied to game objects's assets.
-        For instance, an outline is togglable in gameplay code.
-        Same with visibility.
+        Importantly, renderables are collected per frame, (not true of the underlying assets).
+        For instance, an outline is togglable in gameplay code. Same with visibility.
     */
 
     #warning TODO: Drawcalls contain the transform mesh ids, material_type and skeleton data
     #warning TODO: Here we need to use them to build renderables.
+    BeginDrawCalls();
 
+    // NOTE: Renderables need to be alive the whole time, (drawcalls point to renderables)
+    //       This is why we'll actually get them through the entity system via the DrawFrame args maybe (or just query the ecs)
+    Renderable r = {
+        .transform = glm::mat4(1.0f),
+        .mesh_prefab = renderstate.rids.dummy_mesh,
+        0, NULL
+    };
     {
         // TODO During week where we integrate with entity system
+
+        AddDrawCall(&r);
     }
+
+    EndDrawCalls();
+
+
+
+
+
 
     /*  Build FrameGraph
 
@@ -752,7 +775,7 @@ void Renderer_DrawFrame()
                 {
                     .rid = swapchain_image_resource_id,
                     .usage_flags = FG_USAGE_COLOR,
-                    .sampler_type = FG_SAMPLER_NOT_SAMPLABLE,
+                    .sampler_type = FG_SAMPLER_NOT_SAMPLABLE,  // NOTE: Outputs attachment, can ignore sampler_type
 
                     .access = VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,
                     .stage  = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
@@ -802,7 +825,6 @@ void Renderer_DrawFrame()
 
     VK_CHECK(vkBeginCommandBuffer(gcmd, &graphics_cmd_begin_info));
     {
-        UpdateGlobalSceneData();
         FG_CmdRenderFrame(gcmd);
         FG_CmdTransitionSwapchainForPresentation(gcmd, swapchain_image_resource_id);
     }
@@ -812,6 +834,8 @@ void Renderer_DrawFrame()
     // End of graphics commands recording
 
     
+
+
 
     // Prepare submission of the command buffer to the queue.
     // - Requires waiting on the present semaphore (signalled when the swapchain is ready)
