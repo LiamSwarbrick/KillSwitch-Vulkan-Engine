@@ -505,6 +505,10 @@ void Renderer_Init(const Renderer_InitInfo* info)
         // But this should just work with multithreading when using thread_safe_submit_cmd()
     }
 
+
+    #warning TEMP: For assetysys integration
+    renderstate.temp_test_mesh = info->temp_test_mesh;
+
     // Init Subsystems
     //
     //   FrameGraph:
@@ -644,7 +648,6 @@ void _Renderer_OnWindowMinimize()
     // TODO: Pause rendering on minimize
 }
 
-
 void Renderer_DrawFrame()
 {
     /*  Get current swapchain image, and wait on sync structures
@@ -764,7 +767,8 @@ void Renderer_DrawFrame()
             .is_compute = 0,
             .render_area = { .offset = { 0, 0 }, .extent = renderstate.swapchain_extent },
             
-            .execute_callback = SwapchainPass_Execute
+            .execute_callback = SwapchainPass_Execute,
+            .user_data = NULL
         };
         swapchain_pass = FG_AddPass(swapchain_pass_desc, PASS_TYPE_SWAPCHAIN_PASS);
     }

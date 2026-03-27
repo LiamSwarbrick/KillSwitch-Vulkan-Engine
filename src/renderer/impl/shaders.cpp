@@ -1,14 +1,63 @@
 #include "shaders.h"
 #include "internal_state.h"
 
+#include <glm/gtc/matrix_transform.hpp>  // lookAt, perspective, translate
+
 void UpdateGlobalSceneData()
 {
     SceneData data = {};
     
-    // TODO: Add camera here.
-    data.view = glm::mat4(1.0f);
-    // data.view[3][1] = -0.5f;
-    data.proj = glm::mat4(1.0f);
+    static glm::vec3 pos = glm::vec3(0.0f, 0.0f, 3.0f);
+
+    // Rotation state
+    static float yaw   = -90.0f; // looking down -Z initially
+    static float pitch =  0.0f;
+
+    const bool* state = SDL_GetKeyboardState(NULL);
+
+    float moveSpeed = 0.05f;
+    float rotSpeed  = 1.5f; // degrees per frame (tweak as needed)
+
+    // --- ROTATION (arrow keys) ---
+    if (state[SDL_SCANCODE_LEFT])  yaw   -= rotSpeed;
+    if (state[SDL_SCANCODE_RIGHT]) yaw   += rotSpeed;
+    if (state[SDL_SCANCODE_UP])    pitch += rotSpeed;
+    if (state[SDL_SCANCODE_DOWN])  pitch -= rotSpeed;
+
+    // Clamp pitch to avoid flipping
+    if (pitch > 89.0f)  pitch = 89.0f;
+    if (pitch < -89.0f) pitch = -89.0f;
+
+    // --- DIRECTION VECTOR ---
+    glm::vec3 forward;
+    forward.x = cos(glm::radians(yaw)) * cos(glm::radians(pitch));
+    forward.y = sin(glm::radians(pitch));
+    forward.z = sin(glm::radians(yaw)) * cos(glm::radians(pitch));
+    forward = glm::normalize(forward);
+
+    // --- MOVEMENT (WASD relative to camera) ---
+    glm::vec3 right = glm::normalize(glm::cross(forward, glm::vec3(0.0f, 1.0f, 0.0f)));
+
+    if (state[SDL_SCANCODE_W]) pos += forward * moveSpeed;
+    if (state[SDL_SCANCODE_S]) pos -= forward * moveSpeed;
+    if (state[SDL_SCANCODE_A]) pos -= right   * moveSpeed;
+    if (state[SDL_SCANCODE_D]) pos += right   * moveSpeed;
+
+    // --- VIEW MATRIX ---
+    glm::vec3 up = glm::vec3(0.0f, 1.0f, 0.0f);
+    data.view = glm::lookAt(pos, pos + forward, up);
+
+    // --- PROJECTION ---
+    float fov = glm::radians(60.0f);
+    float aspect = (float)renderstate.swapchain_extent.width / (float)renderstate.swapchain_extent.width;
+
+    data.proj = glm::perspective(fov, aspect, 0.1f, 100.0f);
+    // GLM is OpenGL-style by default:
+    // - Y is flipped
+    // - Z is -1..1 instead of 0..1
+    data.proj[1][1] *= -1.0f;
+
+
     data.view_proj = data.proj * data.view;
     FG_UploadBufferData(&renderstate.main.staging_objects, 
                         renderstate.rids.global_scene_buffer_rid, 
@@ -42,7 +91,12 @@ void SubmitDraw(VkCommandBuffer cmd, Renderable* r, PipelineKey key)
     pc.v_positions_ptr      = renderstate.registry.resources[r->mesh_rids.v_pos_buf_rid].buffer_gpu_address;
     pc.v_texcoords_ptr      = renderstate.registry.resources[r->mesh_rids.v_texcoord_buf_rid].buffer_gpu_address;
     pc.v_normals_ptr        = renderstate.registry.resources[r->mesh_rids.v_normal_buf_rid].buffer_gpu_address;
-    pc.v_colors_ptr         = renderstate.registry.resources[r->mesh_rids.v_color_buf_rid].buffer_gpu_address;
+
+    // TODO: Remove vertex colors probably
+    if (r->mesh_rids.v_color_buf_rid != UINT32_MAX)
+        pc.v_colors_ptr         = renderstate.registry.resources[r->mesh_rids.v_color_buf_rid].buffer_gpu_address;
+    else
+        pc.v_colors_ptr = 0;
 
     if (r->mesh_rids.v_joint_ids_buf_rid != UINT32_MAX)
         pc.v_joint_ids_ptr = renderstate.registry.resources[r->mesh_rids.v_joint_ids_buf_rid].buffer_gpu_address;

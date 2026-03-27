@@ -17,8 +17,9 @@ uint32_t create_material_texture2d_resource(const char* debug_name, FG_ResourceF
      uint32_t width, uint32_t height, VkFormat format
 );
 
-#include <bit>  // compute_num_mip_levels() uses std::countl_zero()
-// NOTE: If porting to C, C23 has stdc_leading_zeros() in <stdbit.h> header
+
+// #include <bit>  // compute_num_mip_levels() uses std::countl_zero()
+// // NOTE: If porting to C, C23 has stdc_leading_zeros() in <stdbit.h> header
 uint32_t compute_num_mip_levels(uint32_t image_level0_width, uint32_t image_level0_height);
 
 
@@ -306,7 +307,7 @@ MeshBufferRIDs create_mesh_resources(const char* debug_name, FG_ResourceFlags sh
     glm::uvec4* joint_ids, glm::vec4* joint_weights)
 {
     // Required vertex attributes
-    SDL_assert(positions && texcoords && normals && colors);
+    SDL_assert(positions && texcoords && normals);
 
     // Each buffer has the same usage flags
     VkBufferUsageFlags usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | 
@@ -341,26 +342,30 @@ MeshBufferRIDs create_mesh_resources(const char* debug_name, FG_ResourceFlags sh
         debug_resource_name, shared_flags, usage, vertex_count * sizeof(glm::vec3), normals
     );
 
-    // Colors
-    snprintf(debug_resource_name, sizeof(debug_resource_name), "%s_ColorBuffer", debug_name);
-    mesh_rids.v_color_buf_rid = create_resource_with_buffer_data(
-        debug_resource_name, shared_flags, usage, vertex_count * sizeof(glm::vec3), colors
-    );
+    // Colors (Optional) TODO: Probably remove
+    mesh_rids.v_color_buf_rid = UINT32_MAX;
+    if (colors)
+    {
+        snprintf(debug_resource_name, sizeof(debug_resource_name), "%s_ColorBuffer", debug_name);
+        mesh_rids.v_color_buf_rid = create_resource_with_buffer_data(
+            debug_resource_name, shared_flags, usage, vertex_count * sizeof(glm::vec3), colors
+        );
+    }
 
+    // Joint IDs (Optional)
     mesh_rids.v_joint_ids_buf_rid = UINT32_MAX;
     if (joint_ids)
     {
-        // Joint IDs
         snprintf(debug_resource_name, sizeof(debug_resource_name), "%s_JointIDsBuffer", debug_name);
         mesh_rids.v_joint_ids_buf_rid = create_resource_with_buffer_data(
             debug_resource_name, shared_flags, usage, vertex_count * sizeof(glm::uvec4), joint_ids
         );
     }
 
+    // Joint weights (Optional)
     mesh_rids.v_joint_weights_buf_rid = UINT32_MAX;
     if (joint_weights)
     {
-        // Joint weights
         snprintf(debug_resource_name, sizeof(debug_resource_name), "%s_JointWeights", debug_name);
         mesh_rids.v_joint_weights_buf_rid = create_resource_with_buffer_data(
             debug_resource_name, shared_flags, usage, vertex_count * sizeof(glm::vec4), joint_weights
@@ -372,6 +377,25 @@ MeshBufferRIDs create_mesh_resources(const char* debug_name, FG_ResourceFlags sh
 
 uint32_t compute_num_mip_levels(uint32_t image_level0_width, uint32_t image_level0_height)
 {
+    uint32_t bits = image_level0_width | image_level0_height;
+
+    uint32_t leading_zeros = 0;
+
+    if (bits == 0)
+        return 0;  // Edge case, though shouldn't happen for valid textures
+
+    // Count leading zeros the silly way
+    for (int i = 31; i >= 0; --i)
+    {
+        if (bits & (1u << i))
+            break;
+        leading_zeros++;
+    }
+
+    return 32 - leading_zeros;
+
+#if 0  // NOTE(Liam): std::countl_zero not working on Jaime's machines at the moment
+
     // Counting number of mipmaps an image needs
     //
     // Let N := Num mip levels.
@@ -393,6 +417,7 @@ uint32_t compute_num_mip_levels(uint32_t image_level0_width, uint32_t image_leve
     const uint32_t  leading_zeros = std::countl_zero(bits);  // C++
     // const u32  leading_zeros = stdc_leading_zeros(bits);  // C23
     return 32 - leading_zeros;
+#endif
 }
 
 

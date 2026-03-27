@@ -32,17 +32,17 @@ void SwapchainPass_Execute(VkCommandBuffer cmd, void* user_data)
     // TODO: During week where we integrate with entity system.
     
     // OLD SHIT: Move this to renderer.cpp where the warning is about drawcalls
-    int N = 32;
+    int N = 1;
     for (int i = 0; i < N; ++i)
     {
         // TEMP: Hardcode our Test Renderable
         // ALSO TODO: Use depth buffer, and amend pipeline key.        
         ObjectData tri_object_data = { glm::mat4(1.0f) };
-        tri_object_data.model[0][0] *= 2.0f/(float)N;
-        tri_object_data.model[1][1] *= 4.0f/(float)N;
-        tri_object_data.model[3][1] = -1.0f + 2.0f*(float)i/(float)N;
-        tri_object_data.model[3][0] = -1.0f + ((float)(N-1)/(float)N)*(1.0f + sinf(2.0f*(float)M_PI*(((float)i/(float)N) + (float)(renderstate.frame_number) / 600.0f)));
-        tri_object_data.model[0][0] *= fabsf(-1.0f + 8.0f * tri_object_data.model[3][0]);
+        // tri_object_data.model[0][0] *= 2.0f/(float)N;
+        // tri_object_data.model[1][1] *= 4.0f/(float)N;
+        // tri_object_data.model[3][1] = -1.0f + 2.0f*(float)i/(float)N;
+        // tri_object_data.model[3][0] = -1.0f + ((float)(N-1)/(float)N)*(1.0f + sinf(2.0f*(float)M_PI*(((float)i/(float)N) + (float)(renderstate.frame_number) / 600.0f)));
+        // tri_object_data.model[0][0] *= fabsf(-1.0f + 8.0f * tri_object_data.model[3][0]);
     
         size_t joint_count = 164;
         glm::mat4* joint_matrices = (glm::mat4*)malloc(joint_count * sizeof(glm::mat4));
@@ -56,7 +56,8 @@ void SwapchainPass_Execute(VkCommandBuffer cmd, void* user_data)
             .mat_type    = MAT_UNLIT,
             .sort_depth  = 0,  // <- NOTE: unused at the moment.
 
-            .mesh_rids = renderstate.rids.dummy_mesh,
+            // .mesh_rids = renderstate.rids.dummy_mesh,
+            .mesh_rids = renderstate.rids.temp_test_mesh,
             .material_idx = 0,
             .object_ptr = PushToMappedArena(&renderstate.object_transforms, &tri_object_data, sizeof(tri_object_data)),
             .joint_ptr = PushToMappedArena(&renderstate.object_transforms, joint_matrices, joint_count * sizeof(glm::mat4))

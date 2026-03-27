@@ -21,6 +21,7 @@ typedef struct ResourceIDs
 
     // Dummy stuff
     MeshBufferRIDs dummy_mesh;
+    MeshBufferRIDs temp_test_mesh;
 }
 ResourceIDs;
 

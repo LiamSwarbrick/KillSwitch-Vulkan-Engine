@@ -25,6 +25,16 @@ static char* duplicate_string(const char* src) {
 	return dst;
 }
 
+// find bone index relative to node index
+static int find_bone_index(Skin* skin, int target_node_index) {
+	for (size_t i = 0; i < skin->joint_count; ++i) {
+		if (skin->joint_node_indices[i] == target_node_index) {
+			return (int)i;
+		}
+	}
+	return -1;
+}
+
 Asset* load_asset(const char* filename) {
 	cgltf_options options = { 0 };
 	cgltf_data* data = NULL;
@@ -163,29 +173,6 @@ Asset* load_asset(const char* filename) {
 		light->range = gltf_light->range;
 	}
 
-	// Copy Skins
-	for (size_t i = 0; i < asset->skin_count; i++) {
-		cgltf_skin* gltf_skin = &data->skins[i];
-		Skin* skin = &asset->skins[i];
-
-		skin->name = duplicate_string(gltf_skin->name);
-		skin->skeleton_root_node_index = get_node_index(data, gltf_skin->skeleton);
-		skin->joint_count = gltf_skin->joints_count;
-
-		if (skin->joint_count > 0) {
-			skin->joint_node_indices = (int*)malloc(skin->joint_count * sizeof(int));
-			for (size_t j = 0; j < skin->joint_count; j++) {
-				skin->joint_node_indices[j] = get_node_index(data, gltf_skin->joints[j]);
-			}
-
-			// Unpack inverse bind matrices (16 floats per joint)
-			if (gltf_skin->inverse_bind_matrices) {
-				skin->inverse_bind_matrices = (float*)malloc(skin->joint_count * 16 * sizeof(float));
-				cgltf_accessor_unpack_floats(gltf_skin->inverse_bind_matrices, skin->inverse_bind_matrices, skin->joint_count * 16);
-			}
-		}
-	}
-
 	// Copy Nodes
 	for (size_t i = 0; i < asset->node_count; i++) {
 		cgltf_node* gltf_node = &data->nodes[i];
@@ -219,6 +206,66 @@ Asset* load_asset(const char* filename) {
 		}
 	}
 
+	// Copy Skins
+	for (size_t i = 0; i < asset->skin_count; i++) {
+		cgltf_skin* gltf_skin = &data->skins[i];
+		Skin* skin = &asset->skins[i];
+
+		skin->name = duplicate_string(gltf_skin->name);
+		skin->skeleton_root_node_index = get_node_index(data, gltf_skin->skeleton);
+		skin->joint_count = gltf_skin->joints_count;
+
+		if (skin->joint_count > 0) {
+			skin->joint_node_indices = (int*)malloc(skin->joint_count * sizeof(int));
+			for (size_t j = 0; j < skin->joint_count; j++) {
+				skin->joint_node_indices[j] = get_node_index(data, gltf_skin->joints[j]);
+			}
+
+			// Unpack inverse bind matrices (16 floats per joint)
+			if (gltf_skin->inverse_bind_matrices) {
+				skin->inverse_bind_matrices = (float*)malloc(skin->joint_count * 16 * sizeof(float));
+				cgltf_accessor_unpack_floats(gltf_skin->inverse_bind_matrices, skin->inverse_bind_matrices, skin->joint_count * 16);
+			}
+
+			// build bone array
+			skin->bones = (Bone*)calloc(skin->joint_count, sizeof(Bone));
+
+			for (size_t j = 0; j < skin->joint_count; j++) {
+				int node_idx = skin->joint_node_indices[j];
+				Node* node = &asset->nodes[node_idx];
+				Bone* bone = &skin->bones[j];
+
+				bone->name = duplicate_string(node->name);
+
+				// Copy Bind Pose transforms
+				memcpy(bone->translation, node->translation, sizeof(float) * 3);
+				memcpy(bone->rotation, node->rotation, sizeof(float) * 4);
+
+				// start hierarchy with parent index relative to skin joints
+				bone->parent_index = find_bone_index(skin, node->parent_index);
+
+				size_t valid_child_count = 0;
+				for (size_t c = 0; c < node->child_count; c++) {
+					if (find_bone_index(skin, node->children_indices[c]) != -1) {
+						valid_child_count++;
+					}
+				}
+
+				bone->child_count = valid_child_count;
+				if (bone->child_count > 0) {
+					bone->children_indices = (int*)malloc(bone->child_count * sizeof(int));
+					size_t child_idx = 0;
+					for (size_t c = 0; c < node->child_count; c++) {
+						int b_idx = find_bone_index(skin, node->children_indices[c]);
+						if (b_idx != -1) {
+							bone->children_indices[child_idx++] = b_idx;
+						}
+					}
+				}
+			}
+		}
+	}
+
 	// Copy Meshes and Primitives
 	for (size_t i = 0; i < asset->mesh_count; i++) {
 		cgltf_mesh* gltf_mesh = &data->meshes[i];
@@ -228,11 +275,18 @@ Asset* load_asset(const char* filename) {
 		mesh->primitive_count = gltf_mesh->primitives_count;
 		mesh->primitives = (Primitive*)calloc(mesh->primitive_count, sizeof(Primitive));
 
+		// default static mesh
+		mesh->type = 0;
+
 		for (size_t p = 0; p < mesh->primitive_count; p++) {
 			cgltf_primitive* gltf_prim = &gltf_mesh->primitives[p];
 			Primitive* prim = &mesh->primitives[p];
 
 			prim->material_index = get_material_index(data, gltf_prim->material);
+
+			// if not animated mesh then set joint and weights to NULL
+			prim->joints = NULL;
+			prim->weights = NULL;
 
 			if (gltf_prim->indices) {
 				prim->index_count = gltf_prim->indices->count;
@@ -259,21 +313,24 @@ Asset* load_asset(const char* filename) {
 					cgltf_accessor_unpack_floats(attr->data, prim->texcoords, attr->data->count * 2);
 				}
 				else if (attr->type == cgltf_attribute_type_joints) {
-					prim->joints = (uint16_t*)malloc(attr->data->count * 4 * sizeof(uint16_t));
-					// Reading joint indices as uint16_t, but they might be stored as uint8_t or uint32_t in the glTF. We need to read them as uint and then cast to uint16_t.
+					prim->joints = (uint32_t*)malloc(attr->data->count * 4 * sizeof(uint32_t));
 					for (size_t v = 0; v < attr->data->count; ++v) {
 						cgltf_uint tmp[4];
 						cgltf_accessor_read_uint(attr->data, v, tmp, 4);
-						prim->joints[v * 4 + 0] = (uint16_t)tmp[0];
-						prim->joints[v * 4 + 1] = (uint16_t)tmp[1];
-						prim->joints[v * 4 + 2] = (uint16_t)tmp[2];
-						prim->joints[v * 4 + 3] = (uint16_t)tmp[3];
+						prim->joints[v * 4 + 0] = (uint32_t)tmp[0];
+						prim->joints[v * 4 + 1] = (uint32_t)tmp[1];
+						prim->joints[v * 4 + 2] = (uint32_t)tmp[2];
+						prim->joints[v * 4 + 3] = (uint32_t)tmp[3];
 					}
 				}
 				else if (attr->type == cgltf_attribute_type_weights) {
 					prim->weights = (float*)malloc(attr->data->count * 4 * sizeof(float));
 					cgltf_accessor_unpack_floats(attr->data, prim->weights, attr->data->count * 4);
 				}
+			}
+			// if it has joint then its a skinned mesh
+			if (prim->joints != NULL) {
+				mesh->type = 1;
 			}
 		}
 	}
@@ -375,6 +432,14 @@ void free_asset(Asset* asset) {
 		free((void*)skin->name);
 		if (skin->joint_node_indices) free(skin->joint_node_indices);
 		if (skin->inverse_bind_matrices) free(skin->inverse_bind_matrices);
+
+		if (skin->bones) {
+			for (size_t j = 0; j < skin->joint_count; j++) {
+				free((void*)skin->bones[j].name);
+				if (skin->bones[j].children_indices) free(skin->bones[j].children_indices);
+			}
+			free(skin->bones);
+		}
 	}
 	if (asset->skins) free(asset->skins);
 
