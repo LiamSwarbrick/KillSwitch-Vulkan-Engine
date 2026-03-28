@@ -50,7 +50,6 @@ void EndDrawCalls()
     renderstate.drawcalls_collection.is_currently_adding_drawcalls = 0;
 }
 
-// void AddDrawCall(Renderable* r, ShaderID shader_id)  // <- we should get the shaders based on material type
 void AddDrawCall(Renderable* r)
 {
     SDL_assert(renderstate.drawcalls_collection.is_allocated);
@@ -73,28 +72,35 @@ void AddDrawCall(Renderable* r)
     
     const MaterialPipelineInfo* const shaders_for_material = &g_material_configs.array[r->mesh_prefab.mat_type];
 
-    // Submit
-    uint32_t primary_shader_id = shaders_for_material->primary_shader_id;
-    uint32_t* primary_shader_drawcall_count = &renderstate.drawcalls_collection.array[shaders_for_material->primary_shader_id].drawcall_count;
-
-    uint32_t secondary_shader_id = shaders_for_material->secondary_shader_id;
-    uint32_t* secondary_shader_drawcall_count = &renderstate.drawcalls_collection.array[shaders_for_material->secondary_shader_id].drawcall_count;
-
-    SDL_assert(
-        *primary_shader_drawcall_count + 1 < MAX_DRAWCALLS_PER_SHADER &&
-        *secondary_shader_drawcall_count + 1 < MAX_DRAWCALLS_PER_SHADER &&
-        "If this is exceeded, either increase MAX_DRAWCALLS_PER_SHADER to a ludicrous value, or use a dynamic array."
-    );
-
     // Submit draw with primary shader
-    renderstate.drawcalls_collection.array[primary_shader_id].drawcalls[
-        (*primary_shader_drawcall_count)++
-    ] = drawcall;
+    {
+        uint32_t primary_shader_id = shaders_for_material->primary_shader_id;
+        uint32_t* primary_shader_drawcall_count = &renderstate.drawcalls_collection.array[shaders_for_material->primary_shader_id].drawcall_count;
 
-    // Submit draw with secondary shader
-    renderstate.drawcalls_collection.array[shaders_for_material->secondary_shader_id].drawcalls[
-        (*secondary_shader_drawcall_count)++
-    ] = drawcall;
+        SDL_assert(
+            *primary_shader_drawcall_count + 1 < MAX_DRAWCALLS_PER_SHADER &&
+            "If this is exceeded, either increase MAX_DRAWCALLS_PER_SHADER to a ludicrous value, or use a dynamic array."
+        );
+
+        renderstate.drawcalls_collection.array[primary_shader_id].drawcalls[
+            (*primary_shader_drawcall_count)++
+        ] = drawcall;
+    }
+
+    // Submit draw with secondary shader (Making sure it exists first)
+    if (shaders_for_material->secondary_shader_id != SHADER_NONE)
+    {
+        uint32_t secondary_shader_id = shaders_for_material->secondary_shader_id;
+        uint32_t* secondary_shader_drawcall_count = &renderstate.drawcalls_collection.array[shaders_for_material->secondary_shader_id].drawcall_count;
+        SDL_assert(
+            *secondary_shader_drawcall_count + 1 < MAX_DRAWCALLS_PER_SHADER &&
+            "If this is exceeded, either increase MAX_DRAWCALLS_PER_SHADER to a ludicrous value, or use a dynamic array."
+        );
+
+        renderstate.drawcalls_collection.array[shaders_for_material->secondary_shader_id].drawcalls[
+            (*secondary_shader_drawcall_count)++
+        ] = drawcall;
+    }
 }
 
 

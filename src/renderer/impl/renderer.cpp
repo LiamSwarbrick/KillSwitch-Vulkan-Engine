@@ -734,9 +734,10 @@ void Renderer_DrawFrame()
     // NOTE: Renderables need to be alive the whole time, (drawcalls point to renderables)
     //       This is why we'll actually get them through the entity system via the DrawFrame args maybe (or just query the ecs)
     Renderable r = {
-        .transform = glm::mat4(1.0f),
-        .mesh_prefab = renderstate.rids.dummy_mesh,
-        0, NULL
+        .transform    = glm::mat4(1.0f),
+        .mesh_prefab  = renderstate.rids.dummy_mesh,
+        .joint_count  = 0,
+        .joints       = NULL
     };
     {
         // TODO During week where we integrate with entity system
@@ -819,10 +820,10 @@ void Renderer_DrawFrame()
         .pInheritanceInfo  = NULL
     };
     VkCommandBuffer gcmd = renderstate.frames[frame_in_flight].graphics_command_buffer;
-
+    
     // Begin recording graphics commands
     //
-
+    renderstate.currently_bound_pipeline = VK_NULL_HANDLE;  // <- Each time we start recording cmd bufs, the bound pipeline is reset
     VK_CHECK(vkBeginCommandBuffer(gcmd, &graphics_cmd_begin_info));
     {
         FG_CmdRenderFrame(gcmd);

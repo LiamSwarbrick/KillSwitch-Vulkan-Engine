@@ -63,6 +63,8 @@ VkPipeline PK_GetOrCreatePipeline(PipelineEntry** pipeline_map_ref, PipelineKey 
     // Add new pipeline to hash map
     hmput(*pipeline_map_ref, key.value, new_pipeline);
 
+
+    SDL_assert(new_pipeline != VK_NULL_HANDLE);
     return new_pipeline;
 }
 
