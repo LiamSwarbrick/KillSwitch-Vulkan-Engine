@@ -9,11 +9,5 @@
 // #include "renderer/components.h"
 
 
-struct C_StaticMesh
-{
-	Mesh* mesh;
-	Asset* parent_asset;
-};
-
 #endif // !FOUNDATIONS_COMPONENTS_H
 

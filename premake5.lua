@@ -274,7 +274,6 @@ workspace "AdventureEngine"
         includedirs {
             SRC,
             SRC .. "game",
-            SRC .. "game/foundations",
             include_paths.SDL3,
             include_paths.glm,
             include_paths.cgltf

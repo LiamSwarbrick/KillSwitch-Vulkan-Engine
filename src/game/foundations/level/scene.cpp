@@ -37,15 +37,15 @@ bool Scene::LoadAsset(const char* fileName)
         t.matrix = glm::translate(t.matrix, t.position);
 
 
-        C_StaticMesh staticMesh{
-            &asset->meshes[node->mesh_index],
-            asset
-        };
+        // C_StaticMesh staticMesh{
+        //     &asset->meshes[node->mesh_index],
+        //     asset
+        // };
 
         AdvEng::EntityID eID;
         eID = m_ecs.CreateEntity((node->name) ? (node->name) : "");
         m_ecs.AddComponent<C_Transform>(eID, { t.position, t.rotation, t.matrix });
-        m_ecs.AddComponent<C_StaticMesh>(eID, { staticMesh.mesh, staticMesh.parent_asset });
+        // m_ecs.AddComponent<C_StaticMesh>(eID, { staticMesh.mesh, staticMesh.parent_asset });
         
     }
     
