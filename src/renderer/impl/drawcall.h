@@ -9,6 +9,7 @@ typedef struct DrawCall
 
     float      sort_depth;   // <-TODO unused (move this step to render pass execute callback).
     uint64_t   object_ptr;   // GPU Address of the glsl ObjectData struct (contains model matrix etc.)
+    uint64_t   joints_ptr;   // GPU Address of the skinning matrices (0 if not skinned)
 }
 DrawCall;
 

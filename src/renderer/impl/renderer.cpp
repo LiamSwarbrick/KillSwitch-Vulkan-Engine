@@ -739,10 +739,14 @@ void Renderer_DrawFrame()
         .joint_count  = 0,
         .joints       = NULL
     };
+    Renderable r2 = r;
+    r2.transform[3][0] -= 0.5;
+    r2.transform[3][1] -= 0.5;
     {
         // TODO During week where we integrate with entity system
 
         AddDrawCall(&r);
+        AddDrawCall(&r2);
     }
 
     EndDrawCalls();
@@ -820,7 +824,7 @@ void Renderer_DrawFrame()
         .pInheritanceInfo  = NULL
     };
     VkCommandBuffer gcmd = renderstate.frames[frame_in_flight].graphics_command_buffer;
-    
+
     // Begin recording graphics commands
     //
     renderstate.currently_bound_pipeline = VK_NULL_HANDLE;  // <- Each time we start recording cmd bufs, the bound pipeline is reset

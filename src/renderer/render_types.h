@@ -50,7 +50,6 @@ typedef struct MeshRIDs
 {
     uint32_t primitive_count;
     PrimitiveRIDs primitives[MAX_PRIMITIVES];
-    uint32_t joints_buffer_rid;
 }
 MeshRIDs;
 
@@ -74,7 +73,7 @@ typedef struct Renderable
 }
 Renderable;
 
-#warning TODO: Finally have api use renderview
+#warning TODO: Finally have api use renderview (just pass renderview each frame and that equals the drawcalls)
 typedef struct RenderView
 {
     uint32_t num_renderables;

@@ -114,7 +114,7 @@ void create_startup_resources()
     );
 
     // Objects Buffer (Mapped so we rapidly upload transforms each frame)
-    const uint32_t MAX_RENDERED_OBJECTS = 100000;
+    const uint32_t MAX_RENDERED_OBJECTS = 10000;
     ResourceCreateInfo objects_info = {
         .buffer_create_info = {
             .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
@@ -129,6 +129,24 @@ void create_startup_resources()
         "ObjectsBuffer", FG_RESOURCE_TYPE_BUFFER, flags, &objects_info
     );
     renderstate.object_transforms = MakeArenaOnBufferResource(renderstate.rids.objects_buffer_rid);
+
+    // Joints Buffer (Mapped as well as we upload them each frame)
+    const uint32_t MAX_JOINTS_FOR_ALL_OBJECTS = MAX_RENDERED_OBJECTS * 50;
+    ResourceCreateInfo joints_info = {
+        .buffer_create_info = {
+            .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
+            .size = MAX_JOINTS_FOR_ALL_OBJECTS * sizeof(glm::mat4),
+            .usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT
+                | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT
+                | VK_BUFFER_USAGE_TRANSFER_DST_BIT
+        },
+        .is_cpu_accessible = 1  // <- Hence mapped
+    };
+    renderstate.rids.objects_buffer_rid = FG_CreateResource(
+        "JointsBuffer", FG_RESOURCE_TYPE_BUFFER, flags, &objects_info
+    );
+    renderstate.joint_transforms = MakeArenaOnBufferResource(renderstate.rids.objects_buffer_rid);
+
 
     // Materials SSBO
     const uint32_t MAX_MATERIALS = 1024;
@@ -203,8 +221,7 @@ void create_startup_resources()
                     sizeof(quad_positions) / sizeof(quad_positions[0]),
                     quad_indices, quad_positions, quad_uvs, quad_normals, quad_colors, NULL, NULL
                 )
-            },
-            .joints_buffer_rid = UINT32_MAX
+            }
         }
     };
     //  = create_mesh_resources("QuadMesh", flags, 6, 4, quad_indices,

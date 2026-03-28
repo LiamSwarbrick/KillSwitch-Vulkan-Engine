@@ -10,6 +10,7 @@
 typedef enum
 {
     PASS_TYPE_SWAPCHAIN_PASS,
+    PASS_TYPE_FORWARD_OPAQUE,  // TODO: Move to deferred after this works? Add MSAA?
 
     PASS_TYPE_COUNT,
     PASS_TYPE_INVALID
@@ -19,8 +20,6 @@ static_assert(PASS_TYPE_COUNT <= MAX_PASSES, "Must increase MAX_PASSES in frameg
 static_assert(PASS_TYPE_COUNT < 1 << PKEY_NUM_BITS_PASS_TYPE,
     "More passes than pipeline key can index. Must give more bits by increasing PKEY_NUM_BITS_PASS_TYPE in pipeline_hashing.h."
 );
-
-// PipelineKey GetKeyFromRenderable(Renderable* renderable);
 
 void SwapchainPass_Execute(VkCommandBuffer cmd, void* user_data);
 

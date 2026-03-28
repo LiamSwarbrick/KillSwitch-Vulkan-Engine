@@ -65,9 +65,10 @@ void AddDrawCall(Renderable* r)
 
         // Push renderables transform to the mapped buffer and keep the pointer to it in draw calls.
         .object_ptr = PushToMappedArena(&renderstate.object_transforms, &r->transform, sizeof(r->transform)),
+        .joints_ptr = r->joints ? PushToMappedArena(&renderstate.joint_transforms, r->joints, sizeof(glm::mat4) * r->joint_count) : 0
     };
 
-    #warning NEED TO COPY CPU SIDE JOINTS BUFFER (r->joints) TO joints_buffer_rid
+    #warning NEED TO COPY CPU SIDE JOINTS BUFFER (r->joints) TO GPU with PushToMappedArena for joints_arena
     #warning Probably implement it using a single fence in EndDrawCalls()?
     
     const MaterialPipelineInfo* const shaders_for_material = &g_material_configs.array[r->mesh_prefab.mat_type];
@@ -108,7 +109,7 @@ void ExecuteDrawCall(VkCommandBuffer cmd, DrawCall drawcall, PipelineKey key)
 {
     // Get/Create and Bind Pipeline
     VkPipeline pipeline = PK_GetOrCreatePipeline(&renderstate.pipeline_map, key);
-    if (renderstate.currently_bound_pipeline != pipeline)
+    if (renderstate.currently_bound_pipeline != pipeline)  // <- No redundant ass pipeline binds
     {
         renderstate.currently_bound_pipeline = pipeline;
         vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
@@ -121,16 +122,7 @@ void ExecuteDrawCall(VkCommandBuffer cmd, DrawCall drawcall, PipelineKey key)
     pc.scene_ptr    = renderstate.registry.resources[renderstate.rids.global_scene_buffer_rid].buffer_gpu_address;
     pc.material_ptr = renderstate.registry.resources[renderstate.rids.material_ssbo_rid].buffer_gpu_address;
     pc.object_ptr   = drawcall.object_ptr;
-    if (drawcall.renderable->mesh_prefab.vertex_type == VERTEX_TYPE_SKINNED)
-    {
-        pc.joints_ptr = renderstate.registry.resources[
-                        drawcall.renderable->mesh_prefab.mesh_rids.joints_buffer_rid
-                    ].buffer_gpu_address;
-    }
-    else
-    {
-        pc.joints_ptr = 0;
-    }
+    pc.joints_ptr = drawcall.joints_ptr;
 
     for (uint32_t prim_i = 0; prim_i < drawcall.renderable->mesh_prefab.mesh_rids.primitive_count; ++prim_i)
     {
@@ -179,93 +171,6 @@ void ExecuteDrawCall(VkCommandBuffer cmd, DrawCall drawcall, PipelineKey key)
         vkCmdDraw(cmd, index_count, instance_count, 0, 0);
     }
 }
-
-    // NOTE: NEXT STEP IS MOVE THE STUFF BELOW TO A HELPER DRAW FUNCTION WE CALL IN RENDERPASS EXECUTE CALLBACKS
-#if 0
-
-    // TODO: Move Pipeline key creation to per pass.
-    // Craft pipeline key from renderable
-    PipelineKey key = {
-        .pipeline_type  = PK_PIPELINE_TYPE_GRAPHICS,
-        .shader_id      = shader_id,
-        .pass_type      = PK_PIPELINE_TYPE_GRAPHICS,
-
-        .vertex_type    = r->mesh_prefab.vertex_type,
-        .depth_test     = 
-        .depth_write    =
-        .depth_op       =
-        .stencil_mode   =
-        .cull_mode      =
-        .blend_mode     =
-        .polygon_mode   =
-        .front_face     =
-    };
-    key.pipeline_type = PK_PIPELINE_TYPE_GRAPHICS;
-    key.shader_id     = SHADER_UNLIT;
-    key.pass_type     = PASS_TYPE_SWAPCHAIN_PASS;
-    key.vertex_type   = drawcall.mesh_prefab.vertex_type;
-    key.depth_test    = 0;  // Triangle is 2D clip-space, no depth needed for test
-    key.depth_write   = 0;
-    key.depth_op      = VK_COMPARE_OP_NEVER;  // TODO.
-    key.stencil_mode  = 0;
-    key.cull_mode     = VK_CULL_MODE_NONE;  // No culling to ensure it shows regardless of winding
-    key.blend_mode    = BLEND_MODE_OPAQUE;
-    key.polygon_mode  = VK_POLYGON_MODE_FILL;
-    key.front_face    = VK_FRONT_FACE_COUNTER_CLOCKWISE;
-
-    // Get/Bind Pipeline
-    VkPipeline pipeline = PK_GetOrCreatePipeline(&renderstate.pipeline_map, key);
-    vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
-
-    // Bind the Global Bindless Set (textures)
-    vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, 
-        renderstate.global_pipeline_layout, 0, 1, &renderstate.heap.global_set, 0, NULL
-    );
-
-    // Prepare Push Constants
-    GraphicsPushConstants pc = {};
-    pc.scene_ptr    = renderstate.registry.resources[renderstate.rids.global_scene_buffer_rid].buffer_gpu_address;
-    pc.object_ptr   = r->object_ptr;
-    pc.material_ptr = renderstate.registry.resources[renderstate.rids.material_ssbo_rid].buffer_gpu_address;
-    pc.material_idx = r->material_idx;
-    pc.joints_ptr    = r->vertex_type == VERTEX_TYPE_SKINNED ? r->joints_ptr : 0;
-
-    pc.index_ptr    = renderstate.registry.resources[r->mesh_rids.index_buf_rid].buffer_gpu_address;
-    pc.v_positions_ptr      = renderstate.registry.resources[r->mesh_rids.v_pos_buf_rid].buffer_gpu_address;
-    pc.v_texcoords_ptr      = renderstate.registry.resources[r->mesh_rids.v_texcoord_buf_rid].buffer_gpu_address;
-    pc.v_normals_ptr        = renderstate.registry.resources[r->mesh_rids.v_normal_buf_rid].buffer_gpu_address;
-
-    // TODO: Remove vertex colors probably
-    if (r->mesh_rids.v_color_buf_rid != UINT32_MAX)
-        pc.v_colors_ptr         = renderstate.registry.resources[r->mesh_rids.v_color_buf_rid].buffer_gpu_address;
-    else
-        pc.v_colors_ptr = 0;
-
-    if (r->mesh_rids.v_joint_ids_buf_rid != UINT32_MAX)
-        pc.v_joint_ids_ptr = renderstate.registry.resources[r->mesh_rids.v_joint_ids_buf_rid].buffer_gpu_address;
-    else
-        pc.v_joint_ids_ptr = 0;
-
-    if (r->mesh_rids.v_joint_weights_buf_rid != UINT32_MAX)
-        pc.v_joint_weights_ptr = renderstate.registry.resources[r->mesh_rids.v_joint_weights_buf_rid].buffer_gpu_address;
-    else
-        pc.v_joint_weights_ptr = 0;
-
-
-    vkCmdPushConstants(cmd, renderstate.global_pipeline_layout, 
-                       VK_SHADER_STAGE_ALL, 
-                       0, sizeof(GraphicsPushConstants), &pc);
-
-    // Draw
-    // NOTE: Since we use Vertex Pulling, we don't bind vertex or index buffers.
-    //       In fact, here we gotta use vkCmdDraw, but with the index count.
-    //       Not using vkCmdDrawIndexed because the index buffer is not the one part of pipeline pVertexInputState
-    uint32_t index_count = renderstate.registry.resources[r->mesh_rids.index_buf_rid].buffer.size / sizeof(uint32_t);
-    uint32_t instance_count = 1;  // TODO: Instanced rendering
-
-    vkCmdDraw(cmd, index_count, instance_count, 0, 0);
-}
-#endif
 
 
 // SCENE DATA UPDATION DURING FRAME

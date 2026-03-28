@@ -73,6 +73,7 @@ typedef struct RenderState
     // TODO: Move this shit to a more game local directory instead of internal state
     ShaderRegistry shader_registry;
     MappedArena object_transforms;
+    MappedArena joint_transforms;
     ResourceIDs rids;  // IDs into registry, framegraph, or pipeline hash
 
     // Draw call collection (drawcall.h)
