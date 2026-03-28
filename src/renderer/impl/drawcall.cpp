@@ -41,6 +41,7 @@ void BeginDrawCalls()
 
     // Empty object data (e.g. model transforms)
     ResetMappedArena(&renderstate.object_transforms);
+    ResetMappedArena(&renderstate.joint_transforms);
 
     renderstate.drawcalls_collection.is_currently_adding_drawcalls = 1;
 }
@@ -67,9 +68,6 @@ void AddDrawCall(Renderable* r)
         .object_ptr = PushToMappedArena(&renderstate.object_transforms, &r->transform, sizeof(r->transform)),
         .joints_ptr = r->joints ? PushToMappedArena(&renderstate.joint_transforms, r->joints, sizeof(glm::mat4) * r->joint_count) : 0
     };
-
-    #warning NEED TO COPY CPU SIDE JOINTS BUFFER (r->joints) TO GPU with PushToMappedArena for joints_arena
-    #warning Probably implement it using a single fence in EndDrawCalls()?
     
     const MaterialPipelineInfo* const shaders_for_material = &g_material_configs.array[r->mesh_prefab.mat_type];
 

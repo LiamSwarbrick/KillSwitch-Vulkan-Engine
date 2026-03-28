@@ -162,7 +162,7 @@ void create_startup_resources()
     renderstate.rids.material_ssbo_rid = FG_CreateResource(
         "MaterialSSBO", FG_RESOURCE_TYPE_BUFFER, flags, &mat_info
     );
-
+    
 
 
     /////// MOVE BELOW TO create_scene_resources(scene resource list?) /////////////
