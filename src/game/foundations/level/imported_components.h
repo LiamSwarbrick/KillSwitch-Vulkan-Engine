@@ -31,16 +31,7 @@
 // ---- IMPORTED COLLIDER -----
 
 // Notice you have to add the type of the enum on every value,
-// There is a workaround that would involve doing 3 other defines, which would be 
-// #define ENUM_VALUE_ImportedColliderType(e)     ENUM_VALUE(ImportedColliderType, e)
-// #define ENUM_TO_STRING_CASE_ImportedColliderType(e)   ENUM_TO_STRING_CASE(ImportedColliderType, e)
-// #define STRING_TO_ENUM_CASE_ImportedColliderType(e) STRING_TO_ENUM_CASE(ImportedColliderType, e)
-// 
-// #define ENUM_VALUE(EnumName, entry) entry,
-// #define ENUM_TO_STRING_CASE(EnumName, entry) case EnumName::entry: return #entry;
-// #define STRING_TO_ENUM_CASE(EnumName, entry) if (s == #entry) return EnumName::entry;
-
-//  BUT, i would need to change the definition of the enum to use 
+// For an alternative, read option 1 on core/utils/enum_reflection.h
 #define COLLIDER_TYPE_VALUES(X) \
     X(ImportedColliderType, BOX)                \
     X(ImportedColliderType, SPHERE)             \
