@@ -61,7 +61,7 @@ T StructFromRapidJsonValue(const rj::Value& obj) = delete;
     DECLARE_STRUCT(StructName, FIELDS)                                          \
     DECLARE_STRUCT_JSON_UTILS(StructName, FIELDS)
 
-// Macro helpers for the designed 
+// Macro helpers for the designed Fields
 #define STRUCT_MEMBER(type, name) type name;
 
 #define STRUCT_TO_JSON(type, name)                                              \
@@ -75,24 +75,6 @@ T StructFromRapidJsonValue(const rj::Value& obj) = delete;
 #define STRUCT_FROM_JSON(type, name)                                            \
     if (obj.HasMember(#name) && !obj[#name].IsNull())                           \
         s.name = rj_get<type>(obj[#name]);
-
-
-// ─── Usage ────────────────────────────────────────────────────────────────────
-
-#define PLAYER_FIELDS(F)    \
-    F(std::string,  name)   \
-    F(int,          level)  \
-    F(float,        health) \
-    F(bool,         alive)
-
-DECLARE_STRUCT(Player, PLAYER_FIELDS)
-
-#define ITEM_FIELDS(F)      \
-    F(std::string,  id)     \
-    F(std::string,  label)  \
-    F(int,          count)
-
-DECLARE_STRUCT(Item, ITEM_FIELDS)
 
 
 #endif // !CORE_UTILS_STRUCT_REFLECTION_H
