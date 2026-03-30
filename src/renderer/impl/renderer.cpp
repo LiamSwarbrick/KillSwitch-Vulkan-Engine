@@ -14,6 +14,9 @@ void external_free(void* ptr) { return L_free(ptr, &renderstate.main.tt); }
 #define STB_DS_IMPLEMENTATION
 #include "stb_ds.h"  // Pipeline keying using this, I'm the STB_DS_IMPLEMENTATION here
 
+#warning TODO: Set STB_IMAGE allocators
+#define STB_IMAGE_IMPLEMENTATION
+ #include "stb_image.h"
 
 // NOTE(Liam): The only mutable internal state for renderer is this renderstate.
 // All other global state here should be const

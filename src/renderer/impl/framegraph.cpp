@@ -798,7 +798,7 @@ void FG_UploadImageData(ThreadStagingObjects* stg, uint32_t rid, const void* dat
     // HOWEVER: We want this barrier here because resourecs that are purely textures
     // are never transitioned by the framegraph execution
     single_resource_barrier(stg->upload_command_buffer, res, 0,
-        VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT,
+        VK_PIPELINE_STAGE_2_ALL_GRAPHICS_BIT,
         VK_ACCESS_2_SHADER_READ_BIT,
         VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
         renderstate.queue_family_indices.graphics_family
@@ -827,13 +827,14 @@ void FG_GenMipmaps(uint32_t image_rid)
     SDL_assert(res->image.usage & VK_IMAGE_USAGE_TRANSFER_SRC_BIT && res->image.usage & VK_IMAGE_USAGE_TRANSFER_DST_BIT);
     
     uint32_t num_levels = res->image.subresource_range.levelCount;
-    VkOffset3D current_mipmap_dimensions = {
-        (int32_t)res->image.extent.width,
-        (int32_t)res->image.extent.height,
-        (int32_t)res->image.extent.depth
-    };
 
-    // Transfer command
+    // Start with the dimensions of mip 0
+    int32_t prev_w = (int32_t)res->image.extent.width;
+    int32_t prev_h = (int32_t)res->image.extent.height;
+    int32_t prev_d = (int32_t)res->image.extent.depth;
+
+
+    // Begin recording transfer command
     ThreadStagingObjects* stg = &renderstate.main.staging_objects;
     vkResetCommandBuffer(stg->upload_command_buffer, 0);
     VkCommandBufferBeginInfo begin_info = {
@@ -842,62 +843,119 @@ void FG_GenMipmaps(uint32_t image_rid)
     };
     vkBeginCommandBuffer(stg->upload_command_buffer, &begin_info);
 
-    // Transition entire image (all levels) to TRANSFER_DST
-    // TODO:
 
+    // Transition entire image (all levels) to TRANSFER_DST and transfer queue family
+    single_resource_barrier(stg->upload_command_buffer, res, 0,
+        VK_PIPELINE_STAGE_2_TRANSFER_BIT,
+        VK_ACCESS_2_TRANSFER_WRITE_BIT,
+        VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+        renderstate.queue_family_indices.transfer_family
+    );
+
+    // Transition top mip level (0) from DST to SRC so we can read from it.
+    {
+        VkImageMemoryBarrier2 barrier_src = {
+            .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
+            .srcStageMask         = VK_PIPELINE_STAGE_2_TRANSFER_BIT,
+            .srcAccessMask        = VK_ACCESS_2_TRANSFER_WRITE_BIT,
+            .dstStageMask         = VK_PIPELINE_STAGE_2_TRANSFER_BIT,
+            .dstAccessMask        = VK_ACCESS_2_TRANSFER_READ_BIT,
+            .oldLayout            = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+            .newLayout            = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+            .srcQueueFamilyIndex  = VK_QUEUE_FAMILY_IGNORED,
+            .dstQueueFamilyIndex  = VK_QUEUE_FAMILY_IGNORED,
+            .image                = res->image.handle,
+            .subresourceRange     = { VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1 }
+        };
+
+        VkDependencyInfo dep_src = {
+            .sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
+            .imageMemoryBarrierCount  = 1,
+            .pImageMemoryBarriers     = &barrier_src
+        };
+        vkCmdPipelineBarrier2(stg->upload_command_buffer, &dep_src);
+    }
 
     for (uint32_t i = 1; i < num_levels; ++i)
     {
-        // Blit previous mip level (i-1) to the current level (i)
+        int32_t curr_w = prev_w > 1 ? prev_w / 2 : 1;
+        int32_t curr_h = prev_h > 1 ? prev_h / 2 : 1;
+        int32_t curr_d = prev_d > 1 ? prev_d / 2 : 1;
 
-        current_mipmap_dimensions.x /= 2;
-        current_mipmap_dimensions.y /= 2;
-        current_mipmap_dimensions.z /= 2;
-        SDL_assert(current_mipmap_dimensions.x && current_mipmap_dimensions.y && current_mipmap_dimensions.z &&
-            "If this assetion fails then num mipmap levels was computed wrong. 1 divided by 2 == 0 for ints, which happens only if miplevel count was too high hence dividing one too many times."
-        );
-
-        // Source is the previous mip level
-        VkImageBlit blit_regions = {
-            .srcSubresource = {
-                .aspectMask     = VK_IMAGE_ASPECT_COLOR_BIT,
-                .mipLevel       = i - 1,
-                .baseArrayLayer = 0,
-                .layerCount     = 1
-            },
-            .srcOffsets = {
-                { 0, 0, 0 },
-                { current_mipmap_dimensions.x * 2, current_mipmap_dimensions.y * 2, current_mipmap_dimensions.z * 2 }
-            },
-            .dstSubresource = {
-                .aspectMask     = VK_IMAGE_ASPECT_COLOR_BIT,
-                .mipLevel       = i,
-                .baseArrayLayer = 0,
-                .layerCount     = 1
-            },
-            .dstOffsets = {
-                { 0, 0, 0 },
-                { current_mipmap_dimensions.x, current_mipmap_dimensions.y, current_mipmap_dimensions.z }
-            }            
+        // Blit mip i-1 to i
+        VkImageBlit blit = {
+            .srcSubresource = { VK_IMAGE_ASPECT_COLOR_BIT, i - 1, 0, 1 },
+            .srcOffsets = { {0,0,0}, {prev_w, prev_h, prev_d} },
+            .dstSubresource = { VK_IMAGE_ASPECT_COLOR_BIT, i, 0, 1 },
+            .dstOffsets = { {0,0,0}, {curr_w, curr_h, curr_d} }
         };
 
+        vkCmdBlitImage(stg->upload_command_buffer, 
+            res->image.handle, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+            res->image.handle, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+            1, &blit, VK_FILTER_LINEAR);
 
-        // Transfer level i-1 to TRANSFER SRC
-        // TODO:
+        prev_w = curr_w;
+        prev_h = curr_h;
+        prev_d = curr_d;
 
+        // Transition current level (i-1) from DST to SRC so we can read from it.
+        VkImageMemoryBarrier2 barrier_src = {
+            .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
+            .srcStageMask         = VK_PIPELINE_STAGE_2_TRANSFER_BIT,
+            .srcAccessMask        = VK_ACCESS_2_TRANSFER_WRITE_BIT,
+            .dstStageMask         = VK_PIPELINE_STAGE_2_TRANSFER_BIT,
+            .dstAccessMask        = VK_ACCESS_2_TRANSFER_READ_BIT,
+            .oldLayout            = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+            .newLayout            = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+            .srcQueueFamilyIndex  = VK_QUEUE_FAMILY_IGNORED,
+            .dstQueueFamilyIndex  = VK_QUEUE_FAMILY_IGNORED,
+            .image                = res->image.handle,
+            .subresourceRange     = { VK_IMAGE_ASPECT_COLOR_BIT, i, 1, 0, 1 }
+        };
 
-        // Blit command
-        // TODO:
+        VkDependencyInfo dep_src = {
+            .sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
+            .imageMemoryBarrierCount  = 1,
+            .pImageMemoryBarriers     = &barrier_src
+        };
+        vkCmdPipelineBarrier2(stg->upload_command_buffer, &dep_src);
     }
 
-    // Transfer entire image (all levels) to SHADER_SAMPLED_READ for the frag shader.
-    // TODO:
+    // Transition whole image to SHADER_READ_ONLY_OPTIMAL
+    // (the texture silently fails and appears black if we don't transfer back... scary shit)
+    //
 
-    // And reflect the current image state in the resource itself
-    // res->current_access/stage/layout
-    // TODO:
+    // Update the resource state registry
+    res->current_layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+    res->current_access = VK_ACCESS_2_SHADER_READ_BIT;
+    res->current_stage  = VK_PIPELINE_STAGE_2_ALL_GRAPHICS_BIT;
+    res->current_queue_family_index = renderstate.queue_family_indices.graphics_family;
+
+    // Not using single_resource_barrier() because we fucked up the resource's knowledge of the sync state
+    VkImageMemoryBarrier2 final_barrier = {
+        .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
+        .srcStageMask         = VK_PIPELINE_STAGE_2_TRANSFER_BIT,
+        .srcAccessMask        = VK_ACCESS_2_TRANSFER_READ_BIT | VK_ACCESS_2_TRANSFER_WRITE_BIT,
+        .dstStageMask         = res->current_stage, 
+        .dstAccessMask        = res->current_access,
+        .oldLayout            = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, 
+        .newLayout            = res->current_layout,
+        .srcQueueFamilyIndex  = renderstate.queue_family_indices.transfer_family,
+        .dstQueueFamilyIndex  = res->current_queue_family_index,
+        .image                = res->image.handle,
+        .subresourceRange     = res->image.subresource_range
+    };
+    VkDependencyInfo final_dep = {
+        .sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
+        .imageMemoryBarrierCount = 1,
+        .pImageMemoryBarriers = &final_barrier
+    };
+    vkCmdPipelineBarrier2(stg->upload_command_buffer, &final_dep);
+
 
     vkEndCommandBuffer(stg->upload_command_buffer);
+
 
     // Submit cmd and wait on CPU side for it to complete by using a VkFence
     VkFenceCreateInfo fence_info = { .sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO };
@@ -908,7 +966,6 @@ void FG_GenMipmaps(uint32_t image_rid)
     vkWaitForFences(renderstate.device, 1, &fence, VK_TRUE, UINT64_MAX);
 
     vkDestroyFence(renderstate.device, fence, NULL);
-    #warning TODO complete genmipmaps
 }
 
 // Descriptors

@@ -2,6 +2,7 @@
 
 #include "internal_state.h"
 
+#include "stb_image.h"
 #include "core/assetsys.h"  // CPU-side asset data
 
 void create_startup_resources();
@@ -160,26 +161,50 @@ void create_startup_resources()
     renderstate.rids.material_ssbo_rid = FG_CreateResource(
         "MaterialSSBO", FG_RESOURCE_TYPE_BUFFER, flags, &mat_info
     );
-    
 
+    #warning TODO: Upload materials on create_scene_resources() instead of startup.
 
-    /////// MOVE BELOW TO create_scene_resources(scene resource list?) /////////////
-    #warning BELOW IS DUMMY DATA, THAT SHOULD NOT BE PART OF startup_resources()
-    // TODO IMPORTANT: ONLY SLOT 0 OF THE MATERIAL SSBO WILL BE WRITTEN TO WITH THIS LOGIC, CHANGE THIS NEXT
-
-    // Let's set Material 0 to be a simple White material with no texture
+    // TEMP Material:
+    uint32_t test_texture_rid = UINT32_MAX;
+    {
+        stbi_set_flip_vertically_on_load(1);
+        int width, height, num_channels;
+        const char* filepath = "assets/godot.png";
+        uint8_t* data = stbi_load(filepath, &width, &height, &num_channels, 4);
+        if (data == NULL)
+        {
+            fprintf(stderr, "Failure to load image (%s)\n", filepath);
+            exit(1);  // TODO: Fallback to default texture
+        }
+        uint64_t data_size = width * height * 4;
+        VkFormat format = VK_FORMAT_R8G8B8A8_SRGB;
+        test_texture_rid = create_mipmapped_texture2d_resource(filepath, flags, data, data_size, width, height, format);
+        
+        stbi_image_free(data);
+    }
     MaterialData default_mat = {
         .base_color = { 1.0f, 1.0f, 1.0f, 1.0f },
-        .texture_idx_basecolor = 0xFFFFFFFF,
+        .texture_idx_basecolor = renderstate.registry.resources[test_texture_rid].image_bindless_index,//0xFFFFFFFF,
 
         .sampler_idx = FG_SAMPLER_LINEAR_REPEAT,
         .alpha_cutoff = 0.5f
     };
+
+    const uint32_t temp_max_materials = 32;
+    MaterialData materials[temp_max_materials] = {
+        default_mat  // index 0
+    };
     FG_UploadBufferData(&renderstate.main.staging_objects, 
-        renderstate.rids.material_ssbo_rid, &default_mat, sizeof(MaterialData)
+        renderstate.rids.material_ssbo_rid, &materials, sizeof(materials)
     );
 
-    // TEST QUAD (TODO: Change to create_mesh_resource or something):
+    /////// MOVE BELOW TO create_scene_resources(scene resource list?) /////////////
+    #warning BELOW IS DUMMY DATA, THAT SHOULD NOT BE PART OF startup_resources()
+    #warning TODO IMPORTANT: ONLY SLOT 0 OF THE MATERIAL SSBO WILL BE WRITTEN TO WITH THIS LOGIC, CHANGE THIS NEXT
+
+
+
+    // TEST QUAD
     uint32_t quad_indices[6] = { 0, 1, 2, 0, 3, 1 };
     glm::vec3 quad_positions[4] = {
         { 0.0f, 0.0f, 0.0f },
@@ -214,7 +239,7 @@ void create_startup_resources()
                 create_primitive_resources(
                     "Dummy Primitive",
                     flags,
-                    0,  // material index
+                    0,  // material index (TODO: Load all materials on scene change, and keep track of material indices CPU side)
                     sizeof(quad_indices) / sizeof(quad_indices[0]),
                     sizeof(quad_positions) / sizeof(quad_positions[0]),
                     quad_indices, quad_positions, quad_uvs, quad_normals, quad_colors, NULL, NULL
@@ -236,66 +261,6 @@ void create_startup_resources()
     // );
     // L_free(test_colors, &renderstate.main.tt);
 
-    // TEST EMPTY IMAGE RESOURCE:
-    #warning TODO: Automate the image creation properties, e.g. usage and queue families and miplevels for whether its a texture2d or a rendertarget2d
-    ResourceCreateInfo test_create_info = {
-        .image_create_info = {
-            .sType        = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
-            .pNext = NULL,
-            .flags = 0,
-            .imageType = VK_IMAGE_TYPE_2D,
-            .format = VK_FORMAT_R16G16B16A16_SFLOAT,
-
-            .extent = {
-                .width  = renderstate.swapchain_extent.width,
-                .height = renderstate.swapchain_extent.height,
-                .depth  = 1
-            },
-
-            .mipLevels = 1,
-            .arrayLayers = 1,
-
-            .samples = VK_SAMPLE_COUNT_1_BIT,
-            .tiling = VK_IMAGE_TILING_OPTIMAL,
-
-            .usage =
-                VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT |
-                VK_IMAGE_USAGE_SAMPLED_BIT |
-                VK_IMAGE_USAGE_TRANSFER_SRC_BIT |
-                VK_IMAGE_USAGE_TRANSFER_DST_BIT,
-
-            .sharingMode = VK_SHARING_MODE_EXCLUSIVE,
-            .queueFamilyIndexCount = 0,
-            .pQueueFamilyIndices = NULL,
-
-            .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED
-        },
-        .image_view_create_info = {
-            .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
-            .pNext = NULL,
-            .flags = 0,
-
-            .image = VK_NULL_HANDLE,  // <- This gets set in the registry code
-            .viewType = VK_IMAGE_VIEW_TYPE_2D,
-            .format = VK_FORMAT_R16G16B16A16_SFLOAT,
-
-            .components = {
-                .r = VK_COMPONENT_SWIZZLE_IDENTITY,
-                .g = VK_COMPONENT_SWIZZLE_IDENTITY,
-                .b = VK_COMPONENT_SWIZZLE_IDENTITY,
-                .a = VK_COMPONENT_SWIZZLE_IDENTITY
-            },
-
-            .subresourceRange = {
-                .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-                .baseMipLevel = 0,
-                .levelCount = 1,
-                .baseArrayLayer = 0,
-                .layerCount = 1
-            }
-        }
-    };
-    uint32_t test_texture_rid = FG_CreateResource("Test texture", FG_RESOURCE_TYPE_IMAGE, flags, &test_create_info);
 
 }
 
@@ -508,7 +473,7 @@ uint32_t create_mipmapped_texture2d_resource(const char* debug_name, FG_Resource
 
             // Mipmapped textures normally won't be part of the framegraph's input and outputs
             // So we set it's initial (and presumably final-) image layout to read only.
-            .initialLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
+            .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED
         },
         .image_view_create_info = {
             .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
