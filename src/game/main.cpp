@@ -104,7 +104,7 @@ int main(int argc, char *argv[])
 
     // Testing Scene and ECS
     Scene scene;
-    scene.LoadLevel("assets/levels/shapes.gltf");
+    scene.LoadLevel("assets/levels/untitled.gltf");
 
 
     bool running = true;

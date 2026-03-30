@@ -24,6 +24,7 @@ include_paths.VMA = EXTERNAL .. "VMA"
 include_paths.glm = EXTERNAL .. "glm"
 include_paths.cgltf = EXTERNAL .. "cgltf"
 include_paths.stb = EXTERNAL .. "stb"
+include_paths.rapidjson = EXTERNAL .. "rapidjson"
 
 lib_dirs = {}
 
@@ -178,7 +179,8 @@ workspace "AdventureEngine"
             SRC .. "core/**",  -- Internal include headers
             include_paths.SDL3,
             include_paths.glm,
-            include_paths.cgltf
+            include_paths.cgltf,
+            include_paths.rapidjson
         }
 
         libdirs {
@@ -277,7 +279,8 @@ workspace "AdventureEngine"
             SRC .. "game/foundations",
             include_paths.SDL3,
             include_paths.glm,
-            include_paths.cgltf
+            include_paths.cgltf,
+            include_paths.rapidjson
         }
 
         libdirs {
