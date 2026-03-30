@@ -13,7 +13,8 @@ typedef enum
     PASS_TYPE_GBUFFER_WRITE,
     PASS_TYPE_DEFERRED_LIGHTING_UNLIT,
     #warning TODO: Figure out how material system would mesh with deferred?
-    #warning Main priority: Test multiple passes in framegraph by implementing naive deferred rendering
+    #warning Main priority: Render with a texture.
+    #warning Next: Test multiple passes in framegraph by implementing naive deferred rendering
 
     PASS_TYPE_COUNT,
     PASS_TYPE_INVALID
