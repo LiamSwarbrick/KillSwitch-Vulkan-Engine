@@ -10,7 +10,10 @@
 typedef enum
 {
     PASS_TYPE_SWAPCHAIN_PASS,
-    PASS_TYPE_FORWARD_OPAQUE,  // TODO: Move to deferred after this works? Add MSAA?
+    PASS_TYPE_GBUFFER_WRITE,
+    PASS_TYPE_DEFERRED_LIGHTING_UNLIT,
+    #warning TODO: Figure out how material system would mesh with deferred?
+    #warning Main priority: Test multiple passes in framegraph by implementing naive deferred rendering
 
     PASS_TYPE_COUNT,
     PASS_TYPE_INVALID
