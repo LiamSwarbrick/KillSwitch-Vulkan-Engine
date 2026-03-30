@@ -18,16 +18,14 @@ PrimitiveRIDs create_primitive_resources(
     glm::vec3* positions, glm::vec2* texcoords, glm::vec3* normals, glm::vec3* colors,
     glm::uvec4* joint_ids, glm::vec4* joint_weights  // Joints only for skinned meshes
     );
-// MeshRIDs create_mesh_resources(
-//     const char* debug_name, FG_ResourceFlags shared_flags, 
-//     );
-
-uint32_t create_material_texture2d_resource(const char* debug_name, FG_ResourceFlags flags,
+uint32_t create_mipmapped_texture2d_resource(const char* debug_name, FG_ResourceFlags flags,
      uint8_t* data, uint64_t data_size,
      uint32_t width, uint32_t height, VkFormat format
 );
 
-
+// NOTE: Not using an optimized built-in for count leading zeros
+// because mipmaps level counting is not a bottleneck and Jaime was having problems with
+// C++20 features.
 // #include <bit>  // compute_num_mip_levels() uses std::countl_zero()
 // // NOTE: If porting to C, C23 has stdc_leading_zeros() in <stdbit.h> header
 uint32_t compute_num_mip_levels(uint32_t image_level0_width, uint32_t image_level0_height);
@@ -239,6 +237,7 @@ void create_startup_resources()
     // L_free(test_colors, &renderstate.main.tt);
 
     // TEST EMPTY IMAGE RESOURCE:
+    #warning TODO: Automate the image creation properties, e.g. usage and queue families and miplevels for whether its a texture2d or a rendertarget2d
     ResourceCreateInfo test_create_info = {
         .image_create_info = {
             .sType        = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
@@ -346,10 +345,6 @@ uint32_t create_resource_with_buffer_data(const char* debug_name, FG_ResourceFla
     return rid;
 }
 
-// MeshBufferRIDs create_mesh_resources(const char* debug_name, FG_ResourceFlags shared_flags, uint32_t index_count, uint32_t vertex_count,
-//     uint32_t* indices,
-//     glm::vec3* positions, glm::vec2* texcoords, glm::vec3* normals, glm::vec3* colors,
-    // glm::uvec4* joint_ids, glm::vec4* joint_weights)
 PrimitiveRIDs create_primitive_resources(
     const char* debug_name, FG_ResourceFlags shared_flags, uint32_t material_index,
     uint32_t index_count, uint32_t vertex_count,
@@ -475,10 +470,9 @@ uint32_t compute_num_mip_levels(uint32_t image_level0_width, uint32_t image_leve
 }
 
 
-uint32_t create_material_texture2d_resource(const char* debug_name, FG_ResourceFlags flags,
+uint32_t create_mipmapped_texture2d_resource(const char* debug_name, FG_ResourceFlags flags,
      uint8_t* data, uint64_t data_size,
-     uint32_t width, uint32_t height, VkFormat format
-)
+     uint32_t width, uint32_t height, VkFormat format)
 {
     uint32_t miplevel_count = compute_num_mip_levels(width, height);
 
@@ -509,11 +503,11 @@ uint32_t create_material_texture2d_resource(const char* debug_name, FG_ResourceF
                 VK_IMAGE_USAGE_TRANSFER_DST_BIT,
 
             .sharingMode = VK_SHARING_MODE_EXCLUSIVE,
-            .queueFamilyIndexCount = 0,
+            .queueFamilyIndexCount = 0,  // <- Zero when using exclusive sharing mode
             .pQueueFamilyIndices = NULL,
 
-            // These normally won't be part of the framegraph's input and outputs
-            // So we set it's initial (and usually final-) image layout to read only.
+            // Mipmapped textures normally won't be part of the framegraph's input and outputs
+            // So we set it's initial (and presumably final-) image layout to read only.
             .initialLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
         },
         .image_view_create_info = {
@@ -542,8 +536,8 @@ uint32_t create_material_texture2d_resource(const char* debug_name, FG_ResourceF
         }
     };
     uint32_t texture_rid = FG_CreateResource(debug_name, FG_RESOURCE_TYPE_IMAGE, flags, &texture_create_info);
+    FG_UploadImageData(&renderstate.main.staging_objects, texture_rid, data, data_size);
+    FG_GenMipmaps(texture_rid);
 
-    // TODO: Upload image, create mipmaps return rid
-    #warning create_material_texture2d_resource unfinished
     return texture_rid;
 }

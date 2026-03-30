@@ -43,7 +43,10 @@
     BlendMode;
 #endif
 
-struct GraphicsPushConstants
+// Push constants
+//
+
+struct PushConstant_DrawCall
 {
     uint64_t scene_ptr;     // Scene data (View/Proj)
     uint64_t material_ptr;  // Material SSBO address
@@ -63,11 +66,47 @@ struct GraphicsPushConstants
     uint64_t v_joint_ids_ptr;      // Only for skinned meshes
     uint64_t v_joint_weights_ptr;  // Only for skinned meshes
 };
+
+struct PushConstant_PassHeader
+{
+    // NOTE: Each renderpass will define their own pass header info in their shader and cpp file.
+    // Use static_assert to make sure PushConstant_PassHeader size is == e.g. PushConstant_PassHeader_DeferredLighting
+    // If a specific pass header does not need all 64 bytes, then pad the struct.
+    uint64_t placeholder[8];  // Just a placeholder 64 bytes of data.
+};
+struct FullPushConstants_Graphics
+{
+    PushConstant_DrawCall dc;
+    PushConstant_PassHeader pass;
+};
+
+// Push constant pass header implementation for each renderpass:
+//
+
+struct PushConstant_Pass_DeferredLighting
+{
+    uint32_t tex_idx_color;  // Temp: color rgb, unused a
+    uint32_t sampler_idx_color;
+
+    uint64_t _padding[7];
+};
+
+// Static asserts to make sure each renderpass has the same header size
+#ifdef __cplusplus
+
+static_assert(sizeof(PushConstant_PassHeader) == sizeof(PushConstant_Pass_DeferredLighting));
+
+#endif  // __cplusplus
+
+
+// Buffers
+//
+
 struct SceneData
 {
     mat4 view;
     mat4 proj;
-    mat4 view_proj; 
+    mat4 view_proj;
 };
 struct ObjectData
 {
@@ -86,10 +125,8 @@ struct MaterialData
 
 
 #ifdef __cplusplus
-    static_assert(sizeof(GraphicsPushConstants) <= 128);
-
     // I want to keep this C compatiable.
-    typedef struct GraphicsPushConstants GraphicsPushConstants;
+    typedef struct PushConstant_DrawCall PushConstant_DrawCall;
     typedef struct SceneData SceneData;
     typedef struct ObjectData ObjectData;
     typedef struct Vertex Vertex;

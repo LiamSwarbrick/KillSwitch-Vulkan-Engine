@@ -7,14 +7,13 @@
 #include "internal_state.h"
 
 /*
-Intelligent pipeline creation by inspecting input and output attachments
-of the renderpass set in the pipeline key in order to set the 
-attachments for VkGraphicsPipelineCreateInfo.
+Renderpass-aware pipeline creation by inspecting input and output attachments of the
+renderpass set in the pipeline key in order to set the attachments for VkGraphicsPipelineCreateInfo.
 
 IMPORTANT IMPLEMENTATION NOTE:
 - A specific renderpass type must be consistent in terms of attachment count and formats from frame to frame.
   because it would fuck with the above mentioned thing (the pipeline is hashed based on pass_id not attachment formats).
-  The framegraph is built every frame but this just means the inputs and outputs can change
+  The framegraph is built every frame but this just means the inputs and outputs can change.
   The number of inputs/outputs to a specific pass along with their VkFormat's must be hard set.
 
 DONE: Graphics Pipelines creation
@@ -47,17 +46,17 @@ VkPipeline PK_GetOrCreatePipeline(PipelineEntry** pipeline_map_ref, PipelineKey 
     VkPipeline new_pipeline = VK_NULL_HANDLE;
     switch ((PK_PipelineType)key.pipeline_type)
     {
-    case PK_PIPELINE_TYPE_COMPUTE:
-        // TODO.
-        SDL_assert(1 && "TODO: make compute pipeline.");
-        break;
+        case PK_PIPELINE_TYPE_COMPUTE:
+            // TODO.
+            SDL_assert(1 && "TODO: make compute pipeline.");
+            break;
 
-    case PK_PIPELINE_TYPE_GRAPHICS:
-        new_pipeline = create_graphics_pipeline(key);
-        break;
-        
-    default:
-        SDL_assert(0 && "Invalid pipeline type");
+        case PK_PIPELINE_TYPE_GRAPHICS:
+            new_pipeline = create_graphics_pipeline(key);
+            break;
+            
+        default:
+            SDL_assert(0 && "Invalid pipeline type");
     }
 
     // Add new pipeline to hash map

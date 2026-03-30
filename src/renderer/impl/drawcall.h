@@ -18,6 +18,9 @@ typedef struct DrawCallsPerShader
 {
     b32 is_allocated;
     b32 is_currently_adding_drawcalls;  // So we can make sure SubmitDraw is only called between Begin and EndDrawCalls
+
+    // Seperate drawcall list for each shader type.
+    // Renderpasses can loop over the lists of the specific shaders that pass uses only.
     struct
     {
         uint32_t drawcall_count;
@@ -41,6 +44,6 @@ void EndDrawCalls();
 // etc.
 // So call this function within the renderpass execute callback
 void UpdateGlobalSceneData(SceneData data);
-void ExecuteDrawCall(VkCommandBuffer cmd, DrawCall drawcall, PipelineKey key);
+void ExecuteDrawCall(VkCommandBuffer cmd, DrawCall drawcall, PipelineKey key, PushConstant_PassHeader push_pass);
 
 #endif  // RENDERER_DRAWCALL_H

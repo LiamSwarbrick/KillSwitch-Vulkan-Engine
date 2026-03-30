@@ -36,7 +36,10 @@ void ShaderRegistry_Init()
         set->pipeline_type = PK_PIPELINE_TYPE_INVALID;
     }
 
-    // Load shaders (NOTE: Current macro requires types have the same name, so make good use of include statements in the glsl to avoid copy pasting shared vertex shaders)
+    // Load shaders
+    // (NOTE: Current macro requires types have the same name,
+    //  so make good use of include statements in the glsl to avoid copy pasting shared vertex shaders
+    //  e.g. if two shaders share a vertex shader, just put the vertex shader in a different file, and #include it in both verts)
     #define LOAD_GRAPHICS(id, name_str) \
         sreg->shaders[id].pipeline_type = PK_PIPELINE_TYPE_GRAPHICS; \
         sreg->shaders[id].graphics.vertex_shader = load_spirv(SHADER_SPIRV_DIR name_str ".vert.spv"); \

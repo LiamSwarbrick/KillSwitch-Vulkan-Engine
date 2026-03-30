@@ -742,6 +742,7 @@ void Renderer_DrawFrame()
     Renderable r2 = r;
     r2.transform[3][0] -= 0.5;
     r2.transform[3][1] -= 0.5;
+    r2.transform[3][2] -= 0.5;
     {
         // TODO During week where we integrate with entity system
 
@@ -770,8 +771,12 @@ void Renderer_DrawFrame()
     uint32_t swapchain_image_resource_id = renderstate.rids.swapchain_image_rids[swapchain_image_index];
     uint32_t swapchain_pass;
     {
+        // RenderPassDesc forward_opaque_pass_desc = {
+
+        // }
+
         // Temporary basic pass for swapchain rendering
-        RenderPassDesc swapchain_pass_desc = (RenderPassDesc){
+        RenderPassDesc swapchain_pass_desc = {
             .debug_name = "Swapchain Pass",
             .input_count = 0,
             .inputs = {},
@@ -782,9 +787,10 @@ void Renderer_DrawFrame()
                     .usage_flags = FG_USAGE_COLOR,
                     .sampler_type = FG_SAMPLER_NOT_SAMPLABLE,  // NOTE: Outputs attachment, can ignore sampler_type
 
+                    .layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
                     .access = VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,
                     .stage  = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
-                    .layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+                    .queue_family_index = renderstate.queue_family_indices.graphics_family,
                     
                     .load_op = VK_ATTACHMENT_LOAD_OP_CLEAR,
                     .store_op = VK_ATTACHMENT_STORE_OP_STORE,

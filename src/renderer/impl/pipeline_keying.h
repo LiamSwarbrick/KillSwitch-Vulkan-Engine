@@ -5,6 +5,9 @@
 #include "../render_types.h"
 
 #include "renderer/shadersrc/shared_constants.glsl"
+static_assert(sizeof(FullPushConstants_Graphics) <= 256 &&
+    "Vulkan 1.4 only guaruntees 256 bytes for pushconstants. So keep within that range."
+);
 
 typedef enum
 {

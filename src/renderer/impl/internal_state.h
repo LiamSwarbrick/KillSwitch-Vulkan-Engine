@@ -24,8 +24,8 @@ typedef struct RenderState
 
     // Options
     // TODO: Instead, just ask core for settings when needed.
-    // Or realistically, each module can have a Settings_Changed callback
-    // Since swapchain will need to be recreated if uncapped_fps is changed.
+    // Or realistically, each module can have a SettingsChanged callback
+    // since swapchain will need to be recreated if uncapped_fps is changed.
     b32 uncapped_fps;
 
     VkInstance instance;
