@@ -31,6 +31,6 @@ typedef struct RenderPrefab
 }
 RenderPrefab;
 
-void Renderer_LoadSceneResource()
+void Renderer_LoadSceneResource();
 
 #endif  // ENGINE_RENDERER_H

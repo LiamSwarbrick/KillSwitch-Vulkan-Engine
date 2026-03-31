@@ -57,8 +57,9 @@ void SwapchainPass_Execute(VkCommandBuffer cmd, void* user_data)
             .sort_depth  = 0,  // <- NOTE: unused at the moment.
 
             // .mesh_rids = renderstate.rids.dummy_mesh,
-            .mesh_rids = renderstate.rids.temp_test_mesh,
-            .material_idx = 0,
+            // .mesh_rids = renderstate.rids.temp_test_mesh,
+            // .material_idx = 0,
+            .prim_rids = renderstate.rids.temp_test_mesh,
             .object_ptr = PushToMappedArena(&renderstate.object_transforms, &tri_object_data, sizeof(tri_object_data)),
             .joint_ptr = PushToMappedArena(&renderstate.object_transforms, joint_matrices, joint_count * sizeof(glm::mat4))
         };
