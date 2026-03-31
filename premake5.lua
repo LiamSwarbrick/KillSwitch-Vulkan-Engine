@@ -24,6 +24,7 @@ include_paths.VMA = EXTERNAL .. "VMA"
 include_paths.glm = EXTERNAL .. "glm"
 include_paths.cgltf = EXTERNAL .. "cgltf"
 include_paths.stb = EXTERNAL .. "stb"
+include_paths.rapidjson = EXTERNAL .. "rapidjson"
 
 lib_dirs = {}
 
@@ -179,7 +180,8 @@ workspace "AdventureEngine"
             include_paths.SDL3,
             include_paths.glm,
             include_paths.cgltf,
-            include_paths.stb
+            include_paths.stb,
+            include_paths.rapidjson
         }
 
         libdirs {
@@ -277,7 +279,8 @@ workspace "AdventureEngine"
             SRC .. "game",
             include_paths.SDL3,
             include_paths.glm,
-            include_paths.cgltf
+            include_paths.cgltf,
+            include_paths.rapidjson
         }
 
         libdirs {

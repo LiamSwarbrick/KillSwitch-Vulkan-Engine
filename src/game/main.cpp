@@ -104,11 +104,8 @@ int main(int argc, char *argv[])
 
 
     // Testing Scene and ECS
-    // Scene scene;
-    // scene.LoadLevel("assets/levels/shapes.gltf");
-
-    //
-
+    Scene scene;
+    scene.LoadLevel("assets/levels/untitled.gltf");
 
     Scene_InitInfo splash_screen_info = {
         .num_prefabs = 1,

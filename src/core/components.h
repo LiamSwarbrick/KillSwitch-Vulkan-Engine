@@ -13,10 +13,10 @@ struct C_Transform
     glm::mat4 matrix;
 };
 
-struct C_StaticMesh
-{
-    MeshPrefab mesh_prefab;
-};
+// struct C_StaticMesh
+// {
+//     MeshPrefab mesh_prefab;
+// };
 
 struct C_AnimatedMesh
 {
