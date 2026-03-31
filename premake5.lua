@@ -178,7 +178,8 @@ workspace "AdventureEngine"
             SRC .. "core/**",  -- Internal include headers
             include_paths.SDL3,
             include_paths.glm,
-            include_paths.cgltf
+            include_paths.cgltf,
+            include_paths.stb
         }
 
         libdirs {

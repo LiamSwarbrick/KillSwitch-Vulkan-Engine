@@ -7,6 +7,8 @@
 
 #include "shadersrc/shared_constants.glsl"
 
+#define MAX_RENDERED_OBJECTS 10000
+
 /*
 Material Example Ideas:
 MAT_UNLIT,             // Skybox
@@ -68,12 +70,11 @@ typedef struct Renderable
     
     // CPU-side joints buffer we memcpy from to GPU joints buffer
     uint32_t joint_count;
-    mat4* const joints;    // <- Pointer to animation system side joints array
+    mat4* joints;    // <- Pointer to animation system side joints array
     // NOTE: Fucking make sure joints arrays are not allocated every frame
 }
 Renderable;
 
-#warning TODO: Finally have api use renderview (just pass renderview each frame and that equals the drawcalls)
 typedef struct RenderView
 {
     uint32_t num_renderables;

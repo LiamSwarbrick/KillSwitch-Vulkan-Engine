@@ -509,8 +509,6 @@ void Renderer_Init(const Renderer_InitInfo* info)
     }
 
 
-    #warning TEMP: For assetysys integration
-    renderstate.temp_test_mesh = info->temp_test_mesh;
 
     // Init Subsystems
     //
@@ -533,6 +531,12 @@ void Renderer_Init(const Renderer_InitInfo* info)
     // Using arrays of drawcalls per shader type.
     // E.g. MAT_PBR_WITH_OUTLINE renderable to add a drawcall to both SHADER_PBR and SHADER_OUTLINE
     InitDrawCallCollections();
+
+    // Init renderables arena (per frame lifetime)
+    renderstate.renderables_arena = (RenderView){
+        .num_renderables = 0,
+        .items = (Renderable*)L_calloc(MAX_RENDERED_OBJECTS, sizeof(Renderable), &renderstate.main.tt)
+    };
 
     // Init per frame structures (except for swapchain_image_acquired_semaphore, which is handled by create_or_recreate_swapchain)
     {
@@ -578,6 +582,7 @@ void Renderer_Shutdown()
         vkDestroyFence(renderstate.device, renderstate.frames[i].rendering_complete_fence, NULL);
     }
 
+    L_free(renderstate.renderables_arena.items, &renderstate.main.tt);
     DestroyDrawCallCollections();
 
     // Shutdown Pipeline Keying and Frame Graph subsystems
@@ -657,6 +662,21 @@ void _Renderer_OnWindowMinimize()
     // TODO: Pause rendering on minimize
 }
 
+void Renderer_ChangeScene(Scene_InitInfo new_scene_info)
+{
+    renderstate.is_next_scene_set = 1;
+    renderstate.next_scene_info = new_scene_info;
+    CreateOrRecreateResources(FG_RESOURCE_FLAGS_WINDOW_DEPENDENT);
+}
+
+void Renderer_PushRenderable(Renderable renderable)
+{
+    SDL_assert(renderstate.renderables_arena.items &&
+        renderstate.renderables_arena.num_renderables + 1 < MAX_RENDERED_OBJECTS
+    );
+    renderstate.renderables_arena.items[renderstate.renderables_arena.num_renderables++] = renderable;
+}
+
 void Renderer_DrawFrame()
 {
     /*  Get current swapchain image, and wait on sync structures
@@ -730,32 +750,37 @@ void Renderer_DrawFrame()
         For instance, an outline is togglable in gameplay code. Same with visibility.
     */
 
-    #warning TODO: Drawcalls contain the transform mesh ids, material_type and skeleton data
-    #warning TODO: Here we need to use them to build renderables.
     BeginDrawCalls();
 
     // NOTE: Renderables need to be alive the whole time, (drawcalls point to renderables)
     //       This is why we'll actually get them through the entity system via the DrawFrame args maybe (or just query the ecs)
-    Renderable r = {
-        .transform    = glm::mat4(1.0f),
-        .mesh_prefab  = renderstate.rids.dummy_mesh,
-        .joint_count  = 0,
-        .joints       = NULL
-    };
-    Renderable r2 = r;
-    r2.transform[3][0] -= 0.5;
-    r2.transform[3][1] -= 0.5;
-    r2.transform[3][2] -= 0.5;
-    {
-        // TODO During week where we integrate with entity system
+    #if 1  // TEMP:
+        Renderable r = {
+            .transform    = glm::mat4(1.0f),
+            .mesh_prefab  = renderstate.rids.dummy_mesh,
+            .joint_count  = 0,
+            .joints       = NULL
+        };
+        Renderable r2 = r;
+        r2.transform[3][0] -= 0.5;
+        r2.transform[3][1] -= 0.5;
+        r2.transform[3][2] -= 0.5;
+        {
+            Renderer_PushRenderable(r);
+            Renderer_PushRenderable(r2);
+        }
+    #endif  // ENDTEMP
 
-        AddDrawCall(&r);
-        AddDrawCall(&r2);
+    for (uint32_t i = 0; i < renderstate.renderables_arena.num_renderables; ++i)
+    {
+        AddDrawCall(&renderstate.renderables_arena.items[i]);
     }
 
     EndDrawCalls();
 
-
+    
+    // Reset renderables arena head for next frame
+    renderstate.renderables_arena.num_renderables = 0;
 
 
 

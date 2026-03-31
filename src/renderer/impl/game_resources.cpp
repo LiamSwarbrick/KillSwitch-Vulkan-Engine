@@ -7,6 +7,7 @@
 
 void create_startup_resources();
 void create_window_dependent_resources();
+void create_scene_resources();
 
 uint32_t create_resource_with_buffer_data(
     const char* debug_name, FG_ResourceFlags flags,
@@ -71,7 +72,11 @@ void CreateOrRecreateResources(FG_ResourceFlags types_to_create)
         renderstate.rids.startup_resources_created = 1;
     }
 
-
+    flags = FG_RESOURCE_FLAGS_SCENE_DEPENDENT;
+    if ((flags & types_to_create) == types_to_create)
+    {
+        create_scene_resources();
+    }
     
 #ifndef NDEBUG
     // Check we haven't left any gaps in the array
@@ -113,7 +118,6 @@ void create_startup_resources()
     );
 
     // Objects Buffer (Mapped so we rapidly upload transforms each frame)
-    const uint32_t MAX_RENDERED_OBJECTS = 10000;
     ResourceCreateInfo objects_info = {
         .buffer_create_info = {
             .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
@@ -129,7 +133,7 @@ void create_startup_resources()
     );
     renderstate.object_transforms = MakeArenaOnBufferResource(renderstate.rids.objects_buffer_rid);
 
-    // Joints Buffer (Mapped as well as we upload them each frame)
+    // Joints Buffer (Mapped so we upload to them each frame)
     const uint32_t MAX_JOINTS_FOR_ALL_OBJECTS = MAX_RENDERED_OBJECTS * 50;
     ResourceCreateInfo joints_info = {
         .buffer_create_info = {
@@ -147,7 +151,7 @@ void create_startup_resources()
     renderstate.joint_transforms = MakeArenaOnBufferResource(renderstate.rids.objects_buffer_rid);
 
 
-    // Materials SSBO
+    // Materials SSBO (materials get uploaded on scene change all at once)
     const uint32_t MAX_MATERIALS = 1024;
     ResourceCreateInfo mat_info = {
         .buffer_create_info = {
@@ -162,6 +166,8 @@ void create_startup_resources()
         "MaterialSSBO", FG_RESOURCE_TYPE_BUFFER, flags, &mat_info
     );
 
+
+    // DUMMY DATA BELOW:
     #warning TODO: Upload materials on create_scene_resources() instead of startup.
 
     // TEMP Material:
@@ -199,10 +205,6 @@ void create_startup_resources()
     );
 
     /////// MOVE BELOW TO create_scene_resources(scene resource list?) /////////////
-    #warning BELOW IS DUMMY DATA, THAT SHOULD NOT BE PART OF startup_resources()
-    #warning TODO IMPORTANT: ONLY SLOT 0 OF THE MATERIAL SSBO WILL BE WRITTEN TO WITH THIS LOGIC, CHANGE THIS NEXT
-
-
 
     // TEST QUAD
     uint32_t quad_indices[6] = { 0, 1, 2, 0, 3, 1 };
@@ -294,6 +296,28 @@ void create_window_dependent_resources()
         );
     }
 }
+
+void create_scene_resources()
+{
+    FG_ResourceFlags flags = FG_RESOURCE_FLAGS_SCENE_DEPENDENT;
+
+    SDL_assert(renderstate.is_next_scene_set);
+    renderstate.is_next_scene_set = 0;
+
+    // Load next scene
+    Scene_InitInfo* init_info = &renderstate.next_scene_info;
+    SDL_Log("TODO: Implement create_scene_resources based on Scene_InitInfo shit\n");
+    #warning TODO: Loop over everything that should be loaded into the scene.
+    // Don't try and be smart about whether the asset was already loaded.
+    // Because we can just replace it with the resource manager later.
+
+    // NOTE: I initially thought I would need something different to Asset*
+    // because it doesn't tell us which are meshes vs collision shapes.
+    // But actually, collision meshes are great for debugging
+    // So just load everything as a mesh
+}
+
+/////
 
 uint32_t create_resource_with_buffer_data(const char* debug_name, FG_ResourceFlags flags, VkBufferUsageFlags usage, size_t size, void* data)
 {
@@ -407,31 +431,6 @@ uint32_t compute_num_mip_levels(uint32_t image_level0_width, uint32_t image_leve
     }
 
     return 32 - leading_zeros;
-
-#if 0  // NOTE(Liam): std::countl_zero not working on Jaime's machines at the moment
-
-    // Counting number of mipmaps an image needs
-    //
-    // Let N := Num mip levels.
-    // Let L := max(width, height) of base image (level 0).
-    // Each mip level is half resolution of previous one, e.g.:
-    // - Mip level 0: length = L    = L / (2^0)
-    // - Mip level 1: length = L/2  = L / (2^1)
-    // - Mip level 2: length = L/4  = L / (2^2)
-    // - Mip level 3: length = L/8  = L / (2^3)
-    //
-    // Highest mip level has length of 1 pixel so num mip levels N is:
-    //    N = 1 + floor( log2( max(width, height) ) )
-    // => N = 1 + position of most significant bit set in max(width, height)
-    // For 32 bit integers:
-    // => N = 1 + (32 - (num leading zeroes + 1))
-    // => N = 32 - num leading zeroes
-
-    const uint32_t bits = image_level0_width | image_level0_height;
-    const uint32_t  leading_zeros = std::countl_zero(bits);  // C++
-    // const u32  leading_zeros = stdc_leading_zeros(bits);  // C23
-    return 32 - leading_zeros;
-#endif
 }
 
 

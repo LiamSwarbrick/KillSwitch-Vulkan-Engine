@@ -170,8 +170,6 @@ typedef struct ImageResourceData
     VkImage                 handle;
     VkImageView             view;
     uint32_t bindless_texture_index;  // Every image gets a slot in the heap. In case it ever needs to be sampled.
-#warning Mid-implementing giving each image resource a heap slot,
-#warning and during execute pass, when transitioning input images, need to set the samples in the passusage for that heap slot.
 
     // Metadata about the image needed for parts of the frame graph
     VkFormat                format;

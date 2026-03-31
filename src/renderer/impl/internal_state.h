@@ -1,6 +1,7 @@
 #ifndef ENGINE_RENDERER_RENDER_STATE_H
 #define ENGINE_RENDERER_RENDER_STATE_H
 
+#include "renderer.h"
 #include "internal_structs.h"
 #include "framegraph.h"
 
@@ -65,27 +66,28 @@ typedef struct RenderState
     // FUTURE: If multithreading drawcalls are needed, see this article on sharing pipelines while using seperate maps per thread:
     //         https://ruby0x1.github.io/machinery_blog_archive/post/vulkan-pipelines-and-render-states/index.html    
     PipelineEntry* pipeline_map;          // Recreated only when swapchain format changes (so never under most circumstances)
-
-    // Renderer execution state:
-    VkPipeline currently_bound_pipeline;  // Used to avoid  vkCmdBindPipeline call if it's already bound
-
-
-    // TODO: Move this shit to a more game local directory instead of internal state
     ShaderRegistry shader_registry;
     ResourceIDs rids;  // IDs into registry, framegraph, or pipeline hash
-
-    MappedArena object_transforms;
-    MappedArena joint_transforms;
-
-    // Draw call collection (drawcall.h)
-    DrawCallsPerShader drawcalls_collection;
 
     // Per Frame Table for converting Pass Type into framegraph.passes array index
     uint32_t pass_id_from_type[PASS_TYPE_COUNT];  // ONLY use after framegraph has been build that frame
 
+    // Arenas reset each frame
+    MappedArena object_transforms;
+    MappedArena joint_transforms;
 
-    #warning TEMP Mesh state in internal_state.h for assetsys integration
-    Mesh* temp_test_mesh;
+    // Draw Calls are accumulated each frame per shader
+    DrawCallsPerShader drawcalls_collection;
+
+    // Renderer execution state:
+    VkPipeline currently_bound_pipeline;  // Used to avoid  vkCmdBindPipeline call if it's already bound
+
+    // Scene Assets
+    b32 is_next_scene_set;
+    Scene_InitInfo next_scene_info;
+
+    // Renderables arena
+    RenderView renderables_arena;
 }
 RenderState;
 

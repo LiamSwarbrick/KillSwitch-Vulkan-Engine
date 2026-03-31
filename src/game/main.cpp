@@ -5,6 +5,9 @@
 #include "SDL3/SDL.h"
 #include "SDL3/SDL_main.h"
 
+uint32_t num_renderables;
+Renderable renderables_arena[MAX_RENDERED_OBJECTS];
+
 int main(int argc, char *argv[])
 {
     bool is_debugging = true;
@@ -28,15 +31,13 @@ int main(int argc, char *argv[])
 
     for (int i = 0; i < asset3->meshes[0].primitive_count; ++i)
     {
-        SDL_Log("Mesh 0 prim %d has %d indices\n", i, asset3->meshes[0].primitives[i].index_count);
+        SDL_Log("Mesh 0 prim %d has %zu indices\n", i, asset3->meshes[0].primitives[i].index_count);
     }
     Mesh* test_mesh = &asset3->meshes[1];
     
 
     // TODO: This will happen before asset loading, but we need to temporarilly pass the mesh to init info
-    Renderer_InitInfo renderer_info = { .window = window, .enable_validation = is_debugging,
-        .temp_test_mesh = test_mesh
-    };
+    Renderer_InitInfo renderer_info = { .window = window, .enable_validation = is_debugging };
     Renderer_Init(&renderer_info);
     
     // Testing shader upload api.
@@ -106,6 +107,15 @@ int main(int argc, char *argv[])
     // Scene scene;
     // scene.LoadLevel("assets/levels/shapes.gltf");
 
+    //
+
+
+    Scene_InitInfo splash_screen_info = {
+        .num_prefabs = 1,
+        .prefabs = &asset3
+    };
+    Renderer_ChangeScene(splash_screen_info);
+
 
     bool running = true;
 
@@ -127,16 +137,9 @@ int main(int argc, char *argv[])
         uint32_t flags = SDL_GetWindowFlags(window);
         if (!(flags & SDL_WINDOW_MINIMIZED))
         {
-            // NOTE: Passes will gather their own renderables, reason being, some passes will just draw a hardcoded full screen triangle,
-            // others will draw from the lights perspective, and others will only draw the toon shaded characters for example
-            //
-            // TODO: Gather entity renderables in RenderView, put this as a function in renderer/renderpasses/gather_renderables.cpp or something
-            // Later TODO: Gather visible entities only for extra optimization.
-            // with support for different passes e.g. shadows from lights perspective will require different entity lists.
-            // In future, when entity system sorted out, can move entity gathering
-            // to inside the Renderer_DrawFrame function, and this can use core
-            // systems to gather relevant entities per each render pass.
-            
+            // Do this buddo:
+            // Renderer_PushRenderable(renderable);
+
             Renderer_DrawFrame();
         }
     }

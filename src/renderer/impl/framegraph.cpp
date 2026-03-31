@@ -2,8 +2,9 @@
 
 #include "internal_state.h"
 
-#warning QUEUE TRANSITIONS MUST BE ADDED TO THESE PIPELINE BARRIERS AND CURRENT QUEUE TRACKED AS WELL
-#warning So far it hasn't crashed because the graphics,presentation,&transfer queus have been the same on my device.
+
+#warning Not sure I need sampler_type in pass resource usage
+
 
 void bindless_heap_init();
 void bindless_heap_shutdown();
