@@ -4,7 +4,7 @@
 // RapidJSON 
 #include "rapidjson/document.h"
 // Imported components for automated de-serialization
-#include "level/imported_components.h"
+#include "imported_components.h"
 
 #include "SDL3/SDL.h"
 
