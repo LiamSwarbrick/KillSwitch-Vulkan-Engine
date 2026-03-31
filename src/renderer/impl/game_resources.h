@@ -14,14 +14,14 @@ typedef struct ResourceIDs
     // Window Dependent
     uint32_t swapchain_image_rids[MAX_SWAPCHAIN_IMAGE_COUNT];
     
-    // Global
+    // Global (on startup)
     uint32_t global_scene_buffer_rid;
     uint32_t objects_buffer_rid;
     uint32_t material_ssbo_rid;
-
+    
     // Dummy stuff
-    MeshRIDs dummy_mesh;
-    MeshRIDs temp_test_mesh;
+    MeshPrefab dummy_mesh;
+    MeshPrefab temp_test_mesh;
 }
 ResourceIDs;
 

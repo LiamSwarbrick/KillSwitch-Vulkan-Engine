@@ -14,6 +14,9 @@ void external_free(void* ptr) { return L_free(ptr, &renderstate.main.tt); }
 #define STB_DS_IMPLEMENTATION
 #include "stb_ds.h"  // Pipeline keying using this, I'm the STB_DS_IMPLEMENTATION here
 
+#warning TODO: Set STB_IMAGE allocators
+#define STB_IMAGE_IMPLEMENTATION
+ #include "stb_image.h"
 
 // NOTE(Liam): The only mutable internal state for renderer is this renderstate.
 // All other global state here should be const
@@ -506,8 +509,6 @@ void Renderer_Init(const Renderer_InitInfo* info)
     }
 
 
-    #warning TEMP: For assetysys integration
-    renderstate.temp_test_mesh = info->temp_test_mesh;
 
     // Init Subsystems
     //
@@ -526,6 +527,16 @@ void Renderer_Init(const Renderer_InitInfo* info)
     renderstate.rids.startup_resources_created = 0;
     _Renderer_OnWindowResize();  // <-- Creates swapchain and window dependent resources
     CreateOrRecreateResources(FG_RESOURCE_FLAGS_ON_STARTUP);
+
+    // Using arrays of drawcalls per shader type.
+    // E.g. MAT_PBR_WITH_OUTLINE renderable to add a drawcall to both SHADER_PBR and SHADER_OUTLINE
+    InitDrawCallCollections();
+
+    // Init renderables arena (per frame lifetime)
+    renderstate.renderables_arena = (RenderView){
+        .num_renderables = 0,
+        .items = (Renderable*)L_calloc(MAX_RENDERED_OBJECTS, sizeof(Renderable), &renderstate.main.tt)
+    };
 
     // Init per frame structures (except for swapchain_image_acquired_semaphore, which is handled by create_or_recreate_swapchain)
     {
@@ -570,6 +581,9 @@ void Renderer_Shutdown()
         vkDestroyCommandPool(renderstate.device, renderstate.frames[i].graphics_command_pool, NULL);
         vkDestroyFence(renderstate.device, renderstate.frames[i].rendering_complete_fence, NULL);
     }
+
+    L_free(renderstate.renderables_arena.items, &renderstate.main.tt);
+    DestroyDrawCallCollections();
 
     // Shutdown Pipeline Keying and Frame Graph subsystems
     PK_Shutdown(&renderstate.pipeline_map, renderstate.device);
@@ -648,6 +662,21 @@ void _Renderer_OnWindowMinimize()
     // TODO: Pause rendering on minimize
 }
 
+void Renderer_ChangeScene(Scene_InitInfo new_scene_info)
+{
+    renderstate.is_next_scene_set = 1;
+    renderstate.next_scene_info = new_scene_info;
+    CreateOrRecreateResources(FG_RESOURCE_FLAGS_WINDOW_DEPENDENT);
+}
+
+void Renderer_PushRenderable(Renderable renderable)
+{
+    SDL_assert(renderstate.renderables_arena.items &&
+        renderstate.renderables_arena.num_renderables + 1 < MAX_RENDERED_OBJECTS
+    );
+    renderstate.renderables_arena.items[renderstate.renderables_arena.num_renderables++] = renderable;
+}
+
 void Renderer_DrawFrame()
 {
     /*  Get current swapchain image, and wait on sync structures
@@ -706,27 +735,55 @@ void Renderer_DrawFrame()
     vkResetCommandPool(renderstate.device, renderstate.frames[frame_in_flight].graphics_command_pool, 0);
 
 
+
+
+
     /* Sort Drawcalls into arrays per shader
 
-        Add to Renderable renderables_per_shader[SHADER_COUNT][MAX_RENDERABLES]
-
         Example, Renderable r with MAT_PBR_WITH_OUTLINE:
-        r could be added to many different shaders:
+        r could be added to many different shaders: (pseudocode)
             renderables_per_shader[SHADER_PBR].append(r);
             renderables_per_shader[SHADER_OUTLINE].append(r);
             renderables_per_shader[SHADER_SHADOWMAP].append(r);
         
-        Importantly, drawcalls aren't tied to game objects's assets.
-        For instance, an outline is togglable in gameplay code.
-        Same with visibility.
+        Importantly, renderables are collected per frame, (not true of the underlying assets).
+        For instance, an outline is togglable in gameplay code. Same with visibility.
     */
 
-    #warning TODO: Drawcalls contain the transform mesh ids, material_type and skeleton data
-    #warning TODO: Here we need to use them to build renderables.
+    BeginDrawCalls();
 
+    // NOTE: Renderables need to be alive the whole time, (drawcalls point to renderables)
+    //       This is why we'll actually get them through the entity system via the DrawFrame args maybe (or just query the ecs)
+    #if 1  // TEMP:
+        Renderable r = {
+            .transform    = glm::mat4(1.0f),
+            .mesh_prefab  = renderstate.rids.dummy_mesh,
+            .joint_count  = 0,
+            .joints       = NULL
+        };
+        Renderable r2 = r;
+        r2.transform[3][0] -= 0.5;
+        r2.transform[3][1] -= 0.5;
+        r2.transform[3][2] -= 0.5;
+        {
+            Renderer_PushRenderable(r);
+            Renderer_PushRenderable(r2);
+        }
+    #endif  // ENDTEMP
+
+    for (uint32_t i = 0; i < renderstate.renderables_arena.num_renderables; ++i)
     {
-        // TODO During week where we integrate with entity system
+        AddDrawCall(&renderstate.renderables_arena.items[i]);
     }
+
+    EndDrawCalls();
+
+    
+    // Reset renderables arena head for next frame
+    renderstate.renderables_arena.num_renderables = 0;
+
+
+
 
     /*  Build FrameGraph
 
@@ -742,8 +799,12 @@ void Renderer_DrawFrame()
     uint32_t swapchain_image_resource_id = renderstate.rids.swapchain_image_rids[swapchain_image_index];
     uint32_t swapchain_pass;
     {
+        // RenderPassDesc forward_opaque_pass_desc = {
+
+        // }
+
         // Temporary basic pass for swapchain rendering
-        RenderPassDesc swapchain_pass_desc = (RenderPassDesc){
+        RenderPassDesc swapchain_pass_desc = {
             .debug_name = "Swapchain Pass",
             .input_count = 0,
             .inputs = {},
@@ -752,11 +813,12 @@ void Renderer_DrawFrame()
                 {
                     .rid = swapchain_image_resource_id,
                     .usage_flags = FG_USAGE_COLOR,
-                    .sampler_type = FG_SAMPLER_NOT_SAMPLABLE,
+                    .sampler_type = FG_SAMPLER_NOT_SAMPLABLE,  // NOTE: Outputs attachment, can ignore sampler_type
 
+                    .layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
                     .access = VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,
                     .stage  = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
-                    .layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+                    .queue_family_index = renderstate.queue_family_indices.graphics_family,
                     
                     .load_op = VK_ATTACHMENT_LOAD_OP_CLEAR,
                     .store_op = VK_ATTACHMENT_STORE_OP_STORE,
@@ -799,10 +861,9 @@ void Renderer_DrawFrame()
 
     // Begin recording graphics commands
     //
-
+    renderstate.currently_bound_pipeline = VK_NULL_HANDLE;  // <- Each time we start recording cmd bufs, the bound pipeline is reset
     VK_CHECK(vkBeginCommandBuffer(gcmd, &graphics_cmd_begin_info));
     {
-        UpdateGlobalSceneData();
         FG_CmdRenderFrame(gcmd);
         FG_CmdTransitionSwapchainForPresentation(gcmd, swapchain_image_resource_id);
     }
@@ -812,6 +873,8 @@ void Renderer_DrawFrame()
     // End of graphics commands recording
 
     
+
+
 
     // Prepare submission of the command buffer to the queue.
     // - Requires waiting on the present semaphore (signalled when the swapchain is ready)

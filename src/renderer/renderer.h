@@ -5,32 +5,26 @@
 #include "SDL3/SDL.h"
 #include "render_types.h"
 
-#warning TEMP: In renderer.cpp I'm including assetsys to temporarily pass a Mesh to Renderer_InitInfo
-#include "core/assetsys.h"
-
 typedef struct Renderer_InitInfo
 {
     SDL_Window* window;
     bool enable_validation;
-
-    // TEMP:
-    Mesh* temp_test_mesh;
 }
 RendererInitInfo;
 
 void Renderer_Init(const Renderer_InitInfo* info);
 void Renderer_Shutdown();
 void Renderer_ListenToWindowEvent(SDL_Event event);
+void Renderer_PushRenderable(Renderable renderable);
 void Renderer_DrawFrame();
 
-typedef struct RenderPrefab
-{
-    VertexType vertex_type;
-    MaterialType mat_type;
-    MeshRIDs mesh_rids;
-}
-RenderPrefab;
 
-void Renderer_LoadSceneResource();
+typedef struct Scene_InitInfo
+{
+    uint32_t num_prefabs;
+    Asset** prefabs;
+}
+Scene_InitInfo;
+void Renderer_ChangeScene(Scene_InitInfo new_scene_info);
 
 #endif  // ENGINE_RENDERER_H

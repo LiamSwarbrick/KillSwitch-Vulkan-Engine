@@ -202,6 +202,9 @@ typedef struct Asset {
 } Asset;
 
 
+Image load_image(const char* name, const char* uri);
+void free_image(Image* image);
+
 Asset* load_asset(const char* filename);
 
 void free_asset(Asset* asset);

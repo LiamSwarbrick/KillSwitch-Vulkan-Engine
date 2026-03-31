@@ -2,10 +2,12 @@
 
 #include "internal_state.h"
 
+#include "stb_image.h"
 #include "core/assetsys.h"  // CPU-side asset data
 
 void create_startup_resources();
 void create_window_dependent_resources();
+void create_scene_resources();
 
 uint32_t create_resource_with_buffer_data(
     const char* debug_name, FG_ResourceFlags flags,
@@ -18,16 +20,14 @@ PrimitiveRIDs create_primitive_resources(
     glm::vec3* positions, glm::vec2* texcoords, glm::vec3* normals, glm::vec3* colors,
     glm::uvec4* joint_ids, glm::vec4* joint_weights  // Joints only for skinned meshes
     );
-//MeshRIDs create_mesh_resources(
-//    const char* debug_name, FG_ResourceFlags shared_flags, 
-//    );
-
-uint32_t create_material_texture2d_resource(const char* debug_name, FG_ResourceFlags flags,
+uint32_t create_mipmapped_texture2d_resource(const char* debug_name, FG_ResourceFlags flags,
      uint8_t* data, uint64_t data_size,
      uint32_t width, uint32_t height, VkFormat format
 );
 
-
+// NOTE: Not using an optimized built-in for count leading zeros
+// because mipmaps level counting is not a bottleneck and Jaime was having problems with
+// C++20 features.
 // #include <bit>  // compute_num_mip_levels() uses std::countl_zero()
 // // NOTE: If porting to C, C23 has stdc_leading_zeros() in <stdbit.h> header
 uint32_t compute_num_mip_levels(uint32_t image_level0_width, uint32_t image_level0_height);
@@ -72,7 +72,11 @@ void CreateOrRecreateResources(FG_ResourceFlags types_to_create)
         renderstate.rids.startup_resources_created = 1;
     }
 
-
+    flags = FG_RESOURCE_FLAGS_SCENE_DEPENDENT;
+    if ((flags & types_to_create) == types_to_create)
+    {
+        create_scene_resources();
+    }
     
 #ifndef NDEBUG
     // Check we haven't left any gaps in the array
@@ -114,7 +118,6 @@ void create_startup_resources()
     );
 
     // Objects Buffer (Mapped so we rapidly upload transforms each frame)
-    const uint32_t MAX_RENDERED_OBJECTS = 100000;
     ResourceCreateInfo objects_info = {
         .buffer_create_info = {
             .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
@@ -130,7 +133,25 @@ void create_startup_resources()
     );
     renderstate.object_transforms = MakeArenaOnBufferResource(renderstate.rids.objects_buffer_rid);
 
-    // Materials SSBO
+    // Joints Buffer (Mapped so we upload to them each frame)
+    const uint32_t MAX_JOINTS_FOR_ALL_OBJECTS = MAX_RENDERED_OBJECTS * 50;
+    ResourceCreateInfo joints_info = {
+        .buffer_create_info = {
+            .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
+            .size = MAX_JOINTS_FOR_ALL_OBJECTS * sizeof(glm::mat4),
+            .usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT
+                | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT
+                | VK_BUFFER_USAGE_TRANSFER_DST_BIT
+        },
+        .is_cpu_accessible = 1  // <- Hence mapped
+    };
+    renderstate.rids.objects_buffer_rid = FG_CreateResource(
+        "JointsBuffer", FG_RESOURCE_TYPE_BUFFER, flags, &objects_info
+    );
+    renderstate.joint_transforms = MakeArenaOnBufferResource(renderstate.rids.objects_buffer_rid);
+
+
+    // Materials SSBO (materials get uploaded on scene change all at once)
     const uint32_t MAX_MATERIALS = 1024;
     ResourceCreateInfo mat_info = {
         .buffer_create_info = {
@@ -146,24 +167,46 @@ void create_startup_resources()
     );
 
 
+    // DUMMY DATA BELOW:
+    #warning TODO: Upload materials on create_scene_resources() instead of startup.
 
-    /////// MOVE BELOW TO create_scene_resources(scene resource list?) /////////////
-    #warning BELOW IS DUMMY DATA, THAT SHOULD NOT BE PART OF startup_resources()
-    // TODO IMPORTANT: ONLY SLOT 0 OF THE MATERIAL SSBO WILL BE WRITTEN TO WITH THIS LOGIC, CHANGE THIS NEXT
-
-    // Let's set Material 0 to be a simple White material with no texture
+    // TEMP Material:
+    uint32_t test_texture_rid = UINT32_MAX;
+    {
+        stbi_set_flip_vertically_on_load(1);
+        int width, height, num_channels;
+        const char* filepath = "assets/godot.png";
+        uint8_t* data = stbi_load(filepath, &width, &height, &num_channels, 4);
+        if (data == NULL)
+        {
+            fprintf(stderr, "Failure to load image (%s)\n", filepath);
+            exit(1);  // TODO: Fallback to default texture
+        }
+        uint64_t data_size = width * height * 4;
+        VkFormat format = VK_FORMAT_R8G8B8A8_SRGB;
+        test_texture_rid = create_mipmapped_texture2d_resource(filepath, flags, data, data_size, width, height, format);
+        
+        stbi_image_free(data);
+    }
     MaterialData default_mat = {
         .base_color = { 1.0f, 1.0f, 1.0f, 1.0f },
-        .texture_idx_basecolor = 0xFFFFFFFF,
+        .texture_idx_basecolor = renderstate.registry.resources[test_texture_rid].image_bindless_index,//0xFFFFFFFF,
 
         .sampler_idx = FG_SAMPLER_LINEAR_REPEAT,
         .alpha_cutoff = 0.5f
     };
+
+    const uint32_t temp_max_materials = 32;
+    MaterialData materials[temp_max_materials] = {
+        default_mat  // index 0
+    };
     FG_UploadBufferData(&renderstate.main.staging_objects, 
-        renderstate.rids.material_ssbo_rid, &default_mat, sizeof(MaterialData)
+        renderstate.rids.material_ssbo_rid, &materials, sizeof(materials)
     );
 
-    // TEST QUAD (TODO: Change to create_mesh_resource or something):
+    /////// MOVE BELOW TO create_scene_resources(scene resource list?) /////////////
+
+    // TEST QUAD
     uint32_t quad_indices[6] = { 0, 1, 2, 0, 3, 1 };
     glm::vec3 quad_positions[4] = {
         { 0.0f, 0.0f, 0.0f },
@@ -189,79 +232,37 @@ void create_startup_resources()
         {0,0,1},
         {0,1,1}
     };
-    //renderstate.rids.dummy_mesh = create_mesh_resources("QuadMesh", flags, 6, 4, quad_indices,
-    //    quad_positions, quad_uvs, quad_normals, quad_colors, NULL, NULL
-    //);
-
-    //Primitive* test_prim = &renderstate.temp_test_mesh->primitives[0];
-    //float* test_colors = (float*)L_calloc(test_prim->vertex_count, 3 * sizeof(float) * test_prim->vertex_count, &renderstate.main.tt);
-    //for (int i = 0; i < test_prim->vertex_count * 3; ++i) test_colors[i] = fabsf(sinf((float)i));
-    //renderstate.rids.temp_test_mesh = create_mesh_resources(renderstate.temp_test_mesh->name, flags,
-    //    test_prim->index_count, test_prim->vertex_count, test_prim->indices,
-    //    (glm::vec3*)test_prim->positions, (glm::vec2*)test_prim->texcoords, (glm::vec3*)test_prim->normals,
-    //    (glm::vec3*)test_colors, (glm::uvec4*)test_prim->joints, (glm::vec4*)test_prim->weights
-    //);
-    //L_free(test_colors, &renderstate.main.tt);
-
-    // TEST EMPTY IMAGE RESOURCE:
-    ResourceCreateInfo test_create_info = {
-        .image_create_info = {
-            .sType        = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
-            .pNext = NULL,
-            .flags = 0,
-            .imageType = VK_IMAGE_TYPE_2D,
-            .format = VK_FORMAT_R16G16B16A16_SFLOAT,
-
-            .extent = {
-                .width  = renderstate.swapchain_extent.width,
-                .height = renderstate.swapchain_extent.height,
-                .depth  = 1
-            },
-
-            .mipLevels = 1,
-            .arrayLayers = 1,
-
-            .samples = VK_SAMPLE_COUNT_1_BIT,
-            .tiling = VK_IMAGE_TILING_OPTIMAL,
-
-            .usage =
-                VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT |
-                VK_IMAGE_USAGE_SAMPLED_BIT |
-                VK_IMAGE_USAGE_TRANSFER_SRC_BIT |
-                VK_IMAGE_USAGE_TRANSFER_DST_BIT,
-
-            .sharingMode = VK_SHARING_MODE_EXCLUSIVE,
-            .queueFamilyIndexCount = 0,
-            .pQueueFamilyIndices = NULL,
-
-            .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED
-        },
-        .image_view_create_info = {
-            .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
-            .pNext = NULL,
-            .flags = 0,
-
-            .image = VK_NULL_HANDLE,  // <- This gets set in the registry code
-            .viewType = VK_IMAGE_VIEW_TYPE_2D,
-            .format = VK_FORMAT_R16G16B16A16_SFLOAT,
-
-            .components = {
-                .r = VK_COMPONENT_SWIZZLE_IDENTITY,
-                .g = VK_COMPONENT_SWIZZLE_IDENTITY,
-                .b = VK_COMPONENT_SWIZZLE_IDENTITY,
-                .a = VK_COMPONENT_SWIZZLE_IDENTITY
-            },
-
-            .subresourceRange = {
-                .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-                .baseMipLevel = 0,
-                .levelCount = 1,
-                .baseArrayLayer = 0,
-                .layerCount = 1
+    renderstate.rids.dummy_mesh = {
+        .vertex_type = VERTEX_TYPE_STATIC,
+        .mat_type    = MAT_UNLIT,
+        .mesh_rids = {
+            .primitive_count = 1,
+            .primitives = {
+                create_primitive_resources(
+                    "Dummy Primitive",
+                    flags,
+                    0,  // material index (TODO: Load all materials on scene change, and keep track of material indices CPU side)
+                    sizeof(quad_indices) / sizeof(quad_indices[0]),
+                    sizeof(quad_positions) / sizeof(quad_positions[0]),
+                    quad_indices, quad_positions, quad_uvs, quad_normals, quad_colors, NULL, NULL
+                )
             }
         }
     };
-    uint32_t test_texture_rid = FG_CreateResource("Test texture", FG_RESOURCE_TYPE_IMAGE, flags, &test_create_info);
+    //  = create_mesh_resources("QuadMesh", flags, 6, 4, quad_indices,
+    //     quad_positions, quad_uvs, quad_normals, quad_colors, NULL, NULL
+    // );
+
+    // Primitive* test_prim = &renderstate.temp_test_mesh->primitives[0];
+    // float* test_colors = (float*)L_calloc(test_prim->vertex_count, 3 * sizeof(float) * test_prim->vertex_count, &renderstate.main.tt);
+    // for (int i = 0; i < test_prim->vertex_count * 3; ++i) test_colors[i] = fabsf(sinf((float)i));
+    // renderstate.rids.temp_test_mesh = create_mesh_resources(renderstate.temp_test_mesh->name, flags,
+    //     test_prim->index_count, test_prim->vertex_count, test_prim->indices,
+    //     (glm::vec3*)test_prim->positions, (glm::vec2*)test_prim->texcoords, (glm::vec3*)test_prim->normals,
+    //     (glm::vec3*)test_colors, NULL, NULL
+    // );
+    // L_free(test_colors, &renderstate.main.tt);
+
 
 }
 
@@ -296,6 +297,29 @@ void create_window_dependent_resources()
     }
 }
 
+void create_scene_resources()
+{
+    FG_ResourceFlags flags = FG_RESOURCE_FLAGS_SCENE_DEPENDENT;
+
+    SDL_assert(renderstate.is_next_scene_set);
+    renderstate.is_next_scene_set = 0;
+
+    // Load next scene
+    Scene_InitInfo* init_info = &renderstate.next_scene_info;
+    #warning THIS IS WHERE I WORK TMR
+    SDL_Log("TODO: Implement create_scene_resources based on Scene_InitInfo shit\n");
+    #warning TODO: Loop over everything that should be loaded into the scene.
+    // Don't try and be smart about whether the asset was already loaded.
+    // Because we can just replace it with the resource manager later.
+
+    // NOTE: I initially thought I would need something different to Asset*
+    // because it doesn't tell us which are meshes vs collision shapes.
+    // But actually, collision meshes are great for debugging
+    // So just load everything as a mesh
+}
+
+/////
+
 uint32_t create_resource_with_buffer_data(const char* debug_name, FG_ResourceFlags flags, VkBufferUsageFlags usage, size_t size, void* data)
 {
     ResourceCreateInfo res_create_info = {
@@ -311,10 +335,6 @@ uint32_t create_resource_with_buffer_data(const char* debug_name, FG_ResourceFla
     return rid;
 }
 
-// MeshBufferRIDs create_mesh_resources(const char* debug_name, FG_ResourceFlags shared_flags, uint32_t index_count, uint32_t vertex_count,
-//     uint32_t* indices,
-//     glm::vec3* positions, glm::vec2* texcoords, glm::vec3* normals, glm::vec3* colors,
-    // glm::uvec4* joint_ids, glm::vec4* joint_weights)
 PrimitiveRIDs create_primitive_resources(
     const char* debug_name, FG_ResourceFlags shared_flags, uint32_t material_index,
     uint32_t index_count, uint32_t vertex_count,
@@ -412,38 +432,12 @@ uint32_t compute_num_mip_levels(uint32_t image_level0_width, uint32_t image_leve
     }
 
     return 32 - leading_zeros;
-
-#if 0  // NOTE(Liam): std::countl_zero not working on Jaime's machines at the moment
-
-    // Counting number of mipmaps an image needs
-    //
-    // Let N := Num mip levels.
-    // Let L := max(width, height) of base image (level 0).
-    // Each mip level is half resolution of previous one, e.g.:
-    // - Mip level 0: length = L    = L / (2^0)
-    // - Mip level 1: length = L/2  = L / (2^1)
-    // - Mip level 2: length = L/4  = L / (2^2)
-    // - Mip level 3: length = L/8  = L / (2^3)
-    //
-    // Highest mip level has length of 1 pixel so num mip levels N is:
-    //    N = 1 + floor( log2( max(width, height) ) )
-    // => N = 1 + position of most significant bit set in max(width, height)
-    // For 32 bit integers:
-    // => N = 1 + (32 - (num leading zeroes + 1))
-    // => N = 32 - num leading zeroes
-
-    const uint32_t bits = image_level0_width | image_level0_height;
-    const uint32_t  leading_zeros = std::countl_zero(bits);  // C++
-    // const u32  leading_zeros = stdc_leading_zeros(bits);  // C23
-    return 32 - leading_zeros;
-#endif
 }
 
 
-uint32_t create_material_texture2d_resource(const char* debug_name, FG_ResourceFlags flags,
+uint32_t create_mipmapped_texture2d_resource(const char* debug_name, FG_ResourceFlags flags,
      uint8_t* data, uint64_t data_size,
-     uint32_t width, uint32_t height, VkFormat format
-)
+     uint32_t width, uint32_t height, VkFormat format)
 {
     uint32_t miplevel_count = compute_num_mip_levels(width, height);
 
@@ -474,12 +468,12 @@ uint32_t create_material_texture2d_resource(const char* debug_name, FG_ResourceF
                 VK_IMAGE_USAGE_TRANSFER_DST_BIT,
 
             .sharingMode = VK_SHARING_MODE_EXCLUSIVE,
-            .queueFamilyIndexCount = 0,
+            .queueFamilyIndexCount = 0,  // <- Zero when using exclusive sharing mode
             .pQueueFamilyIndices = NULL,
 
-            // These normally won't be part of the framegraph's input and outputs
-            // So we set it's initial (and usually final-) image layout to read only.
-            .initialLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
+            // Mipmapped textures normally won't be part of the framegraph's input and outputs
+            // So we set it's initial (and presumably final-) image layout to read only.
+            .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED
         },
         .image_view_create_info = {
             .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
@@ -507,8 +501,8 @@ uint32_t create_material_texture2d_resource(const char* debug_name, FG_ResourceF
         }
     };
     uint32_t texture_rid = FG_CreateResource(debug_name, FG_RESOURCE_TYPE_IMAGE, flags, &texture_create_info);
+    FG_UploadImageData(&renderstate.main.staging_objects, texture_rid, data, data_size);
+    FG_GenMipmaps(texture_rid);
 
-    // TODO: Upload image, create mipmaps return rid
-    #warning create_material_texture2d_resource unfinished
     return texture_rid;
 }

@@ -4,6 +4,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include "stb_image.h"  // NOTE: Currently STB_IMAGE_IMPLEMENTATION is defined in renderer.cpp
 
 // Helper functions to get indices from cgltf pointers
 static int get_mesh_index(cgltf_data* data, cgltf_mesh* target) { return target ? (int)(target - data->meshes) : -1; }
@@ -33,6 +34,36 @@ static int find_bone_index(Skin* skin, int target_node_index) {
 		}
 	}
 	return -1;
+}
+
+Image load_image(const char* name, const char* uri)
+{
+	// Load images from disk (4 channels: RGBA8 image).
+	// (No decision necessary here about whether it's sRGB or linear)
+	Image image = {
+		.name = name,
+		.uri = uri
+	};
+
+	stbi_set_flip_vertically_on_load(1);
+
+	int width, height, num_channels;
+	image.data = stbi_load(image.uri, &width, &height, &num_channels, 4);
+	image.data_size = width * height * 4;
+	if (image.data == NULL)
+	{
+		SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Failure to load image (%s)", image.uri);
+		
+		exit(1);
+		#warning TODO: Considering whether to support fallback textures or just keep RID to UINT32_MAX?
+	}
+
+	return image;
+}
+
+void free_image(Image* image)
+{
+	stbi_image_free((void*)image->data);
 }
 
 Asset* load_asset(const char* filename) {
@@ -89,8 +120,10 @@ Asset* load_asset(const char* filename) {
 
 	// Copy Images
 	for (size_t i = 0; i < asset->image_count; i++) {
-		asset->images[i].name = duplicate_string(data->images[i].name);
-		asset->images[i].uri = duplicate_string(data->images[i].uri);
+		const char* img_name = duplicate_string(data->images[i].name);
+		const char* img_uri = duplicate_string(data->images[i].uri);
+
+		asset->images[i] = load_image(img_name, img_uri);
 	}
 
 	// Copy Textures
@@ -418,6 +451,7 @@ void free_asset(Asset* asset) {
 	for (size_t i = 0; i < asset->image_count; i++) {
 		free((void*)asset->images[i].name);
 		free((void*)asset->images[i].uri);
+		stbi_image_free((void*)asset->images[i].data);
 	}
 	if (asset->images) free(asset->images);
 

@@ -7,6 +7,8 @@
 
 #include "shadersrc/shared_constants.glsl"
 
+#define MAX_RENDERED_OBJECTS 10000
+
 /*
 Material Example Ideas:
 MAT_UNLIT,             // Skybox
@@ -34,7 +36,6 @@ typedef struct PrimitiveRIDs
 {
     uint32_t index_buf_rid;
     uint32_t material_index;     // Index into the global Material SSBO
-    uint32_t joints_buffer_rid;
 
     // Set to UINT32_MAX for unused attribute (specifically cuz static meshes don't have joints)
     uint32_t v_pos_buf_rid;
@@ -54,22 +55,30 @@ typedef struct MeshRIDs
 }
 MeshRIDs;
 
+typedef struct MeshPrefab
+{
+    VertexType vertex_type;  // Static or skinned (FUTURE: morph target?)
+    MaterialType mat_type;   // Selects which shader to use (or multiple shaders if it's a multipass material type e.g. MAT_PBR_WITH_OUTLINE)
+    MeshRIDs mesh_rids;
+}
+MeshPrefab;
+
 typedef struct Renderable
 {
-    VertexType   vertex_type;  // Static or skinned (FUTURE: morph target?)
-    MaterialType mat_type;     // Selects which shader to use (or multiple shaders if it's a multipass material type)
-    float        sort_depth;   // <-TODO unused.
-
-    PrimitiveRIDs prim_rids;  // The buffers containing the vertex and index data
-    // uint32_t material_idx;     // Index into the global Material SSBO
-    uint64_t object_ptr;       // GPU Address of the ObjectData (e.g. model matrix)
-    uint64_t joint_ptr;        // GPU Address of Joint matrices (0 if static)
+    mat4 transform;
+    MeshPrefab mesh_prefab;  // The GPU resource buffers containing the vertex and index data
+    
+    // CPU-side joints buffer we memcpy from to GPU joints buffer
+    uint32_t joint_count;
+    mat4* joints;    // <- Pointer to animation system side joints array
+    // NOTE: Fucking make sure joints arrays are not allocated every frame
 }
 Renderable;
 
 typedef struct RenderView
 {
-    Renderable* items;  // stb_ds array
+    uint32_t num_renderables;
+    Renderable* items;
 }
 RenderView;
 

@@ -25,8 +25,8 @@
 // For the internals, the RenderState contains:
 // - ResourceRegistry registry; Which holds all resources and their current state.
 // - BindlessHeap heap; Which is the descriptor set that holds all textures and samplers.
-// (buffers on the other hand, are passed to the shader through their GPU pointer with the BufferDeviceAddress vulkan feature)
-
+// (buffers on the other hand, are passed to the shader through their GPU pointer with the BufferDeviceAddress vulkan feature.
+//  GPU pointers are normally passed to the shader via push constants)
 
 // Usage notes:
 //
@@ -41,6 +41,13 @@
 #ifndef RENDERER_FRAMEGRAPH_H
 #define RENDERER_FRAMEGRAPH_H
 
+// Arbitrary predefined array sizes for simplicity
+#define MAX_PASS_RESOURCE_BANDWIDTH  8
+#define MAX_PASSES          256
+#define MAX_RESOURCES       20000
+#define NUM_BINDLESS_TEXTURE_SLOTS 10000   // Ample descriptor slots to never worry about again.
+#define PUSHCONSTANTS_SIZE  256  // <- Guarunteed in Vulkan 1.4, and we rely on these a lot.
+
 #include "internal_structs.h"
 #include "vulkan_wrapper.h"
 
@@ -49,13 +56,6 @@ void FG_Init();
 void FG_Shutdown();
 
 void FG_ClearResources();
-
-// Arbitrary predefined array sizes for simplicity
-#define MAX_PASS_RESOURCE_BANDWIDTH  16
-#define MAX_PASSES          256
-#define MAX_RESOURCES       1024
-
-#define NUM_BINDLESS_TEXTURE_SLOTS 100000   // Ample descriptor slots to never worry about again.
 
 typedef enum
 {
@@ -77,7 +77,7 @@ typedef enum
     FG_SAMPLER_SHADOW,
 
     FG_SAMPLER_COUNT,
-    FG_SAMPLER_NOT_SAMPLABLE,
+    FG_SAMPLER_NOT_SAMPLABLE,  // For output resources
 }
 FG_SamplerType;
 
@@ -85,13 +85,13 @@ typedef struct PassResourceUsage
 {
     uint32_t rid;                 // Index into a resource array (the internal registry)
     FG_UsageFlags usage_flags;    // Tells the graph HOW to use this resource in this pass
-    FG_SamplerType sampler_type;  // Only for image resources. Not using combined image samplers so we can have different samplers for the same image in different passes
+    FG_SamplerType sampler_type;  // Only for input image resources. Not using combined image samplers so we can have different samplers for the same image in different passes
 
     // Sync state
+    VkImageLayout layout;  // For images only (buffers can leave these 0)
     VkAccessFlags2 access;
     VkPipelineStageFlags2 stage;
-    VkImageLayout layout;  // For images only (buffers can leave these 0)
-    // NOTE: Not implementing queue ownership transfers of resources.
+    uint32_t queue_family_index;
 
     // Per-output control (only used if usage_flags includes COLOR, DEPTH, or STENCIL)
     VkAttachmentLoadOp load_op;
@@ -169,6 +169,7 @@ typedef struct ImageResourceData
 {
     VkImage                 handle;
     VkImageView             view;
+    uint32_t bindless_texture_index;  // Every image gets a slot in the heap. In case it ever needs to be sampled.
 
     // Metadata about the image needed for parts of the frame graph
     VkFormat                format;
@@ -212,23 +213,23 @@ typedef struct FG_Resource
     // Shader side access to resources
     union
     {
-        uint32_t      image_bindless_index;  // Index into the global texture array, UINT32_MAX for nonsamplable images e.g. the swapchain
+        uint32_t image_bindless_index;       // Index into the global texture array, UINT32_MAX for nonsamplable images e.g. the swapchain
         VkDeviceAddress buffer_gpu_address;  // Buffer device address for shader
     };
 
     // Sync State
+    VkImageLayout          current_layout;  // Images only, buffers can leave this 0
     VkAccessFlags2         current_access;
     VkPipelineStageFlags2  current_stage;
-    VkImageLayout          current_layout;  // Images only, buffers can leave this 0
+    uint32_t               current_queue_family_index;
 }
 FG_Resource;
 
 typedef struct ResourceRegistry
 {
+    b32 dirty_because_gaps;
     uint32_t resource_count;
     FG_Resource resources[MAX_RESOURCES];
-
-    b32 dirty_because_gaps;
 }
 ResourceRegistry;
 

@@ -4,10 +4,6 @@
 #include "vulkan_wrapper.h"
 #include "pipeline_keying.h"
 
-void UpdateGlobalSceneData();
-// void SubmitDraw(Renderable* r);  // TODO: <change to this
-void SubmitDraw(VkCommandBuffer cmd, Renderable* r, PipelineKey key);
-
 // Shader Registry
 //
 

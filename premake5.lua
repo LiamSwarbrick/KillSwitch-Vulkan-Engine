@@ -180,6 +180,7 @@ workspace "AdventureEngine"
             include_paths.SDL3,
             include_paths.glm,
             include_paths.cgltf,
+            include_paths.stb,
             include_paths.rapidjson
         }
 
@@ -276,7 +277,6 @@ workspace "AdventureEngine"
         includedirs {
             SRC,
             SRC .. "game",
-            SRC .. "game/foundations",
             include_paths.SDL3,
             include_paths.glm,
             include_paths.cgltf,
