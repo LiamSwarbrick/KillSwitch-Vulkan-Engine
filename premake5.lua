@@ -181,7 +181,8 @@ workspace "AdventureEngine"
             include_paths.glm,
             include_paths.cgltf,
             include_paths.stb,
-            include_paths.rapidjson
+            include_paths.rapidjson,
+            include_paths.imgui
         }
 
         libdirs {
@@ -227,7 +228,8 @@ workspace "AdventureEngine"
             include_paths.VMA,
             include_paths.glm,
             include_paths.stb,
-            include_paths.cgltf
+            include_paths.cgltf,
+            include_paths.imgui
         }
 
         libdirs {
@@ -280,7 +282,8 @@ workspace "AdventureEngine"
             include_paths.SDL3,
             include_paths.glm,
             include_paths.cgltf,
-            include_paths.rapidjson
+            include_paths.rapidjson,
+            include_paths.imgui
         }
 
         libdirs {
