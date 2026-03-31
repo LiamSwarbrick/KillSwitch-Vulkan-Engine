@@ -306,6 +306,7 @@ void create_scene_resources()
 
     // Load next scene
     Scene_InitInfo* init_info = &renderstate.next_scene_info;
+    #warning THIS IS WHERE I WORK TMR
     SDL_Log("TODO: Implement create_scene_resources based on Scene_InitInfo shit\n");
     #warning TODO: Loop over everything that should be loaded into the scene.
     // Don't try and be smart about whether the asset was already loaded.
