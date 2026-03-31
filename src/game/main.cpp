@@ -1,5 +1,6 @@
 #include "core/core.h"
 #include "renderer/renderer.h"
+#include "foundations/scene.h"
 
 #include "SDL3/SDL.h"
 #include "SDL3/SDL_main.h"
@@ -102,6 +103,9 @@ int main(int argc, char *argv[])
  //   }
 
 
+    // Testing Scene and ECS
+    Scene scene;
+    scene.LoadLevel("assets/levels/untitled.gltf");
 
 
     bool running = true;

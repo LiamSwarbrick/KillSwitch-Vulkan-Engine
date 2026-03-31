@@ -1,3 +1,6 @@
+#ifndef SHADERSRC_SHARED_CONSTANTS_GLSL
+#define SHADERSRC_SHARED_CONSTANTS_GLSL
+
 // TODO: Maybe a macro that represents either C or C++ instead of __cplusplus which is specific
 #ifdef __cplusplus
     #include "glm/glm.hpp"
@@ -8,8 +11,19 @@
     typedef glm::uvec4 uvec4;
 #endif
 
+#ifndef __cplusplus
 #define VERTEX_TYPE_STATIC 0
 #define VERTEX_TYPE_SKINNED 1
+#else
+typedef enum
+{
+    VERTEX_TYPE_STATIC = 0,
+    VERTEX_TYPE_SKINNED = 1,
+
+    VERETX_TYPE_COUNT
+}
+VertexType;
+#endif
 
 #define BLEND_MODE_OPAQUE   0
 #define BLEND_MODE_MASKED   1
@@ -118,3 +132,5 @@ struct MaterialData
     layout(buffer_reference, scalar) readonly buffer VJointWeightsBuffer { vec4 weights[]; };
 
 #endif
+
+#endif  // SHADERSRC_SHARED_CONSTANTS_GLSL

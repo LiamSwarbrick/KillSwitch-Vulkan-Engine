@@ -24,6 +24,7 @@ include_paths.VMA = EXTERNAL .. "VMA"
 include_paths.glm = EXTERNAL .. "glm"
 include_paths.cgltf = EXTERNAL .. "cgltf"
 include_paths.stb = EXTERNAL .. "stb"
+include_paths.rapidjson = EXTERNAL .. "rapidjson"
 
 lib_dirs = {}
 
@@ -164,7 +165,7 @@ workspace "AdventureEngine"
     project "core"
         kind "StaticLib"
         language "C++"
-        cppdialect "C++23"
+        cppdialect "C++latest"
 
         files {
             SRC .. "core/**.h",
@@ -178,7 +179,8 @@ workspace "AdventureEngine"
             SRC .. "core/**",  -- Internal include headers
             include_paths.SDL3,
             include_paths.glm,
-            include_paths.cgltf
+            include_paths.cgltf,
+            include_paths.rapidjson
         }
 
         libdirs {
@@ -196,7 +198,7 @@ workspace "AdventureEngine"
     project "renderer"
         kind "StaticLib"
         language "C++"
-        cppdialect "C++23"
+        cppdialect "C++latest"
 
         files {
             SRC .. "renderer/**.h",
@@ -264,7 +266,7 @@ workspace "AdventureEngine"
     project "game"
         kind "ConsoleApp"
         language "C++"
-        cppdialect "C++23"
+        cppdialect "C++latest"
 
         files {
             SRC .. "game/**.h",
@@ -273,10 +275,12 @@ workspace "AdventureEngine"
 
         includedirs {
             SRC,
-            SRC .. "game/include",
+            SRC .. "game",
+            SRC .. "game/foundations",
             include_paths.SDL3,
             include_paths.glm,
-            include_paths.cgltf
+            include_paths.cgltf,
+            include_paths.rapidjson
         }
 
         libdirs {
