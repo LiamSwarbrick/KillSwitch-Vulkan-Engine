@@ -700,6 +700,9 @@ void Renderer_Shutdown()
 
 void Renderer_ListenToWindowEvent(SDL_Event event)
 {
+    // event to imgui
+    ImGui_ImplSDL3_ProcessEvent(&event);
+    
     switch (event.type)
     {
         case SDL_EVENT_WINDOW_RESIZED:
@@ -802,7 +805,16 @@ void Renderer_DrawFrame()
     // Reset command buffers by resetting the entire pool
     vkResetCommandPool(renderstate.device, renderstate.frames[frame_in_flight].graphics_command_pool, 0);
 
+    // ImGui: Start new frame
+    ImGui_ImplVulkan_NewFrame();
+    ImGui_ImplSDL3_NewFrame();
+    ImGui::NewFrame();
 
+    // Build ImGui UI here, e.g.
+    ImGui::ShowDemoWindow();  // TODO: Remove after testing
+
+    // Finalize ImGui draw data (must happen before command buffer recording)
+    ImGui::Render();
 
 
 

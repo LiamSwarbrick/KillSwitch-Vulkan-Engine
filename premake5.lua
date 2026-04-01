@@ -25,6 +25,8 @@ include_paths.glm = EXTERNAL .. "glm"
 include_paths.cgltf = EXTERNAL .. "cgltf"
 include_paths.stb = EXTERNAL .. "stb"
 include_paths.rapidjson = EXTERNAL .. "rapidjson"
+include_paths.imgui = EXTERNAL .. "imgui"
+include_paths.imgui_backends = EXTERNAL .. "imgui/backends"
 
 lib_dirs = {}
 
@@ -182,7 +184,8 @@ workspace "AdventureEngine"
             include_paths.cgltf,
             include_paths.stb,
             include_paths.rapidjson,
-            include_paths.imgui
+            include_paths.imgui,
+            include_paths.imgui_backends
         }
 
         libdirs {
@@ -207,6 +210,16 @@ workspace "AdventureEngine"
             SRC .. "renderer/impl/**.cpp",
             EXTERNAL .. "volk/volk.c",
 
+            -- ImGui
+            EXTERNAL .. "imgui/imgui.cpp",
+            EXTERNAL .. "imgui/imgui_demo.cpp",
+            EXTERNAL .. "imgui/imgui_draw.cpp",
+            EXTERNAL .. "imgui/imgui_tables.cpp",
+            EXTERNAL .. "imgui/imgui_widgets.cpp",
+            EXTERNAL .. "imgui/backends/imgui_impl_sdl3.cpp",
+            EXTERNAL .. "imgui/backends/imgui_impl_vulkan.cpp",
+
+
             -- Shader src
             SRC .. "renderer/shadersrc/**.vert",
             SRC .. "renderer/shadersrc/**.frag",
@@ -215,7 +228,8 @@ workspace "AdventureEngine"
         }
 
         defines {
-            "VK_NO_PROTOTYPES"
+            "VK_NO_PROTOTYPES",
+            "IMGUI_IMPL_VULKAN_USE_VOLK"
         }
 
         includedirs {
@@ -229,7 +243,8 @@ workspace "AdventureEngine"
             include_paths.glm,
             include_paths.stb,
             include_paths.cgltf,
-            include_paths.imgui
+            include_paths.imgui,
+            include_paths.imgui_backends
         }
 
         libdirs {
@@ -283,7 +298,8 @@ workspace "AdventureEngine"
             include_paths.glm,
             include_paths.cgltf,
             include_paths.rapidjson,
-            include_paths.imgui
+            include_paths.imgui,
+            include_paths.imgui_backends
         }
 
         libdirs {

@@ -12,7 +12,6 @@ typedef enum
     PASS_TYPE_SWAPCHAIN_PASS,
     PASS_TYPE_GBUFFER_WRITE,
     PASS_TYPE_DEFERRED_LIGHTING_UNLIT,
-    PASS_TYPE_IMGUI,
 
     PASS_TYPE_COUNT,
     PASS_TYPE_INVALID
@@ -24,6 +23,5 @@ static_assert(PASS_TYPE_COUNT < 1 << PKEY_NUM_BITS_PASS_TYPE,
 );
 
 void SwapchainPass_Execute(VkCommandBuffer cmd, void* user_data);
-void ImGuiPass_Execute(VkCommandBuffer cmd, void* user_data);
 
 #endif  // RENDERER_RENDERPASSES_METADATA_PASS_H

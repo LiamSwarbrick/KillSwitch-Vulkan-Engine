@@ -62,4 +62,5 @@ void SwapchainPass_Execute(VkCommandBuffer cmd, void* user_data)
 
         ExecuteDrawCall(cmd, drawcall, key, push_pass);
     }
+    ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), cmd);
 }
