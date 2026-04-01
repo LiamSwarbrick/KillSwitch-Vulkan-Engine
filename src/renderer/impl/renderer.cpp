@@ -3,6 +3,9 @@
 #include "renderpasses/metadata.h"
 
 #include "SDL3/SDL_vulkan.h"
+#include "imgui.h"
+#include "imgui_impl_sdl3.h"
+#include "imgui_impl_vulkan.h"
 
 RenderState renderstate;
 
@@ -17,6 +20,7 @@ void external_free(void* ptr) { return L_free(ptr, &renderstate.main.tt); }
 #warning TODO: Set STB_IMAGE allocators
 #define STB_IMAGE_IMPLEMENTATION
  #include "stb_image.h"
+#include <iterator>
 
 // NOTE(Liam): The only mutable internal state for renderer is this renderstate.
 // All other global state here should be const
@@ -566,6 +570,64 @@ void Renderer_Init(const Renderer_InitInfo* info)
             VK_CHECK(vkAllocateCommandBuffers(renderstate.device, &cmd_alloc_info, &renderstate.frames[i].graphics_command_buffer));
         }
     }
+
+
+    // Init ImGui
+    {
+        // create descriptor pool for imgui 
+        VkDescriptorPoolSize pool_sizes[] = { { VK_DESCRIPTOR_TYPE_SAMPLER, 1000 },
+		{ VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1000 },
+		{ VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1000 },
+		{ VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1000 },
+		{ VK_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER, 1000 },
+		{ VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER, 1000 },
+		{ VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1000 },
+		{ VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1000 },
+		{ VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC, 1000 },
+		{ VK_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC, 1000 },
+		{ VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT, 1000 } };
+
+        VkDescriptorPoolCreateInfo pool_info = {};
+        pool_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+        pool_info.flags = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT;
+        pool_info.maxSets = 1000;
+        pool_info.poolSizeCount = (uint32_t)std::size(pool_sizes);
+        pool_info.pPoolSizes = pool_sizes;
+        VK_CHECK(vkCreateDescriptorPool(renderstate.device, &pool_info, NULL, &renderstate.imgui_descriptor_pool));
+
+        
+        IMGUI_CHECKVERSION();
+        ImGui::CreateContext();
+        ImGuiIO& io = ImGui::GetIO();
+        io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
+
+        // SDL3 backend
+        ImGui_ImplSDL3_InitForVulkan(renderstate.window);
+
+        // Vulkan backend
+        ImGui_ImplVulkan_InitInfo imgui_vk_info = {};
+        imgui_vk_info.ApiVersion          = VK_API_VERSION_1_4;
+        imgui_vk_info.Instance            = renderstate.instance;
+        imgui_vk_info.PhysicalDevice      = renderstate.physical_device;
+        imgui_vk_info.Device              = renderstate.device;
+        imgui_vk_info.QueueFamily         = renderstate.queue_family_indices.graphics_family;
+        imgui_vk_info.Queue               = renderstate.graphics_queue;
+        imgui_vk_info.DescriptorPool      = renderstate.imgui_descriptor_pool;
+        imgui_vk_info.MinImageCount       = 2;
+        imgui_vk_info.ImageCount          = renderstate.swapchain_image_count;
+
+        // swapchain form ?
+        imgui_vk_info.UseDynamicRendering          = true;
+        imgui_vk_info.PipelineInfoMain.PipelineRenderingCreateInfo  = {
+            .sType                   = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO,
+            .colorAttachmentCount    = 1,
+            .pColorAttachmentFormats = &renderstate.swapchain_image_format,
+        };
+
+        ImGui_ImplVulkan_Init(&imgui_vk_info);
+
+        printf("ImGui Initialized.\n");
+    }
 }
 
 void Renderer_Shutdown()
@@ -574,6 +636,12 @@ void Renderer_Shutdown()
 
     // Ensure device is not doing any work before destroying it's stuff.
     vkDeviceWaitIdle(renderstate.device);
+
+    // Destroy imgui stuff
+    ImGui_ImplVulkan_Shutdown();
+    ImGui_ImplSDL3_Shutdown();
+    ImGui::DestroyContext();
+    vkDestroyDescriptorPool(renderstate.device, renderstate.imgui_descriptor_pool, NULL);
 
     // Clean up per frame objects
     for (int i = 0; i < NUM_FRAMES_IN_FLIGHT; ++i)
@@ -632,6 +700,9 @@ void Renderer_Shutdown()
 
 void Renderer_ListenToWindowEvent(SDL_Event event)
 {
+    // event to imgui
+    ImGui_ImplSDL3_ProcessEvent(&event);
+    
     switch (event.type)
     {
         case SDL_EVENT_WINDOW_RESIZED:
@@ -734,7 +805,16 @@ void Renderer_DrawFrame()
     // Reset command buffers by resetting the entire pool
     vkResetCommandPool(renderstate.device, renderstate.frames[frame_in_flight].graphics_command_pool, 0);
 
+    // ImGui: Start new frame
+    ImGui_ImplVulkan_NewFrame();
+    ImGui_ImplSDL3_NewFrame();
+    ImGui::NewFrame();
 
+    // Build ImGui UI here, e.g.
+    ImGui::ShowDemoWindow();  // TODO: Remove after testing
+
+    // Finalize ImGui draw data (must happen before command buffer recording)
+    ImGui::Render();
 
 
 

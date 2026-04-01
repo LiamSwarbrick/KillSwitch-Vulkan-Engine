@@ -14,6 +14,10 @@
 #include "renderpasses/metadata.h"
 #include "game_resources.h"
 
+#include "imgui.h"
+#include "imgui_impl_sdl3.h"
+#include "imgui_impl_vulkan.h"
+
 typedef struct RenderState
 {
     ThreadData main;  // main.tt is the main thread allocation tracker for the renderer.
@@ -88,6 +92,9 @@ typedef struct RenderState
 
     // Renderables arena
     RenderView renderables_arena;
+
+    // imgui descriptor pool
+    VkDescriptorPool imgui_descriptor_pool;
 }
 RenderState;
 
