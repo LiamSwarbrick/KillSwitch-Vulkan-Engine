@@ -40,6 +40,5 @@ Makefile
 *.swo
 .DS_Store
 imgui.ini
-shaderspv/unlit.frag.spv
 .gitignore
-shaderspv/unlit.vert.spv
+
