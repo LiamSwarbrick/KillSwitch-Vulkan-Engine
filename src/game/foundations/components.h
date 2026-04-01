@@ -10,12 +10,6 @@
 #include "glm/glm.hpp"
 
 
-struct C_StaticMesh
-{
-	Mesh* mesh;
-	Asset* parent_asset;
-};
-
 // TODO: change definition to physics/components.h
 enum class ColliderType 
 {

@@ -2,6 +2,8 @@
 #define ASSETSYS_H
 
 #include "cgltf.h"
+#include "renderer/shadersrc/shared_constants.glsl"  // VertexType
+#include "renderer/render_types.h"  // MaterialType
 
 #ifdef __cplusplus
 extern "C" {
@@ -28,7 +30,8 @@ typedef struct Primitive {
 
 typedef struct Mesh {
     const char* name;
-    int type; // 0 = static, 1 = animated
+    VertexType vertex_type;     // 0 = static, 1 = animated (as per shared_constants.glsl)
+    MaterialType mat_type;
 
     Primitive* primitives;
     size_t primitive_count;
@@ -69,6 +72,7 @@ typedef struct Image {
     const char* uri;           
     const unsigned char* data; 
     size_t data_size;
+    uint32_t width, height;
 } Image;
 
 typedef struct Camera {

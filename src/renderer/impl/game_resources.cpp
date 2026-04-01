@@ -21,7 +21,7 @@ PrimitiveRIDs create_primitive_resources(
     glm::uvec4* joint_ids, glm::vec4* joint_weights  // Joints only for skinned meshes
     );
 uint32_t create_mipmapped_texture2d_resource(const char* debug_name, FG_ResourceFlags flags,
-     uint8_t* data, uint64_t data_size,
+     const uint8_t* data, uint64_t data_size,
      uint32_t width, uint32_t height, VkFormat format
 );
 
@@ -152,7 +152,6 @@ void create_startup_resources()
 
 
     // Materials SSBO (materials get uploaded on scene change all at once)
-    const uint32_t MAX_MATERIALS = 1024;
     ResourceCreateInfo mat_info = {
         .buffer_create_info = {
             .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
@@ -170,6 +169,7 @@ void create_startup_resources()
     // DUMMY DATA BELOW:
     #warning TODO: Upload materials on create_scene_resources() instead of startup.
 
+#if 0
     // TEMP Material:
     uint32_t test_texture_rid = UINT32_MAX;
     {
@@ -203,6 +203,7 @@ void create_startup_resources()
     FG_UploadBufferData(&renderstate.main.staging_objects, 
         renderstate.rids.material_ssbo_rid, &materials, sizeof(materials)
     );
+#endif
 
     /////// MOVE BELOW TO create_scene_resources(scene resource list?) /////////////
 
@@ -306,16 +307,150 @@ void create_scene_resources()
 
     // Load next scene
     Scene_InitInfo* init_info = &renderstate.next_scene_info;
-    #warning THIS IS WHERE I WORK TMR
-    SDL_Log("TODO: Implement create_scene_resources based on Scene_InitInfo shit\n");
-    #warning TODO: Loop over everything that should be loaded into the scene.
-    // Don't try and be smart about whether the asset was already loaded.
-    // Because we can just replace it with the resource manager later.
+    ResourceIDs* rids = &renderstate.rids;
 
-    // NOTE: I initially thought I would need something different to Asset*
-    // because it doesn't tell us which are meshes vs collision shapes.
-    // But actually, collision meshes are great for debugging
-    // So just load everything as a mesh
+    /*
+        NOTES For 1st April:
+        Only need to worry about:
+        - Static Mesh Data (the joints are passed by the animation system)
+        - Gather vertextype, e.g. static vs skinned from custom properties?
+
+        - Load textures as resources (automatically gives them an rid in res->image_bindless_index)
+        - Get material data
+    
+    */
+
+    ///////////////////////////////////////////////////////////////////////////////////////////////////
+    // TODO: Account for animated meshes as well                                                     //
+    // TODO: Create stylised gradients via colour buffer for characters meshes (i.e. skinned meshes) //
+    ///////////////////////////////////////////////////////////////////////////////////////////////////
+
+    // Get the list of unique assets (since meshes can be from the same parent asset)
+    uint32_t num_unique_assets = 0;
+    const uint32_t max_assets = 1024;  // <- Arbitrary. If this is too low, L_calloc a bigger amount
+    Asset*   unique_assets[max_assets] = {};
+    uint32_t material_count = 0;
+
+    for (uint32_t i = 0; i < init_info->num_static_meshes; ++i)
+    {
+        C_StaticMesh* component = &init_info->static_meshes[i];
+
+        for (uint32_t j = 0; j < num_unique_assets; ++j)
+        {
+            if (unique_assets[j] == component->parent_asset)
+            {
+                goto seen_this_asset_before;
+            }
+        }
+
+        SDL_assert(num_unique_assets < max_assets && 
+            "If this is too low, L_calloc a bigger amount instead of the stack allocator currently used."
+        );
+        unique_assets[num_unique_assets++] = component->parent_asset;
+        material_count += component->parent_asset->material_count;
+
+    seen_this_asset_before:
+    }
+
+    // Load unique materials
+    uint32_t num_loaded_materials = 0;
+    MaterialData* loaded_materials = (MaterialData*)L_calloc(material_count, sizeof(MaterialData), &renderstate.main.tt);
+    uint32_t assets_mat_start_idx[max_assets] = {};
+    memset(assets_mat_start_idx, 0xFFFF, max_assets);
+
+    for (uint32_t i = 0; i < num_unique_assets; ++i)
+    {
+        Asset* asset = unique_assets[i];
+        assets_mat_start_idx[i] = num_loaded_materials;
+
+        for (uint32_t j = 0; j < unique_assets[i]->material_count; ++j)
+        {
+            Material* mat = &asset->materials[j];
+
+            MaterialData gpu_mat = {};
+            memcpy(&gpu_mat.base_color, mat->base_color, sizeof(glm::vec4));
+            gpu_mat.metalness = mat->metallic;
+            gpu_mat.roughness = mat->roughness;
+            memcpy(&gpu_mat.emissive_factor, mat->emissive_factor, sizeof(glm::vec3));
+            gpu_mat.alpha_cutoff = mat->alpha_cutoff;
+
+            // NOTE: Just use one sampler for now at least
+            // (maybe I'd want to chec the base colour texture's min/mag filter and s/t wrap to choose a better one if we need)
+            gpu_mat.sampler_idx = FG_SAMPLER_LINEAR_REPEAT;
+            
+            if (mat->base_color_texture_index >= 0)
+            {
+                Texture* base_color_texture = &asset->textures[mat->base_color_texture_index];
+                Image*   base_color_image   = &asset->images[base_color_texture->image_index];
+
+                // Create texture resource
+                gpu_mat.texture_idx_basecolor = create_mipmapped_texture2d_resource(
+                    base_color_texture->name, flags, base_color_image->data, base_color_image->data_size,
+                    base_color_image->width, base_color_image->height,
+                    VK_FORMAT_R8G8B8A8_SRGB  // <- is a colour texture
+                );
+            }
+            else
+            {
+                gpu_mat.texture_idx_basecolor = UINT32_MAX;
+            }
+
+            loaded_materials[num_loaded_materials++] = gpu_mat;
+        }
+    }
+
+    // Upload materials to global material buffer (all at once)
+    FG_UploadBufferData(&renderstate.main.staging_objects, rids->material_ssbo_rid,
+        loaded_materials, num_loaded_materials * sizeof(MaterialData)
+    );
+
+
+    // Load meshes
+    for (uint32_t i = 0; i < init_info->num_static_meshes; ++i)
+    {
+        C_StaticMesh* component = &init_info->static_meshes[i];
+
+        component->renderer_prefab = {
+            .vertex_type = component->mesh->vertex_type,
+            .mat_type    = component->mesh->mat_type,
+            .mesh_rids   = {
+                .primitive_count = (uint32_t)component->mesh->primitive_count
+            }
+        };
+
+        uint32_t asset_idx = UINT32_MAX;
+        for (uint32_t a = 0; a < num_unique_assets; ++a)
+        {
+            if (component->parent_asset == unique_assets[a])
+            {
+                asset_idx = a;
+            }
+        }
+        SDL_assert(asset_idx < UINT32_MAX);
+        uint32_t mat_start_idx = assets_mat_start_idx[asset_idx];
+
+        // Load primitives into GPU resources
+        char prim_resource_debug_name[256] = {};
+        for (uint32_t p = 0; p < component->mesh->primitive_count; ++p)
+        {
+            Primitive* prim = &component->mesh->primitives[p];
+            uint32_t gpu_mat_idx = mat_start_idx + prim->material_index;
+
+            snprintf(prim_resource_debug_name, sizeof(prim_resource_debug_name),
+                "%s_Prim%u", component->mesh->name, p
+            );
+            component->renderer_prefab.mesh_rids.primitives[p] = create_primitive_resources(
+                prim_resource_debug_name, flags,
+                gpu_mat_idx,
+                prim->index_count, prim->vertex_count,
+                prim->indices, (glm::vec3*)prim->positions,
+                (glm::vec2*)prim->texcoords, (glm::vec3*)prim->normals,
+                NULL, (glm::uvec4*)prim->joints, (glm::vec4*)prim->weights
+            );
+        }
+    }
+
+    L_free(loaded_materials, &renderstate.main.tt);
 }
 
 /////
@@ -436,7 +571,7 @@ uint32_t compute_num_mip_levels(uint32_t image_level0_width, uint32_t image_leve
 
 
 uint32_t create_mipmapped_texture2d_resource(const char* debug_name, FG_ResourceFlags flags,
-     uint8_t* data, uint64_t data_size,
+     const uint8_t* data, uint64_t data_size,
      uint32_t width, uint32_t height, VkFormat format)
 {
     uint32_t miplevel_count = compute_num_mip_levels(width, height);
