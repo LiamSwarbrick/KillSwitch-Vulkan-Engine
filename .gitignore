@@ -1,6 +1,9 @@
 # --- Misc Local Folders ---
 .notes_local_temp/
 
+# --- ImGUI's local ui state file ---
+imgui.ini
+
 # --- Build Outputs ---
 bin/
 build-artefacts/
