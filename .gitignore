@@ -40,5 +40,5 @@ Makefile
 *.swo
 .DS_Store
 imgui.ini
-.gitignore
+
 
