@@ -4,6 +4,7 @@
 # --- Build Outputs ---
 bin/
 build-artefacts/
+shaderspv/
 
 # --- Clangd ---
 compile_commands.json
