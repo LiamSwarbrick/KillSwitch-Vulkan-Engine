@@ -1,6 +1,8 @@
 #pragma once
 
 #include "imgui.h"
+#include "ecs_inspector.h"
+
 
 namespace DebugUI
 {
@@ -11,6 +13,7 @@ namespace DebugUI
         bool show_ecs_inspector = false;
         bool show_framegraph    = false;
         bool show_asset_browser = false;
+        uint32_t selected_entity_id = UINT32_MAX;
     };
 
     inline void HandleInput(DebugUIState& state)
@@ -47,10 +50,16 @@ namespace DebugUI
     inline void DrawECSInspector(DebugUIState& state)
     {
         if (!state.show_debug_ui || !state.show_ecs_inspector) return;
-        if (ImGui::Begin("ECS Inspector", &state.show_ecs_inspector))
+
+        ImGui::SetNextWindowSize(ImVec2(900, 900), ImGuiCond_FirstUseEver);
+        if (!ImGui::Begin("ECS Inspector", &state.show_ecs_inspector))
         {
-            ImGui::TextDisabled("(ECS Inspector - TODO)");
+            ImGui::End();
+            return;
         }
+
+        DrawECSInspectorContent(state.selected_entity_id);  // <- 调用独立文件的实现
+
         ImGui::End();
     }
 
@@ -74,7 +83,7 @@ namespace DebugUI
         ImGui::End();
     }
 
-    // Call this once per frame after ImGui::NewFrame()
+    // Called after ImGui::NewFrame()
     inline void Draw(DebugUIState& state)
     {
         HandleInput(state);
