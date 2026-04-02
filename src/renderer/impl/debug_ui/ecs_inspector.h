@@ -6,9 +6,7 @@
 
 namespace DebugUI
 {
-    // ---------------------------------------------------------------
-    // 临时占位数据结构，之后替换为真实 ECS 数据
-    // ---------------------------------------------------------------
+    // placeholder
     struct MockComponent
     {
         const char* name;
@@ -106,7 +104,7 @@ namespace DebugUI
     {
         static auto mock_tree = MakeMockEntityTree();
 
-        // 左侧：层级树
+        // hierarchy tree
         ImGui::BeginChild("##entity_hierarchy",
             ImVec2(ImGui::GetContentRegionAvail().x * 0.4f, 0),
             ImGuiChildFlags_Borders
@@ -119,7 +117,7 @@ namespace DebugUI
 
         ImGui::SameLine();
 
-        // 右侧：组件面板
+        // component panel
         ImGui::BeginChild("##component_panel",
             ImVec2(0, 0),
             ImGuiChildFlags_Borders

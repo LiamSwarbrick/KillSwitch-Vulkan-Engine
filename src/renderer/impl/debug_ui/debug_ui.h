@@ -58,7 +58,7 @@ namespace DebugUI
             return;
         }
 
-        DrawECSInspectorContent(state.selected_entity_id);  // <- 调用独立文件的实现
+        DrawECSInspectorContent(state.selected_entity_id);  
 
         ImGui::End();
     }
