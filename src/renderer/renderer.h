@@ -4,6 +4,7 @@
 #include "core/core.h"
 #include "SDL3/SDL.h"
 #include "render_types.h"
+#include "core/components.h"
 
 typedef struct Renderer_InitInfo
 {
@@ -21,8 +22,8 @@ void Renderer_DrawFrame();
 
 typedef struct Scene_InitInfo
 {
-    uint32_t num_prefabs;
-    Asset** prefabs;
+    uint32_t num_static_meshes;
+    C_StaticMesh* static_meshes;
 }
 Scene_InitInfo;
 void Renderer_ChangeScene(Scene_InitInfo new_scene_info);

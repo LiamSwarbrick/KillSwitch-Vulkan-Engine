@@ -1,3 +1,8 @@
+/*
+TODO: Read whatever zee fuck i wrote in these comments at the top 
+and write the up to data description.
+*/
+
 // NOTE(Liam): Frame Graph Motivation:
 // Because in the past I've wasted too much time implemented features in pure hardcoded vulkan
 // (things like bloom involves many passes and buffers and descriptor sets and layouts and pipeline and shaders and synchronisation).
@@ -46,6 +51,7 @@
 #define MAX_PASSES          256
 #define MAX_RESOURCES       20000
 #define NUM_BINDLESS_TEXTURE_SLOTS 10000   // Ample descriptor slots to never worry about again.
+#define MAX_MATERIALS       5096
 #define PUSHCONSTANTS_SIZE  256  // <- Guarunteed in Vulkan 1.4, and we rely on these a lot.
 
 #include "internal_structs.h"
@@ -169,7 +175,6 @@ typedef struct ImageResourceData
 {
     VkImage                 handle;
     VkImageView             view;
-    uint32_t bindless_texture_index;  // Every image gets a slot in the heap. In case it ever needs to be sampled.
 
     // Metadata about the image needed for parts of the frame graph
     VkFormat                format;

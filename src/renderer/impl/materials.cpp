@@ -12,3 +12,5 @@ extern const MaterialConfigs g_material_configs = {
         }
     }
 };
+
+#warning Remember to use MaterialConfigs::is_opaque/is_ui stuff

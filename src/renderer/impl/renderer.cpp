@@ -666,7 +666,7 @@ void Renderer_ChangeScene(Scene_InitInfo new_scene_info)
 {
     renderstate.is_next_scene_set = 1;
     renderstate.next_scene_info = new_scene_info;
-    CreateOrRecreateResources(FG_RESOURCE_FLAGS_WINDOW_DEPENDENT);
+    CreateOrRecreateResources(FG_RESOURCE_FLAGS_SCENE_DEPENDENT);
 }
 
 void Renderer_PushRenderable(Renderable renderable)
@@ -754,7 +754,7 @@ void Renderer_DrawFrame()
 
     // NOTE: Renderables need to be alive the whole time, (drawcalls point to renderables)
     //       This is why we'll actually get them through the entity system via the DrawFrame args maybe (or just query the ecs)
-    #if 1  // TEMP:
+    #if 1  // TEMP:  <- Temporary drawcalls here
         Renderable r = {
             .transform    = glm::mat4(1.0f),
             .mesh_prefab  = renderstate.rids.dummy_mesh,

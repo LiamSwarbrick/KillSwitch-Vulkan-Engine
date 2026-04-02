@@ -2,7 +2,6 @@
 #define RENDERER_RENDER_TYPES_H
 
 // Way for game to communicate thing sfor the renderer
-#include "core/core.h"
 #include "glm/glm.hpp"
 
 #include "shadersrc/shared_constants.glsl"
@@ -70,7 +69,7 @@ typedef struct Renderable
     
     // CPU-side joints buffer we memcpy from to GPU joints buffer
     uint32_t joint_count;
-    mat4* joints;    // <- Pointer to animation system side joints array
+    glm::mat4* joints;    // <- Pointer to animation system side joints array
     // NOTE: Fucking make sure joints arrays are not allocated every frame
 }
 Renderable;

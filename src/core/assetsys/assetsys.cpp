@@ -50,6 +50,8 @@ Image load_image(const char* name, const char* uri)
 	int width, height, num_channels;
 	image.data = stbi_load(image.uri, &width, &height, &num_channels, 4);
 	image.data_size = width * height * 4;
+	image.width = width;
+	image.height = height;
 	if (image.data == NULL)
 	{
 		SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Failure to load image (%s)", image.uri);
@@ -67,7 +69,7 @@ void free_image(Image* image)
 }
 
 Asset* load_asset(const char* filename) {
-	cgltf_options options = { 0 };
+	cgltf_options options = {};
 	cgltf_data* data = NULL;
 	cgltf_result result = cgltf_parse_file(&options, filename, &data);
 	if (result != cgltf_result_success) {
@@ -309,7 +311,11 @@ Asset* load_asset(const char* filename) {
 		mesh->primitives = (Primitive*)calloc(mesh->primitive_count, sizeof(Primitive));
 
 		// default static mesh
-		mesh->type = 0;
+		mesh->vertex_type = VERTEX_TYPE_STATIC;
+
+		// default unlit mesh TODO: better defaults once lighting implemented.
+		mesh->mat_type = MAT_UNLIT;
+		// TODO: Not retrieving material type yet from gltf (need a way of exposing it in blender)
 
 		for (size_t p = 0; p < mesh->primitive_count; p++) {
 			cgltf_primitive* gltf_prim = &gltf_mesh->primitives[p];
@@ -363,7 +369,7 @@ Asset* load_asset(const char* filename) {
 			}
 			// if it has joint then its a skinned mesh
 			if (prim->joints != NULL) {
-				mesh->type = 1;
+				mesh->vertex_type = VERTEX_TYPE_SKINNED;
 			}
 		}
 	}

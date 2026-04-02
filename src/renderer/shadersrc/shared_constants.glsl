@@ -115,12 +115,19 @@ struct ObjectData
 struct MaterialData
 {
     // TODO: Change this to a standard glTF pbr material instead of this shit
-    vec4 base_color;
-    uint32_t texture_idx_basecolor;
-    
-    uint32_t sampler_idx;
+    vec4  base_color;
+    float metalness;
+    float roughness;
+    vec3  emissive_factor;
     float alpha_cutoff;
-    uint32_t padding[1];
+
+    uint32_t sampler_idx;
+        
+    uint32_t texture_idx_basecolor;
+    // TODO: Switch to this layout:
+    // uint32_t texture_idx_basecolor_rgb_metalness_a;
+    // uint32_t texture_idx_emissive_rgb_roughness_a;
+    // uint32_t texture_idx_normalmap;  // <- TODO: Dunno if I want normal maps cuz the game might be stylised?
 };
 
 

@@ -2,6 +2,7 @@
 #define RENDERER_MATERIALS_H
 
 #include "../render_types.h"  // This defines MATERIAL_LIST
+#include "core/my_c_runtime.h"
 
 typedef struct MaterialPipelineInfo
 {
