@@ -1,3 +1,11 @@
+-- University lab machines are super locked down, so build slightly differently
+-- E.g. Use gcc instead of clang, and use the included ./glslc instead of the one in the user's path.
+newoption {
+    trigger     = "uni",
+    description = "Build for university lab environment"
+}
+print "NOTE FOR UNIVERSITY LAB MACHINES: use ./premake5 gmake --uni"
+
 local EXTERNAL = "extern/"
 local SRC = "src/"
 
@@ -16,29 +24,35 @@ include_paths.VMA = EXTERNAL .. "VMA"
 include_paths.glm = EXTERNAL .. "glm"
 include_paths.cgltf = EXTERNAL .. "cgltf"
 include_paths.stb = EXTERNAL .. "stb"
+include_paths.rapidjson = EXTERNAL .. "rapidjson"
+include_paths.imgui = EXTERNAL .. "imgui"
+include_paths.imgui_backends = EXTERNAL .. "imgui/backends"
 
 lib_dirs = {}
 
--- SDL
+-- SDL build flags
 local sdl_build_type = "Release" -- default (no need to debug SDL right?)
-filter "system:windows"
-    libdirs { SDL_BUILD_DIR .. "/" .. sdl_build_type }
-filter "not system:windows"
-    libdirs { SDL_BUILD_DIR }
-
 if _ACTION == "vs2022" then
     SDL_BUILD_FLAGS = "-G \"Visual Studio 17 2022\""
 end
 
 -- VULKAN_SDK
-filter "system:windows"
+if os.host() == "windows" then
     include_paths.Vulkan = VULKAN_SDK .. "/Include"
     lib_dirs.Vulkan      = VULKAN_SDK .. "/Lib"
-filter "not system:windows"
+    lib_dirs.SDL3        = SDL_BUILD_DIR .. "/" .. sdl_build_type
+else
     include_paths.Vulkan = VULKAN_SDK .. "/include"
     lib_dirs.Vulkan      = VULKAN_SDK .. "/lib"
+    lib_dirs.SDL3        = SDL_BUILD_DIR
+end
 
-filter {}
+-- Google's glsl compiler (by default we expect it installed)
+glslc_cmd = "glslc"
+if _OPTIONS["uni"] then
+    -- But on lab machines we use the included executable
+    glslc_cmd = "./glslc"
+end
 
 -- Clean action: cleanall
 newaction {
@@ -98,7 +112,7 @@ local function ensure_sdl_built()
     else
         cmd = table.concat({
             "cd " .. SDL_BUILD_DIR,
-            "cmake .. -DCMAKE_BUILD_TYPE=" .. sdl_build_type .. " -DSDL_TESTS=OFF",
+            "cmake .. -DCMAKE_BUILD_TYPE=" .. sdl_build_type .. " -DSDL_TESTS=OFF -DSDL_X11_XSCRNSAVER=OFF",
             "cmake --build . -j"
         }, " && ")
     end
@@ -127,6 +141,8 @@ workspace "AdventureEngine"
         toolset "clang"
     filter "system:macosx"
         toolset "clang"
+    filter "options:uni"
+        toolset "gcc"
     filter {}
 
     filter "toolset:clang"
@@ -151,21 +167,25 @@ workspace "AdventureEngine"
     project "core"
         kind "StaticLib"
         language "C++"
-        cppdialect "C++23"
+        cppdialect "C++latest"
 
         files {
             SRC .. "core/**.h",
-            SRC .. "core/impl/**.cpp",
-            SRC .. "core/assetsys/**.c"
+            SRC .. "core/**.cpp",
+            SRC .. "core/**.c"
         }
 
         includedirs { 
             SRC,  -- Exported API headers
             SRC .. "core",
-            SRC .. "core/impl",  -- Internal include headers
+            SRC .. "core/**",  -- Internal include headers
             include_paths.SDL3,
             include_paths.glm,
-            include_paths.cgltf
+            include_paths.cgltf,
+            include_paths.stb,
+            include_paths.rapidjson,
+            include_paths.imgui,
+            include_paths.imgui_backends
         }
 
         libdirs {
@@ -173,36 +193,6 @@ workspace "AdventureEngine"
         }
 
         links {
-            "SDL3"   -- The lib we just built via cmake in prebuildcommands
-        }
-
-    -- --------------------------------------------------------------------
-    -- ECS Module
-    -- --------------------------------------------------------------------
-    project "ecs"
-        kind "StaticLib"
-        language "C++"
-        cppdialect "C++23"
-
-        files {
-            SRC .. "ecs/**.hpp",
-            SRC .. "ecs/**.h",
-            SRC .. "ecs/**.cpp"
-        }
-
-        includedirs { 
-            SRC,  -- Exported API headers
-            SRC .. "ecs",
-            SRC .. "ecs/impl",  -- Internal include headers
-            include_paths.SDL3
-        }
-
-        libdirs {
-            lib_dirs.SDL3
-        }
-
-        links {
-            "core",
             "SDL3"   -- The lib we just built via cmake in prebuildcommands
         }
 
@@ -212,7 +202,7 @@ workspace "AdventureEngine"
     project "physics"
         kind "StaticLib"
         language "C++"
-        cppdialect "C++23"
+        cppdialect "C++latest"
 
         files {
             SRC .. "physics/**.hpp",
@@ -223,7 +213,8 @@ workspace "AdventureEngine"
         includedirs { 
             SRC,  -- Exported API headers
             SRC .. "physics/**",
-            include_paths.SDL3 -- Assertions (in case)
+            include_paths.SDL3,
+            include_paths.glm
         }
 
         libdirs {
@@ -235,19 +226,28 @@ workspace "AdventureEngine"
             "SDL3"   -- The lib we just built via cmake in prebuildcommands
         }
 
-
     -- --------------------------------------------------------------------
     -- Renderer Module (Vulkan implementation)
     -- --------------------------------------------------------------------
     project "renderer"
         kind "StaticLib"
         language "C++"
-        cppdialect "C++23"
+        cppdialect "C++latest"
 
         files {
             SRC .. "renderer/**.h",
             SRC .. "renderer/impl/**.cpp",
             EXTERNAL .. "volk/volk.c",
+
+            -- ImGui
+            EXTERNAL .. "imgui/imgui.cpp",
+            EXTERNAL .. "imgui/imgui_demo.cpp",
+            EXTERNAL .. "imgui/imgui_draw.cpp",
+            EXTERNAL .. "imgui/imgui_tables.cpp",
+            EXTERNAL .. "imgui/imgui_widgets.cpp",
+            EXTERNAL .. "imgui/backends/imgui_impl_sdl3.cpp",
+            EXTERNAL .. "imgui/backends/imgui_impl_vulkan.cpp",
+
 
             -- Shader src
             SRC .. "renderer/shadersrc/**.vert",
@@ -257,7 +257,8 @@ workspace "AdventureEngine"
         }
 
         defines {
-            "VK_NO_PROTOTYPES"
+            "VK_NO_PROTOTYPES",
+            "IMGUI_IMPL_VULKAN_USE_VOLK"
         }
 
         includedirs {
@@ -270,11 +271,14 @@ workspace "AdventureEngine"
             include_paths.VMA,
             include_paths.glm,
             include_paths.stb,
-            include_paths.cgltf
+            include_paths.cgltf,
+            include_paths.imgui,
+            include_paths.imgui_backends
         }
 
         libdirs {
-            lib_dirs.Vulkan
+            lib_dirs.Vulkan,
+            lib_dirs.SDL3
         }
 
         filter "system:windows"
@@ -295,7 +299,7 @@ workspace "AdventureEngine"
         filter "files:**.vert or files:**.frag or files:**.comp"
             buildmessage "Compiling shader %{file.relpath}"
             buildcommands {
-                "glslc %{file.relpath} -o shaderspv/%{file.name}.spv"
+                "%{glslc_cmd} %{file.relpath} -o shaderspv/%{file.name}.spv"
             }
             buildoutputs {
                 "shaderspv/%{file.name}.spv"
@@ -309,7 +313,7 @@ workspace "AdventureEngine"
     project "game"
         kind "ConsoleApp"
         language "C++"
-        cppdialect "C++23"
+        cppdialect "C++latest"
 
         files {
             SRC .. "game/**.h",
@@ -318,10 +322,13 @@ workspace "AdventureEngine"
 
         includedirs {
             SRC,
-            SRC .. "game/include",
+            SRC .. "game",
             include_paths.SDL3,
             include_paths.glm,
-            include_paths.cgltf
+            include_paths.cgltf,
+            include_paths.rapidjson,
+            include_paths.imgui,
+            include_paths.imgui_backends
         }
 
         libdirs {
@@ -330,6 +337,7 @@ workspace "AdventureEngine"
 
         links {  -- NOTE: Must link from highest level dependency to lowest level.   
             "renderer",
+            "physics",
             "core",
             "SDL3"
         }

@@ -13,7 +13,7 @@ layout(set = 0, binding = 1) uniform sampler global_samplers[];
 
 layout(push_constant, scalar) uniform PushConstants
 {
-    GraphicsPushConstants pc;
+    FullPushConstants_Graphics push;
 };
 
 layout(location = 0) in vec2 in_uv;
@@ -23,8 +23,8 @@ layout(location = 0) out vec4 out_color;
 
 void main()
 {
-    MaterialBuffer mb = MaterialBuffer(pc.material_ptr);
-    MaterialData mat = mb.materials[pc.material_idx];
+    MaterialBuffer mb = MaterialBuffer(push.dc.material_ptr);
+    MaterialData mat = mb.materials[push.dc.material_idx];
 
     vec4 final_color = mat.base_color * vec4(in_vcolor, 1.0);
 

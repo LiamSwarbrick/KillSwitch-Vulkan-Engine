@@ -3,16 +3,27 @@
 #include "renderpasses/metadata.h"
 
 #include "SDL3/SDL_vulkan.h"
+#include "imgui.h"
+#include "imgui_impl_sdl3.h"
+#include "imgui_impl_vulkan.h"
 
 RenderState renderstate;
 
 // STB DS for hash maps (pipeilne hashing), with the main thread alloc tracker.
+void* external_malloc(size_t size) { return L_calloc(1, size, &renderstate.main.tt); }
 void* external_realloc(void* ptr, size_t size) { return L_realloc(ptr, size, &renderstate.main.tt); }
 void external_free(void* ptr) { return L_free(ptr, &renderstate.main.tt); }
 #define STBDS_REALLOC(context,ptr,size) external_realloc(ptr, size)
 #define STBDS_FREE(context,ptr)         external_free(ptr)
 #define STB_DS_IMPLEMENTATION
 #include "stb_ds.h"  // Pipeline keying using this, I'm the STB_DS_IMPLEMENTATION here
+
+// STB Image for image file loading, with the main thread alloc tracker.
+#define STBI_MALLOC(sz)           external_malloc(sz)
+#define STBI_REALLOC(p,newsz)     external_realloc(p, newsz)
+#define STBI_FREE(p)              external_free(p)
+#define STB_IMAGE_IMPLEMENTATION
+#include "stb_image.h"
 
 
 // NOTE(Liam): The only mutable internal state for renderer is this renderstate.
@@ -27,17 +38,17 @@ const u32 engine_version = VK_MAKE_VERSION(0, 0, 0);
 
 
 // Validation layers:
-#ifdef NDEBUG
-const b32 request_validation_layers = 0;
-const char* const* validation_layers = NULL;
-const u32 validation_layers_count = 0;
-#else
-const b32 request_validation_layers = 1;
+// #ifdef NDEBUG
+// const b32 request_validation_layers = 0;
+// const char* const* validation_layers = NULL;
+// const u32 validation_layers_count = 0;
+// #else
+// const b32 request_validation_layers = 1;
 const char* const validation_layers[] = {
     "VK_LAYER_KHRONOS_validation"
 };
 const u32 validation_layers_count = sizeof(validation_layers) / sizeof(char*);
-#endif
+// #endif
 
 
 // Vulkan Instance Extensions
@@ -505,6 +516,8 @@ void Renderer_Init(const Renderer_InitInfo* info)
         // But this should just work with multithreading when using thread_safe_submit_cmd()
     }
 
+
+
     // Init Subsystems
     //
     //   FrameGraph:
@@ -522,6 +535,16 @@ void Renderer_Init(const Renderer_InitInfo* info)
     renderstate.rids.startup_resources_created = 0;
     _Renderer_OnWindowResize();  // <-- Creates swapchain and window dependent resources
     CreateOrRecreateResources(FG_RESOURCE_FLAGS_ON_STARTUP);
+
+    // Using arrays of drawcalls per shader type.
+    // E.g. MAT_PBR_WITH_OUTLINE renderable to add a drawcall to both SHADER_PBR and SHADER_OUTLINE
+    InitDrawCallCollections();
+
+    // Init renderables arena (per frame lifetime)
+    renderstate.renderables_arena = (RenderView){
+        .num_renderables = 0,
+        .items = (Renderable*)L_calloc(MAX_RENDERED_OBJECTS, sizeof(Renderable), &renderstate.main.tt)
+    };
 
     // Init per frame structures (except for swapchain_image_acquired_semaphore, which is handled by create_or_recreate_swapchain)
     {
@@ -551,6 +574,64 @@ void Renderer_Init(const Renderer_InitInfo* info)
             VK_CHECK(vkAllocateCommandBuffers(renderstate.device, &cmd_alloc_info, &renderstate.frames[i].graphics_command_buffer));
         }
     }
+
+
+    // Init ImGui
+    {
+        // create descriptor pool for imgui 
+        VkDescriptorPoolSize pool_sizes[] = { { VK_DESCRIPTOR_TYPE_SAMPLER, 1000 },
+		{ VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1000 },
+		{ VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1000 },
+		{ VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1000 },
+		{ VK_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER, 1000 },
+		{ VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER, 1000 },
+		{ VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1000 },
+		{ VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1000 },
+		{ VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC, 1000 },
+		{ VK_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC, 1000 },
+		{ VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT, 1000 } };
+
+        VkDescriptorPoolCreateInfo pool_info = {};
+        pool_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+        pool_info.flags = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT;
+        pool_info.maxSets = 1000;
+        pool_info.poolSizeCount = (uint32_t)std::size(pool_sizes);
+        pool_info.pPoolSizes = pool_sizes;
+        VK_CHECK(vkCreateDescriptorPool(renderstate.device, &pool_info, NULL, &renderstate.imgui_descriptor_pool));
+
+        
+        IMGUI_CHECKVERSION();
+        ImGui::CreateContext();
+        ImGuiIO& io = ImGui::GetIO();
+        io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
+
+        // SDL3 backend
+        ImGui_ImplSDL3_InitForVulkan(renderstate.window);
+
+        // Vulkan backend
+        ImGui_ImplVulkan_InitInfo imgui_vk_info = {};
+        imgui_vk_info.ApiVersion          = VK_API_VERSION_1_4;
+        imgui_vk_info.Instance            = renderstate.instance;
+        imgui_vk_info.PhysicalDevice      = renderstate.physical_device;
+        imgui_vk_info.Device              = renderstate.device;
+        imgui_vk_info.QueueFamily         = renderstate.queue_family_indices.graphics_family;
+        imgui_vk_info.Queue               = renderstate.graphics_queue;
+        imgui_vk_info.DescriptorPool      = renderstate.imgui_descriptor_pool;
+        imgui_vk_info.MinImageCount       = 2;
+        imgui_vk_info.ImageCount          = renderstate.swapchain_image_count;
+
+        // swapchain form ?
+        imgui_vk_info.UseDynamicRendering          = true;
+        imgui_vk_info.PipelineInfoMain.PipelineRenderingCreateInfo  = {
+            .sType                   = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO,
+            .colorAttachmentCount    = 1,
+            .pColorAttachmentFormats = &renderstate.swapchain_image_format,
+        };
+
+        ImGui_ImplVulkan_Init(&imgui_vk_info);
+
+        printf("ImGui Initialized.\n");
+    }
 }
 
 void Renderer_Shutdown()
@@ -560,12 +641,21 @@ void Renderer_Shutdown()
     // Ensure device is not doing any work before destroying it's stuff.
     vkDeviceWaitIdle(renderstate.device);
 
+    // Destroy imgui stuff
+    ImGui_ImplVulkan_Shutdown();
+    ImGui_ImplSDL3_Shutdown();
+    ImGui::DestroyContext();
+    vkDestroyDescriptorPool(renderstate.device, renderstate.imgui_descriptor_pool, NULL);
+
     // Clean up per frame objects
     for (int i = 0; i < NUM_FRAMES_IN_FLIGHT; ++i)
     {
         vkDestroyCommandPool(renderstate.device, renderstate.frames[i].graphics_command_pool, NULL);
         vkDestroyFence(renderstate.device, renderstate.frames[i].rendering_complete_fence, NULL);
     }
+
+    L_free(renderstate.renderables_arena.items, &renderstate.main.tt);
+    DestroyDrawCallCollections();
 
     // Shutdown Pipeline Keying and Frame Graph subsystems
     PK_Shutdown(&renderstate.pipeline_map, renderstate.device);
@@ -614,6 +704,9 @@ void Renderer_Shutdown()
 
 void Renderer_ListenToWindowEvent(SDL_Event event)
 {
+    // event to imgui
+    ImGui_ImplSDL3_ProcessEvent(&event);
+    
     switch (event.type)
     {
         case SDL_EVENT_WINDOW_RESIZED:
@@ -644,6 +737,20 @@ void _Renderer_OnWindowMinimize()
     // TODO: Pause rendering on minimize
 }
 
+void Renderer_ChangeScene(Scene_InitInfo new_scene_info)
+{
+    renderstate.is_next_scene_set = 1;
+    renderstate.next_scene_info = new_scene_info;
+    CreateOrRecreateResources(FG_RESOURCE_FLAGS_SCENE_DEPENDENT);
+}
+
+void Renderer_PushRenderable(Renderable renderable)
+{
+    SDL_assert(renderstate.renderables_arena.items &&
+        renderstate.renderables_arena.num_renderables + 1 < MAX_RENDERED_OBJECTS
+    );
+    renderstate.renderables_arena.items[renderstate.renderables_arena.num_renderables++] = renderable;
+}
 
 void Renderer_DrawFrame()
 {
@@ -693,6 +800,12 @@ void Renderer_DrawFrame()
         // Swapchain was out of date, so try again.
         goto retry_with_resized_window;
     }
+#ifdef NDEBUG
+    else if (acquire_result == VK_TIMEOUT)
+    {
+        printf("Timeout occurred. Only waiting one second in debug mode to detect deadlocks/hangs.\n(If you're screen turned off and that caused this crash, don't worry, that won't happen in release mode!\n)");
+    }
+#endif
     VK_CHECK(acquire_result);
 
     // Now we can safely reset the rendering complete fence.
@@ -702,8 +815,66 @@ void Renderer_DrawFrame()
     // Reset command buffers by resetting the entire pool
     vkResetCommandPool(renderstate.device, renderstate.frames[frame_in_flight].graphics_command_pool, 0);
 
+    // ImGui: Start new frame
+    ImGui_ImplVulkan_NewFrame();
+    ImGui_ImplSDL3_NewFrame();
+    ImGui::NewFrame();
+
+    // Build ImGui UI here, e.g.
+    ImGui::ShowDemoWindow();  // TODO: Remove after testing
+
+    // Finalize ImGui draw data (must happen before command buffer recording)
+    ImGui::Render();
+
+
+
+    /* Sort Drawcalls into arrays per shader
+
+        Example, Renderable r with MAT_PBR_WITH_OUTLINE:
+        r could be added to many different shaders: (pseudocode)
+            renderables_per_shader[SHADER_PBR].append(r);
+            renderables_per_shader[SHADER_OUTLINE].append(r);
+            renderables_per_shader[SHADER_SHADOWMAP].append(r);
+        
+        Importantly, renderables are collected per frame, (not true of the underlying assets).
+        For instance, an outline is togglable in gameplay code. Same with visibility.
+    */
+
+    BeginDrawCalls();
+
+    // NOTE: Renderables need to be alive the whole time, (drawcalls point to renderables)
+    //       This is why we'll actually get them through the entity system via the DrawFrame args maybe (or just query the ecs)
+    #if 1  // TEMP:  <- Temporary drawcalls here
+        Renderable r = {
+            .transform    = glm::mat4(1.0f),
+            .mesh_prefab  = renderstate.rids.dummy_mesh,
+            .joint_count  = 0,
+            .joints       = NULL
+        };
+        Renderable r2 = r;
+        r2.transform[3][0] -= 0.5;
+        r2.transform[3][1] -= 0.5;
+        r2.transform[3][2] -= 0.5;
+        {
+            Renderer_PushRenderable(r);
+            Renderer_PushRenderable(r2);
+        }
+    #endif  // ENDTEMP
+
+    for (uint32_t i = 0; i < renderstate.renderables_arena.num_renderables; ++i)
+    {
+        AddDrawCall(&renderstate.renderables_arena.items[i]);
+    }
+
+    EndDrawCalls();
 
     
+    // Reset renderables arena head for next frame
+    renderstate.renderables_arena.num_renderables = 0;
+
+
+
+
     /*  Build FrameGraph
 
         Queries game state to know which renderpasses to use.
@@ -718,8 +889,12 @@ void Renderer_DrawFrame()
     uint32_t swapchain_image_resource_id = renderstate.rids.swapchain_image_rids[swapchain_image_index];
     uint32_t swapchain_pass;
     {
+        // RenderPassDesc forward_opaque_pass_desc = {
+
+        // }
+
         // Temporary basic pass for swapchain rendering
-        RenderPassDesc swapchain_pass_desc = (RenderPassDesc){
+        RenderPassDesc swapchain_pass_desc = {
             .debug_name = "Swapchain Pass",
             .input_count = 0,
             .inputs = {},
@@ -728,11 +903,12 @@ void Renderer_DrawFrame()
                 {
                     .rid = swapchain_image_resource_id,
                     .usage_flags = FG_USAGE_COLOR,
-                    .sampler_type = FG_SAMPLER_NOT_SAMPLABLE,
+                    .sampler_type = FG_SAMPLER_NOT_SAMPLABLE,  // NOTE: Outputs attachment, can ignore sampler_type
 
+                    .layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
                     .access = VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,
                     .stage  = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
-                    .layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+                    .queue_family_index = renderstate.queue_family_indices.graphics_family,
                     
                     .load_op = VK_ATTACHMENT_LOAD_OP_CLEAR,
                     .store_op = VK_ATTACHMENT_STORE_OP_STORE,
@@ -743,12 +919,14 @@ void Renderer_DrawFrame()
             .is_compute = 0,
             .render_area = { .offset = { 0, 0 }, .extent = renderstate.swapchain_extent },
             
-            .execute_callback = SwapchainPass_Execute
+            .execute_callback = SwapchainPass_Execute,
+            .user_data = NULL
         };
         swapchain_pass = FG_AddPass(swapchain_pass_desc, PASS_TYPE_SWAPCHAIN_PASS);
     }
 
 
+    
 
     /*  Execute FrameGraph
 
@@ -772,10 +950,9 @@ void Renderer_DrawFrame()
 
     // Begin recording graphics commands
     //
-
+    renderstate.currently_bound_pipeline = VK_NULL_HANDLE;  // <- Each time we start recording cmd bufs, the bound pipeline is reset
     VK_CHECK(vkBeginCommandBuffer(gcmd, &graphics_cmd_begin_info));
     {
-        UpdateGlobalSceneData();
         FG_CmdRenderFrame(gcmd);
         FG_CmdTransitionSwapchainForPresentation(gcmd, swapchain_image_resource_id);
     }
@@ -785,6 +962,8 @@ void Renderer_DrawFrame()
     // End of graphics commands recording
 
     
+
+
 
     // Prepare submission of the command buffer to the queue.
     // - Requires waiting on the present semaphore (signalled when the swapchain is ready)
@@ -1354,9 +1533,8 @@ void create_or_recreate_swapchain()
         // Requesting in pixel coordinates not screen coordinates because some HiDPI displays make a distinction there
         // and we want to actually render to each and every pixel available on the monitor
         int width, height;
-        SDL_assert(
-            SDL_GetWindowSizeInPixels(renderstate.window, &width, &height)
-        );
+        bool success = SDL_GetWindowSizeInPixels(renderstate.window, &width, &height);
+        SDL_assert(success && "SDL_GetWindowSizeInPixels failed.");
 
         VkExtent2D actual_extent = { (u32)width, (u32)height };
 
@@ -1384,7 +1562,6 @@ void create_or_recreate_swapchain()
     {
         min_image_count = details.capabilities.maxImageCount;
     }
-
 
     // Swapchain Create Info
     VkSwapchainKHR old_swapchain = renderstate.swapchain;

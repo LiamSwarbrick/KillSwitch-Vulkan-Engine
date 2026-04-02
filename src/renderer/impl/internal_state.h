@@ -1,6 +1,7 @@
 #ifndef ENGINE_RENDERER_RENDER_STATE_H
 #define ENGINE_RENDERER_RENDER_STATE_H
 
+#include "renderer.h"
 #include "internal_structs.h"
 #include "framegraph.h"
 
@@ -8,9 +9,14 @@
 #include "pipeline_keying.h"
 
 #include "shaders.h"
+#include "drawcall.h"
 #include "mapped_linear_allocator.h"
 #include "renderpasses/metadata.h"
 #include "game_resources.h"
+
+#include "imgui.h"
+#include "imgui_impl_sdl3.h"
+#include "imgui_impl_vulkan.h"
 
 typedef struct RenderState
 {
@@ -23,8 +29,8 @@ typedef struct RenderState
 
     // Options
     // TODO: Instead, just ask core for settings when needed.
-    // Or realistically, each module can have a Settings_Changed callback
-    // Since swapchain will need to be recreated if uncapped_fps is changed.
+    // Or realistically, each module can have a SettingsChanged callback
+    // since swapchain will need to be recreated if uncapped_fps is changed.
     b32 uncapped_fps;
 
     VkInstance instance;
@@ -63,15 +69,32 @@ typedef struct RenderState
     // Pipeline Keying system and shader registry
     // FUTURE: If multithreading drawcalls are needed, see this article on sharing pipelines while using seperate maps per thread:
     //         https://ruby0x1.github.io/machinery_blog_archive/post/vulkan-pipelines-and-render-states/index.html    
-    PipelineEntry* pipeline_map;  // Recreated only when swapchain format changes (so never under most circumstances)
-
-    // TODO: Move this shit to a more game local directory instead of internal state
+    PipelineEntry* pipeline_map;          // Recreated only when swapchain format changes (so never under most circumstances)
     ShaderRegistry shader_registry;
-    MappedArena object_transforms;
     ResourceIDs rids;  // IDs into registry, framegraph, or pipeline hash
 
     // Per Frame Table for converting Pass Type into framegraph.passes array index
     uint32_t pass_id_from_type[PASS_TYPE_COUNT];  // ONLY use after framegraph has been build that frame
+
+    // Arenas reset each frame
+    MappedArena object_transforms;
+    MappedArena joint_transforms;
+
+    // Draw Calls are accumulated each frame per shader
+    DrawCallsPerShader drawcalls_collection;
+
+    // Renderer execution state:
+    VkPipeline currently_bound_pipeline;  // Used to avoid  vkCmdBindPipeline call if it's already bound
+
+    // Scene Assets
+    b32 is_next_scene_set;
+    Scene_InitInfo next_scene_info;
+
+    // Renderables arena
+    RenderView renderables_arena;
+
+    // imgui descriptor pool
+    VkDescriptorPool imgui_descriptor_pool;
 }
 RenderState;
 

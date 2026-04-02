@@ -67,6 +67,8 @@ check_tracker_for_memory_leaks(ThreadAllocTracker* tracker)
 static inline ThreadAllocInfo*
 get_alloc_info(void* ptr, ThreadAllocTracker* alloc_tracker)
 {
+    assert(ptr && "Fetching the allocation header should never be attempted for NULL pointers.");
+
     // Get size of original allocation by looking backwards in memory for the prepended header
     ThreadAllocInfo* actual_ptr = (ThreadAllocInfo*)((char*)ptr - sizeof(ThreadAllocInfo));
     if (actual_ptr->magic_number != THREAD_ALLOC_INFO_MAGIC_NUMBER)
@@ -200,6 +202,10 @@ L_free(void* ptr, ThreadAllocTracker* alloc_tracker)
             fprintf(stderr, "Error (%s): ThreadAllocTracker* was NULL.\n", __func__);
             exit(1);
         }
+
+        // NOTE: Freeing a NULL pointer is well-defined to just do nothing in C, so we do nothing here too
+        // (It would crash the shit out of the program if we tried to get the allocation header from a NULL pointer)
+        if (ptr == NULL) return;
 
         ThreadAllocInfo* actual_buffer = get_alloc_info(ptr, alloc_tracker);
 
