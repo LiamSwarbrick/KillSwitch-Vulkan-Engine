@@ -22,4 +22,7 @@ bool WillExpire(const C_Animator& animator);
 float GetDuration(const C_Animator& animator);
 float GetCurrentTime(const C_Animator& animator);
 
+// calculations
+void CalculateWorldMatrices(Asset* asset, int boneIndex, const std::vector<int>& nodeIndices, glm::mat4 parentMatrix, const std::vector<glm::mat4>& localJointMatrices, std::vector<glm::mat4>& worldJointMatrices);
+
 #endif  // ANIMATION_H
