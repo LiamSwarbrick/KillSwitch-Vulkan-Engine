@@ -24,8 +24,14 @@ struct C_StaticMesh
 struct C_AnimatedMesh
 {
     Mesh* mesh;             
-    Asset* parent_asset;  
+    Asset* asset;  
     MeshPrefab renderer_prefab;
+
+    // animator states
+    int currentAnimation;
+    float animationTime;
+    bool isPlaying;
+    bool isLooping;
 
 	// skeletal animation data
     uint32_t joint_count;
