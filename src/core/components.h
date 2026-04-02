@@ -23,8 +23,13 @@ struct C_StaticMesh
 
 struct C_AnimatedMesh
 {
-    MeshPrefab mesh_prefab;
-    // SkeletalAnimationState anim_state;  // <-TODO
+    Mesh* mesh;             
+    Asset* parent_asset;  
+    MeshPrefab renderer_prefab;
+
+	// skeletal animation data
+    uint32_t joint_count;
+    glm::mat4* joint_matrices;
 };
 
 // struct C_Mesh

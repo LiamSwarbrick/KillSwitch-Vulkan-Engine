@@ -10,6 +10,8 @@ void Animation_Update(AdvEng::ECS* ecs, float dt)
     //    auto& animator = ecs->GetComponent<C_Animator>(e);
     //    
     //}
+
+	// Compute final matrices and update animation time for each animator
     return;
 }
 

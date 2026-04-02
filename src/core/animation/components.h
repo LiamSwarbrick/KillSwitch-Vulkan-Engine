@@ -15,9 +15,6 @@ struct C_Animator
 
 	bool isPlaying;
 	bool isLooping;
-
-	// renderer reads this to get the final joint matrices for skinning
-	std::vector<glm::mat4> final_joint_matrices;
 };
 
 #endif //ANIMATION_COMPONENTS_H
