@@ -6,6 +6,7 @@
 #include "imgui.h"
 #include "imgui_impl_sdl3.h"
 #include "imgui_impl_vulkan.h"
+#include "debug_ui/debug_ui.h"
 
 RenderState renderstate;
 
@@ -811,8 +812,9 @@ void Renderer_DrawFrame()
     ImGui::NewFrame();
 
     // Build ImGui UI here, e.g.
-    ImGui::ShowDemoWindow();  // TODO: Remove after testing
-
+    // ImGui::ShowDemoWindow();  // TODO: Remove after testing
+    static DebugUI::DebugUIState debug_ui_state;
+    DebugUI::Draw(debug_ui_state);
     // Finalize ImGui draw data (must happen before command buffer recording)
     ImGui::Render();
 
