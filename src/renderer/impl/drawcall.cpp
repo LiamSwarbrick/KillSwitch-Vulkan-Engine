@@ -217,8 +217,8 @@ static SceneData temp_default_camera_scene_data()
     if (state[SDL_SCANCODE_S]) pos -= forward * move_speed;
     if (state[SDL_SCANCODE_A]) pos -= right   * move_speed;
     if (state[SDL_SCANCODE_D]) pos += right   * move_speed;
-    if (state[SDL_SCANCODE_SPACE]) pos += up  * move_speed;
-    if (state[SDL_SCANCODE_LSHIFT]) pos -= up  * move_speed;
+    if (state[SDL_SCANCODE_E]) pos += up  * move_speed;
+    if (state[SDL_SCANCODE_Q]) pos -= up  * move_speed;
 
     // --- VIEW MATRIX ---
     data.view = glm::lookAt(pos, pos + forward, up);

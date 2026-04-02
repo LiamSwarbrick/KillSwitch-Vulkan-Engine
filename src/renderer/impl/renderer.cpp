@@ -10,6 +10,7 @@
 RenderState renderstate;
 
 // STB DS for hash maps (pipeilne hashing), with the main thread alloc tracker.
+void* external_malloc(size_t size) { return L_calloc(1, size, &renderstate.main.tt); }
 void* external_realloc(void* ptr, size_t size) { return L_realloc(ptr, size, &renderstate.main.tt); }
 void external_free(void* ptr) { return L_free(ptr, &renderstate.main.tt); }
 #define STBDS_REALLOC(context,ptr,size) external_realloc(ptr, size)
@@ -17,10 +18,13 @@ void external_free(void* ptr) { return L_free(ptr, &renderstate.main.tt); }
 #define STB_DS_IMPLEMENTATION
 #include "stb_ds.h"  // Pipeline keying using this, I'm the STB_DS_IMPLEMENTATION here
 
-#warning TODO: Set STB_IMAGE allocators
+// STB Image for image file loading, with the main thread alloc tracker.
+#define STBI_MALLOC(sz)           external_malloc(sz)
+#define STBI_REALLOC(p,newsz)     external_realloc(p, newsz)
+#define STBI_FREE(p)              external_free(p)
 #define STB_IMAGE_IMPLEMENTATION
- #include "stb_image.h"
-#include <iterator>
+#include "stb_image.h"
+
 
 // NOTE(Liam): The only mutable internal state for renderer is this renderstate.
 // All other global state here should be const
@@ -34,17 +38,17 @@ const u32 engine_version = VK_MAKE_VERSION(0, 0, 0);
 
 
 // Validation layers:
-#ifdef NDEBUG
-const b32 request_validation_layers = 0;
-const char* const* validation_layers = NULL;
-const u32 validation_layers_count = 0;
-#else
-const b32 request_validation_layers = 1;
+// #ifdef NDEBUG
+// const b32 request_validation_layers = 0;
+// const char* const* validation_layers = NULL;
+// const u32 validation_layers_count = 0;
+// #else
+// const b32 request_validation_layers = 1;
 const char* const validation_layers[] = {
     "VK_LAYER_KHRONOS_validation"
 };
 const u32 validation_layers_count = sizeof(validation_layers) / sizeof(char*);
-#endif
+// #endif
 
 
 // Vulkan Instance Extensions
@@ -796,6 +800,12 @@ void Renderer_DrawFrame()
         // Swapchain was out of date, so try again.
         goto retry_with_resized_window;
     }
+#ifdef NDEBUG
+    else if (acquire_result == VK_TIMEOUT)
+    {
+        printf("Timeout occurred. Only waiting one second in debug mode to detect deadlocks/hangs.\n(If you're screen turned off and that caused this crash, don't worry, that won't happen in release mode!\n)");
+    }
+#endif
     VK_CHECK(acquire_result);
 
     // Now we can safely reset the rendering complete fence.
@@ -1523,9 +1533,8 @@ void create_or_recreate_swapchain()
         // Requesting in pixel coordinates not screen coordinates because some HiDPI displays make a distinction there
         // and we want to actually render to each and every pixel available on the monitor
         int width, height;
-        SDL_assert(
-            SDL_GetWindowSizeInPixels(renderstate.window, &width, &height)
-        );
+        bool success = SDL_GetWindowSizeInPixels(renderstate.window, &width, &height);
+        SDL_assert(success && "SDL_GetWindowSizeInPixels failed.");
 
         VkExtent2D actual_extent = { (u32)width, (u32)height };
 
@@ -1553,7 +1562,6 @@ void create_or_recreate_swapchain()
     {
         min_image_count = details.capabilities.maxImageCount;
     }
-
 
     // Swapchain Create Info
     VkSwapchainKHR old_swapchain = renderstate.swapchain;

@@ -3,9 +3,6 @@
 #include "internal_state.h"
 
 
-#warning Not sure I need sampler_type in pass resource usage
-
-
 void bindless_heap_init();
 void bindless_heap_shutdown();
 void bindless_heap_create_all_samplers();
@@ -381,10 +378,15 @@ void single_resource_barrier(VkCommandBuffer cmd, FG_Resource* res, VkDependency
         .pNext                     = NULL,
         .dependencyFlags           = dep_flags
     };
+
+    // Declare these dudes before the if state so they aren't popped off the stack in release mode holy fucking shit 
+    VkBufferMemoryBarrier2 buffer_barrier = {};
+    VkImageMemoryBarrier2 image_barrier = {};
+
     if (res->type == FG_RESOURCE_TYPE_BUFFER)
     {
-        VkBufferMemoryBarrier2 buffer_barrier = {
-            .sType                = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
+        buffer_barrier = (VkBufferMemoryBarrier2){
+            .sType                = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER_2,
             .pNext                = NULL,
             .srcStageMask         = res->current_stage,
             .srcAccessMask        = res->current_access,
@@ -401,7 +403,7 @@ void single_resource_barrier(VkCommandBuffer cmd, FG_Resource* res, VkDependency
     }
     else if (res->type == FG_RESOURCE_TYPE_IMAGE)
     {
-        VkImageMemoryBarrier2 image_barrier = {
+        image_barrier = (VkImageMemoryBarrier2){
             .sType                = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
             .pNext                = NULL,
             .srcStageMask         = res->current_stage,

@@ -18,6 +18,12 @@ int main(int argc, char *argv[])
         1280, 720
     });
 
+    Renderer_InitInfo renderer_info = {
+        .window = window,
+        .enable_validation = 1//is_debugging
+    };
+    Renderer_Init(&renderer_info);
+
     // Load test scene (This would normally happen after renderer init, but for initial test, we don't)
     //   Realistically, the splash screen assets would load first, then the main menu assets
     //   And while the user is on the main menu, we are loading the prefabs.
@@ -32,10 +38,6 @@ int main(int argc, char *argv[])
         SDL_Log("Mesh 0 prim %d has %zu indices\n", i, asset3->meshes[0].primitives[i].index_count);
     }
     Mesh* test_mesh = &asset3->meshes[1];
-    
-
-    Renderer_InitInfo renderer_info = { .window = window, .enable_validation = is_debugging };
-    Renderer_Init(&renderer_info);
 
     // Testing Scene and ECS
     Scene scene;

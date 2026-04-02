@@ -9,28 +9,31 @@ void create_startup_resources();
 void create_window_dependent_resources();
 void create_scene_resources();
 
-uint32_t create_resource_with_buffer_data(
-    const char* debug_name, FG_ResourceFlags flags,
-    VkBufferUsageFlags usage, size_t size, void* data
-    );
+uint32_t create_resource_with_buffer_data(const char* debug_name, FG_ResourceFlags flags, VkBufferUsageFlags usage, size_t size, void* data);
 PrimitiveRIDs create_primitive_resources(
-    const char* debug_name, FG_ResourceFlags shared_flags, uint32_t material_index,
-    uint32_t index_count, uint32_t vertex_count,
-    uint32_t* indices,
-    glm::vec3* positions, glm::vec2* texcoords, glm::vec3* normals, glm::vec3* colors,
-    glm::uvec4* joint_ids, glm::vec4* joint_weights  // Joints only for skinned meshes
-    );
-uint32_t create_mipmapped_texture2d_resource(const char* debug_name, FG_ResourceFlags flags,
-     const uint8_t* data, uint64_t data_size,
-     uint32_t width, uint32_t height, VkFormat format
+    const char*       debug_name,
+    FG_ResourceFlags  shared_flags,
+    uint32_t          material_index,
+    uint32_t          index_count,
+    uint32_t          vertex_count,
+    uint32_t*         indices,
+    glm::vec3*        positions,
+    glm::vec2*        texcoords,
+    glm::vec3*        normals,
+    glm::vec3*        colors,
+    glm::uvec4*       joint_ids,
+    glm::vec4*        joint_weights
 );
-
-// NOTE: Not using an optimized built-in for count leading zeros
-// because mipmaps level counting is not a bottleneck and Jaime was having problems with
-// C++20 features.
-// #include <bit>  // compute_num_mip_levels() uses std::countl_zero()
-// // NOTE: If porting to C, C23 has stdc_leading_zeros() in <stdbit.h> header
 uint32_t compute_num_mip_levels(uint32_t image_level0_width, uint32_t image_level0_height);
+uint32_t create_mipmapped_texture2d_resource(
+    const char*       debug_name,
+    FG_ResourceFlags  flags,
+    const uint8_t*    data,
+    uint64_t          data_size,
+    uint32_t          width,
+    uint32_t          height, 
+    VkFormat          format
+);
 
 
 void CreateOrRecreateResources(FG_ResourceFlags types_to_create)
@@ -52,8 +55,12 @@ void CreateOrRecreateResources(FG_ResourceFlags types_to_create)
         }
     }
 
+    
+    // The request resource types have now been emptied
+    // So we recreate them...
 
     FG_ResourceFlags flags;
+
 
     flags = FG_RESOURCE_FLAGS_WINDOW_DEPENDENT;
     if ((flags & types_to_create) == types_to_create)
@@ -78,6 +85,7 @@ void CreateOrRecreateResources(FG_ResourceFlags types_to_create)
         create_scene_resources();
     }
     
+
 #ifndef NDEBUG
     // Check we haven't left any gaps in the array
     for (uint32_t rid = 0; rid < renderstate.registry.resource_count; ++rid)
@@ -309,17 +317,6 @@ void create_scene_resources()
     Scene_InitInfo* init_info = &renderstate.next_scene_info;
     ResourceIDs* rids = &renderstate.rids;
 
-    /*
-        NOTES For 1st April:
-        Only need to worry about:
-        - Static Mesh Data (the joints are passed by the animation system)
-        - Gather vertextype, e.g. static vs skinned from custom properties?
-
-        - Load textures as resources (automatically gives them an rid in res->image_bindless_index)
-        - Get material data
-    
-    */
-
     ///////////////////////////////////////////////////////////////////////////////////////////////////
     // TODO: Account for animated meshes as well                                                     //
     // TODO: Create stylised gradients via colour buffer for characters meshes (i.e. skinned meshes) //
@@ -471,11 +468,18 @@ uint32_t create_resource_with_buffer_data(const char* debug_name, FG_ResourceFla
 }
 
 PrimitiveRIDs create_primitive_resources(
-    const char* debug_name, FG_ResourceFlags shared_flags, uint32_t material_index,
-    uint32_t index_count, uint32_t vertex_count,
-    uint32_t* indices,
-    glm::vec3* positions, glm::vec2* texcoords, glm::vec3* normals, glm::vec3* colors,
-    glm::uvec4* joint_ids, glm::vec4* joint_weights  // Joints only for skinned meshes
+    const char*       debug_name,
+    FG_ResourceFlags  shared_flags,
+    uint32_t          material_index,
+    uint32_t          index_count,
+    uint32_t          vertex_count,
+    uint32_t*         indices,
+    glm::vec3*        positions,
+    glm::vec2*        texcoords,
+    glm::vec3*        normals,
+    glm::vec3*        colors,
+    glm::uvec4*       joint_ids,
+    glm::vec4*        joint_weights
 )
 {
     // Required vertex attributes
@@ -551,6 +555,13 @@ PrimitiveRIDs create_primitive_resources(
 
 uint32_t compute_num_mip_levels(uint32_t image_level0_width, uint32_t image_level0_height)
 {
+    /*
+        NOTE: Not using an optimized built-in for count leading zeros
+        because mipmaps level counting is not a bottleneck and Jaime was having problems with
+        C++20 features.
+        #include <bit>  // compute_num_mip_levels() uses std::countl_zero()
+        // NOTE: If porting to C, C23 has stdc_leading_zeros() in <stdbit.h> header
+    */
     uint32_t bits = image_level0_width | image_level0_height;
 
     uint32_t leading_zeros = 0;
@@ -570,9 +581,15 @@ uint32_t compute_num_mip_levels(uint32_t image_level0_width, uint32_t image_leve
 }
 
 
-uint32_t create_mipmapped_texture2d_resource(const char* debug_name, FG_ResourceFlags flags,
-     const uint8_t* data, uint64_t data_size,
-     uint32_t width, uint32_t height, VkFormat format)
+uint32_t create_mipmapped_texture2d_resource(
+    const char*       debug_name,
+    FG_ResourceFlags  flags,
+    const uint8_t*    data,
+    uint64_t          data_size,
+    uint32_t          width,
+    uint32_t          height, 
+    VkFormat          format
+)
 {
     uint32_t miplevel_count = compute_num_mip_levels(width, height);
 
