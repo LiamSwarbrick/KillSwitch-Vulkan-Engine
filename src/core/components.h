@@ -3,7 +3,8 @@
 
 #include "glm/glm.hpp"
 #include "glm/gtc/quaternion.hpp"
-#include "renderer/renderer.h"
+#include "renderer/render_types.h"
+#include "core/assetsys.h"
 
 struct C_Transform
 {
@@ -13,15 +14,28 @@ struct C_Transform
     glm::mat4 matrix;
 };
 
-// struct C_StaticMesh
-// {
-//     MeshPrefab mesh_prefab;
-// };
+struct C_StaticMesh
+{
+	Mesh* mesh;
+	Asset* parent_asset;
+    MeshPrefab renderer_prefab;  // Loaded by renderer (empty before that)
+};
 
 struct C_AnimatedMesh
 {
-    MeshPrefab mesh_prefab;
-    // SkeletalAnimationState anim_state;  // <-TODO
+    Mesh* mesh;             
+    Asset* asset;  
+    MeshPrefab renderer_prefab;
+
+    // animator states
+    int currentAnimation;
+    float animationTime;
+    bool isPlaying;
+    bool isLooping;
+
+	// skeletal animation data
+    uint32_t joint_count;
+    glm::mat4* joint_matrices;
 };
 
 // struct C_Mesh
