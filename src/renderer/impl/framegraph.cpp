@@ -255,7 +255,7 @@ void fg_execute_pass(uint32_t pass_idx, VkCommandBuffer cmd)
 
             SDL_assert(usage->rid < renderstate.registry.resource_count);
             FG_Resource* res = &renderstate.registry.resources[usage->rid];
-
+            
             VkRenderingAttachmentInfo attachment = {
                 .sType               = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
                 .pNext               = NULL,

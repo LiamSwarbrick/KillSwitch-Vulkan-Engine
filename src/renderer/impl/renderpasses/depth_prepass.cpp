@@ -31,7 +31,7 @@ void DepthPrepass_Execute(VkCommandBuffer cmd, void* user_data)
             .front_face     = VK_FRONT_FACE_COUNTER_CLOCKWISE,
             .msaa_samples   = PK_MultisamplingFlag(renderstate.multisampling_count_flag)
         };
-
+#warning TODO: FIX DEPTH (also don't have depth attached to swapchain, cuz swapchain doesn't support msaa)
         ExecuteDrawCall(cmd, drawcall, key, push_pass);
     }
 }

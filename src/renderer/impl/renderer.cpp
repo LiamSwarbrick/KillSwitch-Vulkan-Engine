@@ -1004,7 +1004,7 @@ void Renderer_DrawFrame()
         .debug_name = "Swapchain Pass",
         .input_count = 0,
         .inputs = {},
-        .output_count = 1,
+        .output_count = 2,
         .outputs = {
             {
                 .rid = swapchain_image_resource_id,
