@@ -900,7 +900,7 @@ void Renderer_DrawFrame()
     ImGui::NewFrame();
 
     // Build ImGui UI here, e.g.
-    ImGui::ShowDemoWindow();  // TODO: Remove after testing
+    // ImGui::ShowDemoWindow();  // TODO: Remove after testing
 
     // Finalize ImGui draw data (must happen before command buffer recording)
     ImGui::Render();
@@ -1019,6 +1019,22 @@ void Renderer_DrawFrame()
                 .load_op = VK_ATTACHMENT_LOAD_OP_CLEAR,
                 .store_op = VK_ATTACHMENT_STORE_OP_STORE,
                 .clear_value = { .color = { .float32 = { 0.392f, 0.584f, 0.929f, 0.0f } } }
+            },
+
+            // Depth attachment
+            // TODO: Either take this out of the swapchain pass
+            //       or update imgui init info with this depth buffer knowledge
+            {
+                .rid = renderstate.rids.depth_buffer_rid,
+                .usage_flags = FG_USAGE_DEPTH,
+
+                .layout = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL,
+                .access = VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_READ_BIT, 
+                .stage  = VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT,
+                .queue_family_index = renderstate.queue_family_indices.graphics_family,
+
+                .load_op = VK_ATTACHMENT_LOAD_OP_LOAD,  // <- LOAD (DO NOT CLEAR THE DEPTH PREPASS INFORMATION LOL)
+                .store_op = VK_ATTACHMENT_STORE_OP_DONT_CARE, 
             }
         },
 

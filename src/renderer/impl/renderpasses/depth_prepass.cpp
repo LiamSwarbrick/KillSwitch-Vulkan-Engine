@@ -10,8 +10,8 @@ void DepthPrepass_Execute(VkCommandBuffer cmd, void* user_data)
     // No inputs, so doesn't care use push constant's upper bytes
     PushConstant_PassHeader push_pass = {};
 
-    uint32_t shader_id = SHADER_DEPTH;
-    uint32_t pass_type = PASS_TYPE_DEPTH_PREPASS;
+    const uint32_t shader_id = SHADER_DEPTH;
+    const uint32_t pass_type = PASS_TYPE_DEPTH_PREPASS;
     for (uint32_t i = 0; i < renderstate.drawcalls_collection.array[shader_id].drawcall_count; ++i)
     {
         DrawCall drawcall = renderstate.drawcalls_collection.array[shader_id].drawcalls[i];
@@ -34,5 +34,4 @@ void DepthPrepass_Execute(VkCommandBuffer cmd, void* user_data)
 
         ExecuteDrawCall(cmd, drawcall, key, push_pass);
     }
-    ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), cmd);
 }

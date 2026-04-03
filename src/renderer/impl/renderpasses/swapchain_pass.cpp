@@ -32,7 +32,7 @@ void SwapchainPass_Execute(VkCommandBuffer cmd, void* user_data)
     // for sampling the g-buffers. (Similarly for postprocess passes).
     PushConstant_PassHeader push_pass = {};
 
-    // Draw unlit
+    // Draw unlit (NOTE: Make sure this is specifically opaques, transparents require a different pipeline key)
     uint32_t shader_id = SHADER_UNLIT;
     uint32_t pass_type = PASS_TYPE_SWAPCHAIN_PASS;
     for (uint32_t i = 0; i < renderstate.drawcalls_collection.array[shader_id].drawcall_count; ++i)
@@ -45,9 +45,9 @@ void SwapchainPass_Execute(VkCommandBuffer cmd, void* user_data)
             .pass_type      = pass_type,
 
             .vertex_type    = drawcall.renderable->mesh_prefab.vertex_type,
-            .depth_test     = 0,  // TODO See warning above
-            .depth_write    = 0,  // TODO See warning above
-            .depth_op       = VK_COMPARE_OP_NEVER,  // TODO See above warning/
+            .depth_test     = 1,
+            .depth_write    = 0,  // Disable writing
+            .depth_op       = VK_COMPARE_OP_EQUAL,  // <- Only draw if it matches prepass exactly (TODO: Is that always a good idea)
             .stencil_mode   = 0,
             .cull_mode      = VK_CULL_MODE_BACK_BIT,
             .blend_mode     = BLEND_MODE_OPAQUE,
