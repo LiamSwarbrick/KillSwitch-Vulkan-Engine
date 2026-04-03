@@ -2,10 +2,6 @@
 #include "../internal_state.h"
 #include "../../render_types.h"
 #include "shaders.h"
-#include "glm/glm.hpp"
-
-#define _USE_MATH_DEFINES
-#include <math.h>
 
 /*
 TODO IMPORTANT:
@@ -49,7 +45,6 @@ void SwapchainPass_Execute(VkCommandBuffer cmd, void* user_data)
             .pass_type      = pass_type,
 
             .vertex_type    = drawcall.renderable->mesh_prefab.vertex_type,
-            #warning As soon as drawcall works, put this into an opaque renderpass before swapchain pass, and this pass will have a depth buffer
             .depth_test     = 0,  // TODO See warning above
             .depth_write    = 0,  // TODO See warning above
             .depth_op       = VK_COMPARE_OP_NEVER,  // TODO See above warning/
@@ -57,7 +52,8 @@ void SwapchainPass_Execute(VkCommandBuffer cmd, void* user_data)
             .cull_mode      = VK_CULL_MODE_BACK_BIT,
             .blend_mode     = BLEND_MODE_OPAQUE,
             .polygon_mode   = VK_POLYGON_MODE_FILL,  // <- NOTE: When doing debug draw, can use lines
-            .front_face     = VK_FRONT_FACE_COUNTER_CLOCKWISE
+            .front_face     = VK_FRONT_FACE_COUNTER_CLOCKWISE,
+            .msaa_samples   = PKEY_MULTISAMPLING_1X  // <- Swapchain pass doesn't use msaa
         };
 
         ExecuteDrawCall(cmd, drawcall, key, push_pass);

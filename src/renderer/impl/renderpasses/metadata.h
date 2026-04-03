@@ -9,9 +9,8 @@
 
 typedef enum
 {
+    PASS_TYPE_DEPTH_PREPASS,
     PASS_TYPE_SWAPCHAIN_PASS,
-    PASS_TYPE_GBUFFER_WRITE,
-    PASS_TYPE_DEFERRED_LIGHTING_UNLIT,
 
     PASS_TYPE_COUNT,
     PASS_TYPE_INVALID
@@ -22,6 +21,7 @@ static_assert(PASS_TYPE_COUNT < 1 << PKEY_NUM_BITS_PASS_TYPE,
     "More passes than pipeline key can index. Must give more bits by increasing PKEY_NUM_BITS_PASS_TYPE in pipeline_hashing.h."
 );
 
+void DepthPrepass_Execute(VkCommandBuffer cmd, void* user_data);
 void SwapchainPass_Execute(VkCommandBuffer cmd, void* user_data);
 
 #endif  // RENDERER_RENDERPASSES_METADATA_PASS_H
