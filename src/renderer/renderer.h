@@ -6,19 +6,38 @@
 #include "render_types.h"
 #include "core/components.h"
 
+typedef struct Renderer_Settings
+{
+    b32         uncapped_fps;
+    uint32_t    msaa_sample_count;
+}
+Renderer_Settings;
+
+typedef struct Renderer_SettingsCapabilities
+{
+    b32         supports_uncapped_fps;
+    uint32_t    max_msaa_samples;
+}
+Renderer_SettingsCapabilities;
+
 typedef struct Renderer_InitInfo
 {
     SDL_Window* window;
     bool enable_validation;
+    Renderer_Settings preferred_initial_settings;
 }
-RendererInitInfo;
+Renderer_InitInfo;
 
 void Renderer_Init(const Renderer_InitInfo* info);
 void Renderer_Shutdown();
 void Renderer_ListenToWindowEvent(SDL_Event event);
+
+Renderer_SettingsCapabilities Renderer_GetSettingsCapabilities();
+Renderer_Settings Renderer_GetSettings();
+void Renderer_ChangeSettings(Renderer_Settings new_settings);
+
 void Renderer_PushRenderable(Renderable renderable);
 void Renderer_DrawFrame();
-
 
 typedef struct Scene_InitInfo
 {

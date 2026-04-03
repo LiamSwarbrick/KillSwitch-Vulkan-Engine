@@ -18,12 +18,26 @@ int main(int argc, char *argv[])
         1280, 720
     });
 
+    // NOTE: Currently checking validation in release mode, but on realse you would normally disable it
     Renderer_InitInfo renderer_info = {
         .window = window,
-        .enable_validation = 1//is_debugging
+        .enable_validation = 1,//is_debugging
+        .preferred_initial_settings = {  // Will fallback if these aren't possible
+            .uncapped_fps = 0,
+            .msaa_sample_count = 1
+        }
     };
     Renderer_Init(&renderer_info);
 
+    // // Set 4xMSAA to test settings API
+    // if (Renderer_GetSettingsCapabilities().max_msaa_samples >= 4)
+    // {
+    //     Renderer_Settings settings = Renderer_GetSettings();
+    //     settings.msaa_sample_count = 4;
+    //     Renderer_ChangeSettings(settings);
+    // }
+
+    
     // Load test scene (This would normally happen after renderer init, but for initial test, we don't)
     //   Realistically, the splash screen assets would load first, then the main menu assets
     //   And while the user is on the main menu, we are loading the prefabs.

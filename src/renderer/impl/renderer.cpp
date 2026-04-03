@@ -32,34 +32,34 @@ void external_free(void* ptr) { return L_free(ptr, &renderstate.main.tt); }
 
 #define API_VERSION VK_API_VERSION_1_4
 const char* app_name = "quantocostoilengino";
-const u32 app_version = VK_MAKE_VERSION(0, 0, 0);
+const uint32_t app_version = VK_MAKE_VERSION(0, 0, 0);
 const char* engine_name = "advengine_renderer_in_progress";
-const u32 engine_version = VK_MAKE_VERSION(0, 0, 0);
+const uint32_t engine_version = VK_MAKE_VERSION(0, 0, 0);
 
 
 // Validation layers:
 // #ifdef NDEBUG
 // const b32 request_validation_layers = 0;
 // const char* const* validation_layers = NULL;
-// const u32 validation_layers_count = 0;
+// const uint32_t validation_layers_count = 0;
 // #else
 // const b32 request_validation_layers = 1;
 const char* const validation_layers[] = {
     "VK_LAYER_KHRONOS_validation"
 };
-const u32 validation_layers_count = sizeof(validation_layers) / sizeof(char*);
+const uint32_t validation_layers_count = sizeof(validation_layers) / sizeof(char*);
 // #endif
 
 
 // Vulkan Instance Extensions
 #ifdef NDEBUG
 const char* const extra_instance_extensions[] = { "" };
-const u32 extra_instance_extensions_count = 0;
+const uint32_t extra_instance_extensions_count = 0;
 #else
 const char* const extra_instance_extensions[] = {
     VK_EXT_DEBUG_UTILS_EXTENSION_NAME
 };
-const u32 extra_instance_extensions_count = sizeof(extra_instance_extensions) / sizeof(char*);
+const uint32_t extra_instance_extensions_count = sizeof(extra_instance_extensions) / sizeof(char*);
 #endif
 
 
@@ -67,7 +67,7 @@ const u32 extra_instance_extensions_count = sizeof(extra_instance_extensions) / 
 const char* const device_extensions[] = {
     VK_KHR_SWAPCHAIN_EXTENSION_NAME,
 };
-const u32 device_extensions_count = sizeof(device_extensions) / sizeof(char*);
+const uint32_t device_extensions_count = sizeof(device_extensions) / sizeof(char*);
 
 
 // Vulkan Physical Device Features
@@ -151,7 +151,7 @@ void Renderer_Init(const Renderer_InitInfo* info)
     }
 
     // Display Vulkan loader version
-    u32 loader_api_version = VK_API_VERSION_1_0;
+    uint32_t loader_api_version = VK_API_VERSION_1_0;
     if (vkEnumerateInstanceVersion)
     {
         // This proc was added in Vulkan 1.1
@@ -165,7 +165,7 @@ void Renderer_Init(const Renderer_InitInfo* info)
     // Enable validation layers
     if (renderstate.using_validation_layers)
     {
-        u32 available_layer_count;
+        uint32_t available_layer_count;
         VK_CHECK(vkEnumerateInstanceLayerProperties(&available_layer_count, NULL));
         
         VkLayerProperties* available_layers = (VkLayerProperties*)L_calloc(available_layer_count, sizeof(VkLayerProperties), &renderstate.main.tt);
@@ -173,10 +173,10 @@ void Renderer_Init(const Renderer_InitInfo* info)
         
         // For each layer in validation_layers, make sure it's in the available_layers array
         b32 found_all_layers = 1;
-        for (u32 i = 0; i < validation_layers_count; ++i)
+        for (uint32_t i = 0; i < validation_layers_count; ++i)
         {
             b32 requested_layer_available = 0;
-            for (u32 j = 0; j < available_layer_count; ++j)
+            for (uint32_t j = 0; j < available_layer_count; ++j)
             {
                 if (strcmp(validation_layers[i], available_layers[j].layerName) == 0)
                 {
@@ -222,22 +222,22 @@ void Renderer_Init(const Renderer_InitInfo* info)
 
         // TODO: If using optional functionality, query available instance extensions first with vkEnumerateInstanceExtensionProperties()
         // {
-        //     u32 extension_count = 0;
+        //     uint32_t extension_count = 0;
         //     vkEnumerateInstanceExtensionProperties(NULL, &extension_count, NULL);
         //     etc...
         // }
 
-        u32 sdl_extensions_count = 0;
+        uint32_t sdl_extensions_count = 0;
         char const* const* sdl_extensions = SDL_Vulkan_GetInstanceExtensions(&sdl_extensions_count);
 
         // Also include the debug utils extensions if using_validation_layers
-        u32 instance_extensions_count = sdl_extensions_count + extra_instance_extensions_count + (renderstate.using_validation_layers ? 1 : 0);
+        uint32_t instance_extensions_count = sdl_extensions_count + extra_instance_extensions_count + (renderstate.using_validation_layers ? 1 : 0);
         const char** instance_extensions = (const char**)L_calloc(sizeof(char*), instance_extensions_count, &renderstate.main.tt);
-        for (u32 i = 0; i < sdl_extensions_count; ++i)
+        for (uint32_t i = 0; i < sdl_extensions_count; ++i)
         {
             instance_extensions[i] = sdl_extensions[i];
         }
-        for (u32 i = 0; i < extra_instance_extensions_count; ++i)
+        for (uint32_t i = 0; i < extra_instance_extensions_count; ++i)
         {
             instance_extensions[sdl_extensions_count + i] = extra_instance_extensions[i];
         }
@@ -250,7 +250,7 @@ void Renderer_Init(const Renderer_InitInfo* info)
         printf("Instance Extensions: ");
         if (instance_extensions_count)
         {
-            for (u32 i = 0; i < instance_extensions_count-1; ++i)
+            for (uint32_t i = 0; i < instance_extensions_count-1; ++i)
                 printf("%s, ", instance_extensions[i]);
             printf("%s\n", instance_extensions[instance_extensions_count-1]);
         }
@@ -341,7 +341,7 @@ void Renderer_Init(const Renderer_InitInfo* info)
     {
         renderstate.physical_device = VK_NULL_HANDLE;
 
-        u32 device_count = 0;
+        uint32_t device_count = 0;
         VK_CHECK(vkEnumeratePhysicalDevices(renderstate.instance, &device_count, NULL));
         if (device_count == 0)
         {
@@ -355,7 +355,7 @@ void Renderer_Init(const Renderer_InitInfo* info)
         // Give each device a suitability score and pick the best one (e.g. dGPU > iGPU)
         int* device_suitability_score = (int*)L_calloc(device_count, sizeof(int), &renderstate.main.tt);
         printf("\n");
-        for (u32 i = 0; i < device_count; ++i)
+        for (uint32_t i = 0; i < device_count; ++i)
         {
             printf("Device %d:\n", i);
             device_suitability_score[i] = score_physical_device_and_check_required_features(devices[i]);
@@ -364,7 +364,7 @@ void Renderer_Init(const Renderer_InitInfo* info)
         
         // Select device with highest scored suitability
         int candidate_device_index = 0;
-        for (u32 i = 0; i < device_count; ++i)
+        for (uint32_t i = 0; i < device_count; ++i)
         {
             if (device_suitability_score[i] > device_suitability_score[candidate_device_index])
             {
@@ -385,7 +385,7 @@ void Renderer_Init(const Renderer_InitInfo* info)
         printf("Device Extensions: ");
         if (device_extensions_count)
         {
-            for (u32 i = 0; i < device_extensions_count-1; ++i)
+            for (uint32_t i = 0; i < device_extensions_count-1; ++i)
                 printf("%s, ", device_extensions[i]);
             printf("%s\n", device_extensions[device_extensions_count-1]);
         }
@@ -533,7 +533,15 @@ void Renderer_Init(const Renderer_InitInfo* info)
 
     renderstate.rids.window_resources_created = 0;
     renderstate.rids.startup_resources_created = 0;
-    _Renderer_OnWindowResize();  // <-- Creates swapchain and window dependent resources
+
+    // Set settings now that we know the capabilities
+    renderstate.swapchain = VK_NULL_HANDLE;
+    Renderer_ChangeSettings(info->preferred_initial_settings);  // <- May call _Renderer_OnWindowResize automatically
+    
+    if (renderstate.swapchain == VK_NULL_HANDLE)
+    {
+        _Renderer_OnWindowResize();  // <-- Creates swapchain and window dependent resources
+    }
     CreateOrRecreateResources(FG_RESOURCE_FLAGS_ON_STARTUP);
 
     // Using arrays of drawcalls per shader type.
@@ -560,7 +568,7 @@ void Renderer_Init(const Renderer_InitInfo* info)
             .queueFamilyIndex  = renderstate.queue_family_indices.graphics_family
         };
 
-        for (u32 i = 0; i < NUM_FRAMES_IN_FLIGHT; ++i)
+        for (uint32_t i = 0; i < NUM_FRAMES_IN_FLIGHT; ++i)
         {
             VK_CHECK(vkCreateFence(renderstate.device, &render_fence_create_info, NULL, &renderstate.frames[i].rendering_complete_fence));
             VK_CHECK(vkCreateCommandPool(renderstate.device, &gfx_cmdpool_create_info, NULL, &renderstate.frames[i].graphics_command_pool));
@@ -737,6 +745,77 @@ void _Renderer_OnWindowMinimize()
     // TODO: Pause rendering on minimize
 }
 
+Renderer_SettingsCapabilities Renderer_GetSettingsCapabilities()
+{
+    SDL_assert(renderstate.device != VK_NULL_HANDLE &&
+        "Can only request/change settings & capabilities after VkDevice creation"
+    );
+
+    Renderer_SettingsCapabilities capabilities = {};
+
+    // Supports uncapped fps
+    SwapchainSupportDetails details = get_and_alloc_swap_chain_support_details(renderstate.physical_device);
+    for (uint32_t i = 0; i < details.present_mode_count; ++i)
+    {
+        if (details.present_modes[i] == VK_PRESENT_MODE_MAILBOX_KHR)
+        {
+            capabilities.supports_uncapped_fps = 1;
+        }
+    }
+    free_swap_chain_support_details(details);
+
+    // Max MSAA Samples is the minimum of either support color or depth samples (bitwise & to get the crossover)
+    VkSampleCountFlags msaa_counts =
+          renderstate.physical_device_properties.limits.framebufferColorSampleCounts
+        & renderstate.physical_device_properties.limits.framebufferDepthSampleCounts;
+    if      (msaa_counts & VK_SAMPLE_COUNT_64_BIT) { capabilities.max_msaa_samples = 64; }
+    else if (msaa_counts & VK_SAMPLE_COUNT_32_BIT) { capabilities.max_msaa_samples = 32; }
+    else if (msaa_counts & VK_SAMPLE_COUNT_16_BIT) { capabilities.max_msaa_samples = 16; }
+    else if (msaa_counts & VK_SAMPLE_COUNT_8_BIT)  { capabilities.max_msaa_samples = 8; }
+    else if (msaa_counts & VK_SAMPLE_COUNT_4_BIT)  { capabilities.max_msaa_samples = 4; }
+    else if (msaa_counts & VK_SAMPLE_COUNT_2_BIT)  { capabilities.max_msaa_samples = 2; }
+    else capabilities.max_msaa_samples = 1;
+
+    return capabilities;
+}
+
+Renderer_Settings Renderer_GetSettings()
+{
+    SDL_assert(renderstate.device != VK_NULL_HANDLE &&
+        "Can only request/change settings & capabilities after VkDevice creation"
+    );
+    return renderstate.settings;
+}
+
+void Renderer_ChangeSettings(Renderer_Settings new_settings)
+{
+    SDL_assert(renderstate.device != VK_NULL_HANDLE &&
+        "Can only request/change settings & capabilities after VkDevice creation"
+    );
+    
+    Renderer_Settings old_settings = renderstate.settings;
+    renderstate.settings = new_settings;
+
+    switch (renderstate.settings.msaa_sample_count)
+    {
+        case 64: renderstate.multisampling_count_flag = VK_SAMPLE_COUNT_64_BIT; break;
+        case 32: renderstate.multisampling_count_flag = VK_SAMPLE_COUNT_32_BIT; break;
+        case 16: renderstate.multisampling_count_flag = VK_SAMPLE_COUNT_16_BIT; break;
+        case 8:  renderstate.multisampling_count_flag = VK_SAMPLE_COUNT_8_BIT; break;
+        case 4:  renderstate.multisampling_count_flag = VK_SAMPLE_COUNT_4_BIT; break;
+        case 2:  renderstate.multisampling_count_flag = VK_SAMPLE_COUNT_2_BIT; break;
+        case 1:  renderstate.multisampling_count_flag = VK_SAMPLE_COUNT_1_BIT; break;
+        default: SDL_assert(0 && "Invalid multisampling count");
+    }
+
+    if ((new_settings.uncapped_fps && !old_settings.uncapped_fps)
+        || (new_settings.msaa_sample_count != old_settings.msaa_sample_count)
+    )
+    {
+        _Renderer_OnWindowResize();
+    }
+}
+
 void Renderer_ChangeScene(Scene_InitInfo new_scene_info)
 {
     renderstate.is_next_scene_set = 1;
@@ -763,7 +842,7 @@ void Renderer_DrawFrame()
     // Latency hiding:
     // Double/triple buffering command buffers allows us to start recording the next
     // frame's command buffer before the GPU has done with the current frame's one.
-    u32 frame_in_flight = renderstate.frame_number % NUM_FRAMES_IN_FLIGHT;
+    uint32_t frame_in_flight = renderstate.frame_number % NUM_FRAMES_IN_FLIGHT;
 
     // Wait for rendering to be complete for this frame in flight.
     // NOTE: We don't reset the fence until after we know the swapchain does not need recreating.
@@ -779,7 +858,7 @@ void Renderer_DrawFrame()
     // NOTE: If another frame isn't finished with the swapchain image, the GPU must't execute commands on the next swapchain image.
     //       so it must have attained the image_aquired semaphore first.
     retry_with_resized_window:
-    u32 swapchain_image_index;
+    uint32_t swapchain_image_index;
     VkResult acquire_result = vkAcquireNextImageKHR(
         renderstate.device,
         renderstate.swapchain,
@@ -836,15 +915,14 @@ void Renderer_DrawFrame()
             renderables_per_shader[SHADER_OUTLINE].append(r);
             renderables_per_shader[SHADER_SHADOWMAP].append(r);
         
-        Importantly, renderables are collected per frame, (not true of the underlying assets).
-        For instance, an outline is togglable in gameplay code. Same with visibility.
+        Importantly, renderables have per frame data like transforms etc.
+        For instance, an outline effect should be togglable in gameplay code. Same with visibility.
     */
 
     BeginDrawCalls();
 
-    // NOTE: Renderables need to be alive the whole time, (drawcalls point to renderables)
-    //       This is why we'll actually get them through the entity system via the DrawFrame args maybe (or just query the ecs)
-    #if 1  // TEMP:  <- Temporary drawcalls here
+    #if 1  // TEMP:  <- Temporary push renderables here, the actual renderables are pushed from the game module
+    // NOTE: Renderables need to be alive the whole time, (drawcalls point to renderables when they are pushed, instead of copied)
         Renderable r = {
             .transform    = glm::mat4(1.0f),
             .mesh_prefab  = renderstate.rids.dummy_mesh,
@@ -885,45 +963,72 @@ void Renderer_DrawFrame()
 
     FG_Empty();
 
-    // Swapchain pass
+    // Swapchain rid changes each frame
     uint32_t swapchain_image_resource_id = renderstate.rids.swapchain_image_rids[swapchain_image_index];
-    uint32_t swapchain_pass;
-    {
-        // RenderPassDesc forward_opaque_pass_desc = {
 
-        // }
 
-        // Temporary basic pass for swapchain rendering
-        RenderPassDesc swapchain_pass_desc = {
-            .debug_name = "Swapchain Pass",
-            .input_count = 0,
-            .inputs = {},
-            .output_count = 1,
-            .outputs = {
-                {
-                    .rid = swapchain_image_resource_id,
-                    .usage_flags = FG_USAGE_COLOR,
-                    .sampler_type = FG_SAMPLER_NOT_SAMPLABLE,  // NOTE: Outputs attachment, can ignore sampler_type
+    // Depth prepass
+    RenderPassDesc depth_prepass_desc = {
+        .debug_name = "Depth Prepass",
+        .input_count = {},
+        .output_count = 1,
+        .outputs = {
+            {
+                .rid = renderstate.rids.depth_buffer_rid,
+                .usage_flags = FG_USAGE_DEPTH,
+                .sampler_type = FG_SAMPLER_NOT_SAMPLABLE,
 
-                    .layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-                    .access = VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,
-                    .stage  = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
-                    .queue_family_index = renderstate.queue_family_indices.graphics_family,
-                    
-                    .load_op = VK_ATTACHMENT_LOAD_OP_CLEAR,
-                    .store_op = VK_ATTACHMENT_STORE_OP_STORE,
-                    .clear_value = { .color = { .float32 = { 0.392f, 0.584f, 0.929f, 0.0f } } }
-                }
-            },
+                .layout = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL,
+                .access = VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
+                .stage  = VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT,
+                .queue_family_index = renderstate.queue_family_indices.graphics_family,
 
-            .is_compute = 0,
-            .render_area = { .offset = { 0, 0 }, .extent = renderstate.swapchain_extent },
-            
-            .execute_callback = SwapchainPass_Execute,
-            .user_data = NULL
-        };
-        swapchain_pass = FG_AddPass(swapchain_pass_desc, PASS_TYPE_SWAPCHAIN_PASS);
-    }
+                .load_op = VK_ATTACHMENT_LOAD_OP_CLEAR,
+                .store_op = VK_ATTACHMENT_STORE_OP_STORE,
+                .clear_value = { .depthStencil = { 1.0f, 0 } }
+            }
+        },
+
+        .is_compute = 0,
+        .render_area = { .offset = { 0, 0 }, .extent = renderstate.swapchain_extent },
+        
+        .execute_callback = DepthPrepass_Execute,
+        .user_data = NULL
+    };
+    uint32_t depth_prepass = FG_AddPass(depth_prepass_desc, PASS_TYPE_DEPTH_PREPASS);
+
+    #warning USE DEPTH PREPASS IN A FORWARD PASS
+
+    // Swapchain pass
+    RenderPassDesc swapchain_pass_desc = {
+        .debug_name = "Swapchain Pass",
+        .input_count = 0,
+        .inputs = {},
+        .output_count = 1,
+        .outputs = {
+            {
+                .rid = swapchain_image_resource_id,
+                .usage_flags = FG_USAGE_COLOR,
+                .sampler_type = FG_SAMPLER_NOT_SAMPLABLE,  // NOTE: Outputs attachment, can ignore sampler_type
+
+                .layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+                .access = VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,
+                .stage  = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
+                .queue_family_index = renderstate.queue_family_indices.graphics_family,
+                
+                .load_op = VK_ATTACHMENT_LOAD_OP_CLEAR,
+                .store_op = VK_ATTACHMENT_STORE_OP_STORE,
+                .clear_value = { .color = { .float32 = { 0.392f, 0.584f, 0.929f, 0.0f } } }
+            }
+        },
+
+        .is_compute = 0,
+        .render_area = { .offset = { 0, 0 }, .extent = renderstate.swapchain_extent },
+        
+        .execute_callback = SwapchainPass_Execute,
+        .user_data = NULL
+    };
+    uint32_t swapchain_pass = FG_AddPass(swapchain_pass_desc, PASS_TYPE_SWAPCHAIN_PASS);
 
 
     
@@ -1033,12 +1138,12 @@ QueueFamilyIndices get_physical_device_queue_family_indices(VkPhysicalDevice phy
     QueueFamilyIndices queue_family_indices = {};
 
     // Each queue family index initialized to UINT32_MAX so we can test for failure
-    for (u32 i = 0; i < NUM_QUEUE_FAMILY_INDICES; ++i)
+    for (uint32_t i = 0; i < NUM_QUEUE_FAMILY_INDICES; ++i)
     {
         queue_family_indices.array[i] = UINT32_MAX;
     }
 
-    u32 queue_family_count = 0;
+    uint32_t queue_family_count = 0;
     vkGetPhysicalDeviceQueueFamilyProperties(physical_device, &queue_family_count, NULL);
 
     const uint32_t max_queue_families = 32;  // I want to abuse the stack with fixed arrays to keep malloc calls to a minimum. Doing this across the codebase would add up over time.
@@ -1052,7 +1157,7 @@ QueueFamilyIndices get_physical_device_queue_family_indices(VkPhysicalDevice phy
     b32 queue_families_support_for_presentation[max_queue_families] = {};
     b32 queue_families_support_for_transfer[max_queue_families]     = {};
     // etc.
-    for (u32 i = 0; i < queue_family_count; ++i)
+    for (uint32_t i = 0; i < queue_family_count; ++i)
     {
         printf("--- Queue family %d's bits: ", i);
         vklayer_print_queueflagbits((VkQueueFlagBits)queue_families[i].queueFlags);
@@ -1079,7 +1184,7 @@ QueueFamilyIndices get_physical_device_queue_family_indices(VkPhysicalDevice phy
 
     // Setting queue family indices:
     // We will prefer that the graphics and presentation family be on the same queue for best performance
-    for (u32 i = 0; i < queue_family_count; ++i)
+    for (uint32_t i = 0; i < queue_family_count; ++i)
     {
         if (queue_families_support_for_graphics[i] && queue_families_support_for_presentation[i])
         {
@@ -1088,7 +1193,7 @@ QueueFamilyIndices get_physical_device_queue_family_indices(VkPhysicalDevice phy
         }
     }
     // Otherwise, just find all the queue types we need
-    for (u32 i = 0; i < queue_family_count; ++i)
+    for (uint32_t i = 0; i < queue_family_count; ++i)
     {
         if (queue_families_support_for_graphics[i] && queue_family_indices.graphics_family == UINT32_MAX)
         {
@@ -1113,9 +1218,9 @@ int score_physical_device_and_check_required_features(VkPhysicalDevice physical_
     VkPhysicalDeviceProperties device_properties;
     vkGetPhysicalDeviceProperties(physical_device, &device_properties);
 
-    u32 supported_version_major = VK_API_VERSION_MAJOR(device_properties.apiVersion);
-    u32 supported_version_minor = VK_API_VERSION_MINOR(device_properties.apiVersion);
-    u32 supported_version_patch = VK_API_VERSION_PATCH(device_properties.apiVersion);
+    uint32_t supported_version_major = VK_API_VERSION_MAJOR(device_properties.apiVersion);
+    uint32_t supported_version_minor = VK_API_VERSION_MINOR(device_properties.apiVersion);
+    uint32_t supported_version_patch = VK_API_VERSION_PATCH(device_properties.apiVersion);
 
     printf("--- name: %s\n", device_properties.deviceName);
     printf("--- supports up to Vulkan %d.%d.%d\n",
@@ -1161,14 +1266,14 @@ int score_physical_device_and_check_required_features(VkPhysicalDevice physical_
 
         // Display memory heaps and types
         printf("--- Heaps: has %d memory heap.\n", memory_properties.memoryHeapCount);
-        for (u32 i = 0; i < memory_properties.memoryHeapCount; ++i)
+        for (uint32_t i = 0; i < memory_properties.memoryHeapCount; ++i)
         {
             printf("--- - heap %i: %lu MiB, flags: ", i, memory_properties.memoryHeaps[i].size / (1024*1024));
             vklayer_print_memoryheapflagbits(memory_properties.memoryHeaps[i].flags);
         }
 
         printf("--- Memory types: %d types\n", memory_properties.memoryTypeCount);
-        for (u32 i = 0; i < memory_properties.memoryTypeCount; ++i)
+        for (uint32_t i = 0; i < memory_properties.memoryTypeCount; ++i)
         {
             printf("--- - type %d: from heap %d, flags: ", i, memory_properties.memoryTypes[i].heapIndex);
             vklayer_print_memorypropertyflagbits(memory_properties.memoryTypes[i].propertyFlags);
@@ -1381,17 +1486,17 @@ int score_physical_device_and_check_required_features(VkPhysicalDevice physical_
         b32 all_required_extensions_available = 0;
         if (all_required_queues_supported)
         {
-            u32 available_extensions_count;
+            uint32_t available_extensions_count;
             vkEnumerateDeviceExtensionProperties(physical_device, NULL, &available_extensions_count, NULL);
             VkExtensionProperties* available_extensions = (VkExtensionProperties*)L_calloc(available_extensions_count, sizeof(VkExtensionProperties), &renderstate.main.tt);
             vkEnumerateDeviceExtensionProperties(physical_device, NULL, &available_extensions_count, available_extensions);
 
             // Check whether each required extension (device_extensions array) is in the available_extensions array
             all_required_extensions_available = 1;
-            for (u32 required_i = 0; required_i < device_extensions_count; ++required_i)
+            for (uint32_t required_i = 0; required_i < device_extensions_count; ++required_i)
             {
                 b32 required_extension_is_available = 0;
-                for (u32 available_i = 0; available_i < available_extensions_count; ++available_i)
+                for (uint32_t available_i = 0; available_i < available_extensions_count; ++available_i)
                 {
                     if (strcmp(device_extensions[required_i], available_extensions[available_i].extensionName) == 0)
                     {
@@ -1488,7 +1593,7 @@ void create_or_recreate_swapchain()
     // Choose format
     SDL_assert(details.format_count > 0);
     int chosen_format_index = 0;
-    for (u32 i = 0; i < details.format_count; ++i)
+    for (uint32_t i = 0; i < details.format_count; ++i)
     {
         if (details.formats[i].format == VK_FORMAT_B8G8R8A8_SRGB &&
             details.formats[i].colorSpace == VK_COLOR_SPACE_SRGB_NONLINEAR_KHR)
@@ -1500,9 +1605,9 @@ void create_or_recreate_swapchain()
 
     // Choose present mode
     chosen_present_mode = VK_PRESENT_MODE_FIFO_KHR;  // Only FIFO is guarunteed to be available
-    for (u32 i = 0; i < details.present_mode_count; ++i)
+    for (uint32_t i = 0; i < details.present_mode_count; ++i)
     {
-        if (renderstate.uncapped_fps)
+        if (renderstate.settings.uncapped_fps)
         {
             // Mailbox (aka "triplebuffering") means minimal latency without screen-tearing
             // So we'll use this if it's available
@@ -1536,7 +1641,7 @@ void create_or_recreate_swapchain()
         bool success = SDL_GetWindowSizeInPixels(renderstate.window, &width, &height);
         SDL_assert(success && "SDL_GetWindowSizeInPixels failed.");
 
-        VkExtent2D actual_extent = { (u32)width, (u32)height };
+        VkExtent2D actual_extent = { (uint32_t)width, (uint32_t)height };
 
         // Must be clamped between the min and max extents allowed by the implementation
         actual_extent.width = SDL_clamp(actual_extent.width,
@@ -1553,7 +1658,7 @@ void create_or_recreate_swapchain()
 
     // Request (minImageCount + 1) images so that there is always an image we can immediately aquire to render to.
     // NOTE: minImageCount is the minimum amount for the swapchain implementation to function.
-    u32 min_image_count = details.capabilities.minImageCount + 1;
+    uint32_t min_image_count = details.capabilities.minImageCount + 1;
 
     // Then make sure this doesn't push us over the maxImageCount
     // NOTE: maxImageCount of 0 is a special value for no maximum.
@@ -1635,7 +1740,7 @@ void create_or_recreate_swapchain()
     
     // Create Image Views for SwapChain
     memset(renderstate.swapchain_image_views, 0, sizeof(renderstate.swapchain_image_views));
-    for (u32 i = 0; i < renderstate.swapchain_image_count; ++i)
+    for (uint32_t i = 0; i < renderstate.swapchain_image_count; ++i)
     {
         VkImageViewCreateInfo image_view_create_info = {
             .sType             = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
@@ -1674,11 +1779,11 @@ void create_or_recreate_swapchain()
         .pNext = NULL,
         .flags = 0
     };
-    for (u32 i = 0; i < renderstate.swapchain_image_count; ++i)
+    for (uint32_t i = 0; i < renderstate.swapchain_image_count; ++i)
     {
         VK_CHECK(vkCreateSemaphore(renderstate.device, &semaphore_create_info, NULL, &renderstate.swapchain_image_rendering_complete_semaphores[i]));
     }
-    for (u32 i = 0; i < NUM_FRAMES_IN_FLIGHT; ++i)
+    for (uint32_t i = 0; i < NUM_FRAMES_IN_FLIGHT; ++i)
     {
         VK_CHECK(vkCreateSemaphore(renderstate.device, &semaphore_create_info, NULL, &renderstate.frames[i].swapchain_image_acquired_semaphore));
     }
@@ -1690,13 +1795,13 @@ void create_or_recreate_swapchain()
 void destroy_swapchain()
 {
     // Destroy Image Views and Semaphores
-    for (u32 i = 0; i < renderstate.swapchain_image_count; ++i)
+    for (uint32_t i = 0; i < renderstate.swapchain_image_count; ++i)
     {
         vkDestroyImageView(renderstate.device, renderstate.swapchain_image_views[i], NULL);
         vkDestroySemaphore(renderstate.device, renderstate.swapchain_image_rendering_complete_semaphores[i], NULL);
     }
 
-    for (u32 i = 0; i < NUM_FRAMES_IN_FLIGHT; ++i)
+    for (uint32_t i = 0; i < NUM_FRAMES_IN_FLIGHT; ++i)
     {
         vkDestroySemaphore(renderstate.device, renderstate.frames[i].swapchain_image_acquired_semaphore, NULL);
     }
