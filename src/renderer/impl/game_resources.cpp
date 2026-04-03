@@ -321,7 +321,6 @@ void create_scene_resources()
     */
 
     ///////////////////////////////////////////////////////////////////////////////////////////////////
-    // TODO: Account for animated meshes as well                                                     //
     // TODO: Create stylised gradients via colour buffer for characters meshes (i.e. skinned meshes) //
     ///////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -359,15 +358,15 @@ void create_scene_resources()
 
         for (uint32_t j = 0; j < num_unique_assets; ++j)
         {
-            if (unique_assets[j] == component->parent_asset)
+            if (unique_assets[j] == component->asset)
             {
                 goto seen_this_anim_asset_before;
             }
         }
 
         SDL_assert(num_unique_assets < max_assets);
-        unique_assets[num_unique_assets++] = component->parent_asset;
-        material_count += component->parent_asset->material_count;
+        unique_assets[num_unique_assets++] = component->asset;
+        material_count += component->asset->material_count;
 
     seen_this_anim_asset_before:
     }
@@ -425,7 +424,7 @@ void create_scene_resources()
     );
 
 
-    // Load meshes
+    // Load Static meshes
     for (uint32_t i = 0; i < init_info->num_static_meshes; ++i)
     {
         C_StaticMesh* component = &init_info->static_meshes[i];
@@ -465,12 +464,12 @@ void create_scene_resources()
                 prim->index_count, prim->vertex_count,
                 prim->indices, (glm::vec3*)prim->positions,
                 (glm::vec2*)prim->texcoords, (glm::vec3*)prim->normals,
-                NULL, (glm::uvec4*)prim->joints, (glm::vec4*)prim->weights
+                NULL, NULL, NULL
             );
         }
     }
 
-    // load animated meshes test
+    // Load animated meshes
     for (uint32_t i = 0; i < init_info->num_animated_meshes; ++i)
     {
         C_AnimatedMesh* component = &init_info->animated_meshes[i];
@@ -486,7 +485,7 @@ void create_scene_resources()
         uint32_t asset_idx = UINT32_MAX;
         for (uint32_t a = 0; a < num_unique_assets; ++a)
         {
-            if (component->parent_asset == unique_assets[a]) asset_idx = a;
+            if (component->asset == unique_assets[a]) asset_idx = a;
         }
         SDL_assert(asset_idx < UINT32_MAX);
         uint32_t mat_start_idx = assets_mat_start_idx[asset_idx];
@@ -509,7 +508,7 @@ void create_scene_resources()
                 prim->indices, (glm::vec3*)prim->positions,
                 (glm::vec2*)prim->texcoords, (glm::vec3*)prim->normals,
                 NULL, (glm::uvec4*)prim->joints, (glm::vec4*)prim->weights
-            );
+                );
         }
     }
 

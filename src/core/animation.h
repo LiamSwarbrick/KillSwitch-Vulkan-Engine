@@ -2,24 +2,24 @@
 #define ANIMATION_H
 
 #include "core/ecs/registry.h"
-#include "core/animation/components.h"
+#include "core/components.h"
 
 void Animation_Update(AdvEng::ECS* ecs, float dt);
 
 // animation control
-void Start(C_Animator& animator, const char* name); // by name
-void Start(C_Animator& animator, int id); // by index
-void Stop(C_Animator& animator);
+void Start(C_AnimatedMesh& animator, const char* name); // by name
+void Start(C_AnimatedMesh& animator, int id); // by index
+void Stop(C_AnimatedMesh& animator);
 
 // settings
-void SetLooping(C_Animator& animator, bool looping);
+void SetLooping(C_AnimatedMesh& animator, bool looping);
 
 // state checks
-bool IsRunning(const C_Animator& animator);
-bool WillExpire(const C_Animator& animator);
+bool IsRunning(const C_AnimatedMesh& animator);
+bool WillExpire(const C_AnimatedMesh& animator);
 
 // getters
-float GetDuration(const C_Animator& animator);
-float GetCurrentTime(const C_Animator& animator);
+float GetDuration(const C_AnimatedMesh& animator);
+float GetCurrentTime(const C_AnimatedMesh& animator);
 
 #endif  // ANIMATION_H

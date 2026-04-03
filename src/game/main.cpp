@@ -51,7 +51,7 @@ int main(int argc, char *argv[])
 
     C_AnimatedMesh temp_animated_mesh = {
         .mesh = &asset3->meshes[3],
-        .parent_asset = asset3,
+        .asset = asset3,
         .joint_count = zombie_joint_count,
         .joint_matrices = (glm::mat4*)malloc(zombie_joint_count * sizeof(glm::mat4))
     };

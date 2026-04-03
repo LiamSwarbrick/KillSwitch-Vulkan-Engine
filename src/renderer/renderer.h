@@ -19,7 +19,6 @@ void Renderer_ListenToWindowEvent(SDL_Event event);
 void Renderer_PushRenderable(Renderable renderable);
 void Renderer_DrawFrame();
 
-
 typedef struct Scene_InitInfo
 {
     uint32_t num_static_meshes;
