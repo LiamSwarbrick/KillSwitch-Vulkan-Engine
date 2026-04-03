@@ -27,11 +27,9 @@ typedef struct RenderState
     b32 program_caused_vulkan_validation_layer_errors;
     u64 frame_number;
 
-    // Options
-    // TODO: Instead, just ask core for settings when needed.
-    // Or realistically, each module can have a SettingsChanged callback
-    // since swapchain will need to be recreated if uncapped_fps is changed.
-    b32 uncapped_fps;
+    Renderer_Settings settings;
+    VkSampleCountFlagBits multisampling_count_flag;
+
 
     VkInstance instance;
     VkDebugUtilsMessengerEXT debug_messenger;
@@ -41,6 +39,8 @@ typedef struct RenderState
     QueueFamilyIndices queue_family_indices;
     VkDevice device;
     VmaAllocator vma_allocator;
+
+    
 
     // Queue handles to VkDevice queues (cleaned up automatically when VkDevice is destroyed)
     VkQueue graphics_queue;

@@ -17,6 +17,16 @@ typedef enum
 }
 PipelineKeyNumBits;
 
+typedef enum
+{
+    PKEY_MULTISAMPLING_1X = 0,
+    PKEY_MULTISAMPLING_2X = 1,
+    PKEY_MULTISAMPLING_4X = 2,
+    PKEY_MULTISAMPLING_8X = 3
+}
+PipelineKeyMultisamplingBits;
+PipelineKeyMultisamplingBits PK_MultisamplingFlag(VkSampleCountFlagBits sample_count);
+
 typedef union PipelineKey
 {
     struct
@@ -34,6 +44,7 @@ typedef union PipelineKey
         uint64_t blend_mode    : 4;  // BLEND_MODE_OPAQUE / Alpha / Additive (see shadersrc/shared_constants.glsl)
         uint64_t polygon_mode  : 2;  // VkPolygonMode
         uint64_t front_face    : 1;  // VkFrontFace (we'll use CCW but things like mirrored objects would flip winding)
+        uint64_t msaa_samples  : 2;  // PipelineKeyMultisamplingBits. 0=1x, 1=2x, 3=4x, 4=8x samples
         // ... remaining bits for future use
     };
 

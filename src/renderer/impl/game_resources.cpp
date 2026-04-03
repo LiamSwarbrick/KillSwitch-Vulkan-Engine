@@ -34,6 +34,15 @@ uint32_t create_mipmapped_texture2d_resource(
     uint32_t          height, 
     VkFormat          format
 );
+uint32_t create_rendertarget2d_resource(
+    const char*            debug_name,
+    FG_ResourceFlags       flags,
+    uint32_t               width,
+    uint32_t               height,
+    VkFormat               format,
+    VkImageAspectFlags     aspect,
+    b32                    multisampled
+);
 
 
 void CreateOrRecreateResources(FG_ResourceFlags types_to_create)
@@ -134,7 +143,7 @@ void create_startup_resources()
                 | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT
                 | VK_BUFFER_USAGE_TRANSFER_DST_BIT
         },
-        .is_cpu_accessible = 1  // <- Hence mapped
+        .is_buffer_cpu_accessible = 1  // <- Hence mapped
     };
     renderstate.rids.objects_buffer_rid = FG_CreateResource(
         "ObjectsBuffer", FG_RESOURCE_TYPE_BUFFER, flags, &objects_info
@@ -151,7 +160,7 @@ void create_startup_resources()
                 | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT
                 | VK_BUFFER_USAGE_TRANSFER_DST_BIT
         },
-        .is_cpu_accessible = 1  // <- Hence mapped
+        .is_buffer_cpu_accessible = 1  // <- Hence mapped
     };
     renderstate.rids.objects_buffer_rid = FG_CreateResource(
         "JointsBuffer", FG_RESOURCE_TYPE_BUFFER, flags, &objects_info
@@ -304,6 +313,17 @@ void create_window_dependent_resources()
             swapchain_image_name, FG_RESOURCE_TYPE_IMAGE, flags, import_info
         );
     }
+
+    const uint32_t width = renderstate.swapchain_extent.width;
+    const uint32_t height = renderstate.swapchain_extent.height;
+    
+    // Depth buffer
+    renderstate.rids.depth_buffer_rid = create_rendertarget2d_resource(
+        "Depth Buffer", flags, width, height,
+        VK_FORMAT_D32_SFLOAT,
+        VK_IMAGE_ASPECT_DEPTH_BIT,
+        1
+    );
 }
 
 void create_scene_resources()
@@ -622,9 +642,6 @@ uint32_t create_mipmapped_texture2d_resource(
             .sharingMode = VK_SHARING_MODE_EXCLUSIVE,
             .queueFamilyIndexCount = 0,  // <- Zero when using exclusive sharing mode
             .pQueueFamilyIndices = NULL,
-
-            // Mipmapped textures normally won't be part of the framegraph's input and outputs
-            // So we set it's initial (and presumably final-) image layout to read only.
             .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED
         },
         .image_view_create_info = {
@@ -656,5 +673,82 @@ uint32_t create_mipmapped_texture2d_resource(
     FG_UploadImageData(&renderstate.main.staging_objects, texture_rid, data, data_size);
     FG_GenMipmaps(texture_rid);
 
+    return texture_rid;
+}
+
+uint32_t create_rendertarget2d_resource(
+    const char*            debug_name,
+    FG_ResourceFlags       flags,
+    uint32_t               width,
+    uint32_t               height,
+    VkFormat               format,
+    VkImageAspectFlags     aspect,
+    b32                    multisampled
+)
+{
+    b32 is_depth_stencil_attachment = (aspect & VK_IMAGE_ASPECT_DEPTH_BIT) || (aspect & VK_IMAGE_ASPECT_STENCIL_BIT);
+
+    VkImageUsageFlags attachment_specific_usage = is_depth_stencil_attachment ?
+        VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT : VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
+
+    VkSampleCountFlagBits multisample_count = multisampled ?
+        renderstate.multisampling_count_flag : VK_SAMPLE_COUNT_1_BIT;
+
+    ResourceCreateInfo rendertarget_create_info = {
+        .image_create_info = {
+            .sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
+            .pNext = NULL,
+            .flags = 0,
+            .imageType = VK_IMAGE_TYPE_2D,
+            .format = format,
+
+            .extent = {
+                .width  = width,
+                .height = height,
+                .depth  = 1
+            },
+
+            .mipLevels = 1,
+            .arrayLayers = 1,
+
+            .samples = multisample_count,  // <- Multisampling
+            .tiling = VK_IMAGE_TILING_OPTIMAL,
+
+            .usage = attachment_specific_usage
+                   | VK_IMAGE_USAGE_SAMPLED_BIT
+                   | VK_IMAGE_USAGE_TRANSFER_SRC_BIT
+                   | VK_IMAGE_USAGE_TRANSFER_DST_BIT,
+
+            .sharingMode = VK_SHARING_MODE_EXCLUSIVE,
+            .queueFamilyIndexCount = 0,  // <- Zero when using exclusive sharing mode
+            .pQueueFamilyIndices = NULL,
+            .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED
+        },
+        .image_view_create_info = {
+            .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
+            .pNext = NULL,
+            .flags = 0,
+
+            .image = VK_NULL_HANDLE,  // <- This gets set in the registry code in FG_CreateResource
+            .viewType = VK_IMAGE_VIEW_TYPE_2D,
+            .format = format,
+
+            .components = {
+                .r = VK_COMPONENT_SWIZZLE_IDENTITY,
+                .g = VK_COMPONENT_SWIZZLE_IDENTITY,
+                .b = VK_COMPONENT_SWIZZLE_IDENTITY,
+                .a = VK_COMPONENT_SWIZZLE_IDENTITY
+            },
+
+            .subresourceRange = {
+                .aspectMask = aspect,
+                .baseMipLevel = 0,
+                .levelCount = 1,
+                .baseArrayLayer = 0,
+                .layerCount = 1
+            }
+        }
+    };
+    uint32_t texture_rid = FG_CreateResource(debug_name, FG_RESOURCE_TYPE_IMAGE, flags, &rendertarget_create_info);
     return texture_rid;
 }

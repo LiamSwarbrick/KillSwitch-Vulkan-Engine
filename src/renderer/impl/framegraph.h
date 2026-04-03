@@ -71,7 +71,8 @@ typedef enum
     FG_USAGE_STORAGE = 1 << 3,  // For Compute SSBOs or Storage Images
     FG_USAGE_SAMPLED = 1 << 4   // For Shaders reading textures
 }
-FG_UsageFlags;
+FG_UsageFlagBits;
+typedef uint32_t FG_UsageFlags;
 
 // TODO: Add more address modes than just REPEAT
 //       Also support for LUT textures (look up tables) e.g. for LTC area lights
@@ -161,7 +162,8 @@ typedef enum
     FG_RESOURCE_FLAGS_ON_STARTUP       = 1 << 1,  // E.g. shader storage buffers, the splash screen texture, also font bitmaps maybe.
     FG_RESOURCE_FLAGS_SCENE_DEPENDENT  = 1 << 2,  // Loads for current scene (unloads things from last scene automatically)
 }
-FG_ResourceFlags;
+FG_ResourceFlagBits;
+typedef uint32_t FG_ResourceFlags;
 
 typedef struct BufferResourceData
 {
@@ -184,13 +186,18 @@ typedef struct ImageResourceData
 }
 ImageResourceData;
 
-typedef struct ResourceCreateInfo
+typedef union ResourceCreateInfo  // Untagged so not using union for safety.
 {
-    VkImageCreateInfo image_create_info;
-    VkImageViewCreateInfo image_view_create_info;
-
-    VkBufferCreateInfo buffer_create_info;
-    b32 is_cpu_accessible;
+    struct
+    {
+        VkImageCreateInfo image_create_info;
+        VkImageViewCreateInfo image_view_create_info;
+    };
+    struct
+    {
+        VkBufferCreateInfo buffer_create_info;
+        b32 is_buffer_cpu_accessible;
+    };
 }
 ResourceCreateInfo;
 uint32_t FG_CreateResource(const char* debug_name, FG_ResourceType type, FG_ResourceFlags flags, ResourceCreateInfo* create_info);

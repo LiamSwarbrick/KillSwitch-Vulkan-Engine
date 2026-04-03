@@ -8,7 +8,8 @@
 //
 
 #define SHADER_LIST \
-    X(SHADER_UNLIT)
+    X(SHADER_UNLIT) \
+    X(SHADER_DEPTH)
 
 typedef enum
 {

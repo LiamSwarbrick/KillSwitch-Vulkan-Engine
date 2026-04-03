@@ -46,6 +46,7 @@ void ShaderRegistry_Init()
         sreg->shaders[id].graphics.fragment_shader = load_spirv(SHADER_SPIRV_DIR name_str ".frag.spv");
 
     LOAD_GRAPHICS(SHADER_UNLIT, "unlit");
+    LOAD_GRAPHICS(SHADER_DEPTH, "depth");
     
     // Finally, make sure none are invalid
     for (uint32_t i = 0; i < SHADER_COUNT; ++i)

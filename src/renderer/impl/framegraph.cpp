@@ -261,7 +261,7 @@ void fg_execute_pass(uint32_t pass_idx, VkCommandBuffer cmd)
                 .pNext               = NULL,
                 .imageView           = res->image.view,
                 .imageLayout         = usage->layout,
-
+#warning MSAA RESOLVE MUST BE ADDED TO OUTPUT PASS USAGE
                 // TODO: Currently no MSAA (this can be a parameter of a renderpass?)
                 .resolveMode         = VK_RESOLVE_MODE_NONE,
                 .resolveImageView    = VK_NULL_HANDLE,
@@ -569,7 +569,7 @@ uint32_t FG_CreateResource(const char* debug_name, FG_ResourceType type, FG_Reso
     {
         // Create .buffer.handle, with allocation stored in .allocation
         VmaAllocationCreateInfo alloc_create_info = { .usage = VMA_MEMORY_USAGE_AUTO };
-        if (create_info->is_cpu_accessible)
+        if (create_info->is_buffer_cpu_accessible)
         {
             alloc_create_info.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | 
                                       VMA_ALLOCATION_CREATE_MAPPED_BIT;
@@ -589,7 +589,7 @@ uint32_t FG_CreateResource(const char* debug_name, FG_ResourceType type, FG_Reso
         resource_info.import_info.buffer.size = create_info->buffer_create_info.size;
         resource_info.import_info.buffer.mapped_data = alloc_info.pMappedData;
     }
-    else
+    else if (type == FG_RESOURCE_TYPE_IMAGE)
     {
         // Create .image.handle, with allocation stored in .allocation
         VmaAllocationCreateInfo alloc_create_info = { .usage=VMA_MEMORY_USAGE_AUTO };
@@ -621,6 +621,10 @@ uint32_t FG_CreateResource(const char* debug_name, FG_ResourceType type, FG_Reso
         resource_info.import_info.image.extent = create_info->image_create_info.extent;
         resource_info.import_info.image.usage  = create_info->image_create_info.usage;
         resource_info.import_info.image.subresource_range = create_info->image_view_create_info.subresourceRange;
+    }
+    else
+    {
+        SDL_assert(0 && "Invalid resource type");
     }
 
     // Returns the resource's id into the registry
