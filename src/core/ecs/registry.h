@@ -47,8 +47,7 @@ namespace AdvEng
 		static size_t GetNextComponentIndex(std::string typeName)
 		{
 			static size_t index = 0;
-			// For debugging name types:
-			//m_componentNames.push_back(typeName);
+			m_componentNames.push_back(typeName);
 			return index++;
 		};
 
@@ -330,6 +329,19 @@ namespace AdvEng
         {
             SDL_assert(IsEntityValid(id));
             return GetEntityMask(id);
+        }
+
+        std::string GetComponentName(size_t bit_index)
+        {
+            if (bit_index < m_componentNames.size())
+                return m_componentNames[bit_index];
+            return "Unknown";
+        }
+
+        template <typename T>
+        size_t GetComponentBitIndex()
+        {
+            return GetOrRegisterComponentIndex<T>();
         }
 
 	};
