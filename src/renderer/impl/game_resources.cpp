@@ -5,6 +5,8 @@
 #include "stb_image.h"
 #include "core/assetsys.h"  // CPU-side asset data
 
+#include "stb_image.h"
+
 void create_startup_resources();
 void create_window_dependent_resources();
 void create_scene_resources();
@@ -184,45 +186,6 @@ void create_startup_resources()
     );
 
 
-    // DUMMY DATA BELOW:
-    #warning TODO: Upload materials on create_scene_resources() instead of startup.
-
-#if 0
-    // TEMP Material:
-    uint32_t test_texture_rid = UINT32_MAX;
-    {
-        stbi_set_flip_vertically_on_load(1);
-        int width, height, num_channels;
-        const char* filepath = "assets/godot.png";
-        uint8_t* data = stbi_load(filepath, &width, &height, &num_channels, 4);
-        if (data == NULL)
-        {
-            fprintf(stderr, "Failure to load image (%s)\n", filepath);
-            exit(1);  // TODO: Fallback to default texture
-        }
-        uint64_t data_size = width * height * 4;
-        VkFormat format = VK_FORMAT_R8G8B8A8_SRGB;
-        test_texture_rid = create_mipmapped_texture2d_resource(filepath, flags, data, data_size, width, height, format);
-        
-        stbi_image_free(data);
-    }
-    MaterialData default_mat = {
-        .base_color = { 1.0f, 1.0f, 1.0f, 1.0f },
-        .texture_idx_basecolor = renderstate.registry.resources[test_texture_rid].image_bindless_index,//0xFFFFFFFF,
-
-        .sampler_idx = FG_SAMPLER_LINEAR_REPEAT,
-        .alpha_cutoff = 0.5f
-    };
-
-    const uint32_t temp_max_materials = 32;
-    MaterialData materials[temp_max_materials] = {
-        default_mat  // index 0
-    };
-    FG_UploadBufferData(&renderstate.main.staging_objects, 
-        renderstate.rids.material_ssbo_rid, &materials, sizeof(materials)
-    );
-#endif
-
     /////// MOVE BELOW TO create_scene_resources(scene resource list?) /////////////
 
     // TEST QUAD
@@ -253,14 +216,14 @@ void create_startup_resources()
     };
     renderstate.rids.dummy_mesh = {
         .vertex_type = VERTEX_TYPE_STATIC,
-        .mat_type    = MAT_UNLIT,
+        .mat_type    = MAT_UNLIT_OPAQUE,
         .mesh_rids = {
             .primitive_count = 1,
             .primitives = {
                 create_primitive_resources(
                     "Dummy Primitive",
                     flags,
-                    0,  // material index (TODO: Load all materials on scene change, and keep track of material indices CPU side)
+                    0,  // Default material index
                     sizeof(quad_indices) / sizeof(quad_indices[0]),
                     sizeof(quad_positions) / sizeof(quad_positions[0]),
                     quad_indices, quad_positions, quad_uvs, quad_normals, quad_colors, NULL, NULL
@@ -268,21 +231,6 @@ void create_startup_resources()
             }
         }
     };
-    //  = create_mesh_resources("QuadMesh", flags, 6, 4, quad_indices,
-    //     quad_positions, quad_uvs, quad_normals, quad_colors, NULL, NULL
-    // );
-
-    // Primitive* test_prim = &renderstate.temp_test_mesh->primitives[0];
-    // float* test_colors = (float*)L_calloc(test_prim->vertex_count, 3 * sizeof(float) * test_prim->vertex_count, &renderstate.main.tt);
-    // for (int i = 0; i < test_prim->vertex_count * 3; ++i) test_colors[i] = fabsf(sinf((float)i));
-    // renderstate.rids.temp_test_mesh = create_mesh_resources(renderstate.temp_test_mesh->name, flags,
-    //     test_prim->index_count, test_prim->vertex_count, test_prim->indices,
-    //     (glm::vec3*)test_prim->positions, (glm::vec2*)test_prim->texcoords, (glm::vec3*)test_prim->normals,
-    //     (glm::vec3*)test_colors, NULL, NULL
-    // );
-    // L_free(test_colors, &renderstate.main.tt);
-
-
 }
 
 
@@ -372,7 +320,7 @@ void create_scene_resources()
     uint32_t num_unique_assets = 0;
     const uint32_t max_assets = 1024;  // <- Arbitrary. If this is too low, L_calloc a bigger amount
     Asset*   unique_assets[max_assets] = {};
-    uint32_t material_count = 0;
+    uint32_t material_count = 1;  // Start at one to give space for default material
 
     for (uint32_t i = 0; i < init_info->num_static_meshes; ++i)
     {
@@ -400,6 +348,32 @@ void create_scene_resources()
     MaterialData* loaded_materials = (MaterialData*)L_calloc(material_count, sizeof(MaterialData), &renderstate.main.tt);
     uint32_t assets_mat_start_idx[max_assets] = {};
     memset(assets_mat_start_idx, 0xFFFF, max_assets);
+
+    // Add default material
+    {
+        uint32_t default_texture_rid = UINT32_MAX;
+        stbi_set_flip_vertically_on_load(1);
+        int width, height, num_channels;
+        const char* filepath = "assets/godot.png";
+        uint8_t* data = stbi_load(filepath, &width, &height, &num_channels, 4);
+        if (data == NULL)
+        {
+            fprintf(stderr, "Failure to load image (%s)\n", filepath);
+            exit(1);  // TODO: Fallback to default texture
+        }
+        uint64_t data_size = width * height * 4;
+        VkFormat format = VK_FORMAT_R8G8B8A8_SRGB;
+        default_texture_rid = create_mipmapped_texture2d_resource(filepath, flags, data, data_size, width, height, format);
+        stbi_image_free(data);
+        
+        MaterialData default_mat = {
+            .base_color = { 1.0f, 1.0f, 1.0f, 1.0f },
+            .alpha_cutoff = 0.5f,
+            .sampler_idx = FG_SAMPLER_LINEAR_REPEAT,
+            .texture_idx_basecolor = renderstate.registry.resources[default_texture_rid].image_bindless_index
+        };
+        loaded_materials[num_loaded_materials++] = default_mat;
+    }
 
     for (uint32_t i = 0; i < num_unique_assets; ++i)
     {

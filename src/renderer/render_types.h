@@ -20,7 +20,7 @@ MAT_HUD                // E.g. Minimap, current weapon, ammo. These are ui eleme
 */
 
 #define MATERIAL_LIST \
-    X(MAT_UNLIT)
+    X(MAT_UNLIT_OPAQUE)
 
 typedef enum
 {

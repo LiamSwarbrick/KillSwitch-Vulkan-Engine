@@ -101,7 +101,7 @@ struct MaterialData
     float alpha_cutoff;
 
     uint32_t sampler_idx;
-        
+    
     uint32_t texture_idx_basecolor;
     // TODO: Switch to this layout:
     // uint32_t texture_idx_basecolor_rgb_metalness_a;

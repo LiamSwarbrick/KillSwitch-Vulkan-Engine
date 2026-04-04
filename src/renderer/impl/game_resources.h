@@ -35,6 +35,7 @@ typedef struct ResourceIDs
     // Dummy stuff TODO REMOVE
     MeshPrefab dummy_mesh;
     MeshPrefab temp_test_mesh;
+    MaterialData temp_test_mat;
 }
 ResourceIDs;
 
