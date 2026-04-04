@@ -6,6 +6,7 @@
 
 namespace DebugUI
 {
+    // State of menubar and windows in the debug UI
     struct DebugUIState
     {
         bool show_debug_ui      = false;  // F3 to toggle
@@ -13,6 +14,8 @@ namespace DebugUI
         bool show_ecs_inspector = false;
         bool show_framegraph    = false;
         bool show_asset_browser = false;
+
+        // Entity ID 
         uint32_t selected_entity_id = UINT32_MAX;
     };
 
@@ -24,7 +27,7 @@ namespace DebugUI
             state.show_debug_ui = !state.show_debug_ui;
         }
     }
-
+    // Main menu bar with options to toggle different debug windows
     inline void DrawMainMenuBar(DebugUIState& state)
     {
         if (!state.show_debug_ui) return;
@@ -40,14 +43,14 @@ namespace DebugUI
                 ImGui::TextDisabled("F3 to toggle UI");
                 ImGui::EndMenu();
             }
-            // Display hint on the right side
+            // Display toggle hint on the right side
             ImGui::SetCursorPosX(ImGui::GetIO().DisplaySize.x - 100.0f);
             ImGui::TextDisabled("[F3] Debug UI");
             ImGui::EndMainMenuBar();
         }
     }
 
-    inline void DrawECSInspector(DebugUIState& state)
+    inline void DrawECSInspector(DebugUIState& state, AdvEng::ECS& ecs)
     {
         if (!state.show_debug_ui || !state.show_ecs_inspector) return;
 
@@ -58,7 +61,7 @@ namespace DebugUI
             return;
         }
 
-        DrawECSInspectorContent(state.selected_entity_id);  
+        DrawECSInspectorContent(ecs, state.selected_entity_id);  
 
         ImGui::End();
     }
@@ -84,11 +87,11 @@ namespace DebugUI
     }
 
     // Called after ImGui::NewFrame()
-    inline void Draw(DebugUIState& state)
+    inline void Draw(DebugUIState& state, AdvEng::ECS& ecs)
     {
         HandleInput(state);
         DrawMainMenuBar(state);
-        DrawECSInspector(state);
+        DrawECSInspector(state, ecs);
         DrawFramegraph(state);
         DrawAssetBrowser(state);
     }

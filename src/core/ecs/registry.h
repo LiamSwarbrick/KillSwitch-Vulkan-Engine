@@ -320,6 +320,18 @@ namespace AdvEng
 			//return { this };
 		}
 
+		// For debug UI
+        std::vector<EntityID> GetAllEntities()
+        {
+            return m_entityMasks.GetIDList();
+        }
+
+        ComponentMask GetEntityComponentMask(EntityID id)
+        {
+            SDL_assert(IsEntityValid(id));
+            return GetEntityMask(id);
+        }
+
 	};
 
 	

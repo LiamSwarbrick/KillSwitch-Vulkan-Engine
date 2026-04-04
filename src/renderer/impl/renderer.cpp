@@ -749,6 +749,12 @@ void Renderer_PushRenderable(Renderable renderable)
     renderstate.renderables_arena.items[renderstate.renderables_arena.num_renderables++] = renderable;
 }
 
+void Renderer_SetImGuiCallback(Renderer_ImGuiBuildCallback callback, void* user_data)
+{
+    renderstate.imgui_callback      = callback;
+    renderstate.imgui_callback_data = user_data;
+}
+
 void Renderer_DrawFrame()
 {
     /*  Get current swapchain image, and wait on sync structures
@@ -813,8 +819,8 @@ void Renderer_DrawFrame()
 
     // Build ImGui UI here, e.g.
     // ImGui::ShowDemoWindow();  // TODO: Remove after testing
-    static DebugUI::DebugUIState debug_ui_state;
-    DebugUI::Draw(debug_ui_state);
+    if (renderstate.imgui_callback)
+        renderstate.imgui_callback(renderstate.imgui_callback_data);
     // Finalize ImGui draw data (must happen before command buffer recording)
     ImGui::Render();
 

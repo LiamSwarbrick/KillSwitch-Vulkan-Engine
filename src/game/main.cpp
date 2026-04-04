@@ -4,11 +4,21 @@
 
 #include "foundations/scene.h"
 
+#include "renderer/impl/debug_ui/debug_ui.h"
+
 #include "SDL3/SDL.h"
 #include "SDL3/SDL_main.h"
 
 uint32_t num_renderables;
 Renderable renderables_arena[MAX_RENDERED_OBJECTS];
+
+static DebugUI::DebugUIState debug_ui_state;
+
+void OnImGuiBuild(void* user_data)
+{
+    Scene* scene = (Scene*)user_data;
+    DebugUI::Draw(debug_ui_state, scene->GetECS());
+}
 
 int main(int argc, char *argv[])
 {
@@ -107,6 +117,7 @@ int main(int argc, char *argv[])
 
     // Testing Scene and ECS
     Scene scene;
+    Renderer_SetImGuiCallback(OnImGuiBuild, &scene);
     scene.LoadLevel("assets/levels/untitled.gltf");
 
     Scene_InitInfo splash_screen_info = {
