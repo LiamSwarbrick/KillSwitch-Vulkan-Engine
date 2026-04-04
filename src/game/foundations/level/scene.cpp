@@ -1,5 +1,6 @@
 #include "foundations/scene.h"
 #include "foundations/components.h"
+#include "renderer/renderer.h"
 
 // RapidJSON 
 #include "rapidjson/document.h"
@@ -130,7 +131,32 @@ bool Scene::FreeAsset(Asset* asset)
 bool Scene::LoadLevel(const char* fileName)
 {
     // For now
-    return LoadAsset(fileName);
+    bool success = LoadAsset(fileName);
+    if (!success) return false;
+
+    // NOTE: Jaime's view returns a sparse set, aka, some C++ iterator.
+    // The renderer takes a contiguous array of data.
+    // Therefore, get the view, and iterate over it to build the contiguous array to init the scene.
+    auto packed = m_ecs.GetView<C_StaticMesh>().GetPacked();
+    
+    std::vector<C_StaticMesh> meshes;
+    for (size_t i = 0; i < packed.size(); ++i)
+    {
+        auto [static_mesh] = packed[i].components;
+        printf("Mesh: %zu\n", i);
+        printf("- mesh->name = %s\n", static_mesh.mesh->name);
+        printf("- ->primitive_count = %zu\n", static_mesh.mesh->primitive_count);
+        printf("- ->primitive0_indexcount = %zu\n", static_mesh.mesh->primitives[0].index_count);
+        meshes.push_back(static_mesh);
+    }
+
+    Scene_InitInfo info = {};
+    info.num_static_meshes = (uint32_t)meshes.size();
+    info.static_meshes = meshes.data();
+
+    Renderer_ChangeScene(info);
+    
+    return true;
 }
 
 void Scene::Update(float dt)

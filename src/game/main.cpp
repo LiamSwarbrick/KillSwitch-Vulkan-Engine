@@ -105,15 +105,15 @@ int main(int argc, char *argv[])
     Scene scene;
     scene.LoadLevel("assets/levels/untitled.gltf");
 
-    C_StaticMesh temp_static_mesh = {
-        .mesh = &asset3->meshes[0],
-        .parent_asset = asset3
-    };
-    Scene_InitInfo splash_screen_info = {
-        .num_static_meshes = 1,
-        .static_meshes = &temp_static_mesh
-    };
-    Renderer_ChangeScene(splash_screen_info);
+    // C_StaticMesh temp_static_mesh = {
+    //     .mesh = &asset3->meshes[0],
+    //     .parent_asset = asset3
+    // };
+    // Scene_InitInfo splash_screen_info = {
+    //     .num_static_meshes = 1,
+    //     .static_meshes = &temp_static_mesh
+    // };
+    // Renderer_ChangeScene(splash_screen_info);
 
 
     bool running = true;
@@ -139,11 +139,13 @@ int main(int argc, char *argv[])
             // Do this buddo:
             // Renderer_PushRenderable(renderable);
 
-            Renderable r = {
-                .transform = glm::mat4(1.0f),
-                .mesh_prefab = temp_static_mesh.renderer_prefab,
-            };
-            Renderer_PushRenderable(r);
+            scene.Render();
+            
+            // Renderable r = {
+            //     .transform = glm::mat4(1.0f),
+            //     .mesh_prefab = temp_static_mesh.renderer_prefab,
+            // };
+            // Renderer_PushRenderable(r);
 
             Renderer_DrawFrame(temp_camera_view_matrix());
         }

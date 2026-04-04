@@ -40,7 +40,9 @@ namespace AdvEng
 		EntityID m_maxID = 0;
 
 
-	private:
+	// private:
+#warning NOTE(Liam): I'm making all of these public since they're called outside this class in multiple files. Maybe adjust the API
+	public:
 
 		// Metaprogramming magic with next method
 		static size_t GetNextComponentIndex(std::string typeName)

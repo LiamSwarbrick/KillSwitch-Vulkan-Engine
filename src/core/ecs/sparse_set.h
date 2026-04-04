@@ -131,7 +131,7 @@ namespace AdvEng
         T& Get(EntityID id)
         {
             EntityID index = GetDenseIndex(id);
-            SDL_assert(index == NULL_ID && "SparseSet::GetRef with invalid entity id");
+            SDL_assert(index != NULL_ID && "SparseSet::GetRef with invalid entity id");
             return m_dense[index];
         }
 
