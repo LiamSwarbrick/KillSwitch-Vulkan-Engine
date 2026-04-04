@@ -1029,7 +1029,7 @@ void Renderer_DrawFrame(glm::mat4 primary_camera_view)
                 .queue_family_index = renderstate.queue_family_indices.graphics_family,
 
                 .load_op = VK_ATTACHMENT_LOAD_OP_CLEAR,
-                .store_op = VK_ATTACHMENT_STORE_OP_DONT_CARE,  // DO NOT STORE MSAA TARGET BACK TO MAIN MEMORY
+                .store_op = use_msaa ? VK_ATTACHMENT_STORE_OP_DONT_CARE : VK_ATTACHMENT_STORE_OP_STORE,  // DO NOT STORE MSAA TARGETS BACK TO MAIN MEMORY (Applies to tiled architectures)
                 .clear_value = { .color = { .float32 = { 0.392f, 0.584f, 0.929f, 0.0f } } }
             },
 
