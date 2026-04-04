@@ -13,3 +13,6 @@
 [submodule "extern/imgui"]
 	path = extern/imgui
 	url = https://github.com/ocornut/imgui.git
+[submodule "extern/imgui-node-editor"]
+	path = extern/imgui-node-editor
+	url = https://github.com/thedmd/imgui-node-editor.git
