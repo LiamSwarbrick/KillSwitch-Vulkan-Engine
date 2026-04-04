@@ -335,12 +335,21 @@ void create_window_dependent_resources()
     );
 
     // Resolve HDR color target for post processing/deferred steps
-    renderstate.rids.hdr_color_target_rid = create_rendertarget2d_resource(
-        "Forward Render Target", flags, width, height,
-        VK_FORMAT_R16G16B16A16_SFLOAT,
-        VK_IMAGE_ASPECT_COLOR_BIT,
-        0, 0
-    );
+    if (renderstate.multisampling_count_flag > VK_SAMPLE_COUNT_1_BIT)
+    {
+        renderstate.rids.hdr_color_target_rid = create_rendertarget2d_resource(
+            "Forward Render Target", flags, width, height,
+            VK_FORMAT_R16G16B16A16_SFLOAT,
+            VK_IMAGE_ASPECT_COLOR_BIT,
+            0, 0
+        );
+    }
+    else
+    {
+        // Alias to forward render target when not using MSAA
+        renderstate.rids.hdr_color_target_rid = renderstate.rids.forward_target_rid;
+    }
+
 }
 
 void create_scene_resources()
@@ -704,6 +713,13 @@ uint32_t create_rendertarget2d_resource(
     b32                    is_transient
 )
 {
+    // Disable multisampling and transience when not using it
+    if (renderstate.multisampling_count_flag == VK_SAMPLE_COUNT_1_BIT)
+    {
+        multisampled = 0;
+        is_transient = 0;
+    }
+
     b32 is_depth_stencil_attachment = (aspect & VK_IMAGE_ASPECT_DEPTH_BIT) || (aspect & VK_IMAGE_ASPECT_STENCIL_BIT);
 
     VkImageUsageFlags attachment_specific_usage = is_depth_stencil_attachment ?

@@ -971,6 +971,7 @@ void Renderer_DrawFrame(glm::mat4 primary_camera_view)
     // Swapchain rid changes each frame
     uint32_t swapchain_image_resource_id = renderstate.rids.swapchain_image_rids[swapchain_image_index];
 
+    b32 use_msaa = renderstate.multisampling_count_flag > VK_SAMPLE_COUNT_1_BIT;
 
     // Depth prepass
     RenderPassDesc depth_prepass_desc = {
@@ -984,9 +985,6 @@ void Renderer_DrawFrame(glm::mat4 primary_camera_view)
                 .rid = renderstate.rids.depth_buffer_rid,
                 .usage_flags = FG_USAGE_DEPTH,
                 .sampler_type = FG_SAMPLER_NOT_SAMPLABLE,
-
-                .resolve_rid = UINT32_MAX,
-                .resolve_mode = VK_RESOLVE_MODE_NONE,
 
                 .layout = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL,
                 .access = VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
@@ -1022,7 +1020,7 @@ void Renderer_DrawFrame(glm::mat4 primary_camera_view)
                 .usage_flags = FG_USAGE_COLOR,
                 .sampler_type = FG_SAMPLER_NOT_SAMPLABLE,
                 
-                .resolve_rid = renderstate.rids.hdr_color_target_rid,
+                .resolve_rid  = use_msaa ? renderstate.rids.hdr_color_target_rid : UINT32_MAX,
                 .resolve_mode = VK_RESOLVE_MODE_AVERAGE_BIT,  // Automatically handling the edge case where resolve mode must not be set for 1 sample
 
                 .layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
@@ -1060,8 +1058,6 @@ void Renderer_DrawFrame(glm::mat4 primary_camera_view)
     uint32_t forward_opaque_pass = FG_AddPass(forward_opaque_desc);
     
 
-    #warning TODO: Easy postprocess chain pipeline?
-
     // Swapchain pass
     RenderPassDesc swapchain_pass_desc = {
         .debug_name = "Swapchain Pass",
@@ -1070,6 +1066,7 @@ void Renderer_DrawFrame(glm::mat4 primary_camera_view)
         .input_count = 1,
         .inputs = {
             {
+                // Resource aliasing: when not using MSAA, hdr_color_target equals forward_target_rid
                 .rid = renderstate.rids.hdr_color_target_rid,
                 .usage_flags = FG_USAGE_SAMPLED,
                 .sampler_type = FG_SAMPLER_LINEAR_REPEAT,

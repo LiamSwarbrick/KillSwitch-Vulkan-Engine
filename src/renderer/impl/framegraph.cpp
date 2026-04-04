@@ -277,43 +277,45 @@ void fg_execute_pass(uint32_t pass_idx, VkCommandBuffer cmd)
                 .clearValue  = usage->clear_value
             };
 
+            b32 is_color = usage->usage_flags & FG_USAGE_COLOR;
+            b32 is_depth = usage->usage_flags & FG_USAGE_DEPTH;
+            b32 is_stencil = usage->usage_flags & FG_USAGE_STENCIL;
+
+            b32 is_msaa = (renderstate.multisampling_count_flag > VK_SAMPLE_COUNT_1_BIT);
+            b32 has_resolve = (usage->resolve_rid < UINT32_MAX);
+
             // Multisampled attachments come with a target they resolve to...
-            if (usage->resolve_rid < UINT32_MAX && renderstate.multisampling_count_flag > VK_SAMPLE_COUNT_1_BIT)
+            if (is_msaa && has_resolve)
             {
                 FG_Resource* resolve_res = &renderstate.registry.resources[usage->resolve_rid];
-                
                 attachment.resolveMode        = usage->resolve_mode;
                 attachment.resolveImageView   = resolve_res->image.view;
-                // Important: Resolve target must be in COLOR_ATTACHMENT_OPTIMAL during the pass
-                attachment.resolveImageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-                
-                // VULKAN SPEC: If resolving, the storeOp of the MSAA attachment 
-                // refers to the MSAA data, but the resolve happens regardless.
-                // We usually DONT_CARE about the MSAA data after resolve.
+                if (is_color)
+                {
+                    attachment.resolveImageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+                }
+                else if (is_depth)
+                {
+                    attachment.resolveImageLayout = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL;
+                }
             }
             else
             {
-                attachment.resolveMode = VK_RESOLVE_MODE_NONE;
+                attachment.resolveMode        = VK_RESOLVE_MODE_NONE;
+                attachment.resolveImageView   = VK_NULL_HANDLE;
             }
 
-            
-            if (usage->usage_flags & FG_USAGE_COLOR)
+            if (is_color)
             {
                 color_attachments[color_attachment_count++] = attachment;
             }
-
             // NOTE: Packed Depth-Stencil uses the same ImageView but different aspects in the barrier
-            if (usage->usage_flags & FG_USAGE_DEPTH)
+            if (is_depth)
             {
                 depth_attachment = attachment;
                 has_depth = 1;
-
-                // Handle Depth Resolve (core since Vulkan 1.2+ which is nice)
-                if (usage->resolve_rid < UINT32_MAX) {
-                    depth_attachment.resolveMode = usage->resolve_mode; 
-                }
             }
-            if (usage->usage_flags & FG_USAGE_STENCIL)
+            if (is_stencil)
             {
                 stencil_attachment = attachment;
                 has_stencil = 1;
