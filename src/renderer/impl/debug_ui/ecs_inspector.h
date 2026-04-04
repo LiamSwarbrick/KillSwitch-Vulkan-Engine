@@ -21,8 +21,8 @@ namespace DebugUI
     template <>
     inline void DrawComponentFields<C_Transform>(C_Transform& t)
     {
-        ImGui::DragFloat3("Position", &t.position.x, 0.1f);
-        ImGui::DragFloat4("Rotation", &t.rotation.x, 0.01f);
+        ImGui::Text("Position:  %.3f  %.3f  %.3f", t.position.x, t.position.y, t.position.z);
+        ImGui::Text("Rotation:  %.3f  %.3f  %.3f  %.3f", t.rotation.x, t.rotation.y, t.rotation.z, t.rotation.w);
     }
 
     template <>
@@ -40,14 +40,14 @@ namespace DebugUI
         switch (c.type)
         {
             case ColliderType::Sphere:
-                ImGui::DragFloat("Radius", &c.sphere.radius, 0.01f);
+                ImGui::Text("Radius:  %.3f", c.sphere.radius);
                 break;
             case ColliderType::Box:
-                ImGui::DragFloat3("Half Widths", &c.box.halfWidths.x, 0.01f);
+                ImGui::Text("Half Widths:  %.3f  %.3f  %.3f", c.box.halfWidths.x, c.box.halfWidths.y, c.box.halfWidths.z);
                 break;
             case ColliderType::Capsule:
-                ImGui::DragFloat("Radius", &c.capsule.radius, 0.01f);
-                ImGui::DragFloat("Height", &c.capsule.height, 0.01f);
+                ImGui::Text("Radius:  %.3f", c.capsule.radius);
+                ImGui::Text("Height:  %.3f", c.capsule.height);
                 break;
             default:
                 ImGui::TextDisabled("(unknown collider type)");
