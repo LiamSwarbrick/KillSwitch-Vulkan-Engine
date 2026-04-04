@@ -77,5 +77,4 @@ void SwapchainPass_Execute(VkCommandBuffer cmd, RenderPassDesc* desc)
     }
 
     ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), cmd);
-}
 #endif

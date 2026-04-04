@@ -27,18 +27,29 @@ void Scene::Shutdown()
 
 bool Scene::LoadAsset(const char* fileName) 
 {
+    if (m_asset)
+    {
+        free_asset(m_asset);
+    }
     Asset* asset = load_asset(fileName);
 
     // Load the nodes
     for (size_t i = 0; i < asset->node_count; i++)
     {
         Node* node = &asset->nodes[i];
-
+        
         // RapidJSON to ECS tutorial!!1!1!!!!!1
         // 1. We parse extras_json with rapidjson::Document
         rj::Document doc;
-        doc.Parse(node->extras_json);
-
+        if (node->extras_json)
+        {
+            doc.Parse(node->extras_json);
+        }
+        else
+        {
+            continue;
+        }
+        
         // 2. And put the "_ecs" value in the following
         rj::Value& components = doc["_ecs"];
         
@@ -102,21 +113,17 @@ bool Scene::LoadAsset(const char* fileName)
         t.matrix = glm::translate(t.matrix, t.position);
         m_ecs.AddComponent<C_Transform>(eID, { t.position, t.rotation, t.matrix });
 
-        C_StaticMesh staticMesh{
-           &asset->meshes[node->mesh_index],
-           asset
-        };
-        m_ecs.AddComponent<C_StaticMesh>(eID, { staticMesh.mesh, staticMesh.parent_asset });
-
-        
-
-        
-        
-        
-        
+        if (node->mesh_index >= 0)
+        {
+            C_StaticMesh staticMesh{
+                &asset->meshes[node->mesh_index],
+                asset
+            };
+            m_ecs.AddComponent<C_StaticMesh>(eID, { staticMesh.mesh, staticMesh.parent_asset });
+        }
     }
-    
-    FreeAsset(asset);
+
+    m_asset = asset;
 
     return true;
 }
@@ -139,20 +146,46 @@ bool Scene::LoadLevel(const char* fileName)
     // Therefore, get the view, and iterate over it to build the contiguous array to init the scene.
     auto packed = m_ecs.GetView<C_StaticMesh>().GetPacked();
     
-    std::vector<C_StaticMesh> meshes;
+    std::vector<C_StaticMesh*> meshes;
     for (size_t i = 0; i < packed.size(); ++i)
     {
         auto [static_mesh] = packed[i].components;
-        printf("Mesh: %zu\n", i);
-        printf("- mesh->name = %s\n", static_mesh.mesh->name);
-        printf("- ->primitive_count = %zu\n", static_mesh.mesh->primitive_count);
-        printf("- ->primitive0_indexcount = %zu\n", static_mesh.mesh->primitives[0].index_count);
-        meshes.push_back(static_mesh);
+        meshes.push_back(&static_mesh);
     }
 
     Scene_InitInfo info = {};
     info.num_static_meshes = (uint32_t)meshes.size();
     info.static_meshes = meshes.data();
+
+// /* TEMP ANIMATION STUFF */
+//     // Animation test
+//     Asset* asset3 = load_asset("assets/animations/Animationtest.gltf");
+//     SDL_Log("Asset 3 Extras: %s\n", asset3->nodes[0].extras_json);
+
+//     // Find how many joints the zombie has
+//     uint32_t zombie_joint_count = 0;
+//     if (asset3->skin_count > 0) {
+//         zombie_joint_count = asset3->skins[0].joint_count;
+//     }
+//     else {
+//         zombie_joint_count = 1; 
+//     }
+
+//     C_AnimatedMesh temp_animated_mesh = {
+//         .mesh = &asset3->meshes[3],
+//         .asset = asset3,
+//         .joint_count = zombie_joint_count,
+//         .joint_matrices = (glm::mat4*)malloc(zombie_joint_count * sizeof(glm::mat4))
+//     };
+
+//     for (uint32_t j = 0; j < zombie_joint_count; j++) {
+//         temp_animated_mesh.joint_matrices[j] = glm::mat4(1.0f);
+//     }
+
+//     info.num_animated_meshes = 1;
+//     info.animated_meshes = &temp_animated_mesh;
+    
+// /* END TEMP ANIMATION STUFF */
 
     Renderer_ChangeScene(info);
     
@@ -166,5 +199,18 @@ void Scene::Update(float dt)
 
 void Scene::Render()
 {
+    m_ecs.GetView<C_Transform, C_StaticMesh>().ForEach([&](C_Transform& transform, C_StaticMesh& mesh)
+    {
+        // Skip invalid / not-yet-uploaded meshes
+        if (mesh.renderer_prefab.mesh_rids.primitive_count == 0)
+            return;
 
+        Renderable r{};
+        r.transform = transform.matrix;
+        r.mesh_prefab = mesh.renderer_prefab;
+        r.joint_count = 0;
+        r.joints = nullptr;
+
+        Renderer_PushRenderable(r);
+    });
 }

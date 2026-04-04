@@ -100,7 +100,7 @@ Asset* load_asset(const char* filename) {
 
 	// Set counts
 	asset->mesh_count = data->meshes_count;
-	asset->material_count = data->materials_count;
+	asset->material_count = data->materials_count + 1; // always a default material
 	asset->texture_count = data->textures_count;
 	asset->image_count = data->images_count;
 	asset->camera_count = data->cameras_count;
@@ -111,7 +111,6 @@ Asset* load_asset(const char* filename) {
 
 	// Allocate arrays
 	if (asset->mesh_count > 0) asset->meshes = (Mesh*)calloc(asset->mesh_count, sizeof(Mesh));
-	if (asset->material_count > 0) asset->materials = (Material*)calloc(asset->material_count, sizeof(Material));
 	if (asset->texture_count > 0) asset->textures = (Texture*)calloc(asset->texture_count, sizeof(Texture));
 	if (asset->image_count > 0) asset->images = (Image*)calloc(asset->image_count, sizeof(Image));
 	if (asset->camera_count > 0) asset->cameras = (Camera*)calloc(asset->camera_count, sizeof(Camera));
@@ -119,6 +118,7 @@ Asset* load_asset(const char* filename) {
 	if (asset->node_count > 0) asset->nodes = (Node*)calloc(asset->node_count, sizeof(Node));
 	if (asset->skin_count > 0) asset->skins = (Skin*)calloc(asset->skin_count, sizeof(Skin));
 	if (asset->animation_count > 0) asset->animations = (Animation*)calloc(asset->animation_count, sizeof(Animation));
+	asset->materials = (Material*)calloc(asset->material_count, sizeof(Material));
 
 	// Copy Images
 	for (size_t i = 0; i < asset->image_count; i++) {
@@ -152,7 +152,7 @@ Asset* load_asset(const char* filename) {
 	}
 
 	// Copy Materials
-	for (size_t i = 0; i < asset->material_count; i++) {
+	for (size_t i = 0; i < data->materials_count; i++) { //only iterate over actual materials in the gltf file
 		cgltf_material* gltf_mat = &data->materials[i];
 		Material* mat = &asset->materials[i];
 
@@ -179,6 +179,23 @@ Asset* load_asset(const char* filename) {
 		memcpy(mat->emissive_factor, gltf_mat->emissive_factor, sizeof(float) * 3);
 		mat->alpha_cutoff = gltf_mat->alpha_cutoff;
 	}
+	// Create Default Material at the end of the array
+	size_t default_mat_idx = asset->material_count - 1;
+	Material* def_mat = &asset->materials[default_mat_idx];
+	def_mat->name = duplicate_string("default_material");
+	def_mat->base_color_texture_index = -1;
+	def_mat->metallic_roughness_texture_index = -1;
+	def_mat->normal_map_texture_index = -1;
+	def_mat->emissive_texture_index = -1;
+	def_mat->occlusion_texture_index = -1;
+	def_mat->base_color[0] = def_mat->base_color[1] = def_mat->base_color[2] = 1.0f; 
+	def_mat->base_color[3] = 1.0f;
+	def_mat->metallic = 0.0f;
+	def_mat->roughness = 0.5f;
+	def_mat->emissive_factor[0] = 0.0f;
+	def_mat->emissive_factor[1] = 0.0f;
+	def_mat->emissive_factor[2] = 0.0f;
+	def_mat->alpha_cutoff = 0.5f;
 
 	// Copy Cameras
 	for (size_t i = 0; i < asset->camera_count; i++) {
@@ -218,6 +235,7 @@ Asset* load_asset(const char* filename) {
 		node->mesh_index = get_mesh_index(data, gltf_node->mesh);
 		node->camera_index = get_camera_index(data, gltf_node->camera);
 		node->light_index = get_light_index(data, gltf_node->light);
+		node->skin_index = get_skin_index(data, gltf_node->skin);
 
 		memcpy(node->translation, gltf_node->translation, sizeof(float) * 3);
 		memcpy(node->rotation, gltf_node->rotation, sizeof(float) * 4);
@@ -237,6 +255,9 @@ Asset* load_asset(const char* filename) {
 		// Save custom blender properties for trigger zones/spawns
 		if (gltf_node->extras.data) {
 			node->extras_json = duplicate_string(gltf_node->extras.data);
+		}
+		else {
+			node->extras_json = NULL;
 		}
 	}
 
@@ -320,7 +341,14 @@ Asset* load_asset(const char* filename) {
 			cgltf_primitive* gltf_prim = &gltf_mesh->primitives[p];
 			Primitive* prim = &mesh->primitives[p];
 
-			prim->material_index = get_material_index(data, gltf_prim->material);
+			int mat_index = get_material_index(data, gltf_prim->material);
+			if (mat_index < 0) {
+				// if it doesnt have a material it will point to the default material assigned to the end of the material array
+				prim->material_index = (int)(asset->material_count - 1);
+			}
+			else {
+				prim->material_index = mat_index;
+			}
 
 			// if not animated mesh then set joint and weights to NULL
 			prim->joints = NULL;

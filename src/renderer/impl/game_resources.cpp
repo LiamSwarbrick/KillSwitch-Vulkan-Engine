@@ -312,7 +312,6 @@ void create_scene_resources()
     ResourceIDs* rids = &renderstate.rids;
 
     ///////////////////////////////////////////////////////////////////////////////////////////////////
-    // TODO: Account for animated meshes as well                                                     //
     // TODO: Create stylised gradients via colour buffer for characters meshes (i.e. skinned meshes) //
     ///////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -324,7 +323,7 @@ void create_scene_resources()
 
     for (uint32_t i = 0; i < init_info->num_static_meshes; ++i)
     {
-        C_StaticMesh* component = &init_info->static_meshes[i];
+        C_StaticMesh* component = init_info->static_meshes[i];
 
         for (uint32_t j = 0; j < num_unique_assets; ++j)
         {
@@ -341,6 +340,26 @@ void create_scene_resources()
         material_count += component->parent_asset->material_count;
 
     seen_this_asset_before:
+    }
+
+    // animated meshes test
+    for (uint32_t i = 0; i < init_info->num_animated_meshes; ++i)
+    {
+        C_AnimatedMesh* component = init_info->animated_meshes[i];
+
+        for (uint32_t j = 0; j < num_unique_assets; ++j)
+        {
+            if (unique_assets[j] == component->asset)
+            {
+                goto seen_this_anim_asset_before;
+            }
+        }
+
+        SDL_assert(num_unique_assets < max_assets);
+        unique_assets[num_unique_assets++] = component->asset;
+        material_count += component->asset->material_count;
+
+    seen_this_anim_asset_before:
     }
 
     // Load unique materials
@@ -392,10 +411,10 @@ void create_scene_resources()
             gpu_mat.alpha_cutoff = mat->alpha_cutoff;
 
             // NOTE: Just use one sampler for now at least
-            // (maybe I'd want to chec the base colour texture's min/mag filter and s/t wrap to choose a better one if we need)
+            // (maybe I'd want to check the base colour texture's min/mag filter and s/t wrap to choose a better one if we need)
             gpu_mat.sampler_idx = FG_SAMPLER_LINEAR_REPEAT;
             
-            if (mat->base_color_texture_index >= 0)
+            if (mat->base_color_texture_index > 0)
             {
                 Texture* base_color_texture = &asset->textures[mat->base_color_texture_index];
                 Image*   base_color_image   = &asset->images[base_color_texture->image_index];
@@ -422,10 +441,10 @@ void create_scene_resources()
     );
 
 
-    // Load meshes
+    // Load Static meshes
     for (uint32_t i = 0; i < init_info->num_static_meshes; ++i)
     {
-        C_StaticMesh* component = &init_info->static_meshes[i];
+        C_StaticMesh* component = init_info->static_meshes[i];
 
         component->renderer_prefab = {
             .vertex_type = component->mesh->vertex_type,
@@ -456,6 +475,49 @@ void create_scene_resources()
             snprintf(prim_resource_debug_name, sizeof(prim_resource_debug_name),
                 "%s_Prim%u", component->mesh->name, p
             );
+            component->renderer_prefab.mesh_rids.primitives[p] = create_primitive_resources(
+                prim_resource_debug_name, flags,
+                gpu_mat_idx,
+                prim->index_count, prim->vertex_count,
+                prim->indices, (glm::vec3*)prim->positions,
+                (glm::vec2*)prim->texcoords, (glm::vec3*)prim->normals,
+                NULL, NULL, NULL
+            );
+        }
+    }
+
+    // Load animated meshes
+    for (uint32_t i = 0; i < init_info->num_animated_meshes; ++i)
+    {
+        C_AnimatedMesh* component = init_info->animated_meshes[i];
+
+        component->renderer_prefab = {
+            .vertex_type = component->mesh->vertex_type, 
+            .mat_type = component->mesh->mat_type,
+            .mesh_rids = {
+                .primitive_count = (uint32_t)component->mesh->primitive_count
+            }
+        };
+
+        uint32_t asset_idx = UINT32_MAX;
+        for (uint32_t a = 0; a < num_unique_assets; ++a)
+        {
+            if (component->asset == unique_assets[a]) asset_idx = a;
+        }
+        SDL_assert(asset_idx < UINT32_MAX);
+        uint32_t mat_start_idx = assets_mat_start_idx[asset_idx];
+
+        // Load primitives into GPU resources
+        char prim_resource_debug_name[256] = {};
+        for (uint32_t p = 0; p < component->mesh->primitive_count; ++p)
+        {
+            Primitive* prim = &component->mesh->primitives[p];
+            uint32_t gpu_mat_idx = mat_start_idx + prim->material_index;
+
+            snprintf(prim_resource_debug_name, sizeof(prim_resource_debug_name),
+                "%s_Prim%u", component->mesh->name, p
+            );
+
             component->renderer_prefab.mesh_rids.primitives[p] = create_primitive_resources(
                 prim_resource_debug_name, flags,
                 gpu_mat_idx,
