@@ -13,17 +13,16 @@
 
 namespace AdvEng
 {
-
+	// forward declaring View
+	template <typename...>
+	class View;
+	class Entity;
+	
 	class ECS
 	{
 
 	private:
 
-		// forward declaring View
-		template <typename...>
-		class View;
-
-		class Entity;
 
 		// Just for debugging.
 		// Needs to be inline
