@@ -3,7 +3,7 @@
 #include "materials.h"
 #include "internal_state.h"
 #include "mapped_linear_allocator.h"
-#include <glm/gtc/matrix_transform.hpp>  // lookAt, perspective, translate
+#include "glm/gtc/matrix_transform.hpp"
 
 void InitDrawCallCollections()
 {
@@ -191,6 +191,32 @@ void ExecuteDrawCall(VkCommandBuffer cmd, DrawCall drawcall, PipelineKey key, Pu
     }
 }
 
+void ExecuteFullscreenPass(VkCommandBuffer cmd, uint32_t shader_id, PipelineKey key, PushConstant_PassHeader push_pass)
+{
+    VkPipeline pipeline = PK_GetOrCreatePipeline(&renderstate.pipeline_map, key);
+    if (renderstate.currently_bound_pipeline != pipeline) 
+    {
+        renderstate.currently_bound_pipeline = pipeline;
+        vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
+    }
+
+    // Prepare the pass part of Push Constants
+    // We only need the .pass part (texture/sampler indices)
+    // TODO: If it turns I'm never using both dc and pass, then I can remove one of them
+    //       This would half the push constants size requirements from 256 to 128
+    FullPushConstants_Graphics push = {
+        .dc = {}, 
+        .pass = push_pass
+    };
+
+    vkCmdPushConstants(cmd, renderstate.global_pipeline_layout,
+        VK_SHADER_STAGE_ALL, 0, sizeof(push), &push
+    );
+
+    // Push 3 empty vertices we'll use for a fullscreen triangle
+    vkCmdDraw(cmd, 3, 1, 0, 0);
+}
+
 
 // SCENE DATA UPDATION DURING FRAME
 
@@ -258,10 +284,7 @@ static SceneData temp_default_camera_scene_data()
 
 void UpdateGlobalSceneData(SceneData data)
 {
-    #warning SceneData argument currently ignored.
-
-    data = temp_default_camera_scene_data();
-    
+    // data = temp_default_camera_scene_data();   
     FG_UploadBufferData(&renderstate.main.staging_objects, 
                         renderstate.rids.global_scene_buffer_rid, 
                         &data, sizeof(SceneData)

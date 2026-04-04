@@ -100,7 +100,7 @@ void FG_Empty()
     }
 }
 
-uint32_t FG_AddPass(RenderPassDesc pass_description, uint32_t pass_type)
+uint32_t FG_AddPass(RenderPassDesc pass_description)
 {
     FrameGraph* fg = &renderstate.framegraph;
     SDL_assert(fg->pass_count < MAX_PASSES);
@@ -111,10 +111,10 @@ uint32_t FG_AddPass(RenderPassDesc pass_description, uint32_t pass_type)
     memcpy(pass, &pass_description, sizeof(RenderPassDesc));
 
     // Add to table
-    SDL_assert(renderstate.pass_id_from_type[pass_type] == PASS_TYPE_INVALID &&
+    SDL_assert(renderstate.pass_id_from_type[pass_description.pass_type] == PASS_TYPE_INVALID &&
         "Can't add the same pass twice, give it a unique PassType enumeration"
     );
-    renderstate.pass_id_from_type[pass_type] = pass_id;
+    renderstate.pass_id_from_type[pass_description.pass_type] = pass_id;
 
     return pass_id;
 }
@@ -186,7 +186,7 @@ void fg_add_barrier(FG_Resource* res, PassResourceUsage* usage,
 
 void fg_apply_barriers(VkCommandBuffer cmd, RenderPassDesc* pass)
 {
-    VkImageMemoryBarrier2 image_barriers[MAX_PASS_RESOURCE_BANDWIDTH * 2];  // *2 because each resource could require both an input and output barrier.
+    VkImageMemoryBarrier2 image_barriers[MAX_PASS_RESOURCE_BANDWIDTH * 3];  // *3 because each resource could require both an input and output barrier (2x) and then each output could have a resolve rid (*3).
     VkBufferMemoryBarrier2 buffer_barriers[MAX_PASS_RESOURCE_BANDWIDTH * 2];
     uint32_t img_count = 0;
     uint32_t buf_count = 0;
@@ -204,6 +204,16 @@ void fg_apply_barriers(VkCommandBuffer cmd, RenderPassDesc* pass)
     {
         FG_Resource* res = &renderstate.registry.resources[pass->outputs[i].rid];
         fg_add_barrier(res, &pass->outputs[i], image_barriers, &img_count, buffer_barriers, &buf_count);
+
+        // MSAA Resolved Attachment
+        uint32_t resolve_rid = pass->outputs[i].resolve_rid;
+        if (resolve_rid < UINT32_MAX)
+        {
+            FG_Resource* resolved_res = &renderstate.registry.resources[resolve_rid];
+            PassResourceUsage resolve_usage = pass->outputs[i];
+            resolve_usage.rid = pass->outputs[i].resolve_rid;
+            fg_add_barrier(resolved_res, &resolve_usage, image_barriers, &img_count, buffer_barriers, &buf_count);
+        }
     }
 
     if (img_count > 0 || buf_count > 0)
@@ -236,7 +246,7 @@ void fg_execute_pass(uint32_t pass_idx, VkCommandBuffer cmd)
     if (pass->is_compute)
     {
         // Compute passes don't use vkCmdBeginRendering
-        pass->execute_callback(cmd, pass->user_data);
+        pass->execute_callback(cmd, pass);
     }
     else  // Graphics Pass:
     {
@@ -252,26 +262,41 @@ void fg_execute_pass(uint32_t pass_idx, VkCommandBuffer cmd)
         for (uint32_t i = 0; i < pass->output_count; ++i)
         {
             PassResourceUsage* usage = &pass->outputs[i];
-
             SDL_assert(usage->rid < renderstate.registry.resource_count);
             FG_Resource* res = &renderstate.registry.resources[usage->rid];
-            
-            VkRenderingAttachmentInfo attachment = {
-                .sType               = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
-                .pNext               = NULL,
-                .imageView           = res->image.view,
-                .imageLayout         = usage->layout,
-#warning MSAA RESOLVE MUST BE ADDED TO OUTPUT PASS USAGE
-                // TODO: Currently no MSAA (this can be a parameter of a renderpass?)
-                .resolveMode         = VK_RESOLVE_MODE_NONE,
-                .resolveImageView    = VK_NULL_HANDLE,
-                .resolveImageLayout  = VK_IMAGE_LAYOUT_UNDEFINED,
 
-                .loadOp              = usage->load_op,
-                .storeOp             = usage->store_op,
-                .clearValue          = usage->clear_value
+            // Setup the base attachment info
+            VkRenderingAttachmentInfo attachment = {
+                .sType       = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
+                .pNext       = NULL,
+                .imageView   = res->image.view,
+                .imageLayout = usage->layout,
+
+                .loadOp      = usage->load_op,
+                .storeOp     = usage->store_op,
+                .clearValue  = usage->clear_value
             };
 
+            // Multisampled attachments come with a target they resolve to...
+            if (usage->resolve_rid < UINT32_MAX && renderstate.multisampling_count_flag > VK_SAMPLE_COUNT_1_BIT)
+            {
+                FG_Resource* resolve_res = &renderstate.registry.resources[usage->resolve_rid];
+                
+                attachment.resolveMode        = usage->resolve_mode;
+                attachment.resolveImageView   = resolve_res->image.view;
+                // Important: Resolve target must be in COLOR_ATTACHMENT_OPTIMAL during the pass
+                attachment.resolveImageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+                
+                // VULKAN SPEC: If resolving, the storeOp of the MSAA attachment 
+                // refers to the MSAA data, but the resolve happens regardless.
+                // We usually DONT_CARE about the MSAA data after resolve.
+            }
+            else
+            {
+                attachment.resolveMode = VK_RESOLVE_MODE_NONE;
+            }
+
+            
             if (usage->usage_flags & FG_USAGE_COLOR)
             {
                 color_attachments[color_attachment_count++] = attachment;
@@ -282,6 +307,11 @@ void fg_execute_pass(uint32_t pass_idx, VkCommandBuffer cmd)
             {
                 depth_attachment = attachment;
                 has_depth = 1;
+
+                // Handle Depth Resolve (core since Vulkan 1.2+ which is nice)
+                if (usage->resolve_rid < UINT32_MAX) {
+                    depth_attachment.resolveMode = usage->resolve_mode; 
+                }
             }
             if (usage->usage_flags & FG_USAGE_STENCIL)
             {
@@ -326,7 +356,7 @@ void fg_execute_pass(uint32_t pass_idx, VkCommandBuffer cmd)
             vkCmdSetScissor(cmd, 0, 1, &pass->render_area);
         }
 
-        pass->execute_callback(cmd, pass->user_data);
+        pass->execute_callback(cmd, pass);
 
         vkCmdEndRendering(cmd);
     }
@@ -527,7 +557,7 @@ uint32_t add_resource_to_registry_and_heap(const char* debug_name, FG_ResourceTy
 
         if (can_be_sampled)
         {
-            printf("Adding " ANSI_CYAN "%s" ANSI_RESET " to heap (is samplable).\n", res->debug_name);
+            printf("Adding " ANSI_CYAN "%s" ANSI_RESET " to heap at index %u (is samplable).\n", res->debug_name, renderstate.heap.texture_count);
 
             // Register in  bindless descriptor array
             res->image_bindless_index = renderstate.heap.texture_count++;

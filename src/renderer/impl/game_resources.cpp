@@ -41,7 +41,8 @@ uint32_t create_rendertarget2d_resource(
     uint32_t               height,
     VkFormat               format,
     VkImageAspectFlags     aspect,
-    b32                    multisampled
+    b32                    multisampled,
+    b32                    is_transient
 );
 
 
@@ -322,7 +323,23 @@ void create_window_dependent_resources()
         "Depth Buffer", flags, width, height,
         VK_FORMAT_D32_SFLOAT,
         VK_IMAGE_ASPECT_DEPTH_BIT,
-        1
+        1, 0
+    );
+
+    // Foward render target
+    renderstate.rids.forward_target_rid = create_rendertarget2d_resource(
+        "Forward Render Target", flags, width, height,
+        VK_FORMAT_R16G16B16A16_SFLOAT,
+        VK_IMAGE_ASPECT_COLOR_BIT,
+        1, 1
+    );
+
+    // Resolve HDR color target for post processing/deferred steps
+    renderstate.rids.hdr_color_target_rid = create_rendertarget2d_resource(
+        "Forward Render Target", flags, width, height,
+        VK_FORMAT_R16G16B16A16_SFLOAT,
+        VK_IMAGE_ASPECT_COLOR_BIT,
+        0, 0
     );
 }
 
@@ -683,13 +700,29 @@ uint32_t create_rendertarget2d_resource(
     uint32_t               height,
     VkFormat               format,
     VkImageAspectFlags     aspect,
-    b32                    multisampled
+    b32                    multisampled,
+    b32                    is_transient
 )
 {
     b32 is_depth_stencil_attachment = (aspect & VK_IMAGE_ASPECT_DEPTH_BIT) || (aspect & VK_IMAGE_ASPECT_STENCIL_BIT);
 
     VkImageUsageFlags attachment_specific_usage = is_depth_stencil_attachment ?
         VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT : VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
+
+    if (is_transient)
+    {
+        // MSAA images that are never stored to main memory don't even need to exist
+        attachment_specific_usage |=
+              VK_IMAGE_USAGE_TRANSIENT_ATTACHMENT_BIT;
+            // | VK_IMAGE_USAGE_SAMPLED_BIT;
+    }
+    else
+    {
+        attachment_specific_usage |=
+              VK_IMAGE_USAGE_SAMPLED_BIT;
+            // | VK_IMAGE_USAGE_TRANSFER_SRC_BIT
+            // | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
+    }
 
     VkSampleCountFlagBits multisample_count = multisampled ?
         renderstate.multisampling_count_flag : VK_SAMPLE_COUNT_1_BIT;
@@ -714,10 +747,7 @@ uint32_t create_rendertarget2d_resource(
             .samples = multisample_count,  // <- Multisampling
             .tiling = VK_IMAGE_TILING_OPTIMAL,
 
-            .usage = attachment_specific_usage
-                   | VK_IMAGE_USAGE_SAMPLED_BIT
-                   | VK_IMAGE_USAGE_TRANSFER_SRC_BIT
-                   | VK_IMAGE_USAGE_TRANSFER_DST_BIT,
+            .usage = attachment_specific_usage,
 
             .sharingMode = VK_SHARING_MODE_EXCLUSIVE,
             .queueFamilyIndexCount = 0,  // <- Zero when using exclusive sharing mode

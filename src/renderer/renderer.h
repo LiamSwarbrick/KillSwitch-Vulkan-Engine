@@ -10,6 +10,7 @@ typedef struct Renderer_Settings
 {
     b32         uncapped_fps;
     uint32_t    msaa_sample_count;
+    float       fov_y;  // Radians 
 }
 Renderer_Settings;
 
@@ -37,7 +38,7 @@ Renderer_Settings Renderer_GetSettings();
 void Renderer_ChangeSettings(Renderer_Settings new_settings);
 
 void Renderer_PushRenderable(Renderable renderable);
-void Renderer_DrawFrame();
+void Renderer_DrawFrame(glm::mat4 primary_camera_view);
 
 typedef struct Scene_InitInfo
 {

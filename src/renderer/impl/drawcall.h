@@ -46,5 +46,6 @@ void EndDrawCalls();
 // So call this function within the renderpass execute callback
 void UpdateGlobalSceneData(SceneData data);
 void ExecuteDrawCall(VkCommandBuffer cmd, DrawCall drawcall, PipelineKey key, PushConstant_PassHeader push_pass);
+void ExecuteFullscreenPass(VkCommandBuffer cmd, uint32_t shader_id, PipelineKey key, PushConstant_PassHeader push_pass);
 
 #endif  // RENDERER_DRAWCALL_H

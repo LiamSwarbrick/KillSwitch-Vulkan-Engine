@@ -831,7 +831,8 @@ void Renderer_PushRenderable(Renderable renderable)
     renderstate.renderables_arena.items[renderstate.renderables_arena.num_renderables++] = renderable;
 }
 
-void Renderer_DrawFrame()
+
+void Renderer_DrawFrame(glm::mat4 primary_camera_view)
 {
     /*  Get current swapchain image, and wait on sync structures
 
@@ -950,6 +951,10 @@ void Renderer_DrawFrame()
     // Reset renderables arena head for next frame
     renderstate.renderables_arena.num_renderables = 0;
 
+    // Set player camera
+    renderstate.camera_view = primary_camera_view;
+    float aspect = (float)renderstate.swapchain_extent.width / (float)renderstate.swapchain_extent.height;
+    renderstate.fullscreen_proj =  MakeProjectionMatrix(renderstate.settings.fov_y, aspect, 0.1f, 100.0f);
 
 
 
@@ -970,6 +975,8 @@ void Renderer_DrawFrame()
     // Depth prepass
     RenderPassDesc depth_prepass_desc = {
         .debug_name = "Depth Prepass",
+        .pass_type = PASS_TYPE_DEPTH_PREPASS,
+
         .input_count = {},
         .output_count = 1,
         .outputs = {
@@ -977,6 +984,9 @@ void Renderer_DrawFrame()
                 .rid = renderstate.rids.depth_buffer_rid,
                 .usage_flags = FG_USAGE_DEPTH,
                 .sampler_type = FG_SAMPLER_NOT_SAMPLABLE,
+
+                .resolve_rid = UINT32_MAX,
+                .resolve_mode = VK_RESOLVE_MODE_NONE,
 
                 .layout = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL,
                 .access = VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
@@ -995,17 +1005,84 @@ void Renderer_DrawFrame()
         .execute_callback = DepthPrepass_Execute,
         .user_data = NULL
     };
-    uint32_t depth_prepass = FG_AddPass(depth_prepass_desc, PASS_TYPE_DEPTH_PREPASS);
+    uint32_t depth_prepass = FG_AddPass(depth_prepass_desc);
 
-    #warning USE DEPTH PREPASS IN A FORWARD PASS
+    // Forward Opaque Pass
+    RenderPassDesc forward_opaque_desc = {
+        .debug_name = "Forward Opaque Pass",
+        .pass_type = PASS_TYPE_FORWARD_OPAQUE,
+
+        .input_count = {},
+        .output_count = 2,
+        .outputs = {
+
+            // Colour target
+            {
+                .rid = renderstate.rids.forward_target_rid,
+                .usage_flags = FG_USAGE_COLOR,
+                .sampler_type = FG_SAMPLER_NOT_SAMPLABLE,
+                
+                .resolve_rid = renderstate.rids.hdr_color_target_rid,
+                .resolve_mode = VK_RESOLVE_MODE_AVERAGE_BIT,  // Automatically handling the edge case where resolve mode must not be set for 1 sample
+
+                .layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+                .access = VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,
+                .stage  = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
+                .queue_family_index = renderstate.queue_family_indices.graphics_family,
+
+                .load_op = VK_ATTACHMENT_LOAD_OP_CLEAR,
+                .store_op = VK_ATTACHMENT_STORE_OP_DONT_CARE,  // DO NOT STORE MSAA TARGET BACK TO MAIN MEMORY
+                .clear_value = { .color = { .float32 = { 0.392f, 0.584f, 0.929f, 0.0f } } }
+            },
+
+            // Depth attachment (preloading with depth from the prepass)
+            {
+                .rid = renderstate.rids.depth_buffer_rid,
+                .usage_flags = FG_USAGE_DEPTH,
+                .sampler_type = FG_SAMPLER_NOT_SAMPLABLE,
+
+                .layout = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL,
+                .access = VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_READ_BIT, 
+                .stage  = VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT,
+                .queue_family_index = renderstate.queue_family_indices.graphics_family,
+
+                .load_op = VK_ATTACHMENT_LOAD_OP_LOAD,  // <- LOAD (Do not clear the depth prepass information LOL)
+                .store_op = VK_ATTACHMENT_STORE_OP_DONT_CARE,
+            }
+        },
+
+        .is_compute = 0,
+        .render_area = { .offset = { 0, 0 }, .extent = renderstate.swapchain_extent },
+        
+        .execute_callback = ForwardOpaque_Execute,
+        .user_data = NULL
+    };
+    uint32_t forward_opaque_pass = FG_AddPass(forward_opaque_desc);
+    
+
+    #warning TODO: Easy postprocess chain pipeline?
 
     // Swapchain pass
     RenderPassDesc swapchain_pass_desc = {
         .debug_name = "Swapchain Pass",
-        .input_count = 0,
-        .inputs = {},
-        .output_count = 2,
+        .pass_type = PASS_TYPE_SWAPCHAIN_PASS,
+        
+        .input_count = 1,
+        .inputs = {
+            {
+                .rid = renderstate.rids.hdr_color_target_rid,
+                .usage_flags = FG_USAGE_SAMPLED,
+                .sampler_type = FG_SAMPLER_LINEAR_REPEAT,
+
+                .layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                .access = VK_ACCESS_2_SHADER_READ_BIT,
+                .stage  = VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
+                .queue_family_index = renderstate.queue_family_indices.graphics_family
+            }
+        },
+        .output_count = 1,
         .outputs = {
+            // Swapchain image color attachment
             {
                 .rid = swapchain_image_resource_id,
                 .usage_flags = FG_USAGE_COLOR,
@@ -1016,25 +1093,9 @@ void Renderer_DrawFrame()
                 .stage  = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
                 .queue_family_index = renderstate.queue_family_indices.graphics_family,
                 
-                .load_op = VK_ATTACHMENT_LOAD_OP_CLEAR,
+                .load_op = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
                 .store_op = VK_ATTACHMENT_STORE_OP_STORE,
-                .clear_value = { .color = { .float32 = { 0.392f, 0.584f, 0.929f, 0.0f } } }
-            },
-
-            // Depth attachment
-            // TODO: Either take this out of the swapchain pass
-            //       or update imgui init info with this depth buffer knowledge
-            {
-                .rid = renderstate.rids.depth_buffer_rid,
-                .usage_flags = FG_USAGE_DEPTH,
-
-                .layout = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL,
-                .access = VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_READ_BIT, 
-                .stage  = VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT,
-                .queue_family_index = renderstate.queue_family_indices.graphics_family,
-
-                .load_op = VK_ATTACHMENT_LOAD_OP_LOAD,  // <- LOAD (DO NOT CLEAR THE DEPTH PREPASS INFORMATION LOL)
-                .store_op = VK_ATTACHMENT_STORE_OP_DONT_CARE, 
+                // .clear_value = { .color = { .float32 = { 0.0f, 0.584f, 0.929f, 0.0f } } }
             }
         },
 
@@ -1044,7 +1105,7 @@ void Renderer_DrawFrame()
         .execute_callback = SwapchainPass_Execute,
         .user_data = NULL
     };
-    uint32_t swapchain_pass = FG_AddPass(swapchain_pass_desc, PASS_TYPE_SWAPCHAIN_PASS);
+    uint32_t swapchain_pass = FG_AddPass(swapchain_pass_desc);
 
 
     

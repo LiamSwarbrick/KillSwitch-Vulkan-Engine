@@ -22,6 +22,8 @@ typedef struct ResourceIDs
     // Window Dependent
     uint32_t swapchain_image_rids[MAX_SWAPCHAIN_IMAGE_COUNT];
     uint32_t depth_buffer_rid;
+    uint32_t forward_target_rid;
+    uint32_t hdr_color_target_rid;
 
     // Scene Dependant (NOTE: These are kept track by the ECS/scene, so possibly I don't actually need these)
     // uint32_t num_scene_meshes;

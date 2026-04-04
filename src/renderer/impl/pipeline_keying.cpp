@@ -155,7 +155,7 @@ VkPipeline create_graphics_pipeline(PipelineKey key)
         case (PKEY_MULTISAMPLING_8X): multisample_info.rasterizationSamples = VK_SAMPLE_COUNT_8_BIT; break;
         default: SDL_assert(0);
     }
-    // FUTURE: Implement MSAA with Specular AA
+    // FUTURE: Implement MSAA with Specular AA if using shiny things
 
     // Fixed-Function State (Depth/Stencil)
     VkPipelineDepthStencilStateCreateInfo depth_info = { .sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO };

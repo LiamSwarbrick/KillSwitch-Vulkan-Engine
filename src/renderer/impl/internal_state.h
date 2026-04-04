@@ -28,7 +28,7 @@ typedef struct RenderState
     u64 frame_number;
 
     Renderer_Settings settings;
-    VkSampleCountFlagBits multisampling_count_flag;
+    VkSampleCountFlagBits multisampling_count_flag;  // NOTE: Vulkan version of msaa setting stored outside settings struct to avoid exposing Vulkan API to game module
 
 
     VkInstance instance;
@@ -82,6 +82,8 @@ typedef struct RenderState
 
     // Draw Calls are accumulated each frame per shader
     DrawCallsPerShader drawcalls_collection;
+    glm::mat4 camera_view;
+    glm::mat4 fullscreen_proj;
 
     // Renderer execution state:
     VkPipeline currently_bound_pipeline;  // Used to avoid  vkCmdBindPipeline call if it's already bound

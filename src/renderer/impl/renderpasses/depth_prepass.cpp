@@ -3,15 +3,19 @@
 #include "../../render_types.h"
 #include "shaders.h"
 
-void DepthPrepass_Execute(VkCommandBuffer cmd, void* user_data)
+void DepthPrepass_Execute(VkCommandBuffer cmd, RenderPassDesc* desc)
 {
-    UpdateGlobalSceneData({});
+    const uint32_t pass_type = PASS_TYPE_DEPTH_PREPASS;
 
-    // No inputs, so doesn't care use push constant's upper bytes
-    PushConstant_PassHeader push_pass = {};
+    SceneData scene_data = {};
+    scene_data.view = renderstate.camera_view;
+    scene_data.proj = renderstate.fullscreen_proj;
+    scene_data.view_proj = scene_data.proj * scene_data.view;
+    UpdateGlobalSceneData(scene_data);
+    
+    PushConstant_PassHeader push_pass = {};  // No inputs, so doesn't care use push constant's upper bytes
 
     const uint32_t shader_id = SHADER_DEPTH;
-    const uint32_t pass_type = PASS_TYPE_DEPTH_PREPASS;
     for (uint32_t i = 0; i < renderstate.drawcalls_collection.array[shader_id].drawcall_count; ++i)
     {
         DrawCall drawcall = renderstate.drawcalls_collection.array[shader_id].drawcalls[i];
@@ -31,7 +35,7 @@ void DepthPrepass_Execute(VkCommandBuffer cmd, void* user_data)
             .front_face     = VK_FRONT_FACE_COUNTER_CLOCKWISE,
             .msaa_samples   = PK_MultisamplingFlag(renderstate.multisampling_count_flag)
         };
-#warning TODO: FIX DEPTH (also don't have depth attached to swapchain, cuz swapchain doesn't support msaa)
+
         ExecuteDrawCall(cmd, drawcall, key, push_pass);
     }
 }
