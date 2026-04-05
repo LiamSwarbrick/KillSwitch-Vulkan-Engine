@@ -342,7 +342,7 @@ void create_scene_resources()
     seen_this_asset_before:
     }
 
-    // animated meshes test
+    // Also count animated meshes
     for (uint32_t i = 0; i < init_info->num_animated_meshes; ++i)
     {
         C_AnimatedMesh* component = init_info->animated_meshes[i];
@@ -368,7 +368,7 @@ void create_scene_resources()
     uint32_t assets_mat_start_idx[max_assets] = {};
     memset(assets_mat_start_idx, 0xFFFF, max_assets);
 
-    // Add default material
+    // (First add default material)
     {
         uint32_t default_texture_rid = UINT32_MAX;
         stbi_set_flip_vertically_on_load(1);
@@ -394,6 +394,7 @@ void create_scene_resources()
         loaded_materials[num_loaded_materials++] = default_mat;
     }
 
+    // (Then Load the actual assets in the scene)
     for (uint32_t i = 0; i < num_unique_assets; ++i)
     {
         Asset* asset = unique_assets[i];
@@ -414,17 +415,18 @@ void create_scene_resources()
             // (maybe I'd want to check the base colour texture's min/mag filter and s/t wrap to choose a better one if we need)
             gpu_mat.sampler_idx = FG_SAMPLER_LINEAR_REPEAT;
             
-            if (mat->base_color_texture_index > 0)
+            if (mat->base_color_texture_index >= 0)
             {
                 Texture* base_color_texture = &asset->textures[mat->base_color_texture_index];
                 Image*   base_color_image   = &asset->images[base_color_texture->image_index];
 
                 // Create texture resource
-                gpu_mat.texture_idx_basecolor = create_mipmapped_texture2d_resource(
-                    base_color_texture->name, flags, base_color_image->data, base_color_image->data_size,
+                uint32_t new_texture_rid = create_mipmapped_texture2d_resource(
+                    base_color_image->uri, flags, base_color_image->data, base_color_image->data_size,
                     base_color_image->width, base_color_image->height,
                     VK_FORMAT_R8G8B8A8_SRGB  // <- is a colour texture
                 );
+                gpu_mat.texture_idx_basecolor = renderstate.registry.resources[new_texture_rid].image_bindless_index;
             }
             else
             {

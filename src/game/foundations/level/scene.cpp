@@ -113,8 +113,10 @@ bool Scene::LoadAsset(const char* fileName)
         t.matrix = glm::translate(t.matrix, t.position);
         m_ecs.AddComponent<C_Transform>(eID, { t.position, t.rotation, t.matrix });
 
+        // -- MESH
         if (node->mesh_index >= 0)
         {
+            // printf("Adding mesh!\n");
             C_StaticMesh staticMesh{
                 &asset->meshes[node->mesh_index],
                 asset
@@ -149,7 +151,7 @@ bool Scene::LoadLevel(const char* fileName)
     std::vector<C_StaticMesh*> meshes;
     for (size_t i = 0; i < packed.size(); ++i)
     {
-        auto [static_mesh] = packed[i].components;
+        auto& [static_mesh] = packed[i].components;
         meshes.push_back(&static_mesh);
     }
 
@@ -157,35 +159,39 @@ bool Scene::LoadLevel(const char* fileName)
     info.num_static_meshes = (uint32_t)meshes.size();
     info.static_meshes = meshes.data();
 
-// /* TEMP ANIMATION STUFF */
-//     // Animation test
-//     Asset* asset3 = load_asset("assets/animations/Animationtest.gltf");
-//     SDL_Log("Asset 3 Extras: %s\n", asset3->nodes[0].extras_json);
+/* TEMP ANIMATION STUFF */
+    // Animation test
+    Asset* asset3 = load_asset("assets/animations/Animationtest.gltf");
+    SDL_Log("Asset 3 Extras: %s\n", asset3->nodes[0].extras_json);
 
-//     // Find how many joints the zombie has
-//     uint32_t zombie_joint_count = 0;
-//     if (asset3->skin_count > 0) {
-//         zombie_joint_count = asset3->skins[0].joint_count;
-//     }
-//     else {
-//         zombie_joint_count = 1; 
-//     }
+    // Find how many joints the zombie has
+    uint32_t zombie_joint_count = 0;
+    if (asset3->skin_count > 0) {
+        zombie_joint_count = asset3->skins[0].joint_count;
+    }
+    else {
+        zombie_joint_count = 1; 
+    }
 
-//     C_AnimatedMesh temp_animated_mesh = {
-//         .mesh = &asset3->meshes[3],
-//         .asset = asset3,
-//         .joint_count = zombie_joint_count,
-//         .joint_matrices = (glm::mat4*)malloc(zombie_joint_count * sizeof(glm::mat4))
-//     };
+    C_AnimatedMesh temp_animated_mesh = {
+        .mesh = &asset3->meshes[3],
+        .asset = asset3,
+        .joint_count = zombie_joint_count,
+        .joint_matrices = (glm::mat4*)malloc(zombie_joint_count * sizeof(glm::mat4))
+    };
 
-//     for (uint32_t j = 0; j < zombie_joint_count; j++) {
-//         temp_animated_mesh.joint_matrices[j] = glm::mat4(1.0f);
-//     }
+    for (uint32_t j = 0; j < zombie_joint_count; j++) {
+        temp_animated_mesh.joint_matrices[j] = glm::mat4(1.0f);
+    }
 
-//     info.num_animated_meshes = 1;
-//     info.animated_meshes = &temp_animated_mesh;
+    // TEMP HACK BCUZ MESHES NOT IN THE LOADER YET
+    C_AnimatedMesh* temp_alloced_mesh = (C_AnimatedMesh*)calloc(1, sizeof(C_AnimatedMesh));
+    *temp_alloced_mesh = temp_animated_mesh;
+
+    info.num_animated_meshes = 1;
+    info.animated_meshes = &temp_alloced_mesh;
     
-// /* END TEMP ANIMATION STUFF */
+/* END TEMP ANIMATION STUFF */
 
     Renderer_ChangeScene(info);
     
@@ -210,6 +216,22 @@ void Scene::Render()
         r.mesh_prefab = mesh.renderer_prefab;
         r.joint_count = 0;
         r.joints = nullptr;
+
+        Renderer_PushRenderable(r);
+    });
+
+    m_ecs.GetView<C_Transform, C_AnimatedMesh>().ForEach([&](C_Transform& transform, C_AnimatedMesh& mesh)
+    {
+        printf("ANIMATION: %d\n", mesh.joint_count);
+        // Skip invalid / not-yet-uploaded meshes
+        if (mesh.renderer_prefab.mesh_rids.primitive_count == 0)
+            return;
+
+        Renderable r{};
+        r.transform = transform.matrix;
+        r.mesh_prefab = mesh.renderer_prefab;
+        r.joint_count = mesh.joint_count;
+        r.joints = mesh.joint_matrices;
 
         Renderer_PushRenderable(r);
     });

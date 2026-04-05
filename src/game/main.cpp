@@ -166,6 +166,7 @@ int main(int argc, char *argv[])
         }
     }
 
+    scene.Shutdown();
     Renderer_Shutdown();
     Core_Shutdown(window);
 

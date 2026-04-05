@@ -124,7 +124,7 @@ Asset* load_asset(const char* filename) {
 	for (size_t i = 0; i < asset->image_count; i++) {
 		const char* img_name = duplicate_string(data->images[i].name);
 		const char* img_uri = duplicate_string(data->images[i].uri);
-
+		
 		asset->images[i] = load_image(img_name, img_uri);
 	}
 
