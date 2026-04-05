@@ -105,6 +105,16 @@ uint32_t FG_AddPass(RenderPassDesc pass_description)
     FrameGraph* fg = &renderstate.framegraph;
     SDL_assert(fg->pass_count < MAX_PASSES);
 
+#ifndef NDEBUG
+    for (uint32_t i = 0; i < pass_description.output_count; ++i)
+    {
+        SDL_assert(pass_description.outputs[i].resolve_rid > 0 &&
+            "Resolve RID set to 0 (which is usually swapchain image rid), if you aren't using resolve, set resolve_rid to UINT32_MAX, but you aren't intending on this right? I'm saving your ass with this assert."
+        );
+    }
+#endif
+
+
     // Copy pass description to the next slot and return the index.
     uint32_t pass_id = fg->pass_count++;
     RenderPassDesc* pass = &fg->passes[pass_id];
@@ -203,7 +213,9 @@ void fg_apply_barriers(VkCommandBuffer cmd, RenderPassDesc* pass)
     for (uint32_t i = 0; i < pass->output_count; i++)
     {
         FG_Resource* res = &renderstate.registry.resources[pass->outputs[i].rid];
+        // printf("(pass=%s)\n  before attachment rid=%d: stage=%zu\n", pass->debug_name, pass->outputs[i].rid, res->current_stage);
         fg_add_barrier(res, &pass->outputs[i], image_barriers, &img_count, buffer_barriers, &buf_count);
+        // printf("  after attachment rid=%d: stage=%zu\n", pass->outputs[i].rid, res->current_stage);
 
         // MSAA Resolved Attachment
         uint32_t resolve_rid = pass->outputs[i].resolve_rid;
@@ -212,7 +224,9 @@ void fg_apply_barriers(VkCommandBuffer cmd, RenderPassDesc* pass)
             FG_Resource* resolved_res = &renderstate.registry.resources[resolve_rid];
             PassResourceUsage resolve_usage = pass->outputs[i];
             resolve_usage.rid = pass->outputs[i].resolve_rid;
+            // printf("  before Resolve attachment rid=%d: stage=%zu\n", resolve_rid, resolved_res->current_stage);
             fg_add_barrier(resolved_res, &resolve_usage, image_barriers, &img_count, buffer_barriers, &buf_count);
+            // printf("  after Resolve attachment rid=%d: stage=%zu\n", resolve_rid, resolved_res->current_stage);
         }
     }
 
@@ -470,13 +484,14 @@ void FG_CmdTransitionSwapchainForPresentation(VkCommandBuffer cmd, uint32_t swap
 {
     SDL_assert(swapchain_image_rid < renderstate.registry.resource_count);
     FG_Resource* swapchain_resource = &renderstate.registry.resources[swapchain_image_rid];
-    
+    // printf("swapchain_rid=%d\n   before: stage=%d\n", swapchain_image_rid, swapchain_resource->current_stage);
     single_resource_barrier(cmd, swapchain_resource, VK_DEPENDENCY_BY_REGION_BIT,
-        VK_PIPELINE_STAGE_2_NONE,
+        VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT_KHR,
         VK_ACCESS_2_NONE,
         VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
         renderstate.queue_family_indices.present_family
     );
+    // printf("  after: stage=%d\n", swapchain_resource->current_stage);
 }
 
 // Resource Tracking

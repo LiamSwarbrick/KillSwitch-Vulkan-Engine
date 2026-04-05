@@ -904,6 +904,7 @@ void Renderer_DrawFrame(glm::mat4 primary_camera_view)
 
 
 
+
     /* Sort Drawcalls into arrays per shader
 
         Example, Renderable r with MAT_PBR_WITH_OUTLINE:
@@ -954,6 +955,7 @@ void Renderer_DrawFrame(glm::mat4 primary_camera_view)
 
 
 
+
     /*  Build FrameGraph
 
         Queries game state to know which renderpasses to use.
@@ -966,6 +968,13 @@ void Renderer_DrawFrame(glm::mat4 primary_camera_view)
 
     // Swapchain rid changes each frame
     uint32_t swapchain_image_resource_id = renderstate.rids.swapchain_image_rids[swapchain_image_index];
+    {
+        // NOTE: The swapchain will be transitioned to the presentation queue waiting on COLOUR_ATTACHMENT_OUTPUT_BIT
+        // On the first frame, this resource is in STAGE_2_NONE_BIT, which means it will try transitioning it immediately
+        // and this will result in the synchronisation layers being angry, and potentially crash someones machine (who knows)
+        FG_Resource* swapchain_res = &renderstate.registry.resources[swapchain_image_resource_id];
+        swapchain_res->current_stage = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT;
+    }
 
     b32 use_msaa = renderstate.multisampling_count_flag > VK_SAMPLE_COUNT_1_BIT;
 
@@ -981,6 +990,10 @@ void Renderer_DrawFrame(glm::mat4 primary_camera_view)
                 .rid = renderstate.rids.depth_buffer_rid,
                 .usage_flags = FG_USAGE_DEPTH,
                 .sampler_type = FG_SAMPLER_NOT_SAMPLABLE,
+
+                // Make sure you set resolve_rid to UINT32_MAX when not resolving anything (I added an assertion in FG_AddPass to catch this just in case, because it took hours to debug with synchronisation layers on)
+                .resolve_mode = VK_RESOLVE_MODE_NONE,
+                .resolve_rid  = UINT32_MAX,
 
                 .layout = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL,
                 .access = VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
@@ -1035,6 +1048,9 @@ void Renderer_DrawFrame(glm::mat4 primary_camera_view)
                 .usage_flags = FG_USAGE_DEPTH,
                 .sampler_type = FG_SAMPLER_NOT_SAMPLABLE,
 
+                .resolve_mode = VK_RESOLVE_MODE_NONE,
+                .resolve_rid  = UINT32_MAX,
+
                 .layout = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL,
                 .access = VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_READ_BIT, 
                 .stage  = VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT,
@@ -1081,6 +1097,9 @@ void Renderer_DrawFrame(glm::mat4 primary_camera_view)
                 .usage_flags = FG_USAGE_COLOR,
                 .sampler_type = FG_SAMPLER_NOT_SAMPLABLE,  // NOTE: Outputs attachment, can ignore sampler_type
 
+                .resolve_mode = VK_RESOLVE_MODE_NONE,
+                .resolve_rid  = UINT32_MAX,
+
                 .layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
                 .access = VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,
                 .stage  = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
@@ -1102,6 +1121,7 @@ void Renderer_DrawFrame(glm::mat4 primary_camera_view)
 
 
 
+
     /*
         Render ImGUI Frame
         - Doing this after the framegraph is built so we can visualize the framegraph too!
@@ -1119,6 +1139,7 @@ void Renderer_DrawFrame(glm::mat4 primary_camera_view)
     ImGui::Render();
 
     
+
 
     /*  Execute FrameGraph
 
@@ -1158,8 +1179,9 @@ void Renderer_DrawFrame(glm::mat4 primary_camera_view)
 
 
     // Prepare submission of the command buffer to the queue.
-    // - Requires waiting on the present semaphore (signalled when the swapchain is ready)
-    // - We will signal the render semaphore, to signal that rendering has finished
+    // - Requires waiting on the image acquired semaphore (signalled when swapchain is acquired)
+    // - And signals the rendering complete semaphore, to signal that rendering has finished
+    // Then it can be presented
     VkCommandBufferSubmitInfo gcmd_submit_info = {
         .sType          = VK_STRUCTURE_TYPE_COMMAND_BUFFER_SUBMIT_INFO,
         .pNext          = NULL,
