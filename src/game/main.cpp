@@ -3,8 +3,19 @@
 #include "foundations/scene.h"
 #include "core/components.h"
 
+// TODO: Implementation is exposed?
+#include "renderer/impl/debug_ui/debug_ui.h"
+
 #include "SDL3/SDL.h"
 #include "SDL3/SDL_main.h"
+
+static DebugUI::DebugUIState debug_ui_state;
+
+void OnImGuiBuild(void* user_data)
+{
+    Scene* scene = (Scene*)user_data;
+    DebugUI::Draw(debug_ui_state, scene->GetECS());
+}
 
 glm::mat4 temp_camera_view_matrix()
 {
@@ -88,30 +99,15 @@ int main(int argc, char *argv[])
     }
 
     
-    // Load test scene (This would normally happen after renderer init, but for initial test, we don't)
-    //   Realistically, the splash screen assets would load first, then the main menu assets
-    //   And while the user is on the main menu, we are loading the prefabs.
-    //   That way, we can hide ALL of the latency and it will seem like there are no loading screens at all.
-	//Asset* asset1 = load_asset("assets/levels/shapes.gltf");
-    // Asset* asset3 = load_asset("assets/props/cube.gltf");
-    // Asset* asset3 = load_asset("assets/levels/untitled.gltf");
-    // Asset* asset3 = load_asset("assets/animations/Animationtest.gltf");
-    // SDL_Log("Asset 3 Extras: %s\n", asset3->nodes[0].extras_json);
-
-    // Mesh* test_mesh = &asset3->meshes[1];
-
-    // C_StaticMesh temp_static_mesh = {
-    //     .mesh = &asset3->meshes[0],
-    //     .parent_asset = asset3
-    // };
-    // Scene_InitInfo splash_screen_info = {
-    //     .num_static_meshes = 1,
-    //     .static_meshes = &temp_static_mesh
-    // };
-    // Renderer_ChangeScene(splash_screen_info);
+    /* LOADING NOTES
+       Realistically, the splash screen assets would load first, then the main menu assets
+       And while the user is on the main menu, we are loading the prefabs.
+       That way, we can hide ALL of the latency and it will seem like there are no loading screens at all.
+    */
 
     // Testing Scene and ECS
     Scene scene;
+    Renderer_SetImGuiCallback(OnImGuiBuild, &scene);
     scene.LoadLevel("assets/levels/Untitled2.gltf");
     // scene.LoadLevel("assets/animations/Animationtest.gltf");
     // scene.LoadLevel("assets/levels/Untitled_skybox.gltf");
@@ -151,19 +147,6 @@ int main(int argc, char *argv[])
 
             scene.Render();
             
-            // Renderable r = {
-            //     .transform = glm::mat4(1.0f),
-            //     .mesh_prefab = temp_static_mesh.renderer_prefab,
-            // };
-            // Renderer_PushRenderable(r);
-            // Renderable r = {
-            //     .transform = glm::mat4(1.0f),
-            //     .mesh_prefab = temp_animated_mesh.renderer_prefab,
-            //     .joint_count = temp_animated_mesh.joint_count,
-            //     .joints = temp_animated_mesh.joint_matrices
-            // };
-            // Renderer_PushRenderable(r);
-
             Renderer_DrawFrame(temp_camera_view_matrix());
         }
     }

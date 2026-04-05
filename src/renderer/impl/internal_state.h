@@ -97,6 +97,10 @@ typedef struct RenderState
 
     // imgui descriptor pool
     VkDescriptorPool imgui_descriptor_pool;
+
+    // ImGui game-side UI callback
+    Renderer_ImGuiBuildCallback imgui_callback      = nullptr;
+    void*                       imgui_callback_data = nullptr;
 }
 RenderState;
 

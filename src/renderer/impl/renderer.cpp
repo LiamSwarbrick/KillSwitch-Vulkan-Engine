@@ -6,6 +6,7 @@
 #include "imgui.h"
 #include "imgui_impl_sdl3.h"
 #include "imgui_impl_vulkan.h"
+#include "debug_ui/debug_ui.h"
 
 RenderState renderstate;
 
@@ -831,6 +832,12 @@ void Renderer_PushRenderable(Renderable renderable)
     renderstate.renderables_arena.items[renderstate.renderables_arena.num_renderables++] = renderable;
 }
 
+void Renderer_SetImGuiCallback(Renderer_ImGuiBuildCallback callback, void* user_data)
+{
+    renderstate.imgui_callback      = callback;
+    renderstate.imgui_callback_data = user_data;
+}
+
 
 void Renderer_DrawFrame(glm::mat4 primary_camera_view)
 {
@@ -894,17 +901,6 @@ void Renderer_DrawFrame(glm::mat4 primary_camera_view)
     
     // Reset command buffers by resetting the entire pool
     vkResetCommandPool(renderstate.device, renderstate.frames[frame_in_flight].graphics_command_pool, 0);
-
-    // ImGui: Start new frame
-    ImGui_ImplVulkan_NewFrame();
-    ImGui_ImplSDL3_NewFrame();
-    ImGui::NewFrame();
-
-    // Build ImGui UI here, e.g.
-    // ImGui::ShowDemoWindow();  // TODO: Remove after testing
-
-    // Finalize ImGui draw data (must happen before command buffer recording)
-    ImGui::Render();
 
 
 
@@ -1104,6 +1100,23 @@ void Renderer_DrawFrame(glm::mat4 primary_camera_view)
     };
     uint32_t swapchain_pass = FG_AddPass(swapchain_pass_desc);
 
+
+
+    /*
+        Render ImGUI Frame
+        - Doing this after the framegraph is built so we can visualize the framegraph too!
+    */
+    // ImGui: Start new frame
+    ImGui_ImplVulkan_NewFrame();
+    ImGui_ImplSDL3_NewFrame();
+    ImGui::NewFrame();
+
+    // Build ImGui UI here, e.g.
+    // ImGui::ShowDemoWindow();  // TODO: Remove after testing
+    if (renderstate.imgui_callback)
+        renderstate.imgui_callback(renderstate.imgui_callback_data);
+    // Finalize ImGui draw data (must happen before command buffer recording)
+    ImGui::Render();
 
     
 

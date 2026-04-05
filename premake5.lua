@@ -27,6 +27,7 @@ include_paths.stb = EXTERNAL .. "stb"
 include_paths.rapidjson = EXTERNAL .. "rapidjson"
 include_paths.imgui = EXTERNAL .. "imgui"
 include_paths.imgui_backends = EXTERNAL .. "imgui/backends"
+include_paths.imgui_node_editor = EXTERNAL .. "imgui-node-editor"
 
 lib_dirs = {}
 
@@ -219,6 +220,9 @@ workspace "AdventureEngine"
             EXTERNAL .. "imgui/backends/imgui_impl_sdl3.cpp",
             EXTERNAL .. "imgui/backends/imgui_impl_vulkan.cpp",
 
+            -- ImGui Node Editor
+            EXTERNAL .. "imgui-node-editor/imgui_node_editor.cpp",
+
 
             -- Shader src
             SRC .. "renderer/shadersrc/**.vert",
@@ -244,7 +248,8 @@ workspace "AdventureEngine"
             include_paths.stb,
             include_paths.cgltf,
             include_paths.imgui,
-            include_paths.imgui_backends
+            include_paths.imgui_backends,
+            include_paths.imgui_node_editor
         }
 
         libdirs {
