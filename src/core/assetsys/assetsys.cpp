@@ -36,6 +36,16 @@ static int find_bone_index(Skin* skin, int target_node_index) {
 	return -1;
 }
 
+// find the root node of the skeleton (blender doesn't export it explicitly)
+static int find_skeleton_root(Skin* skin) {
+	for (size_t i = 0; i < skin->joint_count; ++i) {
+		if (skin->bones[i].parent_index == -1) {
+			return skin->joint_node_indices[i];
+		}
+	}
+	return 1;
+}
+
 Image load_image(const char* name, const char* uri)
 {
 	// Load images from disk (4 channels: RGBA8 image).
@@ -264,7 +274,6 @@ Asset* load_asset(const char* filename) {
 		Skin* skin = &asset->skins[i];
 
 		skin->name = duplicate_string(gltf_skin->name);
-		skin->skeleton_root_node_index = get_node_index(data, gltf_skin->skeleton);
 		skin->joint_count = gltf_skin->joints_count;
 
 		if (skin->joint_count > 0) {
@@ -315,6 +324,8 @@ Asset* load_asset(const char* filename) {
 					}
 				}
 			}
+			// Has to be done after finding the parent indices for all bones
+			skin->skeleton_root_node_index = find_skeleton_root(skin);
 		}
 	}
 

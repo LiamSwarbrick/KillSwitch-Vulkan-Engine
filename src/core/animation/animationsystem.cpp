@@ -3,6 +3,7 @@
 #include "glm/gtc/quaternion.hpp"
 #include "glm/gtc/type_ptr.hpp"
 
+// ALL UNDER THE ASSUMPTION OF ONE SKIN PER ASSET
 void Animation_Update(AdvEng::ECS* ecs, float dt)
 {
     auto view = ecs->GetView<C_AnimatedMesh>();
@@ -12,38 +13,45 @@ void Animation_Update(AdvEng::ECS* ecs, float dt)
         auto& animatedMesh = ecs->GetComponent<C_AnimatedMesh>(e);
         Asset* asset = animatedMesh.asset;
 
-        // if (!animatedMesh.isPlaying || !asset || animatedMesh.currentAnimation < 0)
-        //      continue;
+        // Skip if no animation is playing, asset is missing or animation is invalid
+         if (!animatedMesh.isPlaying || !asset || animatedMesh.currentAnimation < 0)
+              continue;
 
         Animation& animation = asset->animations[animatedMesh.currentAnimation];
 
 		// Update the animation time
         animatedMesh.animationTime += dt;
-        if (animatedMesh.isLooping)
+        if (animatedMesh.isLooping && GetDuration(animatedMesh) > 0.0f)
             animatedMesh.animationTime = fmod(animatedMesh.animationTime, GetDuration(animatedMesh));
+		else if (animatedMesh.animationTime > GetDuration(animatedMesh))
+			Stop(animatedMesh);
 
 		// Vectors to store the interpolated transformations for each channel
-        // PUT THESE IN THE animatedMesh COMPONENT WHEN BLENDING
-		int animatedBoneCount = animation.channel_count / 3; // Each node has translation, rotation, scale
+        // PUT THESE IN THE COMPONENT WHEN BLENDING
+		int animatedBoneCount = animatedMesh.joint_count;
 		std::vector<glm::vec3> translations(animatedBoneCount);
 		std::vector<glm::quat> rotations(animatedBoneCount);
         std::vector<glm::vec3> scales(animatedBoneCount);
-		std::vector<int> nodeIndices(animatedBoneCount);
-        // Might want to fill with default values so if something breaks it shouldn't crash
+        
+        // Fill with default values so should just not animate if broken
+        for (int i = 0; i < animatedBoneCount; ++i)
+        {
+            translations[i] = glm::vec3(asset->skins[0].bones[i].translation[0], asset->skins[0].bones[i].translation[1], asset->skins[0].bones[i].translation[2]); 
+			rotations[i] = glm::quat(asset->skins[0].bones[i].rotation[3], asset->skins[0].bones[i].rotation[0], asset->skins[0].bones[i].rotation[1], asset->skins[0].bones[i].rotation[2]);
+			scales[i] = glm::vec3(1.0f);
+		}
 
+        // Loop through each channel and store the interpolated transform data for this frame in the vectors
         for (size_t i = 0; i < animation.channel_count; ++i)
         {
             AnimationChannel& channel = animation.channels[i];
             AnimationSampler& sampler = animation.samplers[channel.sampler_index];
-            int nodeIndex = channel.target_node_index;
-            nodeIndices[i / 3] = nodeIndex;
-
 
             // Find the keyframes and interpolation value from the current animation time
             int firstKeyframe = 0;
             int secondKeyframe = 0;
             float interpolationFactor = 0.0f;
-            for (size_t j = 0; j < sampler.input_count; j++)
+            for (size_t j = 0; j < sampler.input_count - 1; j++)
             {
                 if (animatedMesh.animationTime < sampler.inputs[j + 1])
                 {
@@ -54,24 +62,26 @@ void Animation_Update(AdvEng::ECS* ecs, float dt)
             }
             interpolationFactor = (animatedMesh.animationTime - sampler.inputs[firstKeyframe]) / (sampler.inputs[secondKeyframe] - sampler.inputs[firstKeyframe]);
 
-			// Interpolate the transformations to get local matrices for each joint
+			// Interpolate the transformations to get local matrices for each joint, 0 = translation, 1 = rotation, 2 = scale
+			int jointIndex = find_bone_index(&asset->skins[0], channel.target_node_index);
+            if (jointIndex == -1) continue; // Channel is useless, not affecting a joint
             if (channel.target_path == 0)
             {
                 glm::vec3 start = glm::vec3(sampler.outputs[firstKeyframe * 3], sampler.outputs[firstKeyframe * 3 + 1], sampler.outputs[firstKeyframe * 3 + 2]);
                 glm::vec3 end = glm::vec3(sampler.outputs[secondKeyframe * 3], sampler.outputs[secondKeyframe * 3 + 1], sampler.outputs[secondKeyframe * 3 + 2]);
-                translations[i / 3] = glm::mix(start, end, interpolationFactor);
+                translations[jointIndex] = glm::mix(start, end, interpolationFactor);
             }
             else if (channel.target_path == 1)
             {
                 glm::quat start = glm::quat(sampler.outputs[firstKeyframe * 4 + 3], sampler.outputs[firstKeyframe * 4], sampler.outputs[firstKeyframe * 4 + 1], sampler.outputs[firstKeyframe * 4 + 2]);
                 glm::quat end = glm::quat(sampler.outputs[secondKeyframe * 4 + 3], sampler.outputs[secondKeyframe * 4], sampler.outputs[secondKeyframe * 4 + 1], sampler.outputs[secondKeyframe * 4 + 2]);
-                rotations[i / 3] = glm::slerp(start, end, interpolationFactor);
+                rotations[jointIndex] = glm::slerp(start, end, interpolationFactor);
             }
             else if (channel.target_path == 2)
             {
                 glm::vec3 start = glm::vec3(sampler.outputs[firstKeyframe * 3], sampler.outputs[firstKeyframe * 3 + 1], sampler.outputs[firstKeyframe * 3 + 2]);
                 glm::vec3 end = glm::vec3(sampler.outputs[secondKeyframe * 3], sampler.outputs[secondKeyframe * 3 + 1], sampler.outputs[secondKeyframe * 3 + 2]);
-                scales[i / 3] = glm::mix(start, end, interpolationFactor);
+                scales[jointIndex] = glm::mix(start, end, interpolationFactor);
             }
         }
 
@@ -87,26 +97,17 @@ void Animation_Update(AdvEng::ECS* ecs, float dt)
 
         // Initialise world joint matrices with identity matrices
 		std::vector<glm::mat4> worldJointMatrices(animatedBoneCount, glm::mat4(1.0f));
-		bool isRoot = true;
+        int rootBone = find_bone_index(&asset->skins[0], asset->skins[0].skeleton_root_node_index);
+		CalculateWorldMatrices(asset, rootBone, glm::mat4(1.0f), localJointMatrices, worldJointMatrices);
 
-		// Find root joints and calculate world matrices recursively from them / CURRENTLY USES BLENDER HIERARCHY
-        for (int i = 0; i < animatedBoneCount; ++i)
-        {
-            for (int j = 0; j < animatedBoneCount; ++j)
-            {
-                if (asset->nodes[nodeIndices[i]].parent_index == nodeIndices[j])
-                    isRoot = false;
-            }
-
-            if (isRoot)
-				CalculateWorldMatrices(asset, i, nodeIndices, glm::mat4(1.0f), localJointMatrices, worldJointMatrices);      
-		}
+		// Make sure joint_matrices is allocated
+        if (!animatedMesh.joint_matrices)
+			animatedMesh.joint_matrices = new glm::mat4[animatedBoneCount];
 
 		// Calculate final joint matrices by multiplying world joint matrices with inverse bind matrices
         for (int i = 0; i < animatedBoneCount; ++i)
         {
-            int jointIndex = nodeIndices[i];
-            glm::mat4 inverseBindMatrix = glm::make_mat4(asset->skins[0].inverse_bind_matrices + jointIndex * 16); // HAVE TO ASSUME ONE SKIN FOR NOW
+            glm::mat4 inverseBindMatrix = glm::make_mat4(asset->skins[0].inverse_bind_matrices + i * 16);
             animatedMesh.joint_matrices[i] = worldJointMatrices[i] * inverseBindMatrix;
         }
 
@@ -114,37 +115,99 @@ void Animation_Update(AdvEng::ECS* ecs, float dt)
     return;
 }
 
-void Start(C_AnimatedMesh& animatedMesh, const char* name) {return;} // by name
-void Start(C_AnimatedMesh& animatedMesh, int id) { return; } // by index
-void Stop(C_AnimatedMesh& animatedMesh) { return; }
+void Start(C_AnimatedMesh& animatedMesh, const char* name) // by name
+{
+    if (!animatedMesh.asset)
+		return;
+
+	// Find the animation with the given name and start it
+    for (size_t i = 0; i < animatedMesh.asset->animation_count; ++i)
+    {
+        if (strcmp(animatedMesh.asset->animations[i].name, name) == 0)
+        {
+            animatedMesh.currentAnimation = i;
+            animatedMesh.animationTime = 0.0f;
+            animatedMesh.isPlaying = true;
+            return;
+        }
+	}   
+}
+
+void Start(C_AnimatedMesh& animatedMesh, int id) // by index
+{ 
+	// Check asset and animation index are valid, then start the animation
+    if (!animatedMesh.asset || id < 0 || id >= animatedMesh.asset->animation_count)
+        return;
+
+	animatedMesh.currentAnimation = id;
+	animatedMesh.animationTime = 0.0f;
+	animatedMesh.isPlaying = true; 
+}
+
+void Stop(C_AnimatedMesh& animatedMesh) 
+{ 
+	animatedMesh.isPlaying = false;
+}
+
+
 
 // settings
-void SetLooping(C_AnimatedMesh& animatedMesh, bool looping) { return; } // ToggleLooping? if so just switch bool
+void SetLooping(C_AnimatedMesh& animatedMesh, bool looping) 
+{ 
+    animatedMesh.isLooping = looping; 
+} 
+
+
 
 // state checks
-bool IsRunning(const C_AnimatedMesh& animatedMesh) { return true; }
-bool WillExpire(const C_AnimatedMesh& animatedMesh) { return true; }
+bool IsRunning(const C_AnimatedMesh& animatedMesh) 
+{ 
+    if (!animatedMesh.isPlaying || animatedMesh.animationTime > GetDuration(animatedMesh))
+		return false;
+    return true; 
+}
+
+
 
 // getters
-float GetDuration(const C_AnimatedMesh& animatedMesh) { return 0.0f; } // Get first and last keyframes of the current animation and return the difference
-float GetCurrentTime(const C_AnimatedMesh& animatedMesh) { return 0.0f; } // Just animationTime
+float GetDuration(const C_AnimatedMesh& animatedMesh)
+{
+    // Making sure an existing animation is playing
+    if (animatedMesh.currentAnimation < 0 || animatedMesh.currentAnimation >= animatedMesh.asset->animation_count)
+        return 0.0f;
+
+    Animation& animation = animatedMesh.asset->animations[animatedMesh.currentAnimation];
+    float duration = 0.0f;
+
+    // Loop through all samplers to find the max timestamp, aka the duration
+    for (size_t i = 0; i < animation.sampler_count; ++i)
+    {
+        if (animation.samplers[i].inputs[animation.samplers[i].input_count - 1] > duration)
+			duration = animation.samplers[i].inputs[animation.samplers[i].input_count - 1];
+    }
+
+    return duration;
+} // Get last keyframe of the current animation and return the timestamp
+
+
 
 // calculations
-void CalculateWorldMatrices(Asset* asset, int boneIndex, const std::vector<int>& nodeIndices, glm::mat4 parentMatrix, const std::vector<glm::mat4>& localJointMatrices, std::vector<glm::mat4>& worldJointMatrices)
+int find_bone_index(Skin* skin, int target_node_index) {
+    for (size_t i = 0; i < skin->joint_count; ++i) {
+        if (skin->joint_node_indices[i] == target_node_index) {
+            return (int)i;
+        }
+    }
+    return -1;
+}
+
+void CalculateWorldMatrices(Asset* asset, int boneIndex, glm::mat4 parentMatrix, const std::vector<glm::mat4>& localJointMatrices, std::vector<glm::mat4>& worldJointMatrices)
 {
-	// CURRENTLY USES VALUES FROM THE NODES, NOT THE SKIN/BONES, SO IS FRAGILE AND DEPENDS ON THE BLENDER HIERARCHY
     // Calculate world matrix from local matrix and parent world matrix
-	Node& node = asset->nodes[nodeIndices[boneIndex]];
 	worldJointMatrices[boneIndex] = parentMatrix * localJointMatrices[boneIndex];
 
     // Recursively call for all children
-    for (size_t i = 0; i < node.child_count; ++i)
-    {
-		int childIndex = node.children_indices[i];
-		for (size_t j = 0; j < nodeIndices.size(); ++j)
-		{
-			if (nodeIndices[j] == childIndex)
-				CalculateWorldMatrices(asset, j, nodeIndices, worldJointMatrices[boneIndex], localJointMatrices, worldJointMatrices);
-		}
-    }
+    for (size_t i = 0; i < asset->skins[0].bones[boneIndex].child_count; ++i)
+		CalculateWorldMatrices(asset, asset->skins[0].bones[boneIndex].children_indices[i], worldJointMatrices[boneIndex], localJointMatrices, worldJointMatrices);
 }
+

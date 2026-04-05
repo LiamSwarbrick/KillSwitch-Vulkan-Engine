@@ -321,7 +321,6 @@ void create_scene_resources()
     */
 
     ///////////////////////////////////////////////////////////////////////////////////////////////////
-    // TODO: Account for animated meshes as well                                                     //
     // TODO: Create stylised gradients via colour buffer for characters meshes (i.e. skinned meshes) //
     ///////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -425,7 +424,7 @@ void create_scene_resources()
     );
 
 
-    // Load meshes
+    // Load Static meshes
     for (uint32_t i = 0; i < init_info->num_static_meshes; ++i)
     {
         C_StaticMesh* component = &init_info->static_meshes[i];
@@ -465,12 +464,12 @@ void create_scene_resources()
                 prim->index_count, prim->vertex_count,
                 prim->indices, (glm::vec3*)prim->positions,
                 (glm::vec2*)prim->texcoords, (glm::vec3*)prim->normals,
-                NULL, (glm::uvec4*)prim->joints, (glm::vec4*)prim->weights
+                NULL, NULL, NULL
             );
         }
     }
 
-    // load animated meshes test
+    // Load animated meshes
     for (uint32_t i = 0; i < init_info->num_animated_meshes; ++i)
     {
         C_AnimatedMesh* component = &init_info->animated_meshes[i];
@@ -509,7 +508,7 @@ void create_scene_resources()
                 prim->indices, (glm::vec3*)prim->positions,
                 (glm::vec2*)prim->texcoords, (glm::vec3*)prim->normals,
                 NULL, (glm::uvec4*)prim->joints, (glm::vec4*)prim->weights
-            );
+                );
         }
     }
 

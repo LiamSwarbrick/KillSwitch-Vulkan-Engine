@@ -16,13 +16,12 @@ void SetLooping(C_AnimatedMesh& animator, bool looping);
 
 // state checks
 bool IsRunning(const C_AnimatedMesh& animator);
-bool WillExpire(const C_AnimatedMesh& animator);
 
 // getters
 float GetDuration(const C_AnimatedMesh& animator);
-float GetCurrentTime(const C_AnimatedMesh& animator);
 
 // calculations
-void CalculateWorldMatrices(Asset* asset, int boneIndex, const std::vector<int>& nodeIndices, glm::mat4 parentMatrix, const std::vector<glm::mat4>& localJointMatrices, std::vector<glm::mat4>& worldJointMatrices);
+int find_bone_index(Skin* skin, int target_node_index);
+void CalculateWorldMatrices(Asset* asset, int currentNode, glm::mat4 parentMatrix, const std::vector<glm::mat4>& localJointMatrices, std::vector<glm::mat4>& worldJointMatrices);
 
 #endif  // ANIMATION_H
