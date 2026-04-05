@@ -222,7 +222,7 @@ workspace "AdventureEngine"
 
 
             -- ImGui Node Editor (disable for compile issue)
-            -- EXTERNAL .. "imgui-node-editor/imgui_node_editor.cpp",
+            EXTERNAL .. "imgui-node-editor/imgui_node_editor.cpp",
 
 
             -- Shader src
@@ -321,6 +321,6 @@ workspace "AdventureEngine"
 
         filter "system:windows"
             postbuildcommands {
-                "{COPYFILE} " .. path.getabsolute(SDL_BUILD_DIR .. "/" .. sdl_build_type .. "/SDL3.dll") .. " %{cfg.targetdir}"
+                '{COPYFILE} "' .. path.getabsolute(SDL_BUILD_DIR .. "/" .. sdl_build_type .. "/SDL3.dll") .. '" "%{cfg.targetdir}"'
             }
         filter "*"

@@ -24,7 +24,7 @@ void DepthPrepass_Execute(VkCommandBuffer cmd, RenderPassDesc* desc)
             .pipeline_type  = PK_PIPELINE_TYPE_GRAPHICS,
             .shader_id      = shader_id,
             .pass_type      = pass_type,
-            .vertex_type    = drawcall.renderable->mesh_prefab.vertex_type,
+            .vertex_type    = (uint64_t)drawcall.renderable->mesh_prefab.vertex_type,
             .depth_test     = 1,
             .depth_write    = 1,
             .depth_op       = VK_COMPARE_OP_LESS,
@@ -33,7 +33,7 @@ void DepthPrepass_Execute(VkCommandBuffer cmd, RenderPassDesc* desc)
             .blend_mode     = BLEND_MODE_OPAQUE,
             .polygon_mode   = VK_POLYGON_MODE_FILL,
             .front_face     = VK_FRONT_FACE_COUNTER_CLOCKWISE,
-            .msaa_samples   = PK_MultisamplingFlag(renderstate.multisampling_count_flag)
+            .msaa_samples   = (uint64_t)PK_MultisamplingFlag(renderstate.multisampling_count_flag)
         };
 
         ExecuteDrawCall(cmd, drawcall, key, push_pass);
