@@ -17,6 +17,8 @@ void Scene::StartUp()
     // ... which registers the component
     m_ecs.RegisterComponent<C_Transform>();
     m_ecs.RegisterComponent<C_StaticMesh>();
+
+    m_asset = NULL;
 }
 
 void Scene::Shutdown()
