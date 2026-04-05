@@ -48,7 +48,7 @@ void SwapchainPass_Execute(VkCommandBuffer cmd, void* user_data)
             .shader_id      = shader_id,
             .pass_type      = pass_type,
 
-            .vertex_type    = drawcall.renderable->mesh_prefab.vertex_type,
+            .vertex_type    = (uint64_t)drawcall.renderable->mesh_prefab.vertex_type,
             #warning As soon as drawcall works, put this into an opaque renderpass before swapchain pass, and this pass will have a depth buffer
             .depth_test     = 0,  // TODO See warning above
             .depth_write    = 0,  // TODO See warning above
