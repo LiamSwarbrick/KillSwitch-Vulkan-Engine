@@ -159,9 +159,10 @@ bool Scene::LoadLevel(const char* fileName)
     info.num_static_meshes = (uint32_t)meshes.size();
     info.static_meshes = meshes.data();
 
-/* TEMP ANIMATION STUFF */
+/* TEMP ANIMATION STUFF (moved Pio's test code here for now before animation is loaded properly) */
     // Animation test
     Asset* asset3 = load_asset("assets/animations/Animationtest.gltf");
+    // Asset* asset3 = load_asset("assets/animations/zombie.gltf");
     SDL_Log("Asset 3 Extras: %s\n", asset3->nodes[0].extras_json);
 
     // Find how many joints the zombie has
@@ -185,11 +186,27 @@ bool Scene::LoadLevel(const char* fileName)
     }
 
     // TEMP HACK BCUZ MESHES NOT IN THE LOADER YET
-    C_AnimatedMesh* temp_alloced_mesh = (C_AnimatedMesh*)calloc(1, sizeof(C_AnimatedMesh));
-    *temp_alloced_mesh = temp_animated_mesh;
+    C_AnimatedMesh* anim_component;
+    {
+        AdvEng::EntityID eID;
+        eID = m_ecs.CreateEntity("Temp animated entity");
+        Node* node = &asset3->nodes[0];
+        C_Transform t;
+        t.position = glm::vec3(node->translation[0], node->translation[1], node->translation[2]);
+        t.rotation = glm::quat(node->rotation[0], node->rotation[1], node->rotation[2], node->rotation[3]);
+        t.matrix = glm::mat4_cast(t.rotation);
+        t.matrix = glm::translate(t.matrix, t.position);
+        m_ecs.AddComponent<C_Transform>(eID, { t.position, t.rotation, t.matrix });
+
+
+        m_ecs.AddComponent<C_AnimatedMesh>(eID, std::move(temp_animated_mesh));
+
+        anim_component = &m_ecs.GetComponent<C_AnimatedMesh>(eID);
+    }
+
 
     info.num_animated_meshes = 1;
-    info.animated_meshes = &temp_alloced_mesh;
+    info.animated_meshes = &anim_component;
     
 /* END TEMP ANIMATION STUFF */
 
@@ -222,11 +239,10 @@ void Scene::Render()
 
     m_ecs.GetView<C_Transform, C_AnimatedMesh>().ForEach([&](C_Transform& transform, C_AnimatedMesh& mesh)
     {
-        printf("ANIMATION: %d\n", mesh.joint_count);
         // Skip invalid / not-yet-uploaded meshes
         if (mesh.renderer_prefab.mesh_rids.primitive_count == 0)
             return;
-
+        
         Renderable r{};
         r.transform = transform.matrix;
         r.mesh_prefab = mesh.renderer_prefab;

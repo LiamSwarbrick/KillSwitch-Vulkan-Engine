@@ -19,6 +19,8 @@ glm::mat4 temp_camera_view_matrix()
     float move_speed = 0.05f;
     float rot_speed  = 1.5f;  // Degrees per frame
 
+    if (state[SDL_SCANCODE_LCTRL]) move_speed *= 20.0f;
+
     // --- ROTATION (arrow keys) ---
     if (state[SDL_SCANCODE_LEFT])  yaw   -= rot_speed;
     if (state[SDL_SCANCODE_RIGHT]) yaw   += rot_speed;

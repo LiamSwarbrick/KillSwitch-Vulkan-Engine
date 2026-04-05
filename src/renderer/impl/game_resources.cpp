@@ -492,7 +492,7 @@ void create_scene_resources()
     for (uint32_t i = 0; i < init_info->num_animated_meshes; ++i)
     {
         C_AnimatedMesh* component = init_info->animated_meshes[i];
-
+        
         component->renderer_prefab = {
             .vertex_type = component->mesh->vertex_type, 
             .mat_type = component->mesh->mat_type,
