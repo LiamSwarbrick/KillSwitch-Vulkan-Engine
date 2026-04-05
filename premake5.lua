@@ -220,8 +220,8 @@ workspace "AdventureEngine"
             EXTERNAL .. "imgui/backends/imgui_impl_sdl3.cpp",
             EXTERNAL .. "imgui/backends/imgui_impl_vulkan.cpp",
 
-            -- ImGui Node Editor
-            EXTERNAL .. "imgui-node-editor/imgui_node_editor.cpp",
+            -- ImGui Node Editor (disable for compile issue)
+            -- EXTERNAL .. "imgui-node-editor/imgui_node_editor.cpp",
 
 
             -- Shader src
