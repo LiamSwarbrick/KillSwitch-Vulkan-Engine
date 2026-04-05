@@ -220,8 +220,9 @@ workspace "AdventureEngine"
             EXTERNAL .. "imgui/backends/imgui_impl_sdl3.cpp",
             EXTERNAL .. "imgui/backends/imgui_impl_vulkan.cpp",
 
+
             -- ImGui Node Editor
-            EXTERNAL .. "imgui-node-editor/imgui_node_editor.cpp",
+            -- EXTERNAL .. "imgui-node-editor/imgui_node_editor.cpp",
 
 
             -- Shader src
@@ -233,7 +234,8 @@ workspace "AdventureEngine"
 
         defines {
             "VK_NO_PROTOTYPES",
-            "IMGUI_IMPL_VULKAN_USE_VOLK"
+            "IMGUI_IMPL_VULKAN_USE_VOLK",
+            -- "IMGUI_DEFINE_MATH_OPERATORS"
         }
 
         includedirs {
