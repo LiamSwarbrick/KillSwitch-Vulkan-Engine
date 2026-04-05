@@ -221,7 +221,7 @@ workspace "AdventureEngine"
             EXTERNAL .. "imgui/backends/imgui_impl_vulkan.cpp",
 
 
-            -- ImGui Node Editor
+            -- ImGui Node Editor (disable for compile issue)
             -- EXTERNAL .. "imgui-node-editor/imgui_node_editor.cpp",
 
 
