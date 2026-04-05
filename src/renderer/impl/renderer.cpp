@@ -992,8 +992,8 @@ void Renderer_DrawFrame(glm::mat4 primary_camera_view)
                 .sampler_type = FG_SAMPLER_NOT_SAMPLABLE,
 
                 // Make sure you set resolve_rid to UINT32_MAX when not resolving anything (I added an assertion in FG_AddPass to catch this just in case, because it took hours to debug with synchronisation layers on)
-                .resolve_mode = VK_RESOLVE_MODE_NONE,
                 .resolve_rid  = UINT32_MAX,
+                .resolve_mode = VK_RESOLVE_MODE_NONE,
 
                 .layout = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL,
                 .access = VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
@@ -1048,8 +1048,8 @@ void Renderer_DrawFrame(glm::mat4 primary_camera_view)
                 .usage_flags = FG_USAGE_DEPTH,
                 .sampler_type = FG_SAMPLER_NOT_SAMPLABLE,
 
-                .resolve_mode = VK_RESOLVE_MODE_NONE,
                 .resolve_rid  = UINT32_MAX,
+                .resolve_mode = VK_RESOLVE_MODE_NONE,
 
                 .layout = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL,
                 .access = VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_READ_BIT, 
@@ -1097,8 +1097,8 @@ void Renderer_DrawFrame(glm::mat4 primary_camera_view)
                 .usage_flags = FG_USAGE_COLOR,
                 .sampler_type = FG_SAMPLER_NOT_SAMPLABLE,  // NOTE: Outputs attachment, can ignore sampler_type
 
-                .resolve_mode = VK_RESOLVE_MODE_NONE,
                 .resolve_rid  = UINT32_MAX,
+                .resolve_mode = VK_RESOLVE_MODE_NONE,
 
                 .layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
                 .access = VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,
