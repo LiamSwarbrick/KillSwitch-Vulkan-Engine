@@ -1,7 +1,7 @@
 #ifndef ENGINE_RENDERER_RENDER_STATE_H
 #define ENGINE_RENDERER_RENDER_STATE_H
 
-#include "renderer.h"
+#include "../renderer/renderer.h"
 #include "internal_structs.h"
 #include "framegraph.h"
 

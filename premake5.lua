@@ -186,7 +186,8 @@ workspace "AdventureEngine"
             include_paths.stb,
             include_paths.rapidjson,
             include_paths.imgui,
-            include_paths.imgui_backends
+            include_paths.imgui_backends,
+            include_paths.imgui_node_editor
         }
 
         libdirs {
@@ -221,8 +222,11 @@ workspace "AdventureEngine"
             EXTERNAL .. "imgui/backends/imgui_impl_vulkan.cpp",
 
 
-            -- ImGui Node Editor (disable for compile issue)
+            -- ImGui Node Editor
             EXTERNAL .. "imgui-node-editor/imgui_node_editor.cpp",
+            EXTERNAL .. "imgui-node-editor/imgui_node_editor_api.cpp",
+            EXTERNAL .. "imgui-node-editor/imgui_canvas.cpp",
+            EXTERNAL .. "imgui-node-editor/crude_json.cpp",
 
 
             -- Shader src
@@ -306,7 +310,8 @@ workspace "AdventureEngine"
             include_paths.cgltf,
             include_paths.rapidjson,
             include_paths.imgui,
-            include_paths.imgui_backends
+            include_paths.imgui_backends,
+            include_paths.imgui_node_editor
         }
 
         libdirs {
