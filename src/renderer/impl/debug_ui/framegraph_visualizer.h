@@ -111,10 +111,12 @@ struct FrameGraphVisualizer
         for (uint32_t p = 0; p < fg->pass_count; ++p)
         {
             RenderPassDesc* pass = &fg->passes[p];
+
+            // Check sampled textures: Inputs are textures, see if they are outputs of a prev pass
             for (uint32_t i = 0; i < pass->input_count; ++i)
             {
-                uint32_t       rid   = pass->inputs[i].rid;
-                FG_UsageFlags  flags = pass->inputs[i].usage_flags;
+                uint32_t target_rid   = pass->inputs[i].rid;
+                FG_UsageFlags flags   = pass->inputs[i].usage_flags;
 
                 // Walk backwards to find the nearest pass that writes this resource
                 for (int prev = (int)p - 1; prev >= 0; --prev)
@@ -123,7 +125,8 @@ struct FrameGraphVisualizer
                     bool found = false;
                     for (uint32_t o = 0; o < src->output_count; ++o)
                     {
-                        if (src->outputs[o].rid == rid)
+                        // Check either this rid or it's resolve (cuz MSAA means it uses a resolve target instead)
+                        if (src->outputs[o].rid == target_rid || src->outputs[o].resolve_rid == target_rid)
                         {
                             ed::LinkId lid(link_counter++);
                             ed::Link(lid,
@@ -138,6 +141,35 @@ struct FrameGraphVisualizer
                     if (found) break;
                 }
             }
+
+            // Outputs are attachments, i.e. an attachment may also be used again...
+            for (uint32_t o_curr = 0; o_curr < pass->output_count; ++o_curr)
+            {
+                uint32_t target_rid = pass->outputs[o_curr].rid; 
+
+                // We only care about linking outputs if the current pass is LOADING (reusing) it
+                if (pass->outputs[o_curr].load_op == VK_ATTACHMENT_LOAD_OP_LOAD)
+                {
+                    for (int prev = (int)p - 1; prev >= 0; --prev)
+                    {
+                        RenderPassDesc* src = &fg->passes[prev];
+                        bool found = false;
+                        for (uint32_t o_prev = 0; o_prev < src->output_count; ++o_prev)
+                        {
+                            if (src->outputs[o_prev].rid == target_rid)
+                            {
+                                // LINK: Prev Output Pin -> Current Output Pin
+                                ed::Link(ed::LinkId(link_counter++), 
+                                        output_pin(prev, o_prev), 
+                                        output_pin(p, o_curr), 
+                                        usage_color(pass->outputs[o_curr].usage_flags), 2.0f);
+                                found = true; break;
+                            }
+                        }
+                        if (found) break;
+                    }
+                }
+            }            
         }
 
         // ----------------------------------------------------------------
