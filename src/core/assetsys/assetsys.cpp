@@ -63,7 +63,7 @@ Image load_image(const char* name, const char* uri)
 		.uri = duplicate_string(full_path)
 	};
 
-	stbi_set_flip_vertically_on_load(1);
+	stbi_set_flip_vertically_on_load(0);
 
 	int width, height, num_channels;
 	image.data = stbi_load(image.uri, &width, &height, &num_channels, 4);
