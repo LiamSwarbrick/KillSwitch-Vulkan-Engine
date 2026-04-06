@@ -89,6 +89,29 @@ int main(int argc, char *argv[])
         }
     };
     Renderer_Init(&renderer_info);
+    // ResourceManager resource_manager = ResourceManager_Create((ResourceManagerCreateInfo){
+    //     .debug_name = "GameAssets",
+    //     .initial_capacity = 32
+    // });
+
+    // ResourceHandle boot_vert = ResourceManager_RequestBinary(
+    //     &resource_manager,
+    //     RESOURCE_TYPE_SHADER_BYTECODE,
+    //     RESOURCE_RESIDENCY_BOOT,
+    //     "shader.unlit.vert",
+    //     "shaderspv/unlit.vert.spv"
+    // );
+
+    // ResourceHandle boot_frag = ResourceManager_RequestBinary(
+    //     &resource_manager,
+    //     RESOURCE_TYPE_SHADER_BYTECODE,
+    //     RESOURCE_RESIDENCY_BOOT,
+    //     "shader.unlit.frag",
+    //     "shaderspv/unlit.frag.spv"
+    // );
+
+    // (void)boot_vert;
+    // (void)boot_frag;
 
     // Set 4xMSAA to test settings API
     if (Renderer_GetSettingsCapabilities().max_msaa_samples >= 4)
