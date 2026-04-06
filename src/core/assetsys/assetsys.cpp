@@ -48,11 +48,19 @@ static int find_skeleton_root(Skin* skin) {
 
 Image load_image(const char* name, const char* uri)
 {
+	// Extract just the filename from the uri
+	const char* slash = strrchr(uri, '/');
+	const char* filename = slash ? slash + 1 : uri;
+
+	// all textures stored in assets/
+	char full_path[1024];
+	snprintf(full_path, sizeof(full_path), "assets/%s", filename);
+
 	// Load images from disk (4 channels: RGBA8 image).
 	// (No decision necessary here about whether it's sRGB or linear)
 	Image image = {
-		.name = name,
-		.uri = uri
+		.name = duplicate_string(name),
+		.uri = duplicate_string(full_path)
 	};
 
 	stbi_set_flip_vertically_on_load(1);

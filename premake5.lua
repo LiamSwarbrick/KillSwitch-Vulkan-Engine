@@ -222,7 +222,7 @@ workspace "AdventureEngine"
 
 
             -- ImGui Node Editor (disable for compile issue)
-            EXTERNAL .. "imgui-node-editor/imgui_node_editor.cpp",
+            --EXTERNAL .. "imgui-node-editor/imgui_node_editor.cpp",
 
 
             -- Shader src

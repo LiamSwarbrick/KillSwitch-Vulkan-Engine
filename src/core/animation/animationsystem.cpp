@@ -6,18 +6,18 @@
 // ALL UNDER THE ASSUMPTION OF ONE SKIN PER ASSET
 void Animation_Update(AdvEng::ECS* ecs, float dt)
 {
-    // iterate over entities
-    for (AdvEng::EntityID e = 0; e < AdvEng::MAX_ENTITIES; ++e)
+    auto view = ecs->GetView<C_AnimatedMesh>();
+    // iterate over entities using for each
+    view.ForEach([&](AdvEng::EntityID e, C_AnimatedMesh& animatedMesh)
     {
-        if (!ecs->IsEntityValid(e) || !ecs->Has<C_AnimatedMesh>(e))
-            continue;
-
-        auto& animatedMesh = ecs->GetComponent<C_AnimatedMesh>(e);
         Asset* asset = animatedMesh.asset;
+
+        if (!ecs->IsEntityValid(e) || !ecs->Has<C_AnimatedMesh>(e))
+            return;
 
         // Skip if no animation is playing, asset is missing or animation is invalid
          if (!animatedMesh.isPlaying || !asset || animatedMesh.currentAnimation < 0)
-              continue;
+             return;
 
         Animation& animation = asset->animations[animatedMesh.currentAnimation];
 
@@ -112,9 +112,7 @@ void Animation_Update(AdvEng::ECS* ecs, float dt)
             glm::mat4 inverseBindMatrix = glm::make_mat4(asset->skins[0].inverse_bind_matrices + i * 16);
             animatedMesh.joint_matrices[i] = worldJointMatrices[i] * inverseBindMatrix;
         }
-
-    }
-    return;
+    });
 }
 
 void Start(C_AnimatedMesh& animatedMesh, const char* name) // by name

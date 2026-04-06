@@ -23,12 +23,6 @@ namespace AdvEng
 
 	private:
 
-		// forward declaring View
-		template <typename...>
-		class View;
-
-		class Entity;
-
 		// Just for debugging.
 		// Needs to be inline
 		inline static std::vector<std::string> m_componentNames;
