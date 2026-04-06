@@ -35,6 +35,25 @@
         static bool const value = sizeof(test<T>(0)) == sizeof(yes);               \
     };
 
+// LOCAL NAMESPACE TO DEFINE FLOOR FUNCTION, deprecated in imgui
+namespace {
+    void FloorRect(ImRect & rect)
+    {
+        rect.Min.x = IM_TRUNC(rect.Min.x);
+        rect.Min.y = IM_TRUNC(rect.Min.y);
+        rect.Max.x = IM_TRUNC(rect.Max.x);
+        rect.Max.y = IM_TRUNC(rect.Max.y);
+    }
+}
+namespace ImGui {
+    ImGuiKey GetKeyIndex(ImGuiKey key)
+    {
+        IM_ASSERT(IsNamedKey(key));
+        return key; // already the correct 'index' in modern ImGui
+    }
+}
+
+
 
 namespace ax {
 namespace NodeEditor {
@@ -1648,7 +1667,7 @@ void ed::EditorContext::SetNodePosition(NodeId nodeId, const ImVec2& position)
     if (node->m_Bounds.Min != position)
     {
         node->m_Bounds.Translate(position - node->m_Bounds.Min);
-        node->m_Bounds.Floor();
+        FloorRect(node->m_Bounds);
         MakeDirty(NodeEditor::SaveReasonFlags::Position, node);
     }
 }
@@ -1668,7 +1687,7 @@ void ed::EditorContext::SetGroupSize(NodeId nodeId, const ImVec2& size)
     {
         node->m_GroupBounds.Min = node->m_Bounds.Min;
         node->m_GroupBounds.Max = node->m_Bounds.Min + size;
-        node->m_GroupBounds.Floor();
+        FloorRect(node->m_GroupBounds);
         MakeDirty(NodeEditor::SaveReasonFlags::Size, node);
     }
 }
@@ -1746,10 +1765,10 @@ void ed::EditorContext::UpdateNodeState(Node* node)
 
     node->m_Bounds.Min      = settings->m_Location;
     node->m_Bounds.Max      = node->m_Bounds.Min + settings->m_Size;
-    node->m_Bounds.Floor();
+    FloorRect(node->m_Bounds);
     node->m_GroupBounds.Min = settings->m_Location;
     node->m_GroupBounds.Max = node->m_GroupBounds.Min + settings->m_GroupSize;
-    node->m_GroupBounds.Floor();
+    FloorRect(node->m_GroupBounds);
 }
 
 void ed::EditorContext::RemoveSettings(Object* object)
@@ -3449,8 +3468,7 @@ bool ed::NavigateAction::HandleZoom(const Control& control)
     m_Animation.Finish();
 
     auto mousePos = io.MousePos;
-    auto steps    = (int)io.MouseWheel;
-    auto newZoom  = MatchZoom(steps, m_ZoomLevels[steps < 0 ? 0 : m_ZoomLevelCount - 1]);
+    auto newZoom  = GetNextZoom(io.MouseWheel);
 
     auto oldView   = GetView();
     m_Zoom = newZoom;
@@ -3626,6 +3644,32 @@ ImRect ed::NavigateAction::GetViewRect() const
     return m_Canvas.CalcViewRect(GetView());
 }
 
+float ed::NavigateAction::GetNextZoom(float steps)
+{
+    if (this->Editor->GetConfig().EnableSmoothZoom)
+    {
+        return MatchSmoothZoom(steps);
+    }
+    else
+    {
+        auto fixedSteps = (int)steps;
+        return MatchZoom(fixedSteps, m_ZoomLevels[fixedSteps < 0 ? 0 : m_ZoomLevelCount - 1]);
+    }
+}
+
+float ed::NavigateAction::MatchSmoothZoom(float steps)
+{
+    const auto power = Editor->GetConfig().SmoothZoomPower;
+
+    const auto newZoom = m_Zoom * powf(power, steps);
+    if (newZoom < m_ZoomLevels[0])
+        return m_ZoomLevels[0];
+    else if (newZoom > m_ZoomLevels[m_ZoomLevelCount - 1])
+        return m_ZoomLevels[m_ZoomLevelCount - 1];
+    else
+        return newZoom;
+}
+
 float ed::NavigateAction::MatchZoom(int steps, float fallbackZoom)
 {
     auto currentZoomIndex = MatchZoomIndex(steps);
@@ -3774,7 +3818,7 @@ bool ed::SizeAction::Process(const Control& control)
         if ((m_Pivot & NodeRegion::Right) == NodeRegion::Right)
             newBounds.Max.x = ImMax(newBounds.Min.x + minimumSize.x, Editor->AlignPointToGrid(newBounds.Max.x + dragOffset.x));
 
-        newBounds.Floor();
+        FloorRect(newBounds);
 
         m_LastSize = newBounds.GetSize();
 
@@ -5284,7 +5328,7 @@ void ed::NodeBuilder::End()
     ImGui::EndGroup();
 
     m_NodeRect = ImGui_GetItemRect();
-    m_NodeRect.Floor();
+    FloorRect(m_NodeRect);
 
     if (m_CurrentNode->m_Bounds.GetSize() != m_NodeRect.GetSize())
     {
@@ -5392,7 +5436,7 @@ void ed::NodeBuilder::PinRect(const ImVec2& a, const ImVec2& b)
     IM_ASSERT(nullptr != m_CurrentPin);
 
     m_CurrentPin->m_Bounds = ImRect(a, b);
-    m_CurrentPin->m_Bounds.Floor();
+    FloorRect(m_CurrentPin->m_Bounds);
     m_ResolvePinRect     = false;
 }
 
@@ -5442,7 +5486,7 @@ void ed::NodeBuilder::Group(const ImVec2& size)
         ImGui::Dummy(size);
 
     m_GroupBounds = ImGui_GetItemRect();
-    m_GroupBounds.Floor();
+    FloorRect(m_GroupBounds);
 }
 
 ImDrawList* ed::NodeBuilder::GetUserBackgroundDrawList() const

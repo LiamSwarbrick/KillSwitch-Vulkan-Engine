@@ -1,7 +1,7 @@
 #pragma once
 
 #include "imgui.h"
-#include "imgui_node_editor.h"
+#include "../imgui-node-editor/imgui_node_editor.h"
 #include "../renderer/impl/internal_state.h"  // renderstate, FrameGraph, ResourceRegistry, FG_*
 
 namespace ed = ax::NodeEditor;
