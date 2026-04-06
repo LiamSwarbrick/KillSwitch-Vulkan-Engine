@@ -129,7 +129,7 @@ bool Scene::LoadAsset(const char* fileName)
         if (node->mesh_index >= 0)
         {
             Mesh* mesh = &asset->meshes[node->mesh_index];
-            if (mesh->vertex_type == 1) // VERTEX_TYPE_SKINNED
+            if (mesh->vertex_type == VERTEX_TYPE_SKINNED)
             {
                 uint32_t joint_count = 0;
                 if (node->skin_index >= 0) {
