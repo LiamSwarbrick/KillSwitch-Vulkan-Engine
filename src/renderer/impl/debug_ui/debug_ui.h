@@ -2,6 +2,7 @@
 
 #include "imgui.h"
 #include "ecs_inspector.h"
+#include "framegraph_visualizer.h"
 
 
 namespace DebugUI
@@ -17,6 +18,8 @@ namespace DebugUI
 
         // Entity ID 
         uint32_t selected_entity_id = UINT32_MAX;
+
+        FrameGraphVisualizer fg_viz;
     };
 
     inline void HandleInput(DebugUIState& state)
@@ -69,9 +72,10 @@ namespace DebugUI
     inline void DrawFramegraph(DebugUIState& state)
     {
         if (!state.show_debug_ui || !state.show_framegraph) return;
+        ImGui::SetNextWindowSize(ImVec2(900, 900), ImGuiCond_FirstUseEver);
         if (ImGui::Begin("Framegraph", &state.show_framegraph))
         {
-            ImGui::TextDisabled("(Framegraph Visualizer - TODO)");
+            state.fg_viz.Draw();
         }
         ImGui::End();
     }
