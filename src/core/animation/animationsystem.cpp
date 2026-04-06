@@ -6,10 +6,12 @@
 // ALL UNDER THE ASSUMPTION OF ONE SKIN PER ASSET
 void Animation_Update(AdvEng::ECS* ecs, float dt)
 {
-    auto view = ecs->GetView<C_AnimatedMesh>();
-
-    for (AdvEng::EntityID e : view)
+    // iterate over entities
+    for (AdvEng::EntityID e = 0; e < AdvEng::MAX_ENTITIES; ++e)
     {
+        if (!ecs->IsEntityValid(e) || !ecs->Has<C_AnimatedMesh>(e))
+            continue;
+
         auto& animatedMesh = ecs->GetComponent<C_AnimatedMesh>(e);
         Asset* asset = animatedMesh.asset;
 
