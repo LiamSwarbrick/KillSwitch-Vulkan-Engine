@@ -616,6 +616,7 @@ void Renderer_Init(const Renderer_InitInfo* info)
         ImGui::CreateContext();
         ImGuiIO& io = ImGui::GetIO();
         io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
+        io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
 
         // SDL3 backend
         ImGui_ImplSDL3_InitForVulkan(renderstate.window);

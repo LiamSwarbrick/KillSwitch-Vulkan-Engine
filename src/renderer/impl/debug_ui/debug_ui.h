@@ -28,33 +28,24 @@ namespace DebugUI
 
     inline void HandleInput(DebugUIState& state)
     {
-        // F3 to toggle the entire Debug UI
+        // F3: toggle debug UI; opening restores all three panels
         if (ImGui::IsKeyPressed(ImGuiKey_F3))
         {
             state.show_debug_ui = !state.show_debug_ui;
+            if (state.show_debug_ui)
+            {
+                state.show_ecs_inspector = true;
+                state.show_framegraph    = true;
+                state.show_asset_browser = true;
+            }
         }
     }
-    // Main menu bar with options to toggle different debug windows
-    inline void DrawMainMenuBar(DebugUIState& state)
+
+    // Full-screen transparent dockspace so windows can be docked anywhere.
+    inline void DrawDockSpace(DebugUIState& state)
     {
         if (!state.show_debug_ui) return;
-
-        if (ImGui::BeginMainMenuBar())
-        {
-            if (ImGui::BeginMenu("Debug"))
-            {
-                ImGui::MenuItem("ECS Inspector",  nullptr, &state.show_ecs_inspector);
-                ImGui::MenuItem("Framegraph",     nullptr, &state.show_framegraph);
-                ImGui::MenuItem("Asset Browser",  nullptr, &state.show_asset_browser);
-                ImGui::Separator();
-                ImGui::TextDisabled("F3 to toggle UI");
-                ImGui::EndMenu();
-            }
-            // Display toggle hint on the right side
-            ImGui::SetCursorPosX(ImGui::GetIO().DisplaySize.x - 100.0f);
-            ImGui::TextDisabled("[F3] Debug UI");
-            ImGui::EndMainMenuBar();
-        }
+        ImGui::DockSpaceOverViewport(0, ImGui::GetMainViewport(), ImGuiDockNodeFlags_PassthruCentralNode);
     }
 
     inline void DrawECSInspector(DebugUIState& state, AdvEng::ECS& ecs)
@@ -100,7 +91,7 @@ namespace DebugUI
     inline void Draw(DebugUIState& state, AdvEng::ECS& ecs)
     {
         HandleInput(state);
-        DrawMainMenuBar(state);
+        DrawDockSpace(state);
         DrawECSInspector(state, ecs);
         DrawFramegraph(state);
         DrawAssetBrowser(state);
