@@ -157,10 +157,6 @@ bool Scene::LoadLevel(const char* fileName)
         meshes.push_back(&static_mesh);
     }
 
-    Scene_InitInfo info = {};
-    info.num_static_meshes = (uint32_t)meshes.size();
-    info.static_meshes = meshes.data();
-
 /* TEMP ANIMATION STUFF (moved Pio's test code here for now before animation is loaded properly) */
     // Animation test
     Asset* asset3 = load_asset("assets/animations/Animationtest.gltf");
@@ -206,11 +202,14 @@ bool Scene::LoadLevel(const char* fileName)
         anim_component = &m_ecs.GetComponent<C_AnimatedMesh>(eID);
     }
 
+    /* END TEMP ANIMATION STUFF */
 
-    info.num_animated_meshes = 1;
-    info.animated_meshes = &anim_component;
+    Scene_InitInfo info = {};
+    info.num_static_meshes = (uint32_t)meshes.size();
+    info.static_meshes = meshes.data();
+    info.num_animated_meshes = 1;            // <- TEMP
+    info.animated_meshes = &anim_component;  // <- TEMP
     
-/* END TEMP ANIMATION STUFF */
 
     Renderer_ChangeScene(info);
     

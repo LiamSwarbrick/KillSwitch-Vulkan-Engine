@@ -89,6 +89,9 @@ int main(int argc, char *argv[])
         }
     };
     Renderer_Init(&renderer_info);
+
+    // Dunno whether this resource manager will end up in the final build, if no one is integrating it due to more important tasks
+
     // ResourceManager resource_manager = ResourceManager_Create((ResourceManagerCreateInfo){
     //     .debug_name = "GameAssets",
     //     .initial_capacity = 32
