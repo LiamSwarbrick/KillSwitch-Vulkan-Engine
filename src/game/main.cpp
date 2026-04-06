@@ -108,7 +108,7 @@ int main(int argc, char *argv[])
     // Testing Scene and ECS
     Scene scene{};
     Renderer_SetImGuiCallback(OnImGuiBuild, &scene);
-    scene.LoadLevel("assets/props/scene.gltf");
+    scene.LoadLevel("assets/animations/cat.gltf");
     // scene.LoadLevel("assets/animations/Animationtest.gltf");
     // scene.LoadLevel("assets/levels/Untitled_skybox.gltf");
 
