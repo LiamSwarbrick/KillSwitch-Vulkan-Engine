@@ -100,7 +100,8 @@ void Animation_Update(AdvEng::ECS* ecs, float dt)
         // Initialise world joint matrices with identity matrices
 		std::vector<glm::mat4> worldJointMatrices(animatedBoneCount, glm::mat4(1.0f));
         int rootBone = find_bone_index(&asset->skins[0], asset->skins[0].skeleton_root_node_index);
-		CalculateWorldMatrices(asset, rootBone, glm::mat4(1.0f), localJointMatrices, worldJointMatrices);
+        auto& transform = ecs->GetComponent<C_Transform>(e);
+		CalculateWorldMatrices(asset, rootBone, transform.matrix, localJointMatrices, worldJointMatrices);
 
 		// Make sure joint_matrices is allocated
         if (!animatedMesh.joint_matrices)
