@@ -3,19 +3,8 @@
 #include "foundations/scene.h"
 #include "core/components.h"
 
-// TODO: Implementation is exposed?
-#include "renderer/impl/debug_ui/debug_ui.h"
-
 #include "SDL3/SDL.h"
 #include "SDL3/SDL_main.h"
-
-static DebugUI::DebugUIState debug_ui_state;
-
-void OnImGuiBuild(void* user_data)
-{
-    Scene* scene = (Scene*)user_data;
-    DebugUI::Draw(debug_ui_state, scene->GetECS());
-}
 
 glm::mat4 temp_camera_view_matrix()
 {
@@ -107,7 +96,7 @@ int main(int argc, char *argv[])
 
     // Testing Scene and ECS
     Scene scene{};
-    Renderer_SetImGuiCallback(OnImGuiBuild, &scene);
+    Renderer_SetDebugECS(&scene.GetECS());
     scene.LoadLevel("assets/levels/Untitled2.gltf");
     // scene.LoadLevel("assets/animations/Animationtest.gltf");
     // scene.LoadLevel("assets/levels/Untitled_skybox.gltf");

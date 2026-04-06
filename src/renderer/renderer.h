@@ -57,4 +57,9 @@ typedef void (*Renderer_ImGuiBuildCallback)(void* user_data);
 
 void Renderer_SetImGuiCallback(Renderer_ImGuiBuildCallback callback, void* user_data);
 
+// Register the ECS so the renderer can drive the debug UI internally.
+// Call once after Renderer_Init, passing the scene's ECS reference.
+namespace AdvEng { class ECS; }
+void Renderer_SetDebugECS(AdvEng::ECS* ecs);
+
 #endif  // ENGINE_RENDERER_H

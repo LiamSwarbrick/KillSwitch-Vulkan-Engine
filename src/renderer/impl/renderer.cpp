@@ -9,6 +9,8 @@
 #include "debug_ui/debug_ui.h"
 
 RenderState renderstate;
+static DebugUI::DebugUIState debug_ui_state;
+static AdvEng::ECS*          debug_ecs_ptr = nullptr;
 
 // STB DS for hash maps (pipeilne hashing), with the main thread alloc tracker.
 void* external_malloc(size_t size) { return L_calloc(1, size, &renderstate.main.tt); }
@@ -838,6 +840,11 @@ void Renderer_SetImGuiCallback(Renderer_ImGuiBuildCallback callback, void* user_
     renderstate.imgui_callback_data = user_data;
 }
 
+void Renderer_SetDebugECS(AdvEng::ECS* ecs)
+{
+    debug_ecs_ptr = ecs;
+}
+
 
 void Renderer_DrawFrame(glm::mat4 primary_camera_view)
 {
@@ -1133,6 +1140,8 @@ void Renderer_DrawFrame(glm::mat4 primary_camera_view)
 
     // Build ImGui UI here, e.g.
     // ImGui::ShowDemoWindow();  // TODO: Remove after testing
+    if (debug_ecs_ptr)
+        DebugUI::Draw(debug_ui_state, *debug_ecs_ptr);
     if (renderstate.imgui_callback)
         renderstate.imgui_callback(renderstate.imgui_callback_data);
     // Finalize ImGui draw data (must happen before command buffer recording)
