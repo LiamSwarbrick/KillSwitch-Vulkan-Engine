@@ -1,6 +1,7 @@
 #pragma once
 
 #include "imgui.h"
+#include "imgui_internal.h"  // DockBuilder API
 #include "ecs_inspector.h"
 #include "framegraph_visualizer.h"
 #include "asset_browser.h"
@@ -8,7 +9,7 @@
 
 namespace DebugUI
 {
-    // State of menubar and windows in the debug UI
+    // State of windows in the debug UI
     struct DebugUIState
     {
         bool show_debug_ui      = false;  // F3 to toggle
@@ -20,7 +21,6 @@ namespace DebugUI
         // Entity ID 
         uint32_t selected_entity_id = UINT32_MAX;
 
-        #warning Waiting for node editor from Nansong
         FrameGraphVisualizer fg_viz;
         AssetBrowser         asset_browser;
         Asset*               debug_asset = nullptr;
@@ -41,11 +41,38 @@ namespace DebugUI
         }
     }
 
-    // Full-screen transparent dockspace so windows can be docked anywhere.
+    // Dockspace with default layout
     inline void DrawDockSpace(DebugUIState& state)
     {
         if (!state.show_debug_ui) return;
-        ImGui::DockSpaceOverViewport(0, ImGui::GetMainViewport(), ImGuiDockNodeFlags_PassthruCentralNode);
+        ImGuiID dockspace_id = ImGui::DockSpaceOverViewport(0, ImGui::GetMainViewport(), ImGuiDockNodeFlags_PassthruCentralNode);
+
+        // Build default layout once; skipped if imgui.ini already has a saved layout.
+        ImGuiDockNode* node = ImGui::DockBuilderGetNode(dockspace_id);
+        if (node && node->IsLeafNode())
+        {
+            ImGui::DockBuilderRemoveNode(dockspace_id);
+            ImGui::DockBuilderAddNode(dockspace_id, ImGuiDockNodeFlags_PassthruCentralNode);
+            ImGui::DockBuilderSetNodeSize(dockspace_id, ImGui::GetMainViewport()->Size);
+
+            // Split off bottom strip (30% height) — full width
+            ImGuiID top, bottom;
+            ImGui::DockBuilderSplitNode(dockspace_id, ImGuiDir_Down, 0.30f, &bottom, &top);
+
+            // Split top: ECS on the left (30% of total width), game viewport on the right (passthru)
+            ImGuiID top_left, top_right;
+            ImGui::DockBuilderSplitNode(top, ImGuiDir_Left, 0.30f, &top_left, &top_right);
+
+            // Split bottom strip 50/50
+            ImGuiID bottom_left, bottom_right;
+            ImGui::DockBuilderSplitNode(bottom, ImGuiDir_Left, 0.50f, &bottom_left, &bottom_right);
+
+            ImGui::DockBuilderDockWindow("ECS Inspector",  top_left);
+            ImGui::DockBuilderDockWindow("Asset Browser",  bottom_left);
+            ImGui::DockBuilderDockWindow("Framegraph",     bottom_right);
+
+            ImGui::DockBuilderFinish(dockspace_id);
+        }
     }
 
     inline void DrawECSInspector(DebugUIState& state, AdvEng::ECS& ecs)
