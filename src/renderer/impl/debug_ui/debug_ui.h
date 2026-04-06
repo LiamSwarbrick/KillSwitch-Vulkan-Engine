@@ -2,7 +2,8 @@
 
 #include "imgui.h"
 #include "ecs_inspector.h"
-#include "framegraph_visualizer.h"
+#warning Waiting for node editor from Nansong
+// #include "framegraph_visualizer.h"
 #include "asset_browser.h"
 
 
@@ -20,7 +21,8 @@ namespace DebugUI
         // Entity ID 
         uint32_t selected_entity_id = UINT32_MAX;
 
-        FrameGraphVisualizer fg_viz;
+        #warning Waiting for node editor from Nansong
+        // FrameGraphVisualizer fg_viz;
         AssetBrowser         asset_browser;
         Asset*               debug_asset = nullptr;
     };
@@ -78,7 +80,8 @@ namespace DebugUI
         ImGui::SetNextWindowSize(ImVec2(900, 600), ImGuiCond_FirstUseEver);
         if (ImGui::Begin("Framegraph", &state.show_framegraph))
         {
-            state.fg_viz.Draw();
+            #warning NOTE(Liam), See warnings in debug_ui. Commenting out node editor until Nansong sends his working build of it to the repo.
+            // state.fg_viz.Draw();
         }
         ImGui::End();
     }
