@@ -69,34 +69,13 @@ struct PushConstant_DrawCall
 
 struct PushConstant_PassHeader
 {
-    // NOTE: Each renderpass will define their own pass header info in their shader and cpp file.
-    // Use static_assert to make sure PushConstant_PassHeader size is == e.g. PushConstant_PassHeader_DeferredLighting
-    // If a specific pass header does not need all 64 bytes, then pad the struct.
-    uint64_t placeholder[8];  // Just a placeholder 64 bytes of data.
+    uint32_t texture_indices[16];
 };
-struct FullPushConstants_Graphics
+struct FullPushConstants_Graphics  // Defined for the CPU side to use
 {
     PushConstant_DrawCall dc;
     PushConstant_PassHeader pass;
 };
-
-// Push constant pass header implementation for each renderpass:
-//
-
-struct PushConstant_Pass_DeferredLighting
-{
-    uint32_t tex_idx_color;  // Temp: color rgb, unused a
-    uint32_t sampler_idx_color;
-
-    uint64_t _padding[7];
-};
-
-// Static asserts to make sure each renderpass has the same header size
-#ifdef __cplusplus
-
-static_assert(sizeof(PushConstant_PassHeader) == sizeof(PushConstant_Pass_DeferredLighting));
-
-#endif  // __cplusplus
 
 
 // Buffers
@@ -122,7 +101,7 @@ struct MaterialData
     float alpha_cutoff;
 
     uint32_t sampler_idx;
-        
+    
     uint32_t texture_idx_basecolor;
     // TODO: Switch to this layout:
     // uint32_t texture_idx_basecolor_rgb_metalness_a;

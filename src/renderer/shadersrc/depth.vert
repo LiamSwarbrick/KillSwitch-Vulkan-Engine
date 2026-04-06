@@ -11,10 +11,6 @@ layout(push_constant, scalar) uniform PushConstants
     FullPushConstants_Graphics push;
 };
 
-layout(location = 0) out vec2 out_uv;
-layout(location = 1) out vec3 out_color;
-
-// Multipass materials require different shaders have reproducable vertex positions
 invariant gl_Position;
 
 void main()
@@ -26,20 +22,12 @@ void main()
     SceneData scene  = SceneBuffer(push.dc.scene_ptr).scene;
     ObjectData obj   = ObjectBuffer(push.dc.object_ptr).object;
     
-    // Pull vertex data
+    // Pull only vertex positions
     IndexBuffer ib   = IndexBuffer(push.dc.index_ptr);
     uint index = ib.indices[gl_VertexIndex];
-
     vec3 v_pos    = VPositionBuffer(push.dc.v_positions_ptr).positions[index];
-    vec2 v_uv     = VTexcoordBuffer(push.dc.v_texcoords_ptr).texcoords[index];
-    vec3 v_normal = VNormalBuffer(push.dc.v_normals_ptr).normals[index];
-    vec3 v_color  = vec3(1.0);
-    if (push.dc.v_colors_ptr != 0)
-        v_color  = VColorBuffer(push.dc.v_colors_ptr).colors[index];
-    
     mat4 model_matrix = obj.model;
 
-    // Optional Skinning Logic (shader specialization constants btw)
     if (CURRENT_VERTEX_TYPE == VERTEX_TYPE_SKINNED)
     {
         // Pull skinned vertex data
@@ -56,7 +44,5 @@ void main()
         model_matrix = model_matrix * skin;
     }
 
-    out_uv = v_uv;
-    out_color = v_color;
     gl_Position = scene.view_proj * model_matrix * vec4(v_pos, 1.0);
 }

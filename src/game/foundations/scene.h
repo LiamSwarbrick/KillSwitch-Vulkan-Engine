@@ -28,6 +28,7 @@ public:
 
     // bool LoadLevel(u32 levelNumber);
     bool LoadLevel(const char* fileName);
+    AdvEng::ECS& GetECS() { return m_ecs; };
 
     void Update(float dt);
     void Render();

@@ -134,7 +134,7 @@ Asset* load_asset(const char* filename) {
 	for (size_t i = 0; i < asset->image_count; i++) {
 		const char* img_name = duplicate_string(data->images[i].name);
 		const char* img_uri = duplicate_string(data->images[i].uri);
-
+		
 		asset->images[i] = load_image(img_name, img_uri);
 	}
 
@@ -266,6 +266,9 @@ Asset* load_asset(const char* filename) {
 		if (gltf_node->extras.data) {
 			node->extras_json = duplicate_string(gltf_node->extras.data);
 		}
+		else {
+			node->extras_json = NULL;
+		}
 	}
 
 	// Copy Skins
@@ -342,7 +345,7 @@ Asset* load_asset(const char* filename) {
 		mesh->vertex_type = VERTEX_TYPE_STATIC;
 
 		// default unlit mesh TODO: better defaults once lighting implemented.
-		mesh->mat_type = MAT_UNLIT;
+		mesh->mat_type = MAT_UNLIT_OPAQUE;
 		// TODO: Not retrieving material type yet from gltf (need a way of exposing it in blender)
 
 		for (size_t p = 0; p < mesh->primitive_count; p++) {

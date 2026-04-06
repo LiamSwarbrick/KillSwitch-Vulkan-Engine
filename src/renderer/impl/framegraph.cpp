@@ -3,9 +3,6 @@
 #include "internal_state.h"
 
 
-#warning Not sure I need sampler_type in pass resource usage
-
-
 void bindless_heap_init();
 void bindless_heap_shutdown();
 void bindless_heap_create_all_samplers();
@@ -103,10 +100,20 @@ void FG_Empty()
     }
 }
 
-uint32_t FG_AddPass(RenderPassDesc pass_description, uint32_t pass_type)
+uint32_t FG_AddPass(RenderPassDesc pass_description)
 {
     FrameGraph* fg = &renderstate.framegraph;
     SDL_assert(fg->pass_count < MAX_PASSES);
+
+#ifndef NDEBUG
+    for (uint32_t i = 0; i < pass_description.output_count; ++i)
+    {
+        SDL_assert(pass_description.outputs[i].resolve_rid > 0 &&
+            "Resolve RID set to 0 (which is usually swapchain image rid), if you aren't using resolve, set resolve_rid to UINT32_MAX, but you aren't intending on this right? I'm saving your ass with this assert."
+        );
+    }
+#endif
+
 
     // Copy pass description to the next slot and return the index.
     uint32_t pass_id = fg->pass_count++;
@@ -114,10 +121,10 @@ uint32_t FG_AddPass(RenderPassDesc pass_description, uint32_t pass_type)
     memcpy(pass, &pass_description, sizeof(RenderPassDesc));
 
     // Add to table
-    SDL_assert(renderstate.pass_id_from_type[pass_type] == PASS_TYPE_INVALID &&
+    SDL_assert(renderstate.pass_id_from_type[pass_description.pass_type] == PASS_TYPE_INVALID &&
         "Can't add the same pass twice, give it a unique PassType enumeration"
     );
-    renderstate.pass_id_from_type[pass_type] = pass_id;
+    renderstate.pass_id_from_type[pass_description.pass_type] = pass_id;
 
     return pass_id;
 }
@@ -189,7 +196,7 @@ void fg_add_barrier(FG_Resource* res, PassResourceUsage* usage,
 
 void fg_apply_barriers(VkCommandBuffer cmd, RenderPassDesc* pass)
 {
-    VkImageMemoryBarrier2 image_barriers[MAX_PASS_RESOURCE_BANDWIDTH * 2];  // *2 because each resource could require both an input and output barrier.
+    VkImageMemoryBarrier2 image_barriers[MAX_PASS_RESOURCE_BANDWIDTH * 3];  // *3 because each resource could require both an input and output barrier (2x) and then each output could have a resolve rid (*3).
     VkBufferMemoryBarrier2 buffer_barriers[MAX_PASS_RESOURCE_BANDWIDTH * 2];
     uint32_t img_count = 0;
     uint32_t buf_count = 0;
@@ -206,7 +213,21 @@ void fg_apply_barriers(VkCommandBuffer cmd, RenderPassDesc* pass)
     for (uint32_t i = 0; i < pass->output_count; i++)
     {
         FG_Resource* res = &renderstate.registry.resources[pass->outputs[i].rid];
+        // printf("(pass=%s)\n  before attachment rid=%d: stage=%zu\n", pass->debug_name, pass->outputs[i].rid, res->current_stage);
         fg_add_barrier(res, &pass->outputs[i], image_barriers, &img_count, buffer_barriers, &buf_count);
+        // printf("  after attachment rid=%d: stage=%zu\n", pass->outputs[i].rid, res->current_stage);
+
+        // MSAA Resolved Attachment
+        uint32_t resolve_rid = pass->outputs[i].resolve_rid;
+        if (resolve_rid < UINT32_MAX)
+        {
+            FG_Resource* resolved_res = &renderstate.registry.resources[resolve_rid];
+            PassResourceUsage resolve_usage = pass->outputs[i];
+            resolve_usage.rid = pass->outputs[i].resolve_rid;
+            // printf("  before Resolve attachment rid=%d: stage=%zu\n", resolve_rid, resolved_res->current_stage);
+            fg_add_barrier(resolved_res, &resolve_usage, image_barriers, &img_count, buffer_barriers, &buf_count);
+            // printf("  after Resolve attachment rid=%d: stage=%zu\n", resolve_rid, resolved_res->current_stage);
+        }
     }
 
     if (img_count > 0 || buf_count > 0)
@@ -239,7 +260,7 @@ void fg_execute_pass(uint32_t pass_idx, VkCommandBuffer cmd)
     if (pass->is_compute)
     {
         // Compute passes don't use vkCmdBeginRendering
-        pass->execute_callback(cmd, pass->user_data);
+        pass->execute_callback(cmd, pass);
     }
     else  // Graphics Pass:
     {
@@ -255,38 +276,60 @@ void fg_execute_pass(uint32_t pass_idx, VkCommandBuffer cmd)
         for (uint32_t i = 0; i < pass->output_count; ++i)
         {
             PassResourceUsage* usage = &pass->outputs[i];
-
             SDL_assert(usage->rid < renderstate.registry.resource_count);
             FG_Resource* res = &renderstate.registry.resources[usage->rid];
 
+            // Setup the base attachment info
             VkRenderingAttachmentInfo attachment = {
-                .sType               = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
-                .pNext               = NULL,
-                .imageView           = res->image.view,
-                .imageLayout         = usage->layout,
+                .sType       = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
+                .pNext       = NULL,
+                .imageView   = res->image.view,
+                .imageLayout = usage->layout,
 
-                // TODO: Currently no MSAA (this can be a parameter of a renderpass?)
-                .resolveMode         = VK_RESOLVE_MODE_NONE,
-                .resolveImageView    = VK_NULL_HANDLE,
-                .resolveImageLayout  = VK_IMAGE_LAYOUT_UNDEFINED,
-
-                .loadOp              = usage->load_op,
-                .storeOp             = usage->store_op,
-                .clearValue          = usage->clear_value
+                .loadOp      = usage->load_op,
+                .storeOp     = usage->store_op,
+                .clearValue  = usage->clear_value
             };
 
-            if (usage->usage_flags & FG_USAGE_COLOR)
+            b32 is_color = usage->usage_flags & FG_USAGE_COLOR;
+            b32 is_depth = usage->usage_flags & FG_USAGE_DEPTH;
+            b32 is_stencil = usage->usage_flags & FG_USAGE_STENCIL;
+
+            b32 is_msaa = (renderstate.multisampling_count_flag > VK_SAMPLE_COUNT_1_BIT);
+            b32 has_resolve = (usage->resolve_rid < UINT32_MAX);
+
+            // Multisampled attachments come with a target they resolve to...
+            if (is_msaa && has_resolve)
+            {
+                FG_Resource* resolve_res = &renderstate.registry.resources[usage->resolve_rid];
+                attachment.resolveMode        = usage->resolve_mode;
+                attachment.resolveImageView   = resolve_res->image.view;
+                if (is_color)
+                {
+                    attachment.resolveImageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+                }
+                else if (is_depth)
+                {
+                    attachment.resolveImageLayout = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL;
+                }
+            }
+            else
+            {
+                attachment.resolveMode        = VK_RESOLVE_MODE_NONE;
+                attachment.resolveImageView   = VK_NULL_HANDLE;
+            }
+
+            if (is_color)
             {
                 color_attachments[color_attachment_count++] = attachment;
             }
-
             // NOTE: Packed Depth-Stencil uses the same ImageView but different aspects in the barrier
-            if (usage->usage_flags & FG_USAGE_DEPTH)
+            if (is_depth)
             {
                 depth_attachment = attachment;
                 has_depth = 1;
             }
-            if (usage->usage_flags & FG_USAGE_STENCIL)
+            if (is_stencil)
             {
                 stencil_attachment = attachment;
                 has_stencil = 1;
@@ -329,7 +372,7 @@ void fg_execute_pass(uint32_t pass_idx, VkCommandBuffer cmd)
             vkCmdSetScissor(cmd, 0, 1, &pass->render_area);
         }
 
-        pass->execute_callback(cmd, pass->user_data);
+        pass->execute_callback(cmd, pass);
 
         vkCmdEndRendering(cmd);
     }
@@ -381,10 +424,15 @@ void single_resource_barrier(VkCommandBuffer cmd, FG_Resource* res, VkDependency
         .pNext                     = NULL,
         .dependencyFlags           = dep_flags
     };
+
+    // Declare these dudes before the if state so they aren't popped off the stack in release mode holy fucking shit 
+    VkBufferMemoryBarrier2 buffer_barrier = {};
+    VkImageMemoryBarrier2 image_barrier = {};
+
     if (res->type == FG_RESOURCE_TYPE_BUFFER)
     {
-        VkBufferMemoryBarrier2 buffer_barrier = {
-            .sType                = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
+        buffer_barrier = (VkBufferMemoryBarrier2){
+            .sType                = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER_2,
             .pNext                = NULL,
             .srcStageMask         = res->current_stage,
             .srcAccessMask        = res->current_access,
@@ -401,7 +449,7 @@ void single_resource_barrier(VkCommandBuffer cmd, FG_Resource* res, VkDependency
     }
     else if (res->type == FG_RESOURCE_TYPE_IMAGE)
     {
-        VkImageMemoryBarrier2 image_barrier = {
+        image_barrier = (VkImageMemoryBarrier2){
             .sType                = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
             .pNext                = NULL,
             .srcStageMask         = res->current_stage,
@@ -436,13 +484,14 @@ void FG_CmdTransitionSwapchainForPresentation(VkCommandBuffer cmd, uint32_t swap
 {
     SDL_assert(swapchain_image_rid < renderstate.registry.resource_count);
     FG_Resource* swapchain_resource = &renderstate.registry.resources[swapchain_image_rid];
-    
+    // printf("swapchain_rid=%d\n   before: stage=%d\n", swapchain_image_rid, swapchain_resource->current_stage);
     single_resource_barrier(cmd, swapchain_resource, VK_DEPENDENCY_BY_REGION_BIT,
-        VK_PIPELINE_STAGE_2_NONE,
+        VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT_KHR,
         VK_ACCESS_2_NONE,
         VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
         renderstate.queue_family_indices.present_family
     );
+    // printf("  after: stage=%d\n", swapchain_resource->current_stage);
 }
 
 // Resource Tracking
@@ -525,7 +574,7 @@ uint32_t add_resource_to_registry_and_heap(const char* debug_name, FG_ResourceTy
 
         if (can_be_sampled)
         {
-            printf("Adding " ANSI_CYAN "%s" ANSI_RESET " to heap (is samplable).\n", res->debug_name);
+            printf("Adding " ANSI_CYAN "%s" ANSI_RESET " to heap at index %u (is samplable).\n", res->debug_name, renderstate.heap.texture_count);
 
             // Register in  bindless descriptor array
             res->image_bindless_index = renderstate.heap.texture_count++;
@@ -567,7 +616,7 @@ uint32_t FG_CreateResource(const char* debug_name, FG_ResourceType type, FG_Reso
     {
         // Create .buffer.handle, with allocation stored in .allocation
         VmaAllocationCreateInfo alloc_create_info = { .usage = VMA_MEMORY_USAGE_AUTO };
-        if (create_info->is_cpu_accessible)
+        if (create_info->is_buffer_cpu_accessible)
         {
             alloc_create_info.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | 
                                       VMA_ALLOCATION_CREATE_MAPPED_BIT;
@@ -587,7 +636,7 @@ uint32_t FG_CreateResource(const char* debug_name, FG_ResourceType type, FG_Reso
         resource_info.import_info.buffer.size = create_info->buffer_create_info.size;
         resource_info.import_info.buffer.mapped_data = alloc_info.pMappedData;
     }
-    else
+    else if (type == FG_RESOURCE_TYPE_IMAGE)
     {
         // Create .image.handle, with allocation stored in .allocation
         VmaAllocationCreateInfo alloc_create_info = { .usage=VMA_MEMORY_USAGE_AUTO };
@@ -619,6 +668,10 @@ uint32_t FG_CreateResource(const char* debug_name, FG_ResourceType type, FG_Reso
         resource_info.import_info.image.extent = create_info->image_create_info.extent;
         resource_info.import_info.image.usage  = create_info->image_create_info.usage;
         resource_info.import_info.image.subresource_range = create_info->image_view_create_info.subresourceRange;
+    }
+    else
+    {
+        SDL_assert(0 && "Invalid resource type");
     }
 
     // Returns the resource's id into the registry

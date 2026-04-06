@@ -57,6 +57,8 @@ and write the up to data description.
 #include "internal_structs.h"
 #include "vulkan_wrapper.h"
 
+#include "renderer/shadersrc/sampler_indices.glsl"
+
 // Called at the start and end.
 void FG_Init();
 void FG_Shutdown();
@@ -71,27 +73,18 @@ typedef enum
     FG_USAGE_STORAGE = 1 << 3,  // For Compute SSBOs or Storage Images
     FG_USAGE_SAMPLED = 1 << 4   // For Shaders reading textures
 }
-FG_UsageFlags;
-
-// TODO: Add more address modes than just REPEAT
-//       Also support for LUT textures (look up tables) e.g. for LTC area lights
-typedef enum
-{
-    FG_SAMPLER_NEAREST_REPEAT,
-    FG_SAMPLER_LINEAR_REPEAT,
-    FG_SAMPLER_ANISOTROPIC_REPEAT,
-    FG_SAMPLER_SHADOW,
-
-    FG_SAMPLER_COUNT,
-    FG_SAMPLER_NOT_SAMPLABLE,  // For output resources
-}
-FG_SamplerType;
+FG_UsageFlagBits;
+typedef uint32_t FG_UsageFlags;
 
 typedef struct PassResourceUsage
 {
     uint32_t rid;                 // Index into a resource array (the internal registry)
     FG_UsageFlags usage_flags;    // Tells the graph HOW to use this resource in this pass
     FG_SamplerType sampler_type;  // Only for input image resources. Not using combined image samplers so we can have different samplers for the same image in different passes
+
+    // Optional MSAA resolve step for outputs
+    uint32_t resolve_rid;  // Set to UINT32_MAX when not used
+    VkResolveModeFlagBits resolve_mode;
 
     // Sync state
     VkImageLayout layout;  // For images only (buffers can leave these 0)
@@ -109,8 +102,11 @@ PassResourceUsage;
 typedef struct RenderPassDesc
 {
     char debug_name[64];  // TODO: Add to renderdoc with vkDebugMarkerSetObjectNameEXT somehow
+    uint32_t pass_type;
 
     // Resource inputs/outputs (buffers and image attachments)
+    // NOTE: Output is just an attachment, so things like input depth buffer from another pass would be an output if used for forward rendering
+    // TODO: Maybe rename outputs to attachments
     uint32_t          input_count;
     PassResourceUsage inputs[MAX_PASS_RESOURCE_BANDWIDTH];
     uint32_t          output_count;
@@ -124,7 +120,7 @@ typedef struct RenderPassDesc
     VkRect2D   custom_scissor;
 
     // A function pointer to what executes the draw calls
-    void (*execute_callback)(VkCommandBuffer cmd, void* user_data);
+    void (*execute_callback)(VkCommandBuffer cmd, RenderPassDesc* desc);
     void* user_data;
 }
 RenderPassDesc;
@@ -138,7 +134,7 @@ FrameGraph;
 
 // Graph Building
 void FG_Empty();
-uint32_t FG_AddPass(RenderPassDesc pass_description, uint32_t pass_type);
+uint32_t FG_AddPass(RenderPassDesc pass_description);
 
 // Graph Execution
 void FG_CmdRenderFrame(VkCommandBuffer cmd);
@@ -161,7 +157,8 @@ typedef enum
     FG_RESOURCE_FLAGS_ON_STARTUP       = 1 << 1,  // E.g. shader storage buffers, the splash screen texture, also font bitmaps maybe.
     FG_RESOURCE_FLAGS_SCENE_DEPENDENT  = 1 << 2,  // Loads for current scene (unloads things from last scene automatically)
 }
-FG_ResourceFlags;
+FG_ResourceFlagBits;
+typedef uint32_t FG_ResourceFlags;
 
 typedef struct BufferResourceData
 {
@@ -184,13 +181,18 @@ typedef struct ImageResourceData
 }
 ImageResourceData;
 
-typedef struct ResourceCreateInfo
+typedef union ResourceCreateInfo  // Untagged so not using union for safety.
 {
-    VkImageCreateInfo image_create_info;
-    VkImageViewCreateInfo image_view_create_info;
-
-    VkBufferCreateInfo buffer_create_info;
-    b32 is_cpu_accessible;
+    struct
+    {
+        VkImageCreateInfo image_create_info;
+        VkImageViewCreateInfo image_view_create_info;
+    };
+    struct
+    {
+        VkBufferCreateInfo buffer_create_info;
+        b32 is_buffer_cpu_accessible;
+    };
 }
 ResourceCreateInfo;
 uint32_t FG_CreateResource(const char* debug_name, FG_ResourceType type, FG_ResourceFlags flags, ResourceCreateInfo* create_info);
