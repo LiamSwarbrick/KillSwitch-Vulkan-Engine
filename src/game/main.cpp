@@ -97,7 +97,9 @@ int main(int argc, char *argv[])
     // Testing Scene and ECS
     Scene scene{};
     Renderer_SetDebugECS(&scene.GetECS());
+    Renderer_SetDebugAsset(scene.GetAsset());  // Will be null until LoadLevel finishes, updated below
     scene.LoadLevel("assets/levels/Untitled2.gltf");
+    Renderer_SetDebugAsset(scene.GetAsset());  // Now m_asset is populated
     // scene.LoadLevel("assets/animations/Animationtest.gltf");
     // scene.LoadLevel("assets/levels/Untitled_skybox.gltf");
 

@@ -3,6 +3,7 @@
 #include "imgui.h"
 #include "ecs_inspector.h"
 #include "framegraph_visualizer.h"
+#include "asset_browser.h"
 
 
 namespace DebugUI
@@ -20,6 +21,8 @@ namespace DebugUI
         uint32_t selected_entity_id = UINT32_MAX;
 
         FrameGraphVisualizer fg_viz;
+        AssetBrowser         asset_browser;
+        Asset*               debug_asset = nullptr;
     };
 
     inline void HandleInput(DebugUIState& state)
@@ -57,7 +60,7 @@ namespace DebugUI
     {
         if (!state.show_debug_ui || !state.show_ecs_inspector) return;
 
-        ImGui::SetNextWindowSize(ImVec2(900, 900), ImGuiCond_FirstUseEver);
+        ImGui::SetNextWindowSize(ImVec2(900, 600), ImGuiCond_FirstUseEver);
         if (!ImGui::Begin("ECS Inspector", &state.show_ecs_inspector))
         {
             ImGui::End();
@@ -72,7 +75,7 @@ namespace DebugUI
     inline void DrawFramegraph(DebugUIState& state)
     {
         if (!state.show_debug_ui || !state.show_framegraph) return;
-        ImGui::SetNextWindowSize(ImVec2(900, 900), ImGuiCond_FirstUseEver);
+        ImGui::SetNextWindowSize(ImVec2(900, 600), ImGuiCond_FirstUseEver);
         if (ImGui::Begin("Framegraph", &state.show_framegraph))
         {
             state.fg_viz.Draw();
@@ -83,9 +86,10 @@ namespace DebugUI
     inline void DrawAssetBrowser(DebugUIState& state)
     {
         if (!state.show_debug_ui || !state.show_asset_browser) return;
+        ImGui::SetNextWindowSize(ImVec2(900, 600), ImGuiCond_FirstUseEver);
         if (ImGui::Begin("Asset Browser", &state.show_asset_browser))
         {
-            ImGui::TextDisabled("(Asset Browser - TODO)");
+            state.asset_browser.Draw(state.debug_asset);
         }
         ImGui::End();
     }

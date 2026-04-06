@@ -62,4 +62,9 @@ void Renderer_SetImGuiCallback(Renderer_ImGuiBuildCallback callback, void* user_
 namespace AdvEng { class ECS; }
 void Renderer_SetDebugECS(AdvEng::ECS* ecs);
 
+// Register the loaded asset so the Asset Browser can inspect it.
+// Pass nullptr to clear (e.g. before loading a new scene).
+struct Asset;
+void Renderer_SetDebugAsset(Asset* asset);
+
 #endif  // ENGINE_RENDERER_H

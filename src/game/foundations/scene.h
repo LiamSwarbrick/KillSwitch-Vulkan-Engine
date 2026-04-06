@@ -28,7 +28,8 @@ public:
 
     // bool LoadLevel(u32 levelNumber);
     bool LoadLevel(const char* fileName);
-    AdvEng::ECS& GetECS() { return m_ecs; };
+    AdvEng::ECS& GetECS()   { return m_ecs;    };
+    Asset*        GetAsset() { return m_asset;  };
 
     void Update(float dt);
     void Render();
