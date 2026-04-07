@@ -46,8 +46,12 @@ void ShaderRegistry_Init()
         sreg->shaders[id].graphics.fragment_shader = load_spirv(SHADER_SPIRV_DIR name_str ".frag.spv");
 
     LOAD_GRAPHICS(SHADER_UNLIT, "unlit");
+    LOAD_GRAPHICS(SHADER_DEPTH, "depth");
+    LOAD_GRAPHICS(SHADER_BLIT, "blit");
     
-    // Finally, make sure none are invalid
+    #undef LOAD_GRAPHICS
+
+    // Finally, make sure none are invalid (aka forgot to load it)
     for (uint32_t i = 0; i < SHADER_COUNT; ++i)
     {
         PipelineShaderSet* set = &sreg->shaders[i];

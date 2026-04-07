@@ -1,7 +1,7 @@
 #ifndef ENGINE_RENDERER_RENDER_STATE_H
 #define ENGINE_RENDERER_RENDER_STATE_H
 
-#include "renderer.h"
+#include "../renderer/renderer.h"
 #include "internal_structs.h"
 #include "framegraph.h"
 
@@ -27,11 +27,9 @@ typedef struct RenderState
     b32 program_caused_vulkan_validation_layer_errors;
     u64 frame_number;
 
-    // Options
-    // TODO: Instead, just ask core for settings when needed.
-    // Or realistically, each module can have a SettingsChanged callback
-    // since swapchain will need to be recreated if uncapped_fps is changed.
-    b32 uncapped_fps;
+    Renderer_Settings settings;
+    VkSampleCountFlagBits multisampling_count_flag;  // NOTE: Vulkan version of msaa setting stored outside settings struct to avoid exposing Vulkan API to game module
+
 
     VkInstance instance;
     VkDebugUtilsMessengerEXT debug_messenger;
@@ -41,6 +39,8 @@ typedef struct RenderState
     QueueFamilyIndices queue_family_indices;
     VkDevice device;
     VmaAllocator vma_allocator;
+
+    
 
     // Queue handles to VkDevice queues (cleaned up automatically when VkDevice is destroyed)
     VkQueue graphics_queue;
@@ -82,6 +82,8 @@ typedef struct RenderState
 
     // Draw Calls are accumulated each frame per shader
     DrawCallsPerShader drawcalls_collection;
+    glm::mat4 camera_view;
+    glm::mat4 fullscreen_proj;
 
     // Renderer execution state:
     VkPipeline currently_bound_pipeline;  // Used to avoid  vkCmdBindPipeline call if it's already bound
@@ -95,6 +97,10 @@ typedef struct RenderState
 
     // imgui descriptor pool
     VkDescriptorPool imgui_descriptor_pool;
+
+    // ImGui game-side UI callback
+    Renderer_ImGuiBuildCallback imgui_callback      = nullptr;
+    void*                       imgui_callback_data = nullptr;
 }
 RenderState;
 

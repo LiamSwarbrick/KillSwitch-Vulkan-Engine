@@ -3,7 +3,7 @@
 #include "materials.h"
 #include "internal_state.h"
 #include "mapped_linear_allocator.h"
-#include <glm/gtc/matrix_transform.hpp>  // lookAt, perspective, translate
+#include "glm/gtc/matrix_transform.hpp"
 
 void InitDrawCallCollections()
 {
@@ -71,33 +71,50 @@ void AddDrawCall(Renderable* r)
     
     const MaterialPipelineInfo* const shaders_for_material = &g_material_configs.array[r->mesh_prefab.mat_type];
 
-    // Submit draw with primary shader
+    // Submit draw with depth prepass
+    // TODO: Should I ALWAYS be depth prepassing? It may break under some materials that displace vertices in the vertex shader
     {
-        uint32_t primary_shader_id = shaders_for_material->primary_shader_id;
-        uint32_t* primary_shader_drawcall_count = &renderstate.drawcalls_collection.array[shaders_for_material->primary_shader_id].drawcall_count;
+        uint32_t shader_id = SHADER_DEPTH;
+        uint32_t* shader_drawcall_count = &renderstate.drawcalls_collection.array[shader_id].drawcall_count;
 
         SDL_assert(
-            *primary_shader_drawcall_count + 1 < MAX_DRAWCALLS_PER_SHADER &&
+            *shader_drawcall_count + 1 < MAX_DRAWCALLS_PER_SHADER &&
             "If this is exceeded, either increase MAX_DRAWCALLS_PER_SHADER to a ludicrous value, or use a dynamic array."
         );
 
-        renderstate.drawcalls_collection.array[primary_shader_id].drawcalls[
-            (*primary_shader_drawcall_count)++
+        renderstate.drawcalls_collection.array[shader_id].drawcalls[
+            (*shader_drawcall_count)++
+        ] = drawcall;
+    }
+
+    // Submit draw with primary shader
+    {
+        uint32_t shader_id = shaders_for_material->primary_shader_id;
+        uint32_t* shader_drawcall_count = &renderstate.drawcalls_collection.array[shader_id].drawcall_count;
+
+        SDL_assert(
+            *shader_drawcall_count + 1 < MAX_DRAWCALLS_PER_SHADER &&
+            "If this is exceeded, either increase MAX_DRAWCALLS_PER_SHADER to a ludicrous value, or use a dynamic array."
+        );
+
+        renderstate.drawcalls_collection.array[shader_id].drawcalls[
+            (*shader_drawcall_count)++
         ] = drawcall;
     }
 
     // Submit draw with secondary shader (Making sure it exists first)
     if (shaders_for_material->secondary_shader_id != SHADER_NONE)
     {
-        uint32_t secondary_shader_id = shaders_for_material->secondary_shader_id;
-        uint32_t* secondary_shader_drawcall_count = &renderstate.drawcalls_collection.array[shaders_for_material->secondary_shader_id].drawcall_count;
+        uint32_t shader_id = shaders_for_material->secondary_shader_id;
+        uint32_t* shader_drawcall_count = &renderstate.drawcalls_collection.array[shader_id].drawcall_count;
+
         SDL_assert(
-            *secondary_shader_drawcall_count + 1 < MAX_DRAWCALLS_PER_SHADER &&
+            *shader_drawcall_count + 1 < MAX_DRAWCALLS_PER_SHADER &&
             "If this is exceeded, either increase MAX_DRAWCALLS_PER_SHADER to a ludicrous value, or use a dynamic array."
         );
 
-        renderstate.drawcalls_collection.array[shaders_for_material->secondary_shader_id].drawcalls[
-            (*secondary_shader_drawcall_count)++
+        renderstate.drawcalls_collection.array[shader_id].drawcalls[
+            (*shader_drawcall_count)++
         ] = drawcall;
     }
 }
@@ -174,6 +191,32 @@ void ExecuteDrawCall(VkCommandBuffer cmd, DrawCall drawcall, PipelineKey key, Pu
     }
 }
 
+void ExecuteFullscreenPass(VkCommandBuffer cmd, uint32_t shader_id, PipelineKey key, PushConstant_PassHeader push_pass)
+{
+    VkPipeline pipeline = PK_GetOrCreatePipeline(&renderstate.pipeline_map, key);
+    if (renderstate.currently_bound_pipeline != pipeline) 
+    {
+        renderstate.currently_bound_pipeline = pipeline;
+        vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
+    }
+
+    // Prepare the pass part of Push Constants
+    // We only need the .pass part (texture/sampler indices)
+    // TODO: If it turns I'm never using both dc and pass, then I can remove one of them
+    //       This would half the push constants size requirements from 256 to 128
+    FullPushConstants_Graphics push = {
+        .dc = {}, 
+        .pass = push_pass
+    };
+
+    vkCmdPushConstants(cmd, renderstate.global_pipeline_layout,
+        VK_SHADER_STAGE_ALL, 0, sizeof(push), &push
+    );
+
+    // Push 3 empty vertices we'll use for a fullscreen triangle
+    vkCmdDraw(cmd, 3, 1, 0, 0);
+}
+
 
 // SCENE DATA UPDATION DURING FRAME
 
@@ -241,10 +284,7 @@ static SceneData temp_default_camera_scene_data()
 
 void UpdateGlobalSceneData(SceneData data)
 {
-    #warning SceneData argument currently ignored.
-
-    data = temp_default_camera_scene_data();
-    
+    // data = temp_default_camera_scene_data();   
     FG_UploadBufferData(&renderstate.main.staging_objects, 
                         renderstate.rids.global_scene_buffer_rid, 
                         &data, sizeof(SceneData)

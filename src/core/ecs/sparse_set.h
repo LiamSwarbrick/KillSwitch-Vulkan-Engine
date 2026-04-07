@@ -1,7 +1,7 @@
 #ifndef ECS_SPARSE_SET_H
 #define ECS_SPARSE_SET_H
 
-#include "SDL3/SDL.h"
+
 #include "types.h"
 
 #include <vector>
@@ -145,7 +145,7 @@ namespace AdvEng
         T& Get(EntityID id)
         {
             EntityID index = GetDenseIndex(id);
-            SDL_assert(index == NULL_ID && "SparseSet::GetRef with invalid entity id");
+            SDL_assert(index != NULL_ID && "SparseSet::GetRef with invalid entity id");
             return m_dense[index];
         }
 

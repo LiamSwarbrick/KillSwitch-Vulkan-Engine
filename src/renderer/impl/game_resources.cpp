@@ -5,6 +5,8 @@
 #include "stb_image.h"
 #include "core/assetsys.h"  // CPU-side asset data
 
+#include "stb_image.h"
+
 void create_startup_resources();
 void create_window_dependent_resources();
 void create_scene_resources();
@@ -33,6 +35,16 @@ uint32_t create_mipmapped_texture2d_resource(
     uint32_t          width,
     uint32_t          height, 
     VkFormat          format
+);
+uint32_t create_rendertarget2d_resource(
+    const char*            debug_name,
+    FG_ResourceFlags       flags,
+    uint32_t               width,
+    uint32_t               height,
+    VkFormat               format,
+    VkImageAspectFlags     aspect,
+    b32                    multisampled,
+    b32                    is_transient
 );
 
 
@@ -134,7 +146,7 @@ void create_startup_resources()
                 | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT
                 | VK_BUFFER_USAGE_TRANSFER_DST_BIT
         },
-        .is_cpu_accessible = 1  // <- Hence mapped
+        .is_buffer_cpu_accessible = 1  // <- Hence mapped
     };
     renderstate.rids.objects_buffer_rid = FG_CreateResource(
         "ObjectsBuffer", FG_RESOURCE_TYPE_BUFFER, flags, &objects_info
@@ -151,7 +163,7 @@ void create_startup_resources()
                 | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT
                 | VK_BUFFER_USAGE_TRANSFER_DST_BIT
         },
-        .is_cpu_accessible = 1  // <- Hence mapped
+        .is_buffer_cpu_accessible = 1  // <- Hence mapped
     };
     renderstate.rids.objects_buffer_rid = FG_CreateResource(
         "JointsBuffer", FG_RESOURCE_TYPE_BUFFER, flags, &objects_info
@@ -173,45 +185,6 @@ void create_startup_resources()
         "MaterialSSBO", FG_RESOURCE_TYPE_BUFFER, flags, &mat_info
     );
 
-
-    // DUMMY DATA BELOW:
-    #warning TODO: Upload materials on create_scene_resources() instead of startup.
-
-#if 0
-    // TEMP Material:
-    uint32_t test_texture_rid = UINT32_MAX;
-    {
-        stbi_set_flip_vertically_on_load(1);
-        int width, height, num_channels;
-        const char* filepath = "assets/godot.png";
-        uint8_t* data = stbi_load(filepath, &width, &height, &num_channels, 4);
-        if (data == NULL)
-        {
-            fprintf(stderr, "Failure to load image (%s)\n", filepath);
-            exit(1);  // TODO: Fallback to default texture
-        }
-        uint64_t data_size = width * height * 4;
-        VkFormat format = VK_FORMAT_R8G8B8A8_SRGB;
-        test_texture_rid = create_mipmapped_texture2d_resource(filepath, flags, data, data_size, width, height, format);
-        
-        stbi_image_free(data);
-    }
-    MaterialData default_mat = {
-        .base_color = { 1.0f, 1.0f, 1.0f, 1.0f },
-        .texture_idx_basecolor = renderstate.registry.resources[test_texture_rid].image_bindless_index,//0xFFFFFFFF,
-
-        .sampler_idx = FG_SAMPLER_LINEAR_REPEAT,
-        .alpha_cutoff = 0.5f
-    };
-
-    const uint32_t temp_max_materials = 32;
-    MaterialData materials[temp_max_materials] = {
-        default_mat  // index 0
-    };
-    FG_UploadBufferData(&renderstate.main.staging_objects, 
-        renderstate.rids.material_ssbo_rid, &materials, sizeof(materials)
-    );
-#endif
 
     /////// MOVE BELOW TO create_scene_resources(scene resource list?) /////////////
 
@@ -243,14 +216,14 @@ void create_startup_resources()
     };
     renderstate.rids.dummy_mesh = {
         .vertex_type = VERTEX_TYPE_STATIC,
-        .mat_type    = MAT_UNLIT,
+        .mat_type    = MAT_UNLIT_OPAQUE,
         .mesh_rids = {
             .primitive_count = 1,
             .primitives = {
                 create_primitive_resources(
                     "Dummy Primitive",
                     flags,
-                    0,  // material index (TODO: Load all materials on scene change, and keep track of material indices CPU side)
+                    0,  // Default material index
                     sizeof(quad_indices) / sizeof(quad_indices[0]),
                     sizeof(quad_positions) / sizeof(quad_positions[0]),
                     quad_indices, quad_positions, quad_uvs, quad_normals, quad_colors, NULL, NULL
@@ -258,21 +231,6 @@ void create_startup_resources()
             }
         }
     };
-    //  = create_mesh_resources("QuadMesh", flags, 6, 4, quad_indices,
-    //     quad_positions, quad_uvs, quad_normals, quad_colors, NULL, NULL
-    // );
-
-    // Primitive* test_prim = &renderstate.temp_test_mesh->primitives[0];
-    // float* test_colors = (float*)L_calloc(test_prim->vertex_count, 3 * sizeof(float) * test_prim->vertex_count, &renderstate.main.tt);
-    // for (int i = 0; i < test_prim->vertex_count * 3; ++i) test_colors[i] = fabsf(sinf((float)i));
-    // renderstate.rids.temp_test_mesh = create_mesh_resources(renderstate.temp_test_mesh->name, flags,
-    //     test_prim->index_count, test_prim->vertex_count, test_prim->indices,
-    //     (glm::vec3*)test_prim->positions, (glm::vec2*)test_prim->texcoords, (glm::vec3*)test_prim->normals,
-    //     (glm::vec3*)test_colors, NULL, NULL
-    // );
-    // L_free(test_colors, &renderstate.main.tt);
-
-
 }
 
 
@@ -304,6 +262,42 @@ void create_window_dependent_resources()
             swapchain_image_name, FG_RESOURCE_TYPE_IMAGE, flags, import_info
         );
     }
+
+    const uint32_t width = renderstate.swapchain_extent.width;
+    const uint32_t height = renderstate.swapchain_extent.height;
+    
+    // Depth buffer
+    renderstate.rids.depth_buffer_rid = create_rendertarget2d_resource(
+        "Depth Buffer", flags, width, height,
+        VK_FORMAT_D32_SFLOAT,
+        VK_IMAGE_ASPECT_DEPTH_BIT,
+        1, 0
+    );
+
+    // Foward render target
+    renderstate.rids.forward_target_rid = create_rendertarget2d_resource(
+        "Forward Render Target", flags, width, height,
+        VK_FORMAT_R16G16B16A16_SFLOAT,
+        VK_IMAGE_ASPECT_COLOR_BIT,
+        1, 1
+    );
+
+    // Resolve HDR color target for post processing/deferred steps
+    if (renderstate.multisampling_count_flag > VK_SAMPLE_COUNT_1_BIT)
+    {
+        renderstate.rids.hdr_color_target_rid = create_rendertarget2d_resource(
+            "Forward Render Target", flags, width, height,
+            VK_FORMAT_R16G16B16A16_SFLOAT,
+            VK_IMAGE_ASPECT_COLOR_BIT,
+            0, 0
+        );
+    }
+    else
+    {
+        // Alias to forward render target when not using MSAA
+        renderstate.rids.hdr_color_target_rid = renderstate.rids.forward_target_rid;
+    }
+
 }
 
 void create_scene_resources()
@@ -318,7 +312,6 @@ void create_scene_resources()
     ResourceIDs* rids = &renderstate.rids;
 
     ///////////////////////////////////////////////////////////////////////////////////////////////////
-    // TODO: Account for animated meshes as well                                                     //
     // TODO: Create stylised gradients via colour buffer for characters meshes (i.e. skinned meshes) //
     ///////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -326,11 +319,11 @@ void create_scene_resources()
     uint32_t num_unique_assets = 0;
     const uint32_t max_assets = 1024;  // <- Arbitrary. If this is too low, L_calloc a bigger amount
     Asset*   unique_assets[max_assets] = {};
-    uint32_t material_count = 0;
+    uint32_t material_count = 1;  // Start at one to give space for default material
 
     for (uint32_t i = 0; i < init_info->num_static_meshes; ++i)
     {
-        C_StaticMesh* component = &init_info->static_meshes[i];
+        C_StaticMesh* component = init_info->static_meshes[i];
 
         for (uint32_t j = 0; j < num_unique_assets; ++j)
         {
@@ -349,12 +342,59 @@ void create_scene_resources()
     seen_this_asset_before:
     }
 
+    // Also count animated meshes
+    for (uint32_t i = 0; i < init_info->num_animated_meshes; ++i)
+    {
+        C_AnimatedMesh* component = init_info->animated_meshes[i];
+
+        for (uint32_t j = 0; j < num_unique_assets; ++j)
+        {
+            if (unique_assets[j] == component->asset)
+            {
+                goto seen_this_anim_asset_before;
+            }
+        }
+
+        SDL_assert(num_unique_assets < max_assets);
+        unique_assets[num_unique_assets++] = component->asset;
+        material_count += component->asset->material_count;
+
+    seen_this_anim_asset_before:
+    }
+
     // Load unique materials
     uint32_t num_loaded_materials = 0;
     MaterialData* loaded_materials = (MaterialData*)L_calloc(material_count, sizeof(MaterialData), &renderstate.main.tt);
     uint32_t assets_mat_start_idx[max_assets] = {};
     memset(assets_mat_start_idx, 0xFFFF, max_assets);
 
+    // (First add default material)
+    {
+        uint32_t default_texture_rid = UINT32_MAX;
+        stbi_set_flip_vertically_on_load(1);
+        int width, height, num_channels;
+        const char* filepath = "assets/godot.png";
+        uint8_t* data = stbi_load(filepath, &width, &height, &num_channels, 4);
+        if (data == NULL)
+        {
+            fprintf(stderr, "Failure to load image (%s)\n", filepath);
+            exit(1);  // TODO: Fallback to default texture
+        }
+        uint64_t data_size = width * height * 4;
+        VkFormat format = VK_FORMAT_R8G8B8A8_SRGB;
+        default_texture_rid = create_mipmapped_texture2d_resource(filepath, flags, data, data_size, width, height, format);
+        stbi_image_free(data);
+        
+        MaterialData default_mat = {
+            .base_color = { 1.0f, 1.0f, 1.0f, 1.0f },
+            .alpha_cutoff = 0.5f,
+            .sampler_idx = FG_SAMPLER_LINEAR_REPEAT,
+            .texture_idx_basecolor = renderstate.registry.resources[default_texture_rid].image_bindless_index
+        };
+        loaded_materials[num_loaded_materials++] = default_mat;
+    }
+
+    // (Then Load the actual assets in the scene)
     for (uint32_t i = 0; i < num_unique_assets; ++i)
     {
         Asset* asset = unique_assets[i];
@@ -372,7 +412,7 @@ void create_scene_resources()
             gpu_mat.alpha_cutoff = mat->alpha_cutoff;
 
             // NOTE: Just use one sampler for now at least
-            // (maybe I'd want to chec the base colour texture's min/mag filter and s/t wrap to choose a better one if we need)
+            // (maybe I'd want to check the base colour texture's min/mag filter and s/t wrap to choose a better one if we need)
             gpu_mat.sampler_idx = FG_SAMPLER_LINEAR_REPEAT;
             
             if (mat->base_color_texture_index >= 0)
@@ -381,11 +421,12 @@ void create_scene_resources()
                 Image*   base_color_image   = &asset->images[base_color_texture->image_index];
 
                 // Create texture resource
-                gpu_mat.texture_idx_basecolor = create_mipmapped_texture2d_resource(
-                    base_color_texture->name, flags, base_color_image->data, base_color_image->data_size,
+                uint32_t new_texture_rid = create_mipmapped_texture2d_resource(
+                    base_color_image->uri, flags, base_color_image->data, base_color_image->data_size,
                     base_color_image->width, base_color_image->height,
                     VK_FORMAT_R8G8B8A8_SRGB  // <- is a colour texture
                 );
+                gpu_mat.texture_idx_basecolor = renderstate.registry.resources[new_texture_rid].image_bindless_index;
             }
             else
             {
@@ -402,10 +443,10 @@ void create_scene_resources()
     );
 
 
-    // Load meshes
+    // Load Static meshes
     for (uint32_t i = 0; i < init_info->num_static_meshes; ++i)
     {
-        C_StaticMesh* component = &init_info->static_meshes[i];
+        C_StaticMesh* component = init_info->static_meshes[i];
 
         component->renderer_prefab = {
             .vertex_type = component->mesh->vertex_type,
@@ -436,6 +477,49 @@ void create_scene_resources()
             snprintf(prim_resource_debug_name, sizeof(prim_resource_debug_name),
                 "%s_Prim%u", component->mesh->name, p
             );
+            component->renderer_prefab.mesh_rids.primitives[p] = create_primitive_resources(
+                prim_resource_debug_name, flags,
+                gpu_mat_idx,
+                prim->index_count, prim->vertex_count,
+                prim->indices, (glm::vec3*)prim->positions,
+                (glm::vec2*)prim->texcoords, (glm::vec3*)prim->normals,
+                NULL, NULL, NULL
+            );
+        }
+    }
+
+    // Load animated meshes
+    for (uint32_t i = 0; i < init_info->num_animated_meshes; ++i)
+    {
+        C_AnimatedMesh* component = init_info->animated_meshes[i];
+        
+        component->renderer_prefab = {
+            .vertex_type = component->mesh->vertex_type, 
+            .mat_type = component->mesh->mat_type,
+            .mesh_rids = {
+                .primitive_count = (uint32_t)component->mesh->primitive_count
+            }
+        };
+
+        uint32_t asset_idx = UINT32_MAX;
+        for (uint32_t a = 0; a < num_unique_assets; ++a)
+        {
+            if (component->asset == unique_assets[a]) asset_idx = a;
+        }
+        SDL_assert(asset_idx < UINT32_MAX);
+        uint32_t mat_start_idx = assets_mat_start_idx[asset_idx];
+
+        // Load primitives into GPU resources
+        char prim_resource_debug_name[256] = {};
+        for (uint32_t p = 0; p < component->mesh->primitive_count; ++p)
+        {
+            Primitive* prim = &component->mesh->primitives[p];
+            uint32_t gpu_mat_idx = mat_start_idx + prim->material_index;
+
+            snprintf(prim_resource_debug_name, sizeof(prim_resource_debug_name),
+                "%s_Prim%u", component->mesh->name, p
+            );
+
             component->renderer_prefab.mesh_rids.primitives[p] = create_primitive_resources(
                 prim_resource_debug_name, flags,
                 gpu_mat_idx,
@@ -622,9 +706,6 @@ uint32_t create_mipmapped_texture2d_resource(
             .sharingMode = VK_SHARING_MODE_EXCLUSIVE,
             .queueFamilyIndexCount = 0,  // <- Zero when using exclusive sharing mode
             .pQueueFamilyIndices = NULL,
-
-            // Mipmapped textures normally won't be part of the framegraph's input and outputs
-            // So we set it's initial (and presumably final-) image layout to read only.
             .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED
         },
         .image_view_create_info = {
@@ -656,5 +737,102 @@ uint32_t create_mipmapped_texture2d_resource(
     FG_UploadImageData(&renderstate.main.staging_objects, texture_rid, data, data_size);
     FG_GenMipmaps(texture_rid);
 
+    return texture_rid;
+}
+
+uint32_t create_rendertarget2d_resource(
+    const char*            debug_name,
+    FG_ResourceFlags       flags,
+    uint32_t               width,
+    uint32_t               height,
+    VkFormat               format,
+    VkImageAspectFlags     aspect,
+    b32                    multisampled,
+    b32                    is_transient
+)
+{
+    // Disable multisampling and transience when not using it
+    if (renderstate.multisampling_count_flag == VK_SAMPLE_COUNT_1_BIT)
+    {
+        multisampled = 0;
+        is_transient = 0;
+    }
+
+    b32 is_depth_stencil_attachment = (aspect & VK_IMAGE_ASPECT_DEPTH_BIT) || (aspect & VK_IMAGE_ASPECT_STENCIL_BIT);
+
+    VkImageUsageFlags attachment_specific_usage = is_depth_stencil_attachment ?
+        VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT : VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
+
+    if (is_transient)
+    {
+        // MSAA images that are never stored to main memory don't even need to exist
+        attachment_specific_usage |=
+              VK_IMAGE_USAGE_TRANSIENT_ATTACHMENT_BIT;
+            // | VK_IMAGE_USAGE_SAMPLED_BIT;
+    }
+    else
+    {
+        attachment_specific_usage |=
+              VK_IMAGE_USAGE_SAMPLED_BIT;
+            // | VK_IMAGE_USAGE_TRANSFER_SRC_BIT
+            // | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
+    }
+
+    VkSampleCountFlagBits multisample_count = multisampled ?
+        renderstate.multisampling_count_flag : VK_SAMPLE_COUNT_1_BIT;
+
+    ResourceCreateInfo rendertarget_create_info = {
+        .image_create_info = {
+            .sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
+            .pNext = NULL,
+            .flags = 0,
+            .imageType = VK_IMAGE_TYPE_2D,
+            .format = format,
+
+            .extent = {
+                .width  = width,
+                .height = height,
+                .depth  = 1
+            },
+
+            .mipLevels = 1,
+            .arrayLayers = 1,
+
+            .samples = multisample_count,  // <- Multisampling
+            .tiling = VK_IMAGE_TILING_OPTIMAL,
+
+            .usage = attachment_specific_usage,
+
+            .sharingMode = VK_SHARING_MODE_EXCLUSIVE,
+            .queueFamilyIndexCount = 0,  // <- Zero when using exclusive sharing mode
+            .pQueueFamilyIndices = NULL,
+            .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED
+        },
+        .image_view_create_info = {
+            .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
+            .pNext = NULL,
+            .flags = 0,
+
+            .image = VK_NULL_HANDLE,  // <- This gets set in the registry code in FG_CreateResource
+            .viewType = VK_IMAGE_VIEW_TYPE_2D,
+            .format = format,
+
+            .components = {
+                .r = VK_COMPONENT_SWIZZLE_IDENTITY,
+                .g = VK_COMPONENT_SWIZZLE_IDENTITY,
+                .b = VK_COMPONENT_SWIZZLE_IDENTITY,
+                .a = VK_COMPONENT_SWIZZLE_IDENTITY
+            },
+
+            .subresourceRange = {
+                .aspectMask = aspect,
+                .baseMipLevel = 0,
+                .levelCount = 1,
+                .baseArrayLayer = 0,
+                .layerCount = 1
+            }
+        }
+    };
+    uint32_t texture_rid = FG_CreateResource(debug_name, FG_RESOURCE_TYPE_IMAGE, flags, &rendertarget_create_info);
     return texture_rid;
 }

@@ -5,6 +5,7 @@
 #include "core/components.h"
 // #include "physics/components.h"
 // #include "renderer/components.h"
+// #include "core/animation/components.h"
 
 #include "core/assetsys.h"
 #include "glm/glm.hpp"

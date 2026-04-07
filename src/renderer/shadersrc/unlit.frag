@@ -13,8 +13,9 @@ layout(set = 0, binding = 1) uniform sampler global_samplers[];
 
 layout(push_constant, scalar) uniform PushConstants
 {
-    FullPushConstants_Graphics push;
-};
+    PushConstant_DrawCall dc;
+    PushConstant_PassHeader pass_placeholder;
+} push;
 
 layout(location = 0) in vec2 in_uv;
 layout(location = 1) in vec3 in_vcolor;
@@ -48,5 +49,4 @@ void main()
     }
 
     out_color = final_color;
-    // out_color = vec4(1.0, 0.0, 0.0, 1.0);
 }

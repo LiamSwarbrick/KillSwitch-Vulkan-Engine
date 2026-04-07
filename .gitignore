@@ -1,8 +1,12 @@
 # --- Misc Local Folders ---
 .notes_local_temp/
 
-# --- ImGUI's local ui state file ---
+
+# ImGUI's local ui state file
 imgui.ini
+
+# Renderdoc settings
+*.cap
 
 # --- Build Outputs ---
 bin/
@@ -42,3 +46,11 @@ Makefile
 *.swp
 *.swo
 .DS_Store
+imgui.ini
+
+
+
+# --- Blender backups ---
+*.blend1
+*.blend2
+*.blend3

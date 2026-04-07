@@ -27,6 +27,7 @@ include_paths.stb = EXTERNAL .. "stb"
 include_paths.rapidjson = EXTERNAL .. "rapidjson"
 include_paths.imgui = EXTERNAL .. "imgui"
 include_paths.imgui_backends = EXTERNAL .. "imgui/backends"
+include_paths.imgui_node_editor = EXTERNAL .. "imgui-node-editor"
 
 lib_dirs = {}
 
@@ -185,7 +186,8 @@ workspace "AdventureEngine"
             include_paths.stb,
             include_paths.rapidjson,
             include_paths.imgui,
-            include_paths.imgui_backends
+            include_paths.imgui_backends,
+            include_paths.imgui_node_editor
         }
 
         libdirs {
@@ -249,6 +251,13 @@ workspace "AdventureEngine"
             EXTERNAL .. "imgui/backends/imgui_impl_vulkan.cpp",
 
 
+            -- ImGui Node Editor
+            EXTERNAL .. "imgui-node-editor/imgui_node_editor.cpp",
+            EXTERNAL .. "imgui-node-editor/imgui_node_editor_api.cpp",
+            EXTERNAL .. "imgui-node-editor/imgui_canvas.cpp",
+            EXTERNAL .. "imgui-node-editor/crude_json.cpp",
+
+
             -- Shader src
             SRC .. "renderer/shadersrc/**.vert",
             SRC .. "renderer/shadersrc/**.frag",
@@ -258,7 +267,8 @@ workspace "AdventureEngine"
 
         defines {
             "VK_NO_PROTOTYPES",
-            "IMGUI_IMPL_VULKAN_USE_VOLK"
+            "IMGUI_IMPL_VULKAN_USE_VOLK",
+            -- "IMGUI_DEFINE_MATH_OPERATORS"
         }
 
         includedirs {
@@ -273,7 +283,8 @@ workspace "AdventureEngine"
             include_paths.stb,
             include_paths.cgltf,
             include_paths.imgui,
-            include_paths.imgui_backends
+            include_paths.imgui_backends,
+            include_paths.imgui_node_editor
         }
 
         libdirs {
@@ -328,7 +339,8 @@ workspace "AdventureEngine"
             include_paths.cgltf,
             include_paths.rapidjson,
             include_paths.imgui,
-            include_paths.imgui_backends
+            include_paths.imgui_backends,
+            include_paths.imgui_node_editor
         }
 
         libdirs {
@@ -344,6 +356,6 @@ workspace "AdventureEngine"
 
         filter "system:windows"
             postbuildcommands {
-                "{COPYFILE} " .. path.getabsolute(SDL_BUILD_DIR .. "/" .. sdl_build_type .. "/SDL3.dll") .. " %{cfg.targetdir}"
+                '{COPYFILE} "' .. path.getabsolute(SDL_BUILD_DIR .. "/" .. sdl_build_type .. "/SDL3.dll") .. '" "%{cfg.targetdir}"'
             }
         filter "*"

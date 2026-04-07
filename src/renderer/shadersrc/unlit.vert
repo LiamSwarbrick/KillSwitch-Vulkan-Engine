@@ -14,6 +14,9 @@ layout(push_constant, scalar) uniform PushConstants
 layout(location = 0) out vec2 out_uv;
 layout(location = 1) out vec3 out_color;
 
+// Multipass materials require different shaders have reproducable vertex positions
+invariant gl_Position;
+
 void main()
 {
     // No casting push.pass because forward rendering doesn't read anything.

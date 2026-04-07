@@ -13,17 +13,16 @@
 
 namespace AdvEng
 {
-
+	// forward declaring View
+	template <typename...>
+	class View;
+	class Entity;
+	
 	class ECS
 	{
 
 	private:
 
-		// forward declaring View
-		template <typename...>
-		class View;
-
-		class Entity;
 
 		// Just for debugging.
 		// Needs to be inline
@@ -41,14 +40,15 @@ namespace AdvEng
 		EntityID m_maxID = 0;
 
 
-	private:
+	// private:
+#warning NOTE(Liam): I'm making all of these public since they're called outside this class in multiple files. Maybe adjust the API
+	public:
 
 		// Metaprogramming magic with next method
 		static size_t GetNextComponentIndex(std::string typeName)
 		{
 			static size_t index = 0;
-			// For debugging name types:
-			//m_componentNames.push_back(typeName);
+			m_componentNames.push_back(typeName);
 			return index++;
 		};
 
@@ -319,6 +319,31 @@ namespace AdvEng
 			return View<Types...>(this);
 			//return { this };
 		}
+
+		// For debug UI
+        std::vector<EntityID> GetAllEntities()
+        {
+            return m_entityMasks.GetIDList();
+        }
+
+        ComponentMask GetEntityComponentMask(EntityID id)
+        {
+            SDL_assert(IsEntityValid(id));
+            return GetEntityMask(id);
+        }
+
+        std::string GetComponentName(size_t bit_index)
+        {
+            if (bit_index < m_componentNames.size())
+                return m_componentNames[bit_index];
+            return "Unknown";
+        }
+
+        template <typename T>
+        size_t GetComponentBitIndex()
+        {
+            return GetOrRegisterComponentIndex<T>();
+        }
 
 	};
 
