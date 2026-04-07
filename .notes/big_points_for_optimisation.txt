@@ -1,0 +1,8 @@
+Loading:
+Currently single threaded transfer commands are being used for things in framegraph.
+E.g. mipmap generation, and uploading buffers/images via staging buffers are done
+using one time submit command buffers and then waited on with a fence.
+But since this is all currently on one thread (the main thread), we can only do one at a time.
+The simple improvement would be to multithread this.
+I.e. one ThreadStagingObjects per thread, and load textures + mipmap generation across threads.
+Then while one thread is waiting on a fence, other work is not blocked along with it.

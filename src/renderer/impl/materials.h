@@ -2,6 +2,7 @@
 #define RENDERER_MATERIALS_H
 
 #include "../render_types.h"  // This defines MATERIAL_LIST
+#include "core/my_c_runtime.h"
 
 typedef struct MaterialPipelineInfo
 {
@@ -20,9 +21,9 @@ typedef union MaterialConfigs
     struct
     {
         #define X(name) MaterialPipelineInfo name;
-        MATERIAL_LIST
+        MATERIAL_LIST  // See render_types.h
         #undef X
-    } by_name;  // Required because stupid C++ doesn't have C99 array designators for const initialization.
+    } by_name;  // Required because stupid C++ doesn't have C99 array designators for const initialization. (This trick feels quite clean though to be fair)
 }
 MaterialConfigs;
 extern const MaterialConfigs g_material_configs;

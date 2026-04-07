@@ -6,6 +6,32 @@
 #include "shaders.h"
 #include "internal_state.h"
 
+/*
+Renderpass-aware pipeline creation by inspecting input and output attachments of the
+renderpass set in the pipeline key in order to set the attachments for VkGraphicsPipelineCreateInfo.
+
+IMPORTANT IMPLEMENTATION NOTE:
+- A specific renderpass type must be consistent in terms of attachment count and formats from frame to frame.
+  because it would fuck with the above mentioned thing (the pipeline is hashed based on pass_id not attachment formats).
+  The framegraph is built every frame but this just means the inputs and outputs can change.
+  The number of inputs/outputs to a specific pass along with their VkFormat's must be hard set.
+
+DONE: Graphics Pipelines creation
+TODO: Compute Pipeline creation (wayyy fucking simpler, but not needed compute shaders yet)
+*/
+
+PipelineKeyMultisamplingBits PK_MultisamplingFlag(VkSampleCountFlagBits sample_count)
+{
+    switch (sample_count)
+    {
+        case (VK_SAMPLE_COUNT_1_BIT): return PKEY_MULTISAMPLING_1X;
+        case (VK_SAMPLE_COUNT_2_BIT): return PKEY_MULTISAMPLING_2X;
+        case (VK_SAMPLE_COUNT_4_BIT): return PKEY_MULTISAMPLING_4X;
+        case (VK_SAMPLE_COUNT_8_BIT): return PKEY_MULTISAMPLING_8X;
+        default: SDL_assert(0);
+    }
+}
+
 void PK_Init(PipelineEntry** pipeline_map_ref)
 {
     *pipeline_map_ref = NULL;  // Set to NULL so stb_ds will make a new hash map.
@@ -32,22 +58,24 @@ VkPipeline PK_GetOrCreatePipeline(PipelineEntry** pipeline_map_ref, PipelineKey 
     VkPipeline new_pipeline = VK_NULL_HANDLE;
     switch ((PK_PipelineType)key.pipeline_type)
     {
-    case PK_PIPELINE_TYPE_COMPUTE:
-        // TODO.
-        SDL_assert(1 && "TODO: make compute pipeline.");
-        break;
+        case PK_PIPELINE_TYPE_COMPUTE:
+            // TODO.
+            SDL_assert(1 && "TODO: make compute pipeline.");
+            break;
 
-    case PK_PIPELINE_TYPE_GRAPHICS:
-        new_pipeline = create_graphics_pipeline(key);
-        break;
-        
-    default:
-        SDL_assert(0 && "Invalid pipeline type");
+        case PK_PIPELINE_TYPE_GRAPHICS:
+            new_pipeline = create_graphics_pipeline(key);
+            break;
+            
+        default:
+            SDL_assert(0 && "Invalid pipeline type");
     }
 
     // Add new pipeline to hash map
     hmput(*pipeline_map_ref, key.value, new_pipeline);
 
+
+    SDL_assert(new_pipeline != VK_NULL_HANDLE);
     return new_pipeline;
 }
 
@@ -119,9 +147,15 @@ VkPipeline create_graphics_pipeline(PipelineKey key)
 
     // Fixed-Function State (Multisampling)
     VkPipelineMultisampleStateCreateInfo multisample_info = { .sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO };
-    multisample_info.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;  // Default to 1x
-    // TODO: Implement MSAA.
-    // FUTURE: Implement MSAA with Specular AA
+    switch (key.msaa_samples)
+    {
+        case (PKEY_MULTISAMPLING_1X): multisample_info.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT; break;
+        case (PKEY_MULTISAMPLING_2X): multisample_info.rasterizationSamples = VK_SAMPLE_COUNT_2_BIT; break;
+        case (PKEY_MULTISAMPLING_4X): multisample_info.rasterizationSamples = VK_SAMPLE_COUNT_4_BIT; break;
+        case (PKEY_MULTISAMPLING_8X): multisample_info.rasterizationSamples = VK_SAMPLE_COUNT_8_BIT; break;
+        default: SDL_assert(0);
+    }
+    // FUTURE: Implement MSAA with Specular AA if using shiny things
 
     // Fixed-Function State (Depth/Stencil)
     VkPipelineDepthStencilStateCreateInfo depth_info = { .sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO };
@@ -129,33 +163,6 @@ VkPipeline create_graphics_pipeline(PipelineKey key)
     depth_info.depthWriteEnable  = (VkBool32)key.depth_write;
     depth_info.depthCompareOp    = (VkCompareOp)key.depth_op;
     depth_info.stencilTestEnable = key.stencil_mode != 0;
-
-    // Fixed-Function State (Blending)
-    VkPipelineColorBlendAttachmentState color_blend = {};
-    color_blend.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | 
-                                 VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
-    
-    if (key.blend_mode == BLEND_MODE_BLEND)
-    {
-        color_blend.blendEnable         = VK_TRUE;
-        color_blend.srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA;
-        color_blend.dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
-        color_blend.colorBlendOp        = VK_BLEND_OP_ADD;
-        color_blend.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
-        color_blend.dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO;
-        color_blend.alphaBlendOp        = VK_BLEND_OP_ADD;
-    }
-    else if (key.blend_mode == BLEND_MODE_ADDITIVE)
-    {
-        color_blend.blendEnable         = VK_TRUE;
-        color_blend.srcColorBlendFactor = VK_BLEND_FACTOR_ONE;
-        color_blend.dstColorBlendFactor = VK_BLEND_FACTOR_ONE;
-        color_blend.colorBlendOp        = VK_BLEND_OP_ADD;
-    }
-
-    VkPipelineColorBlendStateCreateInfo blend_info = { .sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO };
-    blend_info.attachmentCount = 1;
-    blend_info.pAttachments    = &color_blend;
 
     // Find attachment formats from the framegraph using key.pass_type to get pass_id
     RenderPassDesc* pass = &renderstate.framegraph.passes[renderstate.pass_id_from_type[key.pass_type]];
@@ -186,6 +193,39 @@ VkPipeline create_graphics_pipeline(PipelineKey key)
             stencil_attachment_rid = usage->rid;
         }
     }
+    SDL_assert(color_attachment_count <= renderstate.physical_device_properties.limits.maxColorAttachments);
+
+    // Fixed-Function State (Blending)
+    VkPipelineColorBlendAttachmentState color_blend_attachments[MAX_PASS_RESOURCE_BANDWIDTH] = {};
+    for (uint32_t i = 0; i < color_attachment_count; ++i)
+    {
+        VkPipelineColorBlendAttachmentState* color_blend = &color_blend_attachments[i];
+        color_blend->colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | 
+                                    VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
+        
+        if (key.blend_mode == BLEND_MODE_BLEND)
+        {
+            color_blend->blendEnable         = VK_TRUE;
+            color_blend->srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA;
+            color_blend->dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
+            color_blend->colorBlendOp        = VK_BLEND_OP_ADD;
+            color_blend->srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
+            color_blend->dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO;
+            color_blend->alphaBlendOp        = VK_BLEND_OP_ADD;
+        }
+        else if (key.blend_mode == BLEND_MODE_ADDITIVE)
+        {
+            color_blend->blendEnable         = VK_TRUE;
+            color_blend->srcColorBlendFactor = VK_BLEND_FACTOR_ONE;
+            color_blend->dstColorBlendFactor = VK_BLEND_FACTOR_ONE;
+            color_blend->colorBlendOp        = VK_BLEND_OP_ADD;
+        }
+    }
+    
+    VkPipelineColorBlendStateCreateInfo blend_info = { .sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO };
+    blend_info.attachmentCount = color_attachment_count;
+    blend_info.pAttachments    = color_blend_attachments;
+
 
     // Dynamic State:
     VkDynamicState dynamic_states[] = { VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR };

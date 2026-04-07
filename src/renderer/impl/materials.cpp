@@ -1,9 +1,10 @@
 #include "materials.h"
 #include "shaders.h"
 
+// Remember if tertiary or more shader's are needed, update drawcall.cpp::AddDrawCall
 extern const MaterialConfigs g_material_configs = {
     .by_name = {
-        .MAT_UNLIT = {
+        .MAT_UNLIT_OPAQUE = {
             .primary_shader_id = SHADER_UNLIT,
             .secondary_shader_id = SHADER_NONE,
             .is_opaque = 1,
@@ -11,3 +12,5 @@ extern const MaterialConfigs g_material_configs = {
         }
     }
 };
+
+#warning Remember to use MaterialConfigs::is_opaque/is_ui stuff

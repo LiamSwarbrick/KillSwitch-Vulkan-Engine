@@ -1,3 +1,6 @@
+#ifndef SHADERSRC_SHARED_CONSTANTS_GLSL
+#define SHADERSRC_SHARED_CONSTANTS_GLSL
+
 // TODO: Maybe a macro that represents either C or C++ instead of __cplusplus which is specific
 #ifdef __cplusplus
     #include "glm/glm.hpp"
@@ -8,31 +11,76 @@
     typedef glm::uvec4 uvec4;
 #endif
 
-#define VERTEX_TYPE_STATIC 0
-#define VERTEX_TYPE_SKINNED 1
+#ifndef __cplusplus
+    #define VERTEX_TYPE_STATIC 0
+    #define VERTEX_TYPE_SKINNED 1
+#else
+    typedef enum
+    {
+        VERTEX_TYPE_STATIC = 0,
+        VERTEX_TYPE_SKINNED = 1,
 
-#define BLEND_MODE_OPAQUE   0
-#define BLEND_MODE_MASKED   1
-#define BLEND_MODE_BLEND    2
-#define BLEND_MODE_ADDITIVE 3
+        VERETX_TYPE_COUNT
+    }
+    VertexType;
+#endif
 
-struct GraphicsPushConstants
+#ifndef __cplusplus
+    #define BLEND_MODE_OPAQUE   0
+    #define BLEND_MODE_MASKED   1
+    #define BLEND_MODE_BLEND    2
+    #define BLEND_MODE_ADDITIVE 3
+#else
+    typedef enum
+    {
+        BLEND_MODE_OPAQUE   = 0,
+        BLEND_MODE_MASKED   = 1,
+        BLEND_MODE_BLEND    = 2,
+        BLEND_MODE_ADDITIVE = 3,
+
+        BLEND_MODE_COUNT
+    }
+    BlendMode;
+#endif
+
+// Push constants
+//
+
+struct PushConstant_DrawCall
 {
     uint64_t scene_ptr;     // Scene data (View/Proj)
-    uint64_t object_ptr;    // Per-instance data (Model matrix)
     uint64_t material_ptr;  // Material SSBO address
+
+    // Per mesh
+    uint64_t object_ptr;    // Per-instance data (Model matrix)
+    uint64_t joints_ptr;     // Skinning matrices (0 if static)
+
+    // Per primitive:
     uint32_t material_idx;  // Which material in the SSBO
     uint32_t _padding;
-    uint64_t joint_ptr;     // Skinning matrices (0 if static)
-    
-    uint64_t index_ptr;     // Index buffer (Pulling)
+    uint64_t index_ptr;      // Index buffer (Pulling)
     uint64_t v_positions_ptr;
     uint64_t v_texcoords_ptr;
     uint64_t v_normals_ptr;
     uint64_t v_colors_ptr;
-    uint64_t v_joint_ids_ptr;     // Only for skinned meshes
+    uint64_t v_joint_ids_ptr;      // Only for skinned meshes
     uint64_t v_joint_weights_ptr;  // Only for skinned meshes
 };
+
+struct PushConstant_PassHeader
+{
+    uint32_t texture_indices[16];
+};
+struct FullPushConstants_Graphics  // Defined for the CPU side to use
+{
+    PushConstant_DrawCall dc;
+    PushConstant_PassHeader pass;
+};
+
+
+// Buffers
+//
+
 struct SceneData
 {
     mat4 view;
@@ -43,32 +91,28 @@ struct ObjectData
 {
     mat4 model;
 };
-// struct Vertex
-// {
-//     vec3 pos;
-//     vec2 uv;
-//     vec3 normal;
-//     vec4 color;       // TODO: Probably remove color?
-//     uvec4 joint_ids;  // Future: For skinning
-//     vec4 weights;     // Future: For skinning
-// };
 struct MaterialData
 {
     // TODO: Change this to a standard glTF pbr material instead of this shit
-    vec4 base_color;
-    uint32_t texture_idx_basecolor;
-    
-    uint32_t sampler_idx;
+    vec4  base_color;
+    float metalness;
+    float roughness;
+    vec3  emissive_factor;
     float alpha_cutoff;
-    uint32_t padding[1];
+
+    uint32_t sampler_idx;
+    
+    uint32_t texture_idx_basecolor;
+    // TODO: Switch to this layout:
+    // uint32_t texture_idx_basecolor_rgb_metalness_a;
+    // uint32_t texture_idx_emissive_rgb_roughness_a;
+    // uint32_t texture_idx_normalmap;  // <- TODO: Dunno if I want normal maps cuz the game might be stylised?
 };
 
 
 #ifdef __cplusplus
-    static_assert(sizeof(GraphicsPushConstants) <= 128);
-
     // I want to keep this C compatiable.
-    typedef struct GraphicsPushConstants GraphicsPushConstants;
+    typedef struct PushConstant_DrawCall PushConstant_DrawCall;
     typedef struct SceneData SceneData;
     typedef struct ObjectData ObjectData;
     typedef struct Vertex Vertex;
@@ -118,3 +162,5 @@ struct MaterialData
     layout(buffer_reference, scalar) readonly buffer VJointWeightsBuffer { vec4 weights[]; };
 
 #endif
+
+#endif  // SHADERSRC_SHARED_CONSTANTS_GLSL

@@ -8,26 +8,34 @@
 
 layout(push_constant, scalar) uniform PushConstants
 {
-    GraphicsPushConstants pc;
+    FullPushConstants_Graphics push;
 };
 
 layout(location = 0) out vec2 out_uv;
 layout(location = 1) out vec3 out_color;
 
+// Multipass materials require different shaders have reproducable vertex positions
+invariant gl_Position;
+
 void main()
 {
+    // No casting push.pass because forward rendering doesn't read anything.
+    // TODO: Switch to deferred?
+
     // Cast pointers
-    SceneData scene  = SceneBuffer(pc.scene_ptr).scene;
-    ObjectData obj   = ObjectBuffer(pc.object_ptr).object;
+    SceneData scene  = SceneBuffer(push.dc.scene_ptr).scene;
+    ObjectData obj   = ObjectBuffer(push.dc.object_ptr).object;
     
     // Pull vertex data
-    IndexBuffer ib   = IndexBuffer(pc.index_ptr);
+    IndexBuffer ib   = IndexBuffer(push.dc.index_ptr);
     uint index = ib.indices[gl_VertexIndex];
 
-    vec3 v_pos    = VPositionBuffer(pc.v_positions_ptr).positions[index];
-    vec2 v_uv     = VTexcoordBuffer(pc.v_texcoords_ptr).texcoords[index];
-    vec3 v_normal = VNormalBuffer(pc.v_normals_ptr).normals[index];
-    vec3 v_color  = VColorBuffer(pc.v_colors_ptr).colors[index];
+    vec3 v_pos    = VPositionBuffer(push.dc.v_positions_ptr).positions[index];
+    vec2 v_uv     = VTexcoordBuffer(push.dc.v_texcoords_ptr).texcoords[index];
+    vec3 v_normal = VNormalBuffer(push.dc.v_normals_ptr).normals[index];
+    vec3 v_color  = vec3(1.0);
+    if (push.dc.v_colors_ptr != 0)
+        v_color  = VColorBuffer(push.dc.v_colors_ptr).colors[index];
     
     mat4 model_matrix = obj.model;
 
@@ -35,10 +43,10 @@ void main()
     if (CURRENT_VERTEX_TYPE == VERTEX_TYPE_SKINNED)
     {
         // Pull skinned vertex data
-        uvec4 v_joint_ids = VJointIDsBuffer(pc.v_joint_ids_ptr).joint_ids[index];
-        vec4 v_weights    = VJointWeightsBuffer(pc.v_joint_weights_ptr).weights[index];
+        uvec4 v_joint_ids = VJointIDsBuffer(push.dc.v_joint_ids_ptr).joint_ids[index];
+        vec4 v_weights    = VJointWeightsBuffer(push.dc.v_joint_weights_ptr).weights[index];
 
-        JointBuffer jb = JointBuffer(pc.joint_ptr);
+        JointBuffer jb = JointBuffer(push.dc.joints_ptr);
         mat4 skin = 
             jb.joints[v_joint_ids.x] * v_weights.x +
             jb.joints[v_joint_ids.y] * v_weights.y +

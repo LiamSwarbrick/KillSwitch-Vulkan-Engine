@@ -2,6 +2,7 @@
 
 #include "internal_state.h"
 
+
 void bindless_heap_init();
 void bindless_heap_shutdown();
 void bindless_heap_create_all_samplers();
@@ -11,6 +12,12 @@ void fg_add_barrier(FG_Resource* res, PassResourceUsage* usage,
                    VkBufferMemoryBarrier2* buf_barriers, uint32_t* buf_count);
 void fg_apply_barriers(VkCommandBuffer cmd, RenderPassDesc* pass);
 void fg_execute_pass(uint32_t pass_idx, VkCommandBuffer cmd);
+
+void single_resource_barrier(VkCommandBuffer cmd, FG_Resource* res,
+    VkPipelineStageFlags2 new_stage,
+    VkAccessFlags2        new_access,
+    VkImageLayout         new_layout,
+    uint32_t  new_queue_family_index);
 
 typedef struct NewResourceInfo
 {
@@ -32,7 +39,7 @@ void FG_Init()
         VkPushConstantRange push_constant_range = {
             .stageFlags = VK_SHADER_STAGE_ALL,
             .offset = 0,
-            .size = 128  // NOTE: Vulkan 1.4 guaruntees 256, before that is only 128. So we could make it 256 if we never intend on supporting earlier versions.
+            .size = PUSHCONSTANTS_SIZE  // NOTE: Vulkan 1.4 guaruntees 256, before that is only 128.
         };
 
         VkPipelineLayoutCreateInfo layout_create_info = {
@@ -93,10 +100,20 @@ void FG_Empty()
     }
 }
 
-uint32_t FG_AddPass(RenderPassDesc pass_description, uint32_t pass_type)
+uint32_t FG_AddPass(RenderPassDesc pass_description)
 {
     FrameGraph* fg = &renderstate.framegraph;
     SDL_assert(fg->pass_count < MAX_PASSES);
+
+#ifndef NDEBUG
+    for (uint32_t i = 0; i < pass_description.output_count; ++i)
+    {
+        SDL_assert(pass_description.outputs[i].resolve_rid > 0 &&
+            "Resolve RID set to 0 (which is usually swapchain image rid), if you aren't using resolve, set resolve_rid to UINT32_MAX, but you aren't intending on this right? I'm saving your ass with this assert."
+        );
+    }
+#endif
+
 
     // Copy pass description to the next slot and return the index.
     uint32_t pass_id = fg->pass_count++;
@@ -104,10 +121,10 @@ uint32_t FG_AddPass(RenderPassDesc pass_description, uint32_t pass_type)
     memcpy(pass, &pass_description, sizeof(RenderPassDesc));
 
     // Add to table
-    SDL_assert(renderstate.pass_id_from_type[pass_type] == PASS_TYPE_INVALID &&
+    SDL_assert(renderstate.pass_id_from_type[pass_description.pass_type] == PASS_TYPE_INVALID &&
         "Can't add the same pass twice, give it a unique PassType enumeration"
     );
-    renderstate.pass_id_from_type[pass_type] = pass_id;
+    renderstate.pass_id_from_type[pass_description.pass_type] = pass_id;
 
     return pass_id;
 }
@@ -122,9 +139,19 @@ void fg_add_barrier(FG_Resource* res, PassResourceUsage* usage,
     // Skip if state already matches (e.g. resource used in same state in consecutive passes)
     if (res->current_layout == usage->layout && 
         res->current_access == usage->access && 
-        res->current_stage  == usage->stage)
+        res->current_stage  == usage->stage  &&
+        res->current_queue_family_index == usage->queue_family_index)
     {
         return;
+    }
+
+    // Ignore queue transfer when queue doesn't change
+    uint32_t src_queue_family   = VK_QUEUE_FAMILY_IGNORED;
+    uint32_t dst_queue_family  = VK_QUEUE_FAMILY_IGNORED;
+    if (res->current_queue_family_index != usage->queue_family_index)
+    {
+        src_queue_family = res->current_queue_family_index;
+        dst_queue_family = usage->queue_family_index;
     }
 
     // Add to barrers array and update resource with post-transition sync state
@@ -139,8 +166,8 @@ void fg_add_barrier(FG_Resource* res, PassResourceUsage* usage,
             .dstAccessMask        = usage->access,
             .oldLayout            = res->current_layout,
             .newLayout            = usage->layout,
-            .srcQueueFamilyIndex  = VK_QUEUE_FAMILY_IGNORED,
-            .dstQueueFamilyIndex  = VK_QUEUE_FAMILY_IGNORED,
+            .srcQueueFamilyIndex  = src_queue_family,
+            .dstQueueFamilyIndex  = dst_queue_family,
             .image                = res->image.handle,
             .subresourceRange     = res->image.subresource_range
         };
@@ -155,8 +182,8 @@ void fg_add_barrier(FG_Resource* res, PassResourceUsage* usage,
             .srcAccessMask        = res->current_access,
             .dstStageMask         = usage->stage,
             .dstAccessMask        = usage->access,
-            .srcQueueFamilyIndex  = VK_QUEUE_FAMILY_IGNORED,
-            .dstQueueFamilyIndex  = VK_QUEUE_FAMILY_IGNORED,
+            .srcQueueFamilyIndex  = src_queue_family,
+            .dstQueueFamilyIndex  = dst_queue_family,
             .buffer               = res->buffer.handle,
             .offset               = 0,
             .size                 = res->buffer.size
@@ -164,11 +191,12 @@ void fg_add_barrier(FG_Resource* res, PassResourceUsage* usage,
     }
     res->current_stage = usage->stage;
     res->current_access = usage->access;
+    res->current_queue_family_index = usage->queue_family_index;
 }
 
 void fg_apply_barriers(VkCommandBuffer cmd, RenderPassDesc* pass)
 {
-    VkImageMemoryBarrier2 image_barriers[MAX_PASS_RESOURCE_BANDWIDTH * 2];  // *2 because each resource could require both an input and output barrier.
+    VkImageMemoryBarrier2 image_barriers[MAX_PASS_RESOURCE_BANDWIDTH * 3];  // *3 because each resource could require both an input and output barrier (2x) and then each output could have a resolve rid (*3).
     VkBufferMemoryBarrier2 buffer_barriers[MAX_PASS_RESOURCE_BANDWIDTH * 2];
     uint32_t img_count = 0;
     uint32_t buf_count = 0;
@@ -176,15 +204,30 @@ void fg_apply_barriers(VkCommandBuffer cmd, RenderPassDesc* pass)
     // Transition INPUTS
     for (uint32_t i = 0; i < pass->input_count; i++)
     {
-        FG_Resource* res = &renderstate.registry.resources[pass->inputs[i].rid];
-        fg_add_barrier(res, &pass->inputs[i], image_barriers, &img_count, buffer_barriers, &buf_count);
+        PassResourceUsage* usage = &pass->inputs[i];
+        FG_Resource* res = &renderstate.registry.resources[usage->rid];
+        fg_add_barrier(res, usage, image_barriers, &img_count, buffer_barriers, &buf_count);
     }
 
     // Transition OUTPUTS
     for (uint32_t i = 0; i < pass->output_count; i++)
     {
         FG_Resource* res = &renderstate.registry.resources[pass->outputs[i].rid];
+        // printf("(pass=%s)\n  before attachment rid=%d: stage=%zu\n", pass->debug_name, pass->outputs[i].rid, res->current_stage);
         fg_add_barrier(res, &pass->outputs[i], image_barriers, &img_count, buffer_barriers, &buf_count);
+        // printf("  after attachment rid=%d: stage=%zu\n", pass->outputs[i].rid, res->current_stage);
+
+        // MSAA Resolved Attachment
+        uint32_t resolve_rid = pass->outputs[i].resolve_rid;
+        if (resolve_rid < UINT32_MAX)
+        {
+            FG_Resource* resolved_res = &renderstate.registry.resources[resolve_rid];
+            PassResourceUsage resolve_usage = pass->outputs[i];
+            resolve_usage.rid = pass->outputs[i].resolve_rid;
+            // printf("  before Resolve attachment rid=%d: stage=%zu\n", resolve_rid, resolved_res->current_stage);
+            fg_add_barrier(resolved_res, &resolve_usage, image_barriers, &img_count, buffer_barriers, &buf_count);
+            // printf("  after Resolve attachment rid=%d: stage=%zu\n", resolve_rid, resolved_res->current_stage);
+        }
     }
 
     if (img_count > 0 || buf_count > 0)
@@ -217,7 +260,7 @@ void fg_execute_pass(uint32_t pass_idx, VkCommandBuffer cmd)
     if (pass->is_compute)
     {
         // Compute passes don't use vkCmdBeginRendering
-        pass->execute_callback(cmd, pass->user_data);
+        pass->execute_callback(cmd, pass);
     }
     else  // Graphics Pass:
     {
@@ -233,38 +276,60 @@ void fg_execute_pass(uint32_t pass_idx, VkCommandBuffer cmd)
         for (uint32_t i = 0; i < pass->output_count; ++i)
         {
             PassResourceUsage* usage = &pass->outputs[i];
-
             SDL_assert(usage->rid < renderstate.registry.resource_count);
             FG_Resource* res = &renderstate.registry.resources[usage->rid];
 
+            // Setup the base attachment info
             VkRenderingAttachmentInfo attachment = {
-                .sType               = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
-                .pNext               = NULL,
-                .imageView           = res->image.view,
-                .imageLayout         = usage->layout,
+                .sType       = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
+                .pNext       = NULL,
+                .imageView   = res->image.view,
+                .imageLayout = usage->layout,
 
-                // TODO: Currently no MSAA
-                .resolveMode         = VK_RESOLVE_MODE_NONE,
-                .resolveImageView    = VK_NULL_HANDLE,
-                .resolveImageLayout  = VK_IMAGE_LAYOUT_UNDEFINED,
-
-                .loadOp              = usage->load_op,
-                .storeOp             = usage->store_op,
-                .clearValue          = usage->clear_value
+                .loadOp      = usage->load_op,
+                .storeOp     = usage->store_op,
+                .clearValue  = usage->clear_value
             };
 
-            if (usage->usage_flags & FG_USAGE_COLOR)
+            b32 is_color = usage->usage_flags & FG_USAGE_COLOR;
+            b32 is_depth = usage->usage_flags & FG_USAGE_DEPTH;
+            b32 is_stencil = usage->usage_flags & FG_USAGE_STENCIL;
+
+            b32 is_msaa = (renderstate.multisampling_count_flag > VK_SAMPLE_COUNT_1_BIT);
+            b32 has_resolve = (usage->resolve_rid < UINT32_MAX);
+
+            // Multisampled attachments come with a target they resolve to...
+            if (is_msaa && has_resolve)
+            {
+                FG_Resource* resolve_res = &renderstate.registry.resources[usage->resolve_rid];
+                attachment.resolveMode        = usage->resolve_mode;
+                attachment.resolveImageView   = resolve_res->image.view;
+                if (is_color)
+                {
+                    attachment.resolveImageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+                }
+                else if (is_depth)
+                {
+                    attachment.resolveImageLayout = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL;
+                }
+            }
+            else
+            {
+                attachment.resolveMode        = VK_RESOLVE_MODE_NONE;
+                attachment.resolveImageView   = VK_NULL_HANDLE;
+            }
+
+            if (is_color)
             {
                 color_attachments[color_attachment_count++] = attachment;
             }
-
             // NOTE: Packed Depth-Stencil uses the same ImageView but different aspects in the barrier
-            if (usage->usage_flags & FG_USAGE_DEPTH)
+            if (is_depth)
             {
                 depth_attachment = attachment;
                 has_depth = 1;
             }
-            if (usage->usage_flags & FG_USAGE_STENCIL)
+            if (is_stencil)
             {
                 stencil_attachment = attachment;
                 has_stencil = 1;
@@ -307,7 +372,7 @@ void fg_execute_pass(uint32_t pass_idx, VkCommandBuffer cmd)
             vkCmdSetScissor(cmd, 0, 1, &pass->render_area);
         }
 
-        pass->execute_callback(cmd, pass->user_data);
+        pass->execute_callback(cmd, pass);
 
         vkCmdEndRendering(cmd);
     }
@@ -328,52 +393,105 @@ void FG_CmdRenderFrame(VkCommandBuffer cmd)
     FrameGraph* fg = &renderstate.framegraph;
     SDL_assert(fg->pass_count < MAX_PASSES);
 
+    // Bind the Global Bindless Set (textures & samplers)
+    vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, 
+        renderstate.global_pipeline_layout, 0, 1, &renderstate.heap.global_set, 0, NULL
+    );
+
     for (uint32_t i = 0; i < fg->pass_count; ++i)
     {
         fg_execute_pass(i, cmd);
     }
 }
 
+void single_resource_barrier(VkCommandBuffer cmd, FG_Resource* res, VkDependencyFlags dep_flags,
+    VkPipelineStageFlags2 new_stage,
+    VkAccessFlags2        new_access,
+    VkImageLayout         new_layout,
+    uint32_t  new_queue_family_index)
+{
+    // Ignore queue transfer when queue doesn't change
+    uint32_t src_queue_family   = VK_QUEUE_FAMILY_IGNORED;
+    uint32_t dst_queue_family  = VK_QUEUE_FAMILY_IGNORED;
+    if (res->current_queue_family_index != new_queue_family_index)
+    {
+        src_queue_family = res->current_queue_family_index;
+        dst_queue_family = new_queue_family_index;
+    }
+
+    VkDependencyInfo dependency = {
+        .sType                     = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
+        .pNext                     = NULL,
+        .dependencyFlags           = dep_flags
+    };
+
+    // Declare these dudes before the if state so they aren't popped off the stack in release mode holy fucking shit 
+    VkBufferMemoryBarrier2 buffer_barrier = {};
+    VkImageMemoryBarrier2 image_barrier = {};
+
+    if (res->type == FG_RESOURCE_TYPE_BUFFER)
+    {
+        buffer_barrier = (VkBufferMemoryBarrier2){
+            .sType                = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER_2,
+            .pNext                = NULL,
+            .srcStageMask         = res->current_stage,
+            .srcAccessMask        = res->current_access,
+            .dstStageMask         = new_stage,
+            .dstAccessMask        = new_access,
+            .srcQueueFamilyIndex  = src_queue_family,
+            .dstQueueFamilyIndex  = dst_queue_family,
+            .buffer               = res->buffer.handle,
+            .offset               = 0,
+            .size                 = res->buffer.size
+        };
+        dependency.bufferMemoryBarrierCount = 1;
+        dependency.pBufferMemoryBarriers = &buffer_barrier;
+    }
+    else if (res->type == FG_RESOURCE_TYPE_IMAGE)
+    {
+        image_barrier = (VkImageMemoryBarrier2){
+            .sType                = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
+            .pNext                = NULL,
+            .srcStageMask         = res->current_stage,
+            .srcAccessMask        = res->current_access,
+            .dstStageMask         = new_stage,
+            .dstAccessMask        = new_access,
+            .oldLayout            = res->current_layout,
+            .newLayout            = new_layout,
+            .srcQueueFamilyIndex  = src_queue_family,
+            .dstQueueFamilyIndex  = dst_queue_family,
+            .image                = res->image.handle,
+            .subresourceRange     = res->image.subresource_range
+        };
+        dependency.imageMemoryBarrierCount = 1;
+        dependency.pImageMemoryBarriers = &image_barrier;
+    }
+    else
+    {
+        SDL_assert(0 && "Unknown resource type.");
+    }
+    
+    vkCmdPipelineBarrier2(cmd, &dependency);
+
+    // Keep track of this new state.
+    res->current_layout = new_layout;
+    res->current_stage  = new_stage;
+    res->current_access = new_access;
+    res->current_queue_family_index = new_queue_family_index;
+}
+
 void FG_CmdTransitionSwapchainForPresentation(VkCommandBuffer cmd, uint32_t swapchain_image_rid)
 {
     SDL_assert(swapchain_image_rid < renderstate.registry.resource_count);
     FG_Resource* swapchain_resource = &renderstate.registry.resources[swapchain_image_rid];
-
-    VkPipelineStageFlags2 new_stage  = VK_PIPELINE_STAGE_2_NONE;
-    VkAccessFlags2        new_access = VK_ACCESS_2_NONE;
-    VkImageLayout         new_layout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
-    
-    // Move swapchain image to present queue with present format.
-    VkImageMemoryBarrier2 barrier = {
-        .sType                = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
-        .pNext                = NULL,
-        .srcStageMask         = swapchain_resource->current_stage,
-        .srcAccessMask        = swapchain_resource->current_access,
-        .dstStageMask         = new_stage,
-        .dstAccessMask        = new_access,
-        .oldLayout            = swapchain_resource->current_layout,
-        .newLayout            = new_layout,
-        .srcQueueFamilyIndex  = renderstate.queue_family_indices.graphics_family,
-        .dstQueueFamilyIndex  = renderstate.queue_family_indices.present_family,
-        .image                = swapchain_resource->image.handle,
-        .subresourceRange     = swapchain_resource->image.subresource_range
-    };
-    VkDependencyInfo dependency = {
-        .sType                     = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
-        .pNext                     = NULL,
-        .dependencyFlags           = VK_DEPENDENCY_BY_REGION_BIT,
-        .imageMemoryBarrierCount   = 1,
-        .pImageMemoryBarriers      = &barrier
-    };
-    vkCmdPipelineBarrier2(cmd, &dependency);
-
-    // Keep track of this new state.
-    // NOTE: Even though swapchain presenting is the last step of rendering.
-    //       We still must update the resources current state, since this
-    //       swapchain image resource gets used again a few frames later.
-    swapchain_resource->current_stage  = new_stage;
-    swapchain_resource->current_access = new_access;
-    swapchain_resource->current_layout = new_layout;
+    // printf("swapchain_rid=%d\n   before: stage=%d\n", swapchain_image_rid, swapchain_resource->current_stage);
+    single_resource_barrier(cmd, swapchain_resource, VK_DEPENDENCY_BY_REGION_BIT,
+        VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT_KHR,
+        VK_ACCESS_2_NONE,
+        VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
+        renderstate.queue_family_indices.present_family
+    );
+    // printf("  after: stage=%d\n", swapchain_resource->current_stage);
 }
 
 // Resource Tracking
@@ -381,7 +499,9 @@ void FG_CmdTransitionSwapchainForPresentation(VkCommandBuffer cmd, uint32_t swap
 
 uint32_t add_resource_to_registry_and_heap(const char* debug_name, FG_ResourceType type, FG_ResourceFlags flags, NewResourceInfo resource_info)
 {
-    SDL_assert(renderstate.registry.resource_count < MAX_RESOURCES);
+    SDL_assert(renderstate.registry.resource_count < MAX_RESOURCES &&
+        "If MAX_RESOURCES is exceeded, increase MAX_RESOURCES to an ample size and recompile."
+    );
 
     uint32_t id = UINT32_MAX;
     if (renderstate.registry.dirty_because_gaps)
@@ -425,9 +545,10 @@ uint32_t add_resource_to_registry_and_heap(const char* debug_name, FG_ResourceTy
     res->type = type;
     res->flags = flags;
     res->allocation = resource_info.allocation;
+    res->current_layout = VK_IMAGE_LAYOUT_UNDEFINED;
     res->current_access = VK_ACCESS_2_NONE;
     res->current_stage  = VK_PIPELINE_STAGE_2_NONE;
-    res->current_layout = VK_IMAGE_LAYOUT_UNDEFINED;
+    res->current_queue_family_index = renderstate.queue_family_indices.graphics_family;  // <- Must initialize to some family, and graphics is likely the best choice
     
     if (type == FG_RESOURCE_TYPE_BUFFER)
     {
@@ -453,7 +574,7 @@ uint32_t add_resource_to_registry_and_heap(const char* debug_name, FG_ResourceTy
 
         if (can_be_sampled)
         {
-            printf("Adding " ANSI_CYAN "%s" ANSI_RESET " to heap (is samplable).\n", res->debug_name);
+            printf("Adding " ANSI_CYAN "%s" ANSI_RESET " to heap at index %u (is samplable).\n", res->debug_name, renderstate.heap.texture_count);
 
             // Register in  bindless descriptor array
             res->image_bindless_index = renderstate.heap.texture_count++;
@@ -495,7 +616,7 @@ uint32_t FG_CreateResource(const char* debug_name, FG_ResourceType type, FG_Reso
     {
         // Create .buffer.handle, with allocation stored in .allocation
         VmaAllocationCreateInfo alloc_create_info = { .usage = VMA_MEMORY_USAGE_AUTO };
-        if (create_info->is_cpu_accessible)
+        if (create_info->is_buffer_cpu_accessible)
         {
             alloc_create_info.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | 
                                       VMA_ALLOCATION_CREATE_MAPPED_BIT;
@@ -515,7 +636,7 @@ uint32_t FG_CreateResource(const char* debug_name, FG_ResourceType type, FG_Reso
         resource_info.import_info.buffer.size = create_info->buffer_create_info.size;
         resource_info.import_info.buffer.mapped_data = alloc_info.pMappedData;
     }
-    else
+    else if (type == FG_RESOURCE_TYPE_IMAGE)
     {
         // Create .image.handle, with allocation stored in .allocation
         VmaAllocationCreateInfo alloc_create_info = { .usage=VMA_MEMORY_USAGE_AUTO };
@@ -547,6 +668,10 @@ uint32_t FG_CreateResource(const char* debug_name, FG_ResourceType type, FG_Reso
         resource_info.import_info.image.extent = create_info->image_create_info.extent;
         resource_info.import_info.image.usage  = create_info->image_create_info.usage;
         resource_info.import_info.image.subresource_range = create_info->image_view_create_info.subresourceRange;
+    }
+    else
+    {
+        SDL_assert(0 && "Invalid resource type");
     }
 
     // Returns the resource's id into the registry
@@ -652,7 +777,9 @@ void FG_UploadImageData(ThreadStagingObjects* stg, uint32_t rid, const void* dat
 {
     FG_Resource* res = &renderstate.registry.resources[rid];
     SDL_assert(res->type == FG_RESOURCE_TYPE_IMAGE);
-    SDL_assert(res->image.usage & VK_IMAGE_USAGE_TRANSFER_DST_BIT && "To copy into an image resource, it must have the TRANSFER_DST usage flag");
+    SDL_assert(res->image.usage & VK_IMAGE_USAGE_TRANSFER_DST_BIT &&
+        "To copy into an image resource, it must have the TRANSFER_DST usage flag"
+    );
 
     VkDeviceSize image_size = size;
 
@@ -685,30 +812,15 @@ void FG_UploadImageData(ThreadStagingObjects* stg, uint32_t rid, const void* dat
     };
     vkBeginCommandBuffer(stg->upload_command_buffer, &begin_info);
 
-    // Transition to transfer destination
-    VkImageMemoryBarrier2 barrier = {
-        .sType                = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
-        .pNext                = NULL,
-        .srcStageMask         = res->current_stage,
-        .srcAccessMask        = res->current_access,
-        .dstStageMask         = VK_PIPELINE_STAGE_2_NONE,
-        .dstAccessMask        = VK_ACCESS_2_TRANSFER_WRITE_BIT,
-        .oldLayout            = res->current_layout,
-        .newLayout            = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-        .srcQueueFamilyIndex  = VK_QUEUE_FAMILY_IGNORED,
-        .dstQueueFamilyIndex  = VK_QUEUE_FAMILY_IGNORED,
-        .image                = res->image.handle,
-        .subresourceRange     = res->image.subresource_range
-    };
-    VkDependencyInfo dep_info = {
-        .sType                     = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
-        .pNext                     = NULL,
-        .dependencyFlags           = 0,
-        .imageMemoryBarrierCount   = 1,
-        .pImageMemoryBarriers      = &barrier
-    };
-    vkCmdPipelineBarrier2(stg->upload_command_buffer, &dep_info);
+    // Transition to transfer queue family with TRANSFER_DST_OPTIMAL layout
+    single_resource_barrier(stg->upload_command_buffer, res, 0,
+        VK_PIPELINE_STAGE_2_TRANSFER_BIT,  // <- Important to enforce queue dependency
+        VK_ACCESS_2_TRANSFER_WRITE_BIT,
+        VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+        renderstate.queue_family_indices.transfer_family
+    );
 
+    // Copy from staging buffer to resource image handle
     VkBufferImageCopy region = {
         .bufferOffset = 0,
         .bufferRowLength = 0,
@@ -734,33 +846,22 @@ void FG_UploadImageData(ThreadStagingObjects* stg, uint32_t rid, const void* dat
         &region
     );
 
-    // Transition back
-    VkImageMemoryBarrier2 barrier_b = {
-        .sType                = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
-        .pNext                = NULL,
-        .srcStageMask         = VK_PIPELINE_STAGE_2_NONE,
-        .srcAccessMask        = VK_ACCESS_2_TRANSFER_WRITE_BIT,
-        .dstStageMask         = res->current_stage,
-        .dstAccessMask        = res->current_access,
-        .oldLayout            = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-        .newLayout            = res->current_layout,
-        .srcQueueFamilyIndex  = VK_QUEUE_FAMILY_IGNORED,
-        .dstQueueFamilyIndex  = VK_QUEUE_FAMILY_IGNORED,
-        .image                = res->image.handle,
-        .subresourceRange     = res->image.subresource_range
-    };
-    VkDependencyInfo dep_info_b = {
-        .sType                     = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
-        .pNext                     = NULL,
-        .dependencyFlags           = 0,
-        .imageMemoryBarrierCount   = 1,
-        .pImageMemoryBarriers      = &barrier_b
-    };
-    vkCmdPipelineBarrier2(stg->upload_command_buffer, &dep_info_b);
+    // Transition to graphics queue to be used as a texture
+    // NOTE: It's possible it may be used for some other purpose but this
+    // will be handled automatically with the barriers added by the framegraph.
+    // HOWEVER: We want this barrier here because resourecs that are purely textures
+    // are never transitioned by the framegraph execution
+    single_resource_barrier(stg->upload_command_buffer, res, 0,
+        VK_PIPELINE_STAGE_2_ALL_GRAPHICS_BIT,
+        VK_ACCESS_2_SHADER_READ_BIT,
+        VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+        renderstate.queue_family_indices.graphics_family
+    );
 
     vkEndCommandBuffer(stg->upload_command_buffer);
 
     
+    // Submit cmd and wait on CPU side for it to complete by using a VkFence
     VkFenceCreateInfo fence_info = { .sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO };
     VkFence fence;
     vkCreateFence(renderstate.device, &fence_info, NULL, &fence);
@@ -772,6 +873,154 @@ void FG_UploadImageData(ThreadStagingObjects* stg, uint32_t rid, const void* dat
     vmaDestroyBuffer(renderstate.vma_allocator, staging_buf, staging_alloc);
 }
 
+void FG_GenMipmaps(uint32_t image_rid)
+{
+    FG_Resource* res = &renderstate.registry.resources[image_rid];
+
+    // NOTE: We require these to upload image data
+    SDL_assert(res->image.usage & VK_IMAGE_USAGE_TRANSFER_SRC_BIT && res->image.usage & VK_IMAGE_USAGE_TRANSFER_DST_BIT);
+    
+    uint32_t num_levels = res->image.subresource_range.levelCount;
+
+    // Start with the dimensions of mip 0
+    int32_t prev_w = (int32_t)res->image.extent.width;
+    int32_t prev_h = (int32_t)res->image.extent.height;
+    int32_t prev_d = (int32_t)res->image.extent.depth;
+
+
+    // Begin recording transfer command
+    ThreadStagingObjects* stg = &renderstate.main.staging_objects;
+    vkResetCommandBuffer(stg->upload_command_buffer, 0);
+    VkCommandBufferBeginInfo begin_info = {
+        .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
+        .flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT
+    };
+    vkBeginCommandBuffer(stg->upload_command_buffer, &begin_info);
+
+
+    // Transition entire image (all levels) to TRANSFER_DST and transfer queue family
+    single_resource_barrier(stg->upload_command_buffer, res, 0,
+        VK_PIPELINE_STAGE_2_TRANSFER_BIT,
+        VK_ACCESS_2_TRANSFER_WRITE_BIT,
+        VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+        renderstate.queue_family_indices.transfer_family
+    );
+
+    // Transition top mip level (0) from DST to SRC so we can read from it.
+    {
+        VkImageMemoryBarrier2 barrier_src = {
+            .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
+            .srcStageMask         = VK_PIPELINE_STAGE_2_TRANSFER_BIT,
+            .srcAccessMask        = VK_ACCESS_2_TRANSFER_WRITE_BIT,
+            .dstStageMask         = VK_PIPELINE_STAGE_2_TRANSFER_BIT,
+            .dstAccessMask        = VK_ACCESS_2_TRANSFER_READ_BIT,
+            .oldLayout            = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+            .newLayout            = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+            .srcQueueFamilyIndex  = VK_QUEUE_FAMILY_IGNORED,
+            .dstQueueFamilyIndex  = VK_QUEUE_FAMILY_IGNORED,
+            .image                = res->image.handle,
+            .subresourceRange     = { VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1 }
+        };
+
+        VkDependencyInfo dep_src = {
+            .sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
+            .imageMemoryBarrierCount  = 1,
+            .pImageMemoryBarriers     = &barrier_src
+        };
+        vkCmdPipelineBarrier2(stg->upload_command_buffer, &dep_src);
+    }
+
+    for (uint32_t i = 1; i < num_levels; ++i)
+    {
+        int32_t curr_w = prev_w > 1 ? prev_w / 2 : 1;
+        int32_t curr_h = prev_h > 1 ? prev_h / 2 : 1;
+        int32_t curr_d = prev_d > 1 ? prev_d / 2 : 1;
+
+        // Blit mip i-1 to i
+        VkImageBlit blit = {
+            .srcSubresource = { VK_IMAGE_ASPECT_COLOR_BIT, i - 1, 0, 1 },
+            .srcOffsets = { {0,0,0}, {prev_w, prev_h, prev_d} },
+            .dstSubresource = { VK_IMAGE_ASPECT_COLOR_BIT, i, 0, 1 },
+            .dstOffsets = { {0,0,0}, {curr_w, curr_h, curr_d} }
+        };
+
+        vkCmdBlitImage(stg->upload_command_buffer, 
+            res->image.handle, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+            res->image.handle, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+            1, &blit, VK_FILTER_LINEAR);
+
+        prev_w = curr_w;
+        prev_h = curr_h;
+        prev_d = curr_d;
+
+        // Transition current level (i-1) from DST to SRC so we can read from it.
+        VkImageMemoryBarrier2 barrier_src = {
+            .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
+            .srcStageMask         = VK_PIPELINE_STAGE_2_TRANSFER_BIT,
+            .srcAccessMask        = VK_ACCESS_2_TRANSFER_WRITE_BIT,
+            .dstStageMask         = VK_PIPELINE_STAGE_2_TRANSFER_BIT,
+            .dstAccessMask        = VK_ACCESS_2_TRANSFER_READ_BIT,
+            .oldLayout            = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+            .newLayout            = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+            .srcQueueFamilyIndex  = VK_QUEUE_FAMILY_IGNORED,
+            .dstQueueFamilyIndex  = VK_QUEUE_FAMILY_IGNORED,
+            .image                = res->image.handle,
+            .subresourceRange     = { VK_IMAGE_ASPECT_COLOR_BIT, i, 1, 0, 1 }
+        };
+
+        VkDependencyInfo dep_src = {
+            .sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
+            .imageMemoryBarrierCount  = 1,
+            .pImageMemoryBarriers     = &barrier_src
+        };
+        vkCmdPipelineBarrier2(stg->upload_command_buffer, &dep_src);
+    }
+
+    // Transition whole image to SHADER_READ_ONLY_OPTIMAL
+    // (the texture silently fails and appears black if we don't transfer back... scary shit)
+    //
+
+    // Update the resource state registry
+    res->current_layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+    res->current_access = VK_ACCESS_2_SHADER_READ_BIT;
+    res->current_stage  = VK_PIPELINE_STAGE_2_ALL_GRAPHICS_BIT;
+    res->current_queue_family_index = renderstate.queue_family_indices.graphics_family;
+
+    // Not using single_resource_barrier() because we fucked up the resource's knowledge of the sync state
+    VkImageMemoryBarrier2 final_barrier = {
+        .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
+        .srcStageMask         = VK_PIPELINE_STAGE_2_TRANSFER_BIT,
+        .srcAccessMask        = VK_ACCESS_2_TRANSFER_READ_BIT | VK_ACCESS_2_TRANSFER_WRITE_BIT,
+        .dstStageMask         = res->current_stage, 
+        .dstAccessMask        = res->current_access,
+        .oldLayout            = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, 
+        .newLayout            = res->current_layout,
+        .srcQueueFamilyIndex  = renderstate.queue_family_indices.transfer_family,
+        .dstQueueFamilyIndex  = res->current_queue_family_index,
+        .image                = res->image.handle,
+        .subresourceRange     = res->image.subresource_range
+    };
+    VkDependencyInfo final_dep = {
+        .sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
+        .imageMemoryBarrierCount = 1,
+        .pImageMemoryBarriers = &final_barrier
+    };
+    vkCmdPipelineBarrier2(stg->upload_command_buffer, &final_dep);
+
+
+    vkEndCommandBuffer(stg->upload_command_buffer);
+
+
+    // Submit cmd and wait on CPU side for it to complete by using a VkFence
+    VkFenceCreateInfo fence_info = { .sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO };
+    VkFence fence;
+    vkCreateFence(renderstate.device, &fence_info, NULL, &fence);
+
+    thread_safe_submit_cmd(stg->upload_command_buffer, fence);
+    vkWaitForFences(renderstate.device, 1, &fence, VK_TRUE, UINT64_MAX);
+
+    vkDestroyFence(renderstate.device, fence, NULL);
+}
 
 // Descriptors
 //

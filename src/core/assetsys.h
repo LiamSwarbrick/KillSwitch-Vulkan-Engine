@@ -2,6 +2,8 @@
 #define ASSETSYS_H
 
 #include "cgltf.h"
+#include "renderer/shadersrc/shared_constants.glsl"  // VertexType
+#include "renderer/render_types.h"  // MaterialType
 
 #ifdef __cplusplus
 extern "C" {
@@ -12,6 +14,11 @@ typedef struct Primitive {
     float* positions;
     float* normals;
     float* texcoords;
+
+    // Skinning data
+    uint32_t* joints;
+    float* weights;
+
     size_t vertex_count;
 
     // Index data
@@ -23,6 +30,8 @@ typedef struct Primitive {
 
 typedef struct Mesh {
     const char* name;
+    VertexType vertex_type;     // 0 = static, 1 = animated (as per shared_constants.glsl)
+    MaterialType mat_type;
 
     Primitive* primitives;
     size_t primitive_count;
@@ -63,6 +72,7 @@ typedef struct Image {
     const char* uri;           
     const unsigned char* data; 
     size_t data_size;
+    uint32_t width, height;
 } Image;
 
 typedef struct Camera {
@@ -85,6 +95,31 @@ typedef struct Light {
     float range;
 } Light;
 
+typedef struct Bone {
+    const char* name;
+
+    // transforms
+    float translation[3];
+    float rotation[4];
+
+    // Hierarchy
+    int parent_index;
+    int* children_indices;
+    size_t child_count;
+} Bone;
+
+typedef struct Skin {
+    const char* name;
+    int skeleton_root_node_index;
+
+    int* joint_node_indices;
+    size_t joint_count;
+
+    float* inverse_bind_matrices;
+
+    Bone* bones;
+} Skin;
+
 typedef struct Node {
     const char* name;
 
@@ -102,6 +137,7 @@ typedef struct Node {
     int mesh_index;
     int camera_index;
     int light_index;
+    int skin_index;
 
     // IMPORTANT: Custom properties from Blender are stored here
     // cgltf stores this as raw JSON data in `node->extras`, 
@@ -161,11 +197,17 @@ typedef struct Asset {
     Node* nodes;
     size_t node_count;
 
+    Skin* skins;
+    size_t skin_count;
+
     Animation* animations;
     size_t animation_count;
 
 } Asset;
 
+
+Image load_image(const char* name, const char* uri);
+void free_image(Image* image);
 
 Asset* load_asset(const char* filename);
 

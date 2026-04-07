@@ -4,14 +4,13 @@
 #include "vulkan_wrapper.h"
 #include "pipeline_keying.h"
 
-void UpdateGlobalSceneData();
-void SubmitDraw(VkCommandBuffer cmd, Renderable* r, PipelineKey key);
-
 // Shader Registry
 //
 
 #define SHADER_LIST \
-    X(SHADER_UNLIT)
+    X(SHADER_UNLIT) \
+    X(SHADER_DEPTH) \
+    X(SHADER_BLIT)
 
 typedef enum
 {
