@@ -1,5 +1,6 @@
 #include "epa.h"
 
+#include <vector>
 #include <set>
 #include "SDL3/SDL.h"
 

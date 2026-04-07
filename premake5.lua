@@ -204,7 +204,7 @@ workspace "AdventureEngine"
     project "physics"
         kind "StaticLib"
         language "C++"
-        cppdialect "C++23"
+        cppdialect "C++latest"
 
         files {
             SRC .. "physics/**.hpp",
@@ -215,6 +215,7 @@ workspace "AdventureEngine"
         includedirs { 
             SRC,  -- Exported API headers
             SRC .. "physics/**",
+            include_paths.glm,
             include_paths.SDL3 -- Assertions (in case)
         }
 
