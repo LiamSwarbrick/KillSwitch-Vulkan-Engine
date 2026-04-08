@@ -4,7 +4,7 @@
 #include "core/ecs/registry.h"
 #include "core/components.h"
 
-void Animation_Update(AdvEng::ECS* ecs, float dt);
+void Animation_Update(ECS* ecs, float dt);
 
 // animation control
 void Start(C_AnimatedMesh& animator, const char* name); // by name

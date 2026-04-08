@@ -60,7 +60,7 @@ bool Scene::LoadAsset(const char* fileName)
         // saying if it is an entity, to create it (bones are not going to be i think)
         // if (components.HasMember("isEntity") && (components.GetBool() == true)) {}
 
-        AdvEng::EntityID eID;
+        EntityID eID;
         eID = m_ecs.CreateEntity((node->name) ? (node->name) : "");
 
         // 3. For ImportedComponents that use mirrored data from the json,
@@ -186,7 +186,7 @@ bool Scene::LoadLevel(const char* fileName)
     // TEMP HACK BCUZ MESHES NOT IN THE LOADER YET
     C_AnimatedMesh* anim_component;
     {
-        AdvEng::EntityID eID;
+        EntityID eID;
         eID = m_ecs.CreateEntity("Temp animated entity");
         Node* node = &asset3->nodes[0];
         C_Transform t;
