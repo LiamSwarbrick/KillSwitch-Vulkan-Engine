@@ -22,7 +22,7 @@ void Animation_Update(AdvEng::ECS* ecs, float dt)
         Animation& animation = asset->animations[animatedMesh.currentAnimation];
 
 		// Update the animation time
-        animatedMesh.animationTime += dt;
+        animatedMesh.animationTime += dt * animatedMesh.playbackSpeed;
         if (animatedMesh.isLooping && GetDuration(animatedMesh) > 0.0f)
             animatedMesh.animationTime = fmod(animatedMesh.animationTime, GetDuration(animatedMesh));
 		else if (animatedMesh.animationTime > GetDuration(animatedMesh))

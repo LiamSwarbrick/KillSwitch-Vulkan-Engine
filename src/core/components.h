@@ -32,6 +32,7 @@ struct C_AnimatedMesh
     float animationTime;
     bool isPlaying;
     bool isLooping;
+    float playbackSpeed;
 
 	// skeletal animation data
     uint32_t joint_count;
