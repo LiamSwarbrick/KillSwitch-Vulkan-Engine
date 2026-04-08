@@ -151,11 +151,6 @@ int main(int argc, char *argv[])
             Renderer_DrawFrame(temp_camera_view_matrix());
         }
     }
-    ResourceManager_UnloadByResidency(
-        &resource_manager,
-        RESOURCE_RESIDENCY_TRANSIENT,
-        1
-    );
 
     scene.Shutdown();
     Renderer_Shutdown();
