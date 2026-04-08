@@ -1,11 +1,11 @@
 #include "animation.h"
 #include "components.h"
 
-void Animation_Update(AdvEng::ECS* ecs, float dt)
+void Animation_Update(ECS* ecs, float dt)
 {
     //auto view = ecs->GetView<C_Animator>();
 
-    //for (AdvEng::EntityID e : view)
+    //for (EntityID e : view)
     //{
     //    auto& animator = ecs->GetComponent<C_Animator>(e);
     //    

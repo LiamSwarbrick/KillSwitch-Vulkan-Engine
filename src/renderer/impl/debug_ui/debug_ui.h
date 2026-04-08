@@ -75,7 +75,7 @@ namespace DebugUI
         }
     }
 
-    inline void DrawECSInspector(DebugUIState& state, AdvEng::ECS& ecs)
+    inline void DrawECSInspector(DebugUIState& state, ECS& ecs)
     {
         if (!state.show_debug_ui || !state.show_ecs_inspector) return;
 
@@ -115,7 +115,7 @@ namespace DebugUI
     }
 
     // Called after ImGui::NewFrame()
-    inline void Draw(DebugUIState& state, AdvEng::ECS& ecs)
+    inline void Draw(DebugUIState& state, ECS& ecs)
     {
         HandleInput(state);
         DrawDockSpace(state);

@@ -10,7 +10,7 @@
 
 RenderState renderstate;
 static DebugUI::DebugUIState debug_ui_state;
-static AdvEng::ECS*          debug_ecs_ptr   = nullptr;
+static ECS*          debug_ecs_ptr   = nullptr;
 static Asset*                debug_asset_ptr = nullptr;
 
 // STB DS for hash maps (pipeilne hashing), with the main thread alloc tracker.
@@ -842,7 +842,7 @@ void Renderer_SetImGuiCallback(Renderer_ImGuiBuildCallback callback, void* user_
     renderstate.imgui_callback_data = user_data;
 }
 
-void Renderer_SetDebugECS(AdvEng::ECS* ecs)
+void Renderer_SetDebugECS(ECS* ecs)
 {
     debug_ecs_ptr = ecs;
 }
