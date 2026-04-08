@@ -1,5 +1,8 @@
-#pragma once
+#ifndef PHYSICS_PHYSICS_MANAGER_H
+#define PHYSICS_PHYSICS_MANAGER_H
+
 class PhysicsManager
 {
 };
 
+#endif // !PHYSICS_PHYSICS_MANAGER_H

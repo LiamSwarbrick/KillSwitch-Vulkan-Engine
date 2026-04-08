@@ -1,4 +1,6 @@
-// PhysicsWorld class will be the manager / orchestrator of all the physics
+#ifndef PHYSICS_PHYSICS_WORLD_H
+#define PHYSICS_PHYSICS_WORLD_H
+
 
 
 // Sparse set for our rigidbodies (and shapes and planes)
@@ -136,7 +138,7 @@ private:
 
 	// --- POOLS (to refactor ECS to remove namespace and move definitions to .cpp)
 	// Fairly similar to the ECS registry, we will just have a couple sparse sets for shapes (though planes is a little bit overkill)
-	AdvEng::SparseSet<RigidBody> bodies;
+	SparseSet<RigidBody> bodies;
 	std::vector<uint32_t> freeBodyIndices;
 
 	// i will use a sparseset of pointers... for polymorphism, even thought we could have a better data structure
@@ -152,10 +154,10 @@ private:
 	void retainShape(ShapeHandle handle);
 	void releaseShape(ShapeHandle handle);
 	
-	AdvEng::SparseSet<ShapeRef> shapes;
+	SparseSet<ShapeRef> shapes;
 	std::vector<uint32_t> freeShapeIndices;
 
-	AdvEng::SparseSet<PlaneShape> planes;
+	SparseSet<PlaneShape> planes;
 	std::vector<uint32_t> freePlaneIndices;
 
 	// --- EACH FRAME ---
@@ -172,3 +174,5 @@ private:
 	float stepAccumulator = 0.0f;
 	int maxSteps = 4;
 };
+
+#endif // !PHYSICS_PHYSICS_WORLD_H
