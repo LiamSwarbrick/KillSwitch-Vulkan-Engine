@@ -13,16 +13,21 @@
 
 namespace AdvEng
 {
-	// forward declaring View
+	// forward declaring View and Entity
 	template <typename...>
 	class View;
+
 	class Entity;
 	
 	class ECS
 	{
-
 	private:
 
+		// Friend-ing View and Entity
+		template <typename...>
+		friend class View;
+
+		friend class Entity;
 
 		// Just for debugging.
 		// Needs to be inline
@@ -40,9 +45,8 @@ namespace AdvEng
 		EntityID m_maxID = 0;
 
 
-	// private:
-#warning NOTE(Liam): I'm making all of these public since they're called outside this class in multiple files. Maybe adjust the API
-	public:
+	private:
+//#warning NOTE(Liam): I'm making all of these public since they're called outside this class in multiple files. Maybe adjust the API
 
 		// Metaprogramming magic with next method
 		static size_t GetNextComponentIndex(std::string typeName)
@@ -310,6 +314,7 @@ namespace AdvEng
 		{
 			return m_componentPools.size();
 		}
+
 
 		template <typename... Types>
 		View<Types...> GetView()
