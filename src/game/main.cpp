@@ -108,9 +108,16 @@ int main(int argc, char *argv[])
     // Testing Scene and ECS
     Scene scene{};
     Renderer_SetImGuiCallback(OnImGuiBuild, &scene);
-    scene.LoadLevel("assets/animations/cat.gltf");
-    // scene.LoadLevel("assets/animations/Animationtest.gltf");
-    // scene.LoadLevel("assets/levels/Untitled_skybox.gltf");
+    scene.StartUp();
+
+    Asset* catPrefab = scene.LoadPrefab("assets/animations/cat.gltf");
+    Asset* roomPrefab = scene.LoadPrefab("assets/animations/Animationtest.gltf");
+
+    scene.InstantiatePrefab(catPrefab, glm::vec3(0, 0, 0));
+    scene.InstantiatePrefab(roomPrefab, glm::vec3(10, 0, 10));
+    AdvEng::EntityID playerEntity = scene.InstantiatePrefab(catPrefab, glm::vec3(5, 0, 5));
+
+    scene.BuildRendererScene();
 
 
     bool running = true;
@@ -124,7 +131,7 @@ int main(int argc, char *argv[])
         uint64_t current_time = SDL_GetTicksNS();
         float dt = (float)(current_time - last_time) / 1000000000.0f;
         last_time = current_time;
-        if (dt > 0.1f) dt = 0.1f;
+        if (dt > 0.1f) dt = 0.1f;   
 
         // Event Loop
         SDL_Event event;
