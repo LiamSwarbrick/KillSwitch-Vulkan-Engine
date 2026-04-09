@@ -19,13 +19,16 @@ MAT_PAUSE_UI           // E.g. pause menu material renderables are part of a pas
 MAT_HUD                // E.g. Minimap, current weapon, ammo. These are ui elements that are on the screen by default.
 */
 
-#define MATERIAL_LIST \
-    X(MAT_UNLIT_OPAQUE)
+// WARNING(Liam): Make sure core/imported_components.h is up to date with this
+#define MATERIAL_LIST(X) \
+    X(MAT_UNLIT_OPAQUE)  \
+    X(MAT_LIT_OPAQUE)
+
 
 typedef enum
 {
     #define X(name) name,
-    MATERIAL_LIST
+    MATERIAL_LIST(X)
     #undef X
     MATERIAL_TYPE_COUNT
 }

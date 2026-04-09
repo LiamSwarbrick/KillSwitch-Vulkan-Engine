@@ -352,9 +352,8 @@ Asset* load_asset(const char* filename) {
 		// default static mesh
 		mesh->vertex_type = VERTEX_TYPE_STATIC;
 
-		// default unlit mesh TODO: better defaults once lighting implemented.
+		// Default to UNLIT, the component system will set the actual value based on the extras json
 		mesh->mat_type = MAT_UNLIT_OPAQUE;
-		// TODO: Not retrieving material type yet from gltf (need a way of exposing it in blender)
 
 		for (size_t p = 0; p < mesh->primitive_count; p++) {
 			cgltf_primitive* gltf_prim = &gltf_mesh->primitives[p];

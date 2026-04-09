@@ -31,7 +31,7 @@ typedef struct Primitive {
 typedef struct Mesh {
     const char* name;
     VertexType vertex_type;     // 0 = static, 1 = animated (as per shared_constants.glsl)
-    MaterialType mat_type;
+    MaterialType mat_type;  // NOTE: Assetsys initializes this but component system finds the material in the extras json and sets it later
 
     Primitive* primitives;
     size_t primitive_count;

@@ -1,6 +1,8 @@
 #include "materials.h"
 #include "shaders.h"
 
+// NOTE: See render_types.h's MATERIAL_LIST for the list of materials
+//       This file is where each material's shaders and metadata are defined.
 // Remember if tertiary or more shader's are needed, update drawcall.cpp::AddDrawCall
 extern const MaterialConfigs g_material_configs = {
     .by_name = {

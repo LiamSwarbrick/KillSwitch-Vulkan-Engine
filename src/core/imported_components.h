@@ -5,5 +5,4 @@ struct ImportedTransform {
     // To be filled
 };
 
-
 #endif // !CORE_BLENDER_COMPONENTS_H

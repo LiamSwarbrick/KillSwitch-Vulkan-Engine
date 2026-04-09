@@ -55,9 +55,13 @@ bool Scene::LoadAsset(const char* fileName)
                 has_ecs_data = true;
             }
         }
-        
+
         if (has_ecs_data)
         {
+            #warning IMPORTANT: Need to change level editor so that every entity has ecs_data for this to work
+            EntityID eID;
+            eID = m_ecs.CreateEntity((node->name) ? (node->name) : "");
+
             // 2. And put the "_ecs" value in the following
             rj::Value& components = doc["_ecs"];
 
@@ -65,9 +69,6 @@ bool Scene::LoadAsset(const char* fileName)
             // We will probably need to add a single flag in _ecs, like "isEntity" or "EntityComponent" idk, 
             // saying if it is an entity, to create it (bones are not going to be i think)
             // if (components.HasMember("isEntity") && (components.GetBool() == true)) {}
-
-            EntityID eID;
-            eID = m_ecs.CreateEntity((node->name) ? (node->name) : "");
 
             // 3. For ImportedComponents that use mirrored data from the json,
             // Check if it cointains the member "____Component" and fill it using Struct
@@ -108,69 +109,68 @@ bool Scene::LoadAsset(const char* fileName)
                 // 3.4 Finally add the component to the ECS!!!
                 m_ecs.AddComponent<C_Collider>(eID, std::move(colliderComponent));
             }
+
+            // ---------------
+            // -- TRANSFORM --
+            // ---------------
+            C_Transform t;
+            t.position = glm::vec3(node->translation[0], node->translation[1], node->translation[2]);
+            t.rotation = glm::quat(node->rotation[0], node->rotation[1], node->rotation[2], node->rotation[3]);
+            t.matrix = glm::mat4_cast(t.rotation);
+            t.matrix = glm::translate(t.matrix, t.position);
+            m_ecs.AddComponent<C_Transform>(eID, { t.position, t.rotation, t.matrix });
+
+            // -- MESH
+            if (node->mesh_index >= 0)
+            {
+                Mesh* mesh = &asset->meshes[node->mesh_index];
+                if (mesh->vertex_type == VERTEX_TYPE_SKINNED)
+                {
+                    uint32_t joint_count = 0;
+                    if (node->skin_index >= 0) {
+                        joint_count = (uint32_t)asset->skins[node->skin_index].joint_count;
+                    }
+                    else if (asset->skin_count > 0) {
+                        joint_count = (uint32_t)asset->skins[0].joint_count;
+                    }
+                    else {
+                        joint_count = 1;
+                    }
+
+                    C_AnimatedMesh animMesh
+                    {
+                        mesh,
+                        asset
+                    };
+                    animMesh.joint_count = joint_count;
+                    animMesh.currentAnimation = 0;
+                    animMesh.animationTime = 0.0f;
+                    animMesh.isPlaying = true;
+                    animMesh.isLooping = true;
+
+                    if (joint_count > 0) {
+                        animMesh.joint_matrices = (glm::mat4*)malloc(joint_count * sizeof(glm::mat4));
+                        for (uint32_t j = 0; j < joint_count; j++) {
+                            animMesh.joint_matrices[j] = glm::mat4(1.0f);
+                        }
+                    }
+                    else {
+                        animMesh.joint_matrices = nullptr;
+                    }
+
+                    m_ecs.AddComponent<C_AnimatedMesh>(eID, std::move(animMesh));
+                }
+                else
+                {
+                    C_StaticMesh staticMesh{
+                        &asset->meshes[node->mesh_index],
+                        asset
+                    };
+                    m_ecs.AddComponent<C_StaticMesh>(eID, { staticMesh.mesh, staticMesh.parent_asset });
+                }
+            }
         }
         // 4. END OF RAPIDJSON EXAMPLE AND OUR REFLECTION SYSTEM !!!
-
-
-        // ---------------
-        // -- TRANSFORM --
-        // ---------------
-        C_Transform t;
-        t.position = glm::vec3(node->translation[0], node->translation[1], node->translation[2]);
-        t.rotation = glm::quat(node->rotation[0], node->rotation[1], node->rotation[2], node->rotation[3]);
-        t.matrix = glm::mat4_cast(t.rotation);
-        t.matrix = glm::translate(t.matrix, t.position);
-        m_ecs.AddComponent<C_Transform>(eID, { t.position, t.rotation, t.matrix });
-
-        // -- MESH
-        if (node->mesh_index >= 0)
-        {
-            Mesh* mesh = &asset->meshes[node->mesh_index];
-            if (mesh->vertex_type == VERTEX_TYPE_SKINNED)
-            {
-                uint32_t joint_count = 0;
-                if (node->skin_index >= 0) {
-                    joint_count = (uint32_t)asset->skins[node->skin_index].joint_count;
-                }
-                else if (asset->skin_count > 0) {
-                    joint_count = (uint32_t)asset->skins[0].joint_count;
-                }
-                else {
-                    joint_count = 1;
-                }
-
-                C_AnimatedMesh animMesh
-                {
-                    mesh,
-                    asset
-                };
-                animMesh.joint_count = joint_count;
-                animMesh.currentAnimation = 0;
-                animMesh.animationTime = 0.0f;
-                animMesh.isPlaying = true;
-                animMesh.isLooping = true;
-
-                if (joint_count > 0) {
-                    animMesh.joint_matrices = (glm::mat4*)malloc(joint_count * sizeof(glm::mat4));
-                    for (uint32_t j = 0; j < joint_count; j++) {
-                        animMesh.joint_matrices[j] = glm::mat4(1.0f);
-                    }
-                }
-                else {
-                    animMesh.joint_matrices = nullptr;
-                }
-
-                m_ecs.AddComponent<C_AnimatedMesh>(eID, std::move(animMesh));
-            }
-            else
-            {
-                C_StaticMesh staticMesh{
-                    &asset->meshes[node->mesh_index],
-                    asset
-                };
-                m_ecs.AddComponent<C_StaticMesh>(eID, { staticMesh.mesh, staticMesh.parent_asset });
-            }
-        }
     }
 
     m_asset = asset;
