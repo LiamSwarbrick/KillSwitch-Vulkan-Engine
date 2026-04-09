@@ -129,7 +129,8 @@ int main(int argc, char *argv[])
 
     // Testing Scene and ECS
     Scene scene{};
-    scene.LoadLevel("assets/levels/Untitled2.gltf");
+    // scene.LoadLevel("assets/levels/Untitled2.gltf");
+    scene.LoadLevel("assets/animations/cat.gltf");
 
     // TODO: Debug UI is built around the idea of 1 asset at the moment.
     //       This must change with the new scene system that can load many asset prefabs.

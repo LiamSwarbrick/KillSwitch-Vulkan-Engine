@@ -2,6 +2,8 @@
 #include "foundations/components.h"
 #include "renderer/renderer.h"
 
+// animation update
+#include "core/animation.h"
 // RapidJSON 
 #include "rapidjson/document.h"
 // Imported components for automated de-serialization
@@ -17,6 +19,7 @@ void Scene::StartUp()
     // ... which registers the component
     m_ecs.RegisterComponent<C_Transform>();
     m_ecs.RegisterComponent<C_StaticMesh>();
+    m_ecs.RegisterComponent<C_AnimatedMesh>();
 
     m_asset = NULL;
 }
@@ -43,64 +46,71 @@ bool Scene::LoadAsset(const char* fileName)
         // RapidJSON to ECS tutorial!!1!1!!!!!1
         // 1. We parse extras_json with rapidjson::Document
         rj::Document doc;
+        bool has_ecs_data = false;
+
         if (node->extras_json)
         {
             doc.Parse(node->extras_json);
+            if (doc.HasMember("_ecs")) {
+                has_ecs_data = true;
+            }
         }
-        else
+
+        EntityID eID;
+        eID = m_ecs.CreateEntity((node->name) ? (node->name) : "");
+        
+        if (has_ecs_data)
         {
-            continue;
-        }
-        
-        // 2. And put the "_ecs" value in the following
-        rj::Value& components = doc["_ecs"];
-        
-        // 2-extra.
-        // We will probably need to add a single flag in _ecs, like "isEntity" or "EntityComponent" idk, 
-        // saying if it is an entity, to create it (bones are not going to be i think)
-        // if (components.HasMember("isEntity") && (components.GetBool() == true)) {}
+            // 2. And put the "_ecs" value in the following
+            rj::Value& components = doc["_ecs"];
+
+            // 2-extra.
+            // We will probably need to add a single flag in _ecs, like "isEntity" or "EntityComponent" idk, 
+            // saying if it is an entity, to create it (bones are not going to be i think)
+            // if (components.HasMember("isEntity") && (components.GetBool() == true)) {}
 
         EntityID eID;
         eID = m_ecs.CreateEntity((node->name) ? (node->name) : "");
 
-        // 3. For ImportedComponents that use mirrored data from the json,
-        // Check if it cointains the member "____Component" and fill it using Struct
-        // ---------------
-        // -- COLLIDER ---
-        // ---------------
-        if (components.HasMember("ColliderComponent"))
-        {
-            // 3.1. Automated import!!!! you don't have to do anything just declare it!!!!
-            ImportedCollider importedCollider = StructFromRapidJsonValue<ImportedCollider>(components["ColliderComponent"]);
-
-            // 3.2. use the ImportedComponent as a helper for your C_Component
-            C_Collider colliderComponent;
-            switch (importedCollider.collider_type)
+            // 3. For ImportedComponents that use mirrored data from the json,
+            // Check if it cointains the member "____Component" and fill it using Struct
+            // ---------------
+            // -- COLLIDER ---
+            // ---------------
+            if (components.HasMember("ColliderComponent"))
             {
-            case ImportedColliderType::BOX:
-                colliderComponent.type = ColliderType::Box;
-                colliderComponent.box.halfWidths = importedCollider.half_widths;
-                break;
-            case ImportedColliderType::SPHERE:
-                colliderComponent.type = ColliderType::Sphere;
-                colliderComponent.sphere.radius = importedCollider.radius;
-                break;
-            case ImportedColliderType::CAPSULE:
-                colliderComponent.type = ColliderType::Capsule;
-                colliderComponent.capsule.radius = importedCollider.radius;
-                colliderComponent.capsule.height = importedCollider.height;
-                break;
-            default:
-                // what the helly (sorry im tired)
-                SDL_assert(false);
-                break;
+                // 3.1. Automated import!!!! you don't have to do anything just declare it!!!!
+                ImportedCollider importedCollider = StructFromRapidJsonValue<ImportedCollider>(components["ColliderComponent"]);
+
+                // 3.2. use the ImportedComponent as a helper for your C_Component
+                C_Collider colliderComponent;
+                switch (importedCollider.collider_type)
+                {
+                case ImportedColliderType::BOX:
+                    colliderComponent.type = ColliderType::Box;
+                    colliderComponent.box.halfWidths = importedCollider.half_widths;
+                    break;
+                case ImportedColliderType::SPHERE:
+                    colliderComponent.type = ColliderType::Sphere;
+                    colliderComponent.sphere.radius = importedCollider.radius;
+                    break;
+                case ImportedColliderType::CAPSULE:
+                    colliderComponent.type = ColliderType::Capsule;
+                    colliderComponent.capsule.radius = importedCollider.radius;
+                    colliderComponent.capsule.height = importedCollider.height;
+                    break;
+                default:
+                    // what the helly (sorry im tired)
+                    SDL_assert(false);
+                    break;
+                }
+
+                // 3.3 If we had more data to acces (in the node), feel free to add data to your component, 
+                // but that won't probably be the case for player defined components
+
+                // 3.4 Finally add the component to the ECS!!!
+                m_ecs.AddComponent<C_Collider>(eID, std::move(colliderComponent));
             }
-
-            // 3.3 If we had more data to acces (in the node), feel free to add data to your component, 
-            // but that won't probably be the case for player defined components
-
-            // 3.4 Finally add the component to the ECS!!!
-            m_ecs.AddComponent<C_Collider>(eID, std::move(colliderComponent));
         }
         // 4. END OF RAPIDJSON EXAMPLE AND OUR REFLECTION SYSTEM !!!
 
@@ -118,12 +128,51 @@ bool Scene::LoadAsset(const char* fileName)
         // -- MESH
         if (node->mesh_index >= 0)
         {
-            // printf("Adding mesh!\n");
-            C_StaticMesh staticMesh{
-                &asset->meshes[node->mesh_index],
-                asset
-            };
-            m_ecs.AddComponent<C_StaticMesh>(eID, { staticMesh.mesh, staticMesh.parent_asset });
+            Mesh* mesh = &asset->meshes[node->mesh_index];
+            if (mesh->vertex_type == VERTEX_TYPE_SKINNED)
+            {
+                uint32_t joint_count = 0;
+                if (node->skin_index >= 0) {
+                    joint_count = (uint32_t)asset->skins[node->skin_index].joint_count;
+                }
+                else if (asset->skin_count > 0) {
+                    joint_count = (uint32_t)asset->skins[0].joint_count;
+                }
+                else {
+                    joint_count = 1;
+                }
+
+                C_AnimatedMesh animMesh
+                {
+                    mesh,
+                    asset
+                };
+                animMesh.joint_count = joint_count;
+                animMesh.currentAnimation = 0;
+                animMesh.animationTime = 0.0f;
+                animMesh.isPlaying = true;
+                animMesh.isLooping = true;
+
+                if (joint_count > 0) {
+                    animMesh.joint_matrices = (glm::mat4*)malloc(joint_count * sizeof(glm::mat4));
+                    for (uint32_t j = 0; j < joint_count; j++) {
+                        animMesh.joint_matrices[j] = glm::mat4(1.0f);
+                    }
+                }
+                else {
+                    animMesh.joint_matrices = nullptr;
+                }
+
+                m_ecs.AddComponent<C_AnimatedMesh>(eID, std::move(animMesh));
+            }
+            else
+            {
+                C_StaticMesh staticMesh{
+                    &asset->meshes[node->mesh_index],
+                    asset
+                };
+                m_ecs.AddComponent<C_StaticMesh>(eID, { staticMesh.mesh, staticMesh.parent_asset });
+            }
         }
     }
 
@@ -157,59 +206,20 @@ bool Scene::LoadLevel(const char* fileName)
         meshes.push_back(&static_mesh);
     }
 
-/* TEMP ANIMATION STUFF (moved Pio's test code here for now before animation is loaded properly) */
-    // Animation test
-    Asset* asset3 = load_asset("assets/animations/Animationtest.gltf");
-    // Asset* asset3 = load_asset("assets/animations/zombie.gltf");
-    SDL_Log("Asset 3 Extras: %s\n", asset3->nodes[0].extras_json);
+    auto packed_anim = m_ecs.GetView<C_AnimatedMesh>().GetPacked();
 
-    // Find how many joints the zombie has
-    uint32_t zombie_joint_count = 0;
-    if (asset3->skin_count > 0) {
-        zombie_joint_count = asset3->skins[0].joint_count;
-    }
-    else {
-        zombie_joint_count = 1; 
-    }
-
-    C_AnimatedMesh temp_animated_mesh = {
-        .mesh = &asset3->meshes[3],
-        .asset = asset3,
-        .joint_count = zombie_joint_count,
-        .joint_matrices = (glm::mat4*)malloc(zombie_joint_count * sizeof(glm::mat4))
-    };
-
-    for (uint32_t j = 0; j < zombie_joint_count; j++) {
-        temp_animated_mesh.joint_matrices[j] = glm::mat4(1.0f);
-    }
-
-    // TEMP HACK BCUZ MESHES NOT IN THE LOADER YET
-    C_AnimatedMesh* anim_component;
+    std::vector<C_AnimatedMesh*> anim_meshes;
+    for (size_t i = 0; i < packed_anim.size(); ++i)
     {
-        EntityID eID;
-        eID = m_ecs.CreateEntity("Temp animated entity");
-        Node* node = &asset3->nodes[0];
-        C_Transform t;
-        t.position = glm::vec3(node->translation[0], node->translation[1], node->translation[2]);
-        t.rotation = glm::quat(node->rotation[0], node->rotation[1], node->rotation[2], node->rotation[3]);
-        t.matrix = glm::mat4_cast(t.rotation);
-        t.matrix = glm::translate(t.matrix, t.position);
-        m_ecs.AddComponent<C_Transform>(eID, { t.position, t.rotation, t.matrix });
-
-
-        m_ecs.AddComponent<C_AnimatedMesh>(eID, std::move(temp_animated_mesh));
-
-        anim_component = &m_ecs.GetComponent<C_AnimatedMesh>(eID);
+        auto& [anim_mesh] = packed_anim[i].components;
+        anim_meshes.push_back(&anim_mesh);
     }
-
-    /* END TEMP ANIMATION STUFF */
 
     Scene_InitInfo info = {};
     info.num_static_meshes = (uint32_t)meshes.size();
     info.static_meshes = meshes.data();
-    info.num_animated_meshes = 1;            // <- TEMP
-    info.animated_meshes = &anim_component;  // <- TEMP
-    
+    info.num_animated_meshes = (uint32_t)anim_meshes.size();
+    info.animated_meshes = anim_meshes.data();
 
     Renderer_ChangeScene(info);
     
@@ -218,7 +228,7 @@ bool Scene::LoadLevel(const char* fileName)
 
 void Scene::Update(float dt)
 {
-
+    Animation_Update(&m_ecs, dt);
 }
 
 void Scene::Render()

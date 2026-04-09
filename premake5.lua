@@ -201,6 +201,52 @@ workspace "AdventureEngine"
         }
 
 
+    -- Third Party ImGUI Node Editor (do not want external code to produce warnings)
+    project "imgui"
+        kind "StaticLib"
+        location ("build-artefacts/imgui")
+        warnings "Off"
+        files {
+            EXTERNAL .. "imgui/imgui.cpp",
+            EXTERNAL .. "imgui/imgui_demo.cpp",
+            EXTERNAL .. "imgui/imgui_draw.cpp",
+            EXTERNAL .. "imgui/imgui_tables.cpp",
+            EXTERNAL .. "imgui/imgui_widgets.cpp",
+            EXTERNAL .. "imgui/backends/imgui_impl_sdl3.cpp",
+            EXTERNAL .. "imgui/backends/imgui_impl_vulkan.cpp",
+        }
+        includedirs {
+            EXTERNAL .. "imgui",
+            EXTERNAL .. "imgui/backends",
+            include_paths.volk,
+            include_paths.SDL3
+        }
+        defines {
+            "IMGUI_IMPL_VULKAN_USE_VOLK"
+        }
+        links {
+            "SDL3"
+        }
+
+    project "imgui_node_editor"
+        kind "StaticLib"
+        location "build-artefacts/imgui-node-editor"
+        warnings "Off"
+        files {
+            EXTERNAL .. "imgui-node-editor/imgui_node_editor.cpp",
+            EXTERNAL .. "imgui-node-editor/imgui_node_editor_api.cpp",
+            EXTERNAL .. "imgui-node-editor/imgui_canvas.cpp",
+            EXTERNAL .. "imgui-node-editor/crude_json.cpp",
+        }
+        includedirs {
+            EXTERNAL .. "imgui"
+        }
+        links {
+            "imgui"
+        }
+
+
+
     -- --------------------------------------------------------------------
     -- Renderer Module (Vulkan implementation)
     -- --------------------------------------------------------------------
@@ -213,23 +259,6 @@ workspace "AdventureEngine"
             SRC .. "renderer/**.h",
             SRC .. "renderer/impl/**.cpp",
             EXTERNAL .. "volk/volk.c",
-
-            -- ImGui
-            EXTERNAL .. "imgui/imgui.cpp",
-            EXTERNAL .. "imgui/imgui_demo.cpp",
-            EXTERNAL .. "imgui/imgui_draw.cpp",
-            EXTERNAL .. "imgui/imgui_tables.cpp",
-            EXTERNAL .. "imgui/imgui_widgets.cpp",
-            EXTERNAL .. "imgui/backends/imgui_impl_sdl3.cpp",
-            EXTERNAL .. "imgui/backends/imgui_impl_vulkan.cpp",
-
-
-            -- ImGui Node Editor
-            EXTERNAL .. "imgui-node-editor/imgui_node_editor.cpp",
-            EXTERNAL .. "imgui-node-editor/imgui_node_editor_api.cpp",
-            EXTERNAL .. "imgui-node-editor/imgui_canvas.cpp",
-            EXTERNAL .. "imgui-node-editor/crude_json.cpp",
-
 
             -- Shader src
             SRC .. "renderer/shadersrc/**.vert",
@@ -273,7 +302,9 @@ workspace "AdventureEngine"
 
         links {
             "core",
-            "SDL3"
+            "SDL3",
+            "imgui",
+            "imgui_node_editor"
         }
 
         -- Shader compilation
@@ -323,7 +354,9 @@ workspace "AdventureEngine"
         links {  -- NOTE: Must link from highest level dependency to lowest level.   
             "renderer",
             "core",
-            "SDL3"
+            "SDL3",
+            "imgui",
+            "imgui_node_editor",
         }
 
         filter "system:windows"

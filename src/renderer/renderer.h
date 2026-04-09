@@ -51,6 +51,12 @@ typedef struct Scene_InitInfo
 Scene_InitInfo;
 void Renderer_ChangeScene(Scene_InitInfo new_scene_info);
 
+
+
+
+// ImGUI
+//
+
 // Optional callback: called between ImGui::NewFrame() and ImGui::Render()
 // Game code can set this to build its own ImGui UI
 typedef void (*Renderer_ImGuiBuildCallback)(void* user_data);
@@ -66,5 +72,6 @@ void Renderer_SetDebugECS(ECS* ecs);
 // Pass nullptr to clear (e.g. before loading a new scene).
 struct Asset;
 void Renderer_SetDebugAsset(Asset* asset);
+
 
 #endif  // ENGINE_RENDERER_H

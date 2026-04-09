@@ -36,16 +36,34 @@ static int find_bone_index(Skin* skin, int target_node_index) {
 	return -1;
 }
 
+// find the root node of the skeleton (blender doesn't export it explicitly)
+static int find_skeleton_root(Skin* skin) {
+	for (size_t i = 0; i < skin->joint_count; ++i) {
+		if (skin->bones[i].parent_index == -1) {
+			return skin->joint_node_indices[i];
+		}
+	}
+	return 1;
+}
+
 Image load_image(const char* name, const char* uri)
 {
+	// Extract just the filename from the uri
+	const char* slash = strrchr(uri, '/');
+	const char* filename = slash ? slash + 1 : uri;
+
+	// all textures stored in assets/
+	char full_path[1024];
+	snprintf(full_path, sizeof(full_path), "assets/%s", filename);
+
 	// Load images from disk (4 channels: RGBA8 image).
 	// (No decision necessary here about whether it's sRGB or linear)
 	Image image = {
-		.name = name,
-		.uri = uri
+		.name = duplicate_string(name),
+		.uri = duplicate_string(full_path)
 	};
 
-	stbi_set_flip_vertically_on_load(1);
+	stbi_set_flip_vertically_on_load(0);
 
 	int width, height, num_channels;
 	image.data = stbi_load(image.uri, &width, &height, &num_channels, 4);
@@ -267,7 +285,6 @@ Asset* load_asset(const char* filename) {
 		Skin* skin = &asset->skins[i];
 
 		skin->name = duplicate_string(gltf_skin->name);
-		skin->skeleton_root_node_index = get_node_index(data, gltf_skin->skeleton);
 		skin->joint_count = gltf_skin->joints_count;
 
 		if (skin->joint_count > 0) {
@@ -318,6 +335,8 @@ Asset* load_asset(const char* filename) {
 					}
 				}
 			}
+			// Has to be done after finding the parent indices for all bones
+			skin->skeleton_root_node_index = find_skeleton_root(skin);
 		}
 	}
 
