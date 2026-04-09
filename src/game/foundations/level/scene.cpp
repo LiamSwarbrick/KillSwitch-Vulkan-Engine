@@ -150,6 +150,7 @@ bool Scene::LoadAsset(const char* fileName)
                 animMesh.joint_count = joint_count;
                 animMesh.currentAnimation = 0;
                 animMesh.animationTime = 0.0f;
+                animMesh.playbackSpeed = 1.0f;
                 animMesh.isPlaying = true;
                 animMesh.isLooping = true;
 				animMesh.isBlending = false;

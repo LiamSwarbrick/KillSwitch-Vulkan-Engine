@@ -147,6 +147,7 @@ int main(int argc, char *argv[])
 
             scene.Render();
             
+            
             Renderer_DrawFrame(temp_camera_view_matrix());
         }
     }

@@ -32,6 +32,7 @@ struct C_AnimatedMesh
     float animationTime;
     bool isPlaying;
     bool isLooping;
+    float playbackSpeed;
 
     // blending states
     bool isBlending;

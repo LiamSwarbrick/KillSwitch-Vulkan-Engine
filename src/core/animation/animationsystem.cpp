@@ -24,7 +24,7 @@ void Animation_Update(AdvEng::ECS* ecs, float dt)
 			return;
 
 		// Update the animation time
-        animatedMesh.animationTime += dt;
+        animatedMesh.animationTime += dt * animatedMesh.playbackSpeed;
 		float duration = GetAnimationDuration(animatedMesh, animatedMesh.currentAnimation);
         if (animatedMesh.animationTime > duration)
         {
@@ -37,8 +37,8 @@ void Animation_Update(AdvEng::ECS* ecs, float dt)
         // Blending time update
         if (animatedMesh.isBlending && animatedMesh.previousAnimation >= 0)
         {
-			animatedMesh.blendTime += dt;
-			animatedMesh.previousAnimationTime += dt;
+			animatedMesh.blendTime += dt * animatedMesh.playbackSpeed;
+			animatedMesh.previousAnimationTime += dt * animatedMesh.playbackSpeed;
 
             // COULD LOOP THE PREVIOUS ANIMATION, NEEDS A HELPER TO GET DURATION
 			float previousDuration = GetAnimationDuration(animatedMesh, animatedMesh.previousAnimation);
