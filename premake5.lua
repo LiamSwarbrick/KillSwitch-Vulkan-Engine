@@ -204,7 +204,6 @@ workspace "AdventureEngine"
     -- Third Party ImGUI Node Editor (do not want external code to produce warnings)
     project "imgui"
         kind "StaticLib"
-        location ("build-artefacts/imgui")
         warnings "Off"
         files {
             EXTERNAL .. "imgui/imgui.cpp",
@@ -218,11 +217,16 @@ workspace "AdventureEngine"
         includedirs {
             EXTERNAL .. "imgui",
             EXTERNAL .. "imgui/backends",
+            include_paths.Vulkan,
             include_paths.volk,
             include_paths.SDL3
         }
         defines {
             "IMGUI_IMPL_VULKAN_USE_VOLK"
+        }
+        libdirs {
+            lib_dirs.Vulkan,
+            lib_dirs.SDL3
         }
         links {
             "SDL3"
@@ -230,7 +234,6 @@ workspace "AdventureEngine"
 
     project "imgui_node_editor"
         kind "StaticLib"
-        location "build-artefacts/imgui-node-editor"
         warnings "Off"
         files {
             EXTERNAL .. "imgui-node-editor/imgui_node_editor.cpp",
@@ -314,7 +317,7 @@ workspace "AdventureEngine"
         filter "files:**.vert or files:**.frag or files:**.comp"
             buildmessage "Compiling shader %{file.relpath}"
             buildcommands {
-                "%{glslc_cmd} %{file.relpath} -o shaderspv/%{file.name}.spv"
+                "%{glslc_cmd} %{file.relpath} -D__IS_GLSL -o shaderspv/%{file.name}.spv"
             }
             buildoutputs {
                 "shaderspv/%{file.name}.spv"
