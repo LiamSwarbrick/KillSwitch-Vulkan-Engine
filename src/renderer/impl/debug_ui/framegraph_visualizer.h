@@ -101,7 +101,7 @@ struct FrameGraphVisualizer
 
             // First-open: arrange nodes in a horizontal pipeline layout
             if (needs_layout && fg->pass_count > 0)
-                ed::SetNodePosition(node_id(p), ImVec2((float)p * 280.0f, 0.0f));
+                ed::SetNodePosition(node_id(p), ImVec2((float)p * 280.0f, (float)p * 100.0f));
         }
 
         // ----------------------------------------------------------------
@@ -175,7 +175,7 @@ struct FrameGraphVisualizer
         // ----------------------------------------------------------------
         // First-open: fit all nodes into view
         // ----------------------------------------------------------------
-        if (needs_layout && fg->pass_count > 0)
+        if (true)  // TODO: <- This was if (needs_layout) but initialization not working
         {
             ed::NavigateToContent(0.0f);  // 0 = instant, no animation
             needs_layout = false;

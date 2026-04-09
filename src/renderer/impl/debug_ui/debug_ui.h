@@ -6,7 +6,6 @@
 #include "framegraph_visualizer.h"
 #include "asset_browser.h"
 
-
 namespace DebugUI
 {
     // State of windows in the debug UI
@@ -25,7 +24,14 @@ namespace DebugUI
         AssetBrowser         asset_browser;
         Asset*               debug_asset = nullptr;
     };
+}
 
+extern DebugUI::DebugUIState debug_ui_state;
+extern AdvEng::ECS*          debug_ecs_ptr;
+extern Asset*                debug_asset_ptr;
+
+namespace DebugUI
+{
     inline void HandleInput(DebugUIState& state)
     {
         // F3: toggle debug UI; opening restores all three panels

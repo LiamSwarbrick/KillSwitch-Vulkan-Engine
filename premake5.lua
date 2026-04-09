@@ -16,6 +16,8 @@ local SDL_BUILD_FLAGS = "" -- initialized later in the SDL section
 local VULKAN_SDK = os.getenv("VULKAN_SDK") or ""
 -- TODO: Check for good enough Vulkan SDK version. e.g. 1.4
 
+-- TODO: Some of these modules should really not be in include_paths,
+-- i.e. we should want to use module/name.h header instead of just name.h
 include_paths = {}
 include_paths.SDL3 = SDL_DIR .. "/include"
 include_paths.Vulkan = VULKAN_SDK .. "/include"

@@ -9,9 +9,6 @@
 #include "debug_ui/debug_ui.h"
 
 RenderState renderstate;
-static DebugUI::DebugUIState debug_ui_state;
-static AdvEng::ECS*          debug_ecs_ptr   = nullptr;
-static Asset*                debug_asset_ptr = nullptr;
 
 // STB DS for hash maps (pipeilne hashing), with the main thread alloc tracker.
 void* external_malloc(size_t size) { return L_calloc(1, size, &renderstate.main.tt); }
