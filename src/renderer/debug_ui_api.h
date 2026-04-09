@@ -4,10 +4,7 @@
 #include "core/ecs.h"
 #include "core/assetsys.h"
 
-namespace DebugUI
-{
-    void SetECS(AdvEng::ECS* ecs);
-    void SetAsset(Asset* asset);
-};
+void DebugUI_SetECS(ECS* ecs);
+void DebugUI_SetAsset(Asset* asset);
 
 #endif  // DEBUG_UI_API_H

@@ -27,7 +27,7 @@ namespace DebugUI
 }
 
 extern DebugUI::DebugUIState debug_ui_state;
-extern AdvEng::ECS*          debug_ecs_ptr;
+extern ECS*                  debug_ecs_ptr;
 extern Asset*                debug_asset_ptr;
 
 namespace DebugUI

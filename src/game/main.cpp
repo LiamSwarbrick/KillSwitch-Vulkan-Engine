@@ -120,13 +120,13 @@ int main(int argc, char *argv[])
        And while the user is on the main menu, we are loading the prefabs.
        That way, we can hide ALL of the latency and it will seem like there are no loading screens at all.
     */
-
+    
     // Testing Scene and ECS
     Scene scene{};
-    DebugUI::SetECS(&scene.GetECS());
-    DebugUI::SetAsset(scene.GetAsset());  // Will be null until LoadLevel finishes, updated below
+    DebugUI_SetECS(&scene.GetECS());
+    DebugUI_SetAsset(scene.GetAsset());  // Will be null until LoadLevel finishes, updated below
     scene.LoadLevel("assets/levels/Untitled2.gltf");
-    DebugUI::SetAsset(scene.GetAsset());  // Now m_asset is populated
+    DebugUI_SetAsset(scene.GetAsset());  // Now m_asset is populated
     // scene.LoadLevel("assets/animations/Animationtest.gltf");
     // scene.LoadLevel("assets/levels/Untitled_skybox.gltf");
 
