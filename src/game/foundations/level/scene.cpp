@@ -55,9 +55,6 @@ bool Scene::LoadAsset(const char* fileName)
                 has_ecs_data = true;
             }
         }
-
-        EntityID eID;
-        eID = m_ecs.CreateEntity((node->name) ? (node->name) : "");
         
         if (has_ecs_data)
         {
@@ -69,8 +66,8 @@ bool Scene::LoadAsset(const char* fileName)
             // saying if it is an entity, to create it (bones are not going to be i think)
             // if (components.HasMember("isEntity") && (components.GetBool() == true)) {}
 
-        EntityID eID;
-        eID = m_ecs.CreateEntity((node->name) ? (node->name) : "");
+            EntityID eID;
+            eID = m_ecs.CreateEntity((node->name) ? (node->name) : "");
 
             // 3. For ImportedComponents that use mirrored data from the json,
             // Check if it cointains the member "____Component" and fill it using Struct
