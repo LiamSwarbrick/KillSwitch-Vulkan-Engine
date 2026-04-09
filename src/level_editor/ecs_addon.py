@@ -41,11 +41,10 @@ class ColliderComponent(BaseComponent):
     collider_type: bpy.props.EnumProperty(
         name="Type",
         items=[
-            ("SPHERE","Sphere",""),
-            ("BOX","Box",""),
-            ("CAPSULE","Capsule",""),
-            ("AABB","AABB","")],
-        default="SPHERE"
+            ("COL_TYPE_SPHERE","Sphere",""),
+            ("COL_TYPE_BOX","Box",""),
+            ("COL_TYPE_CAPSULE","Capsule","")],
+        default="COL_TYPE_SPHERE"
     )
     radius: bpy.props.FloatProperty(default=1.0)
     half_widths: bpy.props.FloatVectorProperty(size=3, default=(0.5,0.5,0.5), subtype='XYZ')

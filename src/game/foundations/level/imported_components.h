@@ -33,9 +33,9 @@
 // Notice you have to add the type of the enum on every value,
 // For an alternative, read option 1 on core/utils/enum_reflection.h
 #define COLLIDER_TYPE_VALUES(X) \
-    X(ImportedColliderType, BOX)                \
-    X(ImportedColliderType, SPHERE)             \
-    X(ImportedColliderType, CAPSULE)            
+    X(COL_TYPE_BOX)                \
+    X(COL_TYPE_SPHERE)             \
+    X(COL_TYPE_CAPSULE)            
 
 DECLARE_ENUM(ImportedColliderType, COLLIDER_TYPE_VALUES)
 

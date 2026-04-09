@@ -87,28 +87,28 @@ bool Scene::LoadAsset(const char* fileName)
                 // 3.1. Automated import!!!! you don't have to do anything just declare it!!!!
                 ImportedCollider importedCollider = StructFromRapidJsonValue<ImportedCollider>(components["ColliderComponent"]);
 
-                // 3.2. use the ImportedComponent as a helper for your C_Component
-                C_Collider colliderComponent;
-                switch (importedCollider.collider_type)
-                {
-                case ImportedColliderType::BOX:
-                    colliderComponent.type = ColliderType::Box;
-                    colliderComponent.box.halfWidths = importedCollider.half_widths;
-                    break;
-                case ImportedColliderType::SPHERE:
-                    colliderComponent.type = ColliderType::Sphere;
-                    colliderComponent.sphere.radius = importedCollider.radius;
-                    break;
-                case ImportedColliderType::CAPSULE:
-                    colliderComponent.type = ColliderType::Capsule;
-                    colliderComponent.capsule.radius = importedCollider.radius;
-                    colliderComponent.capsule.height = importedCollider.height;
-                    break;
-                default:
-                    // what the helly (sorry im tired)
-                    SDL_assert(false);
-                    break;
-                }
+            // 3.2. use the ImportedComponent as a helper for your C_Component
+            C_Collider colliderComponent;
+            switch (importedCollider.collider_type)
+            {
+            case ImportedColliderType::COL_TYPE_BOX:
+                colliderComponent.type = ColliderType::Box;
+                colliderComponent.box.halfWidths = importedCollider.half_widths;
+                break;
+            case ImportedColliderType::COL_TYPE_SPHERE:
+                colliderComponent.type = ColliderType::Sphere;
+                colliderComponent.sphere.radius = importedCollider.radius;
+                break;
+            case ImportedColliderType::COL_TYPE_CAPSULE:
+                colliderComponent.type = ColliderType::Capsule;
+                colliderComponent.capsule.radius = importedCollider.radius;
+                colliderComponent.capsule.height = importedCollider.height;
+                break;
+            default:
+                // what the helly (sorry im tired)
+                SDL_assert(false);
+                break;
+            }
 
                 // 3.3 If we had more data to acces (in the node), feel free to add data to your component, 
                 // but that won't probably be the case for player defined components
