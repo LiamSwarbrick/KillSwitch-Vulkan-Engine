@@ -4,7 +4,7 @@
 // Way for game to communicate thing sfor the renderer
 #include "glm/glm.hpp"
 
-#include "shadersrc/shared_constants.glsl"
+#include "shadersrc/common/shared.glsl"
 
 #define MAX_RENDERED_OBJECTS 10000
 

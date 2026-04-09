@@ -1,51 +1,6 @@
 #ifndef SHADERSRC_SHARED_CONSTANTS_GLSL
 #define SHADERSRC_SHARED_CONSTANTS_GLSL
 
-// TODO: Maybe a macro that represents either C or C++ instead of __cplusplus which is specific
-#ifdef __cplusplus
-    #include "glm/glm.hpp"
-    typedef glm::mat4 mat4;
-    typedef glm::vec4 vec4;
-    typedef glm::vec3 vec3;
-    typedef glm::vec2 vec2;
-    typedef glm::uvec4 uvec4;
-#endif
-
-#ifndef __cplusplus
-    #define VERTEX_TYPE_STATIC 0
-    #define VERTEX_TYPE_SKINNED 1
-#else
-    typedef enum
-    {
-        VERTEX_TYPE_STATIC = 0,
-        VERTEX_TYPE_SKINNED = 1,
-
-        VERETX_TYPE_COUNT
-    }
-    VertexType;
-#endif
-
-#ifndef __cplusplus
-    #define BLEND_MODE_OPAQUE   0
-    #define BLEND_MODE_MASKED   1
-    #define BLEND_MODE_BLEND    2
-    #define BLEND_MODE_ADDITIVE 3
-#else
-    typedef enum
-    {
-        BLEND_MODE_OPAQUE   = 0,
-        BLEND_MODE_MASKED   = 1,
-        BLEND_MODE_BLEND    = 2,
-        BLEND_MODE_ADDITIVE = 3,
-
-        BLEND_MODE_COUNT
-    }
-    BlendMode;
-#endif
-
-// Push constants
-//
-
 struct PushConstant_DrawCall
 {
     uint64_t scene_ptr;     // Scene data (View/Proj)

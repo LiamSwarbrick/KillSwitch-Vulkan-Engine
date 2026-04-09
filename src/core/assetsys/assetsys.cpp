@@ -353,7 +353,9 @@ Asset* load_asset(const char* filename) {
 		mesh->vertex_type = VERTEX_TYPE_STATIC;
 
 		// Default to UNLIT, the component system will set the actual value based on the extras json
-		mesh->mat_type = MAT_UNLIT_OPAQUE;
+		// mesh->mat_type = MAT_UNLIT_OPAQUE;
+		#warning WHILE TESTING, DEFAULT TO LIT UNTIL WE SORT OUT LEVEL EDITOR
+		mesh->mat_type = MAT_LIT_OPAQUE;
 
 		for (size_t p = 0; p < mesh->primitive_count; p++) {
 			cgltf_primitive* gltf_prim = &gltf_mesh->primitives[p];
