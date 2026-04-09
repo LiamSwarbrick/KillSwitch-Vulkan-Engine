@@ -126,14 +126,22 @@ struct FrameGraphVisualizer
                     for (uint32_t o = 0; o < src->output_count; ++o)
                     {
                         // Check either this rid or it's resolve (cuz MSAA means it uses a resolve target instead)
-                        if (src->outputs[o].rid == target_rid || src->outputs[o].resolve_rid == target_rid)
+                        bool attachment_is_target = src->outputs[o].rid == target_rid;
+                        bool is_resolve = (src->outputs[o].resolve_rid == target_rid)
+                            && !attachment_is_target;  // <- Account for the fact that resources are aliased when MSAA is off,
+                            // and we wanna make sure we don't show this as being a 'resolve' step when it's not resolving anything!
+                        if (attachment_is_target || is_resolve)
                         {
                             ed::LinkId lid(link_counter++);
                             ed::Link(lid,
                                      output_pin((uint32_t)prev, o),
                                      input_pin(p, i),
                                      usage_color(flags), 2.0f);
-                            ed::Flow(lid);  // Animated flow dots on the link
+                            if (is_resolve)
+                            {
+                                // Only show a flowy line when MSAA resolve is happening between these pass usages (indicates the extra work happening) 
+                                ed::Flow(lid);  // Animated flow dots on the link
+                            }
                             found = true;
                             break;
                         }
@@ -156,13 +164,21 @@ struct FrameGraphVisualizer
                         bool found = false;
                         for (uint32_t o_prev = 0; o_prev < src->output_count; ++o_prev)
                         {
-                            if (src->outputs[o_prev].rid == target_rid)
+                            bool attachment_is_target = src->outputs[o_prev].rid == target_rid;
+                            bool is_resolve = (src->outputs[o_prev].resolve_rid == target_rid)
+                                && !attachment_is_target;
+                            if (attachment_is_target || is_resolve)
                             {
                                 // LINK: Prev Output Pin -> Current Output Pin
-                                ed::Link(ed::LinkId(link_counter++), 
+                                ed::LinkId lid(link_counter++);
+                                ed::Link(lid, 
                                         output_pin(prev, o_prev), 
                                         output_pin(p, o_curr), 
                                         usage_color(pass->outputs[o_curr].usage_flags), 2.0f);
+                                if (is_resolve)
+                                {
+                                    ed::Flow(lid);
+                                }
                                 found = true; break;
                             }
                         }
@@ -183,6 +199,46 @@ struct FrameGraphVisualizer
 
         ed::End();
         ed::SetCurrentEditor(nullptr);
+
+        // ----------------------------------------------------------------
+        // Legend / Key (top-right overlay)
+        // ----------------------------------------------------------------
+        {
+            ImVec2 top_right = ImGui::GetWindowPos();
+            top_right.x += ImGui::GetWindowSize().x * 0.75;
+            top_right.y += 20.0f;
+
+            ImGui::SetNextWindowPos(top_right);
+            ImGui::SetNextWindowBgAlpha(0.90f);
+
+            ImGui::Begin("FG Key",
+                nullptr,
+                ImGuiWindowFlags_NoDecoration |
+                ImGuiWindowFlags_AlwaysAutoResize |
+                ImGuiWindowFlags_NoMove |
+                ImGuiWindowFlags_NoSavedSettings |
+                ImGuiWindowFlags_NoFocusOnAppearing |
+                ImGuiWindowFlags_NoNav);
+
+            ImGui::Text("FrameGraph Key");
+            ImGui::Separator();
+
+            ImGui::Text("Colour = Resource Usage");
+
+            ImGui::TextColored(ImVec4(0.20f, 0.85f, 0.30f, 1.0f), "- Color Attachment");
+            ImGui::TextColored(ImVec4(0.30f, 0.55f, 1.00f, 1.0f), "- Depth");
+            ImGui::TextColored(ImVec4(0.60f, 0.30f, 1.00f, 1.0f), "- Stencil");
+            ImGui::TextColored(ImVec4(1.00f, 0.60f, 0.20f, 1.0f), "- Storage");
+            ImGui::TextColored(ImVec4(1.00f, 0.90f, 0.20f, 1.0f), "- Sampled");
+
+            ImGui::Spacing();
+
+            ImGui::Text("Link Behaviour");
+            ImGui::Text("- Static   = Regular Dependency");
+            ImGui::Text("- Flowing  = MSAA Resolve between nodes");
+
+            ImGui::End();
+        }
     }
 
     // Call this to force a re-layout (e.g. after a scene change)

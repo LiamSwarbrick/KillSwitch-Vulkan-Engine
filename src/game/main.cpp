@@ -59,19 +59,25 @@ glm::mat4 temp_camera_view_matrix()
 int main(int argc, char *argv[])
 {
     bool is_debugging = true;
+    bool enabled_validation_layers = true;
 #ifdef NDEBUG
     is_debugging = false;
 #endif
 
+    // NOTE: For non production builds, we still want Vulkan validation layers on in release mode, because release mode can have different bugs
+    // To make sure it's obvious when validation layers are used, we'll put it in the window title.
+    // Note that validation layers degrade performance significantly, so should be disabled in performance metrics and absolutely in production builds
+    char title[256] = {};
+    snprintf(title, sizeof(title), "Close-quarters Adventure Game [%s]", enabled_validation_layers ? "VULKAN VALIDATION LAYERS ENABLED" : "VULKAN VALIDATION LAYERS DISABLED");
     SDL_Window* window = Core_Init((Core_InitInfo){
-        "Close-quarters Adventure Game",
+        title,
         1280, 720
     });
 
     // NOTE: Currently checking validation in release mode, but on realse you would normally disable it
     Renderer_InitInfo renderer_info = {
         .window = window,
-        .enable_validation = 1,//is_debugging
+        .enable_validation = enabled_validation_layers,
         .preferred_initial_settings = {  // Will fallback if these aren't possible
             .uncapped_fps = 0,
             .msaa_sample_count = 1,
@@ -120,15 +126,15 @@ int main(int argc, char *argv[])
        And while the user is on the main menu, we are loading the prefabs.
        That way, we can hide ALL of the latency and it will seem like there are no loading screens at all.
     */
-    
+
     // Testing Scene and ECS
     Scene scene{};
-    DebugUI_SetECS(&scene.GetECS());
-    DebugUI_SetAsset(scene.GetAsset());  // Will be null until LoadLevel finishes, updated below
     scene.LoadLevel("assets/levels/Untitled2.gltf");
+
+    // TODO: Debug UI is built around the idea of 1 asset at the moment.
+    //       This must change with the new scene system that can load many asset prefabs.
+    DebugUI_SetECS(&scene.GetECS());
     DebugUI_SetAsset(scene.GetAsset());  // Now m_asset is populated
-    // scene.LoadLevel("assets/animations/Animationtest.gltf");
-    // scene.LoadLevel("assets/levels/Untitled_skybox.gltf");
 
 
     bool running = true;
