@@ -56,7 +56,7 @@ namespace DebugUI
     }
 
     // Registry: bit_index → draw function
-    using DrawFieldsFunc = std::function<void(AdvEng::ECS&, AdvEng::EntityID)>;
+    using DrawFieldsFunc = std::function<void(ECS&, EntityID)>;
 
     struct ComponentDrawEntry
     {
@@ -65,11 +65,11 @@ namespace DebugUI
     };
 
     template <typename T>
-    inline ComponentDrawEntry MakeDrawEntry(AdvEng::ECS& ecs)
+    inline ComponentDrawEntry MakeDrawEntry(ECS& ecs)
     {
         return {
             ecs.GetComponentBitIndex<T>(),
-            [](AdvEng::ECS& ecs, AdvEng::EntityID id)
+            [](ECS& ecs, EntityID id)
             {
                 T* comp = ecs.GetComponentPtr<T>(id);
                 if (comp) DrawComponentFields<T>(*comp);
@@ -77,12 +77,12 @@ namespace DebugUI
         };
     }
 
-    inline void DrawEntityList(AdvEng::ECS& ecs, uint32_t& selected_id)
+    inline void DrawEntityList(ECS& ecs, uint32_t& selected_id)
     {
         ImGui::TextDisabled("Entities (%zu)", ecs.GetEntityCount());
         ImGui::Separator();
 
-        for (AdvEng::EntityID id : ecs.GetAllEntities())
+        for (EntityID id : ecs.GetAllEntities())
         {
             std::string tag   = ecs.GetEntityTag(id);
             std::string label = "[" + std::to_string(id) + "] " + tag;
@@ -103,7 +103,7 @@ namespace DebugUI
     }
 
     inline void DrawComponentMaskPanel(
-        AdvEng::ECS& ecs,
+        ECS& ecs,
         uint32_t selected_id,
         const std::vector<ComponentDrawEntry>& draw_entries)
     {
@@ -117,7 +117,7 @@ namespace DebugUI
         ImGui::Text("[%u] %s", selected_id, tag.c_str());
         ImGui::Separator();
 
-        AdvEng::ComponentMask mask       = ecs.GetEntityComponentMask(selected_id);
+        ComponentMask mask       = ecs.GetEntityComponentMask(selected_id);
         size_t                comp_count = mask.count();
 
         ImGui::TextDisabled("Components (%zu)", comp_count);
@@ -143,7 +143,7 @@ namespace DebugUI
         }
     }
 
-    inline void DrawECSInspectorContent(AdvEng::ECS& ecs, uint32_t& selected_entity_id)
+    inline void DrawECSInspectorContent(ECS& ecs, uint32_t& selected_entity_id)
     {
         // only construct the draw entries once (static)
         static std::vector<ComponentDrawEntry> draw_entries = {

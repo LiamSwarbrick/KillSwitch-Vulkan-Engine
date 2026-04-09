@@ -7,7 +7,7 @@
 class Scene {
 
 private:
-    AdvEng::ECS m_ecs;
+    ECS m_ecs;
 
     // For now
     Asset* m_asset;
@@ -28,7 +28,7 @@ public:
 
     // bool LoadLevel(u32 levelNumber);
     bool LoadLevel(const char* fileName);
-    AdvEng::ECS& GetECS()   { return m_ecs;    };
+    ECS& GetECS()   { return m_ecs;    };
     Asset*        GetAsset() { return m_asset;  };
 
     void Update(float dt);

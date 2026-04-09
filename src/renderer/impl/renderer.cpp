@@ -839,7 +839,7 @@ void Renderer_SetImGuiCallback(Renderer_ImGuiBuildCallback callback, void* user_
     renderstate.imgui_callback_data = user_data;
 }
 
-void Renderer_SetDebugECS(AdvEng::ECS* ecs)
+void Renderer_SetDebugECS(ECS* ecs)
 {
     debug_ecs_ptr = ecs;
 }

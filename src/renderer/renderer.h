@@ -59,8 +59,8 @@ void Renderer_SetImGuiCallback(Renderer_ImGuiBuildCallback callback, void* user_
 
 // Register the ECS so the renderer can drive the debug UI internally.
 // Call once after Renderer_Init, passing the scene's ECS reference.
-namespace AdvEng { class ECS; }
-void Renderer_SetDebugECS(AdvEng::ECS* ecs);
+class ECS;
+void Renderer_SetDebugECS(ECS* ecs);
 
 // Register the loaded asset so the Asset Browser can inspect it.
 // Pass nullptr to clear (e.g. before loading a new scene).
