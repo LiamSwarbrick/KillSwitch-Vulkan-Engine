@@ -56,11 +56,18 @@ bool Scene::LoadAsset(const char* fileName)
             }
         }
 
+        #define TEMPORARY_FIX
+#ifdef TEMPORARY_FIX
+        EntityID eID;
+        eID = m_ecs.CreateEntity((node->name) ? (node->name) : "");
+#endif
         if (has_ecs_data)
         {
             #warning IMPORTANT: Need to change level editor so that every entity has ecs_data for this to work
+#ifndef TEMPORARY_FIX
             EntityID eID;
             eID = m_ecs.CreateEntity((node->name) ? (node->name) : "");
+#endif
 
             // 2. And put the "_ecs" value in the following
             rj::Value& components = doc["_ecs"];
@@ -109,7 +116,9 @@ bool Scene::LoadAsset(const char* fileName)
                 // 3.4 Finally add the component to the ECS!!!
                 m_ecs.AddComponent<C_Collider>(eID, std::move(colliderComponent));
             }
-
+#ifdef TEMPORARY_FIX
+        }
+#endif
             // ---------------
             // -- TRANSFORM --
             // ---------------
@@ -169,7 +178,9 @@ bool Scene::LoadAsset(const char* fileName)
                     m_ecs.AddComponent<C_StaticMesh>(eID, { staticMesh.mesh, staticMesh.parent_asset });
                 }
             }
+#ifndef TEMPORARY_FIX
         }
+#endif
         // 4. END OF RAPIDJSON EXAMPLE AND OUR REFLECTION SYSTEM !!!
     }
 
