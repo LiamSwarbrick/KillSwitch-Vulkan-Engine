@@ -33,6 +33,14 @@ struct C_AnimatedMesh
     bool isPlaying;
     bool isLooping;
 
+    // blending states
+    bool isBlending;
+    int previousAnimation;
+	float previousAnimationTime;
+	float blendDuration;
+	float blendFactor;
+	float blendTime;
+
 	// skeletal animation data
     uint32_t joint_count;
     glm::mat4* joint_matrices;

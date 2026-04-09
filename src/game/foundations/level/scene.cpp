@@ -152,6 +152,7 @@ bool Scene::LoadAsset(const char* fileName)
                 animMesh.animationTime = 0.0f;
                 animMesh.isPlaying = true;
                 animMesh.isLooping = true;
+				animMesh.isBlending = false;
 
                 if (joint_count > 0) {
                     animMesh.joint_matrices = (glm::mat4*)malloc(joint_count * sizeof(glm::mat4));
