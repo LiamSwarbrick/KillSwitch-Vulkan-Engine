@@ -100,8 +100,8 @@ void Animation_Update(AdvEng::ECS* ecs, float dt)
         // Initialise world joint matrices with identity matrices
 		std::vector<glm::mat4> worldJointMatrices(animatedBoneCount, glm::mat4(1.0f));
         int rootBone = find_bone_index(&asset->skins[0], asset->skins[0].skeleton_root_node_index);
-        auto& transform = ecs->GetComponent<C_Transform>(e);
-		CalculateWorldMatrices(asset, rootBone, transform.matrix, localJointMatrices, worldJointMatrices);
+        // pass identity matrix to keep maths in local model space
+		CalculateModelMatrices(asset, rootBone, glm::mat4(1.0f), localJointMatrices, worldJointMatrices);
 
 		// Make sure joint_matrices is allocated
         if (!animatedMesh.joint_matrices)
@@ -202,13 +202,13 @@ int find_bone_index(Skin* skin, int target_node_index) {
     return -1;
 }
 
-void CalculateWorldMatrices(Asset* asset, int boneIndex, glm::mat4 parentMatrix, const std::vector<glm::mat4>& localJointMatrices, std::vector<glm::mat4>& worldJointMatrices)
+void CalculateModelMatrices(Asset* asset, int boneIndex, glm::mat4 parentMatrix, const std::vector<glm::mat4>& localJointMatrices, std::vector<glm::mat4>& worldJointMatrices)
 {
     // Calculate world matrix from local matrix and parent world matrix
 	worldJointMatrices[boneIndex] = parentMatrix * localJointMatrices[boneIndex];
 
     // Recursively call for all children
     for (size_t i = 0; i < asset->skins[0].bones[boneIndex].child_count; ++i)
-		CalculateWorldMatrices(asset, asset->skins[0].bones[boneIndex].children_indices[i], worldJointMatrices[boneIndex], localJointMatrices, worldJointMatrices);
+		CalculateModelMatrices(asset, asset->skins[0].bones[boneIndex].children_indices[i], worldJointMatrices[boneIndex], localJointMatrices, worldJointMatrices);
 }
 

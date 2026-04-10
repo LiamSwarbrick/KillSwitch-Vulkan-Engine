@@ -111,11 +111,12 @@ int main(int argc, char *argv[])
     scene.StartUp();
 
     Asset* catPrefab = scene.LoadPrefab("assets/animations/cat.gltf");
-    Asset* roomPrefab = scene.LoadPrefab("assets/animations/Animationtest.gltf");
+    Asset* animationPrefab = scene.LoadPrefab("assets/animations/Animationtest.gltf");
 
     scene.InstantiatePrefab(catPrefab, glm::vec3(0, 0, 0));
-    scene.InstantiatePrefab(roomPrefab, glm::vec3(10, 0, 10));
-    AdvEng::EntityID playerEntity = scene.InstantiatePrefab(catPrefab, glm::vec3(5, 0, 5));
+    scene.InstantiatePrefab(animationPrefab, glm::vec3(0, 10, 0));
+    // render a second cat
+    AdvEng::EntityID playerEntity = scene.InstantiatePrefab(catPrefab, glm::vec3(10, 0, 10));
 
     scene.BuildRendererScene();
 

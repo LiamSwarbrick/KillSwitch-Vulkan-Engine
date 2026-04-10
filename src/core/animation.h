@@ -22,6 +22,6 @@ float GetDuration(const C_AnimatedMesh& animator);
 
 // calculations
 int find_bone_index(Skin* skin, int target_node_index);
-void CalculateWorldMatrices(Asset* asset, int currentNode, glm::mat4 parentMatrix, const std::vector<glm::mat4>& localJointMatrices, std::vector<glm::mat4>& worldJointMatrices);
+void CalculateModelMatrices(Asset* asset, int currentNode, glm::mat4 parentMatrix, const std::vector<glm::mat4>& localJointMatrices, std::vector<glm::mat4>& worldJointMatrices);
 
 #endif  // ANIMATION_H

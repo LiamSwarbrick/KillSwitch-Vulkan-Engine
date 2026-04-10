@@ -103,7 +103,7 @@ AdvEng::EntityID Scene::InstantiatePrefab(Asset* prefab, glm::vec3 spawnPosition
         // ---------------
         C_Transform t;
         t.position = glm::vec3(node->translation[0], node->translation[1], node->translation[2]) + spawnPosition;
-        t.rotation = glm::quat(node->rotation[0], node->rotation[1], node->rotation[2], node->rotation[3]);
+        t.rotation = glm::quat(node->rotation[3], node->rotation[0], node->rotation[1], node->rotation[2]);
 
         t.matrix = glm::translate(glm::mat4(1.0f), t.position);
         t.matrix *= glm::mat4_cast(t.rotation);
