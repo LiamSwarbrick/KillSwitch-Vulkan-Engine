@@ -30,6 +30,7 @@ void DepthPrepass_Execute(VkCommandBuffer cmd, RenderPassDesc* desc)
             .depth_op       = VK_COMPARE_OP_LESS,
             .stencil_mode   = 0,
             .cull_mode      = VK_CULL_MODE_BACK_BIT,
+    #warning BLEND MODE MASKED TOO (TODO: Renderqueues n sort key shit)
             .blend_mode     = BLEND_MODE_OPAQUE,
             .polygon_mode   = VK_POLYGON_MODE_FILL,
             .front_face     = VK_FRONT_FACE_COUNTER_CLOCKWISE,

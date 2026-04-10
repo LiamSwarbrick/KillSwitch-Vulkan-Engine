@@ -1,121 +1,15 @@
 #ifndef SHADERSRC_SHARED_CONSTANTS_GLSL
 #define SHADERSRC_SHARED_CONSTANTS_GLSL
 
-struct PushConstant_DrawCall
-{
-    uint64_t scene_ptr;     // Scene data (View/Proj)
-    uint64_t material_ptr;  // Material SSBO address
-
-    // Per mesh
-    uint64_t object_ptr;    // Per-instance data (Model matrix)
-    uint64_t joints_ptr;     // Skinning matrices (0 if static)
-
-    // Per primitive:
-    uint32_t material_idx;  // Which material in the SSBO
-    uint32_t _padding;
-    uint64_t index_ptr;      // Index buffer (Pulling)
-    uint64_t v_positions_ptr;
-    uint64_t v_texcoords_ptr;
-    uint64_t v_normals_ptr;
-    uint64_t v_colors_ptr;
-    uint64_t v_joint_ids_ptr;      // Only for skinned meshes
-    uint64_t v_joint_weights_ptr;  // Only for skinned meshes
-};
-
-struct PushConstant_PassHeader
-{
-    uint32_t texture_indices[16];
-};
-struct FullPushConstants_Graphics  // Defined for the CPU side to use
-{
-    PushConstant_DrawCall dc;
-    PushConstant_PassHeader pass;
-};
-
-
-// Buffers
-//
-
-struct SceneData
-{
-    mat4 view;
-    mat4 proj;
-    mat4 view_proj;
-};
-struct ObjectData
-{
-    mat4 model;
-};
-struct MaterialData
-{
-    // TODO: Change this to a standard glTF pbr material instead of this shit
-    vec4  base_color;
-    float metalness;
-    float roughness;
-    vec3  emissive_factor;
-    float alpha_cutoff;
-
-    uint32_t sampler_idx;
-    
-    uint32_t texture_idx_basecolor;
-    // TODO: Switch to this layout:
-    // uint32_t texture_idx_basecolor_rgb_metalness_a;
-    // uint32_t texture_idx_emissive_rgb_roughness_a;
-    // uint32_t texture_idx_normalmap;  // <- TODO: Dunno if I want normal maps cuz the game might be stylised?
-};
-
-
-#ifdef __cplusplus
-    // I want to keep this C compatiable.
-    typedef struct PushConstant_DrawCall PushConstant_DrawCall;
-    typedef struct SceneData SceneData;
-    typedef struct ObjectData ObjectData;
-    typedef struct Vertex Vertex;
-    typedef struct MaterialData MaterialData;
-#endif
-
-#ifndef __cplusplus  // TODO: Maybe a specifc GLSL macro
+#ifdef IS_GLSL
 
     // Shader specialization constants
     layout(constant_id = 0) const uint CURRENT_VERTEX_TYPE = 0;
-    layout(constant_id = 1) const uint CURRENT_BLEND_MODE = 0;
+    layout(constant_id = 1) const uint CURRENT_BLEND_MODE  = 0;
 
-    // Pointer types for global buffers
-    layout(buffer_reference, scalar) readonly buffer SceneBuffer
-    {
-        SceneData scene;
-    };
-    layout(buffer_reference, scalar) readonly buffer ObjectBuffer
-    {
-        ObjectData object;
-    };
-    layout(buffer_reference, scalar) readonly buffer MaterialBuffer
-    {
-        MaterialData materials[];
-    };
+    #define UINT32_MAX 0xFFFFFFFF
 
-    // layout(buffer_reference, scalar) readonly buffer VertexBuffer
-    // {
-    //     Vertex vertices[];
-    // };
+#endif  // IS_GLSL
 
-    // Pointer types for current mesh:
-    layout(buffer_reference, scalar) readonly buffer IndexBuffer
-    {
-        uint indices[];
-    };
-    layout(buffer_reference, scalar) readonly buffer JointBuffer
-    {
-        mat4 joints[];
-    };
-    // Vertex attributes seperated into their own buffers:
-    layout(buffer_reference, scalar) readonly buffer VPositionBuffer { vec3 positions[]; };
-    layout(buffer_reference, scalar) readonly buffer VTexcoordBuffer { vec2 texcoords[]; };
-    layout(buffer_reference, scalar) readonly buffer VNormalBuffer   { vec3 normals[]; };
-    layout(buffer_reference, scalar) readonly buffer VColorBuffer    { vec3 colors[]; };
-    layout(buffer_reference, scalar) readonly buffer VJointIDsBuffer { uvec4 joint_ids[]; };
-    layout(buffer_reference, scalar) readonly buffer VJointWeightsBuffer { vec4 weights[]; };
-
-#endif
 
 #endif  // SHADERSRC_SHARED_CONSTANTS_GLSL

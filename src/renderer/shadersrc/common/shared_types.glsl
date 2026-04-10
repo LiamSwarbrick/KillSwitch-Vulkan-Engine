@@ -1,7 +1,7 @@
 #ifndef SHADERSRC_SHARED_TYPES_GLSL
 #define SHADERSRC_SHARED_TYPES_GLSL
 
-#ifndef __IS_GLSL
+#ifndef IS_GLSL
 
     // Typedef C++ glm types so we can share structs between glsl and C++
     #include "glm/glm.hpp"
@@ -42,7 +42,7 @@
     #define BLEND_MODE_BLEND    2
     #define BLEND_MODE_ADDITIVE 3
     
-#endif  // __IS_GLSL
+#endif  // IS_GLSL
 
 
 

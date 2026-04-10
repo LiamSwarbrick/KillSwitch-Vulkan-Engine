@@ -57,7 +57,7 @@ and write the up to data description.
 #include "internal_structs.h"
 #include "vulkan_wrapper.h"
 
-#include "renderer/shadersrc/sampler_indices.glsl"
+#include "renderer/shadersrc/common/sampler_indices.glsl"
 
 // Called at the start and end.
 void FG_Init();

@@ -177,7 +177,7 @@ void ExecuteDrawCall(VkCommandBuffer cmd, DrawCall drawcall, PipelineKey key, Pu
 
 
         vkCmdPushConstants(cmd, renderstate.global_pipeline_layout,
-            VK_SHADER_STAGE_ALL, 0, sizeof(push), &push.dc
+            VK_SHADER_STAGE_ALL, 0, sizeof(push), &push
         );
 
         // Draw

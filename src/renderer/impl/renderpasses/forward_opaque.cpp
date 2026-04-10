@@ -15,7 +15,7 @@ void ForwardOpaque_Execute(VkCommandBuffer cmd, RenderPassDesc* desc)
     
     PushConstant_PassHeader push_pass = {};
 
-    uint32_t forward_shaders[] = { SHADER_UNLIT };
+    uint32_t forward_shaders[] = { SHADER_UNLIT, SHADER_LIT };  // <- THIS IS IMPORTANT, DON'T FORGET WHEN ADDING MORE SHADERS
 
     for (uint32_t s = 0; s < sizeof(forward_shaders)/sizeof(forward_shaders[0]); ++s)
     {
@@ -34,7 +34,8 @@ void ForwardOpaque_Execute(VkCommandBuffer cmd, RenderPassDesc* desc)
                 .depth_op       = VK_COMPARE_OP_EQUAL,  // <- Equal prolly good bcuz of invariant gl_Position in shaders
                 .stencil_mode   = 0,
                 .cull_mode      = VK_CULL_MODE_BACK_BIT,
-                .blend_mode     = BLEND_MODE_OPAQUE,
+    #warning BLEND MODE MASKED TOO (TODO: Renderqueues n sort key shit (has to also be done in depth prepass to work properly)
+                .blend_mode     = BLEND_MODE_OPAQUE,  // TODO: Use blend mode of primitive (but here is per mesh not per prim)
                 .polygon_mode   = VK_POLYGON_MODE_FILL,
                 .front_face     = VK_FRONT_FACE_COUNTER_CLOCKWISE,
                 .msaa_samples   = (uint64_t)PK_MultisamplingFlag(renderstate.multisampling_count_flag)

@@ -387,6 +387,7 @@ void create_scene_resources()
         
         MaterialData default_mat = {
             .base_color = { 1.0f, 1.0f, 1.0f, 1.0f },
+            .blend_mode = BLEND_MODE_MASKED,
             .alpha_cutoff = 0.5f,
             .sampler_idx = FG_SAMPLER_LINEAR_REPEAT,
             .texture_idx_basecolor = renderstate.registry.resources[default_texture_rid].image_bindless_index
@@ -409,6 +410,7 @@ void create_scene_resources()
             gpu_mat.metalness = mat->metallic;
             gpu_mat.roughness = mat->roughness;
             memcpy(&gpu_mat.emissive_factor, mat->emissive_factor, sizeof(glm::vec3));
+            gpu_mat.blend_mode = mat->blend_mode;
             gpu_mat.alpha_cutoff = mat->alpha_cutoff;
 
             // NOTE: Just use one sampler for now at least

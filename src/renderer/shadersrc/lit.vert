@@ -1,7 +1,28 @@
+#version 460
+#extension GL_GOOGLE_include_directive : require
+#include "common/shared.glsl"
 
-#include "shared_constants.glsl"
-/*
-TODO: Make lit vert and frag shaders.
-Go to game_resources.cpp and make a buffer for lights.
+layout(location = 0) out vec2 out_uv;
+layout(location = 1) out vec3 out_color;
 
-*/
+// Multipass materials require different shaders have reproducable vertex positions
+invariant gl_Position;
+
+void main()
+{
+    SceneData scene  = SceneBuffer(push.dc.scene_ptr).scene;
+    
+    uint vertex_buf_index;
+    vec3 v_pos;
+    vec2 v_uv;
+    vec3 v_normal;
+    vec3 v_color;
+
+    fetch_vertex(gl_VertexIndex, vertex_buf_index, v_pos, v_uv, v_normal, v_color);
+
+    mat4 model_matrix = compute_model_matrix(vertex_buf_index);
+
+    out_uv = v_uv;
+    out_color = v_color;
+    gl_Position = scene.view_proj * model_matrix * vec4(v_pos, 1.0);
+}
