@@ -17,7 +17,7 @@ IMPORTANT IMPLEMENTATION NOTE:
   The number of inputs/outputs to a specific pass along with their VkFormat's must be hard set.
 
 DONE: Graphics Pipelines creation
-TODO: Compute Pipeline creation (wayyy fucking simpler, but not needed compute shaders yet)
+TODO: Compute Pipeline creation (wayyy less complicated, but haven't needed compute shaders yet)
 */
 
 PipelineKeyMultisamplingBits PK_MultisamplingFlag(VkSampleCountFlagBits sample_count)

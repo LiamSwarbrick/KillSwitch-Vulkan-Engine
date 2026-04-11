@@ -2,8 +2,8 @@
 #extension GL_GOOGLE_include_directive : require
 #include "common/shared.glsl"
 
-layout(location = 0) out vec2 out_uv;
-layout(location = 1) out vec3 out_color;
+layout (location = 0) out vec2 out_uv;
+layout (location = 1) out vec3 out_color;
 
 // Multipass materials require different shaders have reproducable vertex positions
 invariant gl_Position;

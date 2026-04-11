@@ -37,7 +37,7 @@ MaterialType;
 typedef struct PrimitiveRIDs
 {
     uint32_t index_buf_rid;
-    uint32_t material_index;     // Index into the global Material SSBO
+    uint32_t material_index;  // Index into the global Material SSBO
 
     // Set to UINT32_MAX for unused attribute (specifically cuz static meshes don't have joints)
     uint32_t v_pos_buf_rid;
@@ -76,12 +76,5 @@ typedef struct Renderable
     // NOTE: Fucking make sure joints arrays are not allocated every frame
 }
 Renderable;
-
-typedef struct RenderView
-{
-    uint32_t num_renderables;
-    Renderable* items;
-}
-RenderView;
 
 #endif  // RENDERER_RENDER_TYPES_H

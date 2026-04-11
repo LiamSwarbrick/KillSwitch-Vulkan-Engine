@@ -13,8 +13,8 @@
     #extension GL_EXT_nonuniform_qualifier : require
 
     // Bindless heap for textures and samplers is the only use of descriptor sets here
-    layout(set = 0, binding = 0) uniform texture2D global_textures[];
-    layout(set = 0, binding = 1) uniform sampler   global_samplers[];
+    layout (set = 0, binding = 0) uniform texture2D global_textures[];
+    layout (set = 0, binding = 1) uniform sampler   global_samplers[];
 
 #endif
 

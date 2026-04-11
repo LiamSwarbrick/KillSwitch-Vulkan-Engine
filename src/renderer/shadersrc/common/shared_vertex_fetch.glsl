@@ -24,10 +24,11 @@ void fetch_vertex(
         v_color  = VColorBuffer(push.dc.v_colors_ptr).colors[vertex_buf_index];
 }
 
-void fetch_vertex_pos(
+void fetch_vertex_pos_uv(
     uint index,
     out uint vertex_buf_index,
-    out vec3 v_pos
+    out vec3 v_pos,
+    out vec2 v_uv
 )
 {
     // Pull only vertex position (for depth passes)
@@ -35,6 +36,7 @@ void fetch_vertex_pos(
     vertex_buf_index = ib.indices[index];
 
     v_pos    = VPositionBuffer(push.dc.v_positions_ptr).positions[vertex_buf_index];    
+    v_uv     = VTexcoordBuffer(push.dc.v_texcoords_ptr).texcoords[vertex_buf_index];
 }
 
 mat4 compute_model_matrix(uint vertex_buf_index)

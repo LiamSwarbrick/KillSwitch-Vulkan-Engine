@@ -69,4 +69,12 @@ typedef struct SwapchainSupportDetails
 }
 SwapChainSupportDetails;
 
+typedef struct RenderView
+{
+    uint32_t num_renderables;
+    Renderable* items;
+}
+RenderView;
+
+
 #endif  // ENGINE_RENDERER_INTERNAL_STRUCTS_H

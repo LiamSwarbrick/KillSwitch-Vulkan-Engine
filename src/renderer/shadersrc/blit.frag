@@ -2,9 +2,9 @@
 #extension GL_GOOGLE_include_directive : require
 #include "common/shared.glsl"
 
-layout(location = 0) in vec2 in_uv;
+layout (location = 0) in vec2 frag_uv;
 
-layout(location = 0) out vec4 frag_color;
+layout (location = 0) out vec4 frag_color;
 
 void main()
 {
@@ -13,6 +13,6 @@ void main()
     frag_color = texture(sampler2D(
         global_textures[nonuniformEXT(push.pass.texture_indices[0])],
         global_samplers[FG_SAMPLER_LINEAR_REPEAT]),
-        in_uv
+        frag_uv
     );
 }

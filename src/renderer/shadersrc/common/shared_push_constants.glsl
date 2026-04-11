@@ -35,10 +35,14 @@ struct FullPushConstants_Graphics  // Defined for the CPU side to use
 
 #ifdef IS_GLSL
 
-    layout(push_constant, scalar) uniform PushConstants
+    layout (push_constant, scalar) uniform PushConstants
     {
         FullPushConstants_Graphics push;
     };
+
+#else
+
+    static_assert(sizeof(FullPushConstants_Graphics) <= 256);
 
 #endif  // IS_GLSL
 

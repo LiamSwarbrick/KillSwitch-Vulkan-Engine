@@ -179,12 +179,14 @@ void create_startup_resources()
             .usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT
                    | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT
                    | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
-        }
+        },
+        .is_buffer_cpu_accessible = 1  // <- Material stuff like blend mode is important to be CPU accessable, and we may want to dynamically change materials.
     };
     renderstate.rids.material_ssbo_rid = FG_CreateResource(
         "MaterialSSBO", FG_RESOURCE_TYPE_BUFFER, flags, &mat_info
     );
-
+    renderstate.mapped_material_data = MakeArenaOnBufferResource(renderstate.rids.material_ssbo_rid);
+    
 
     /////// MOVE BELOW TO create_scene_resources(scene resource list?) /////////////
 
@@ -440,10 +442,10 @@ void create_scene_resources()
     }
 
     // Upload materials to global material buffer (all at once)
-    FG_UploadBufferData(&renderstate.main.staging_objects, rids->material_ssbo_rid,
+    ResetMappedArena(&renderstate.mapped_material_data);
+    PushToMappedArena(&renderstate.mapped_material_data,
         loaded_materials, num_loaded_materials * sizeof(MaterialData)
     );
-
 
     // Load Static meshes
     for (uint32_t i = 0; i < init_info->num_static_meshes; ++i)

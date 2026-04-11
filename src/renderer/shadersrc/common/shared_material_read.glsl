@@ -1,7 +1,7 @@
 #ifndef SHADERSRC_SHARED_MATERIAL_READ_GLSL
 #define SHADERSRC_SHARED_MATERIAL_READ_GLSL
 
-void sample_material(
+void sample_material_basic(
     vec2 uv,
     out MaterialData mat,
     out vec4 base_color)

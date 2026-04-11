@@ -16,7 +16,7 @@ struct ObjectData
 struct MaterialData
 {
     // TODO: Change this to a standard glTF pbr material instead of this shit
-    vec4  base_color;
+    vec4  base_color;  // Alpha stored in base_color.a
     float metalness;
     float roughness;
     vec3  emissive_factor;
@@ -43,35 +43,35 @@ struct MaterialData
 #else
 
     // Pointer types for global buffers
-    layout(buffer_reference, scalar) readonly buffer SceneBuffer
+    layout (buffer_reference, scalar) readonly buffer SceneBuffer
     {
         SceneData scene;
     };
-    layout(buffer_reference, scalar) readonly buffer ObjectBuffer
+    layout (buffer_reference, scalar) readonly buffer ObjectBuffer
     {
         ObjectData object;
     };
-    layout(buffer_reference, scalar) readonly buffer MaterialBuffer
+    layout (buffer_reference, scalar) readonly buffer MaterialBuffer
     {
         MaterialData materials[];
     };
 
     // Pointer types for current mesh:
-    layout(buffer_reference, scalar) readonly buffer IndexBuffer
+    layout (buffer_reference, scalar) readonly buffer IndexBuffer
     {
         uint indices[];
     };
-    layout(buffer_reference, scalar) readonly buffer JointBuffer
+    layout (buffer_reference, scalar) readonly buffer JointBuffer
     {
         mat4 joints[];
     };
     // Vertex attributes seperated into their own buffers:
-    layout(buffer_reference, scalar) readonly buffer VPositionBuffer     { vec3  positions[]; };
-    layout(buffer_reference, scalar) readonly buffer VTexcoordBuffer     { vec2  texcoords[]; };
-    layout(buffer_reference, scalar) readonly buffer VNormalBuffer       { vec3  normals[];   };
-    layout(buffer_reference, scalar) readonly buffer VColorBuffer        { vec3  colors[];    };
-    layout(buffer_reference, scalar) readonly buffer VJointIDsBuffer     { uvec4 joint_ids[]; };
-    layout(buffer_reference, scalar) readonly buffer VJointWeightsBuffer { vec4  weights[];   };
+    layout (buffer_reference, scalar) readonly buffer VPositionBuffer     { vec3  positions[]; };
+    layout (buffer_reference, scalar) readonly buffer VTexcoordBuffer     { vec2  texcoords[]; };
+    layout (buffer_reference, scalar) readonly buffer VNormalBuffer       { vec3  normals[];   };
+    layout (buffer_reference, scalar) readonly buffer VColorBuffer        { vec3  colors[];    };
+    layout (buffer_reference, scalar) readonly buffer VJointIDsBuffer     { uvec4 joint_ids[]; };
+    layout (buffer_reference, scalar) readonly buffer VJointWeightsBuffer { vec4  weights[];   };
 
 #endif  // IS_GLSL
 
