@@ -375,7 +375,7 @@ void create_scene_resources()
         uint32_t default_texture_rid = UINT32_MAX;
         stbi_set_flip_vertically_on_load(1);
         int width, height, num_channels;
-        const char* filepath = "assets/godot.png";
+        const char* filepath = "assets/godot2.png";
         uint8_t* data = stbi_load(filepath, &width, &height, &num_channels, 4);
         if (data == NULL)
         {

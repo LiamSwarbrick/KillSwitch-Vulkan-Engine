@@ -19,6 +19,6 @@ void main()
 
     out_color = vec4(
         final_color.rgb,
-        process_alpha(final_color.a, mat.alpha_cutoff)
+        final_color.a * process_alpha(final_color.a, mat.alpha_cutoff)
     );
 }

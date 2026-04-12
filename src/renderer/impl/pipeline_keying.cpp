@@ -192,10 +192,13 @@ VkPipeline create_graphics_pipeline(PipelineKey key)
     }
     if (key.msaa_samples && color_attachment_count > 0)
     {
+        // TODO: ALPHA TO COVERAGE DISABLED BCUZ NOT LOOKING GOOD. I'D HAVE TO RESEARCH MORE
+
         // Alpha to coverage for anti aliasing alpha masked geometry using multisampling
         // TODO: Improve A2C with tricks from this: https://bgolus.medium.com/anti-aliased-alpha-test-the-esoteric-alpha-to-coverage-8b177335ae4f
         // And mipmap should take this into account too (http://the-witness.net/news/2010/09/computing-alpha-mipmaps/?source=post_page-----8b177335ae4f---------------------------------------).
-        multisample_info.alphaToCoverageEnable = key.blend_mode == BLEND_MODE_MASKED;
+
+        // multisample_info.alphaToCoverageEnable = key.blend_mode == BLEND_MODE_MASKED;
     }
     // FUTURE: Implement MSAA with Specular AA if using shiny things
     
