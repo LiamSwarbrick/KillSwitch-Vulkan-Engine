@@ -16,81 +16,80 @@ void Animation_Update(AdvEng::ECS* ecs, float dt)
             return;
 
         // Skip if no animation is playing, asset is missing or animation is invalid
-         if (!animatedMesh.isPlaying || !asset || animatedMesh.currentAnimation < 0)
+         if (!animatedMesh.isPlaying || !asset || animatedMesh.lowerBodyLayer.currentAnimation < 0 || animatedMesh.lowerBodyLayer.currentAnimation >= asset->animation_count)
              return;
 
-        Animation& animation = asset->animations[animatedMesh.currentAnimation];
-        if (animatedMesh.currentAnimation >= asset->animation_count)
-			return;
+        Animation& animation = asset->animations[animatedMesh.lowerBodyLayer.currentAnimation];
 
-		// Update the animation time
-        animatedMesh.animationTime += dt * animatedMesh.playbackSpeed;
-		float duration = GetAnimationDuration(animatedMesh, animatedMesh.currentAnimation);
-        if (animatedMesh.animationTime > duration)
+
+		// Update the lower body animation time
+		UpdateLayerTime(animatedMesh, animatedMesh.lowerBodyLayer, dt, animatedMesh.playbackSpeed);
+        if (animatedMesh.lowerBodyLayer.currentAnimationTime >= GetAnimationDuration(animatedMesh, animatedMesh.lowerBodyLayer.currentAnimation))
+			PlayAnim(animatedMesh, "Idle", 0.2f); // SETTING TO IDLE IF ANIMATION ENDS
+
+        // Update the upper body animation time if active
+        if (animatedMesh.isUpperlayerActive)
         {
-            if (animatedMesh.isLooping)
-                animatedMesh.animationTime = fmod(animatedMesh.animationTime, duration);
-            else
-				Stop(animatedMesh);
-        }
+            UpdateLayerTime(animatedMesh, animatedMesh.upperBodyLayer, dt, animatedMesh.playbackSpeed);
 
-        // Blending time update
-        if (animatedMesh.isBlending && animatedMesh.previousAnimation >= 0)
+            // If upper body animation has finished, blend back to lower body
+            if (animatedMesh.upperBodyLayer.currentAnimationTime >= GetAnimationDuration(animatedMesh, animatedMesh.upperBodyLayer.currentAnimation))
+                StopUpperBodyAnim(animatedMesh, 0.2f);
+        }
+			
+
+        // Update the bone mask weight
+		animatedMesh.upperBodyLayerWeight += (dt * animatedMesh.layerBlendDirection * animatedMesh.playbackSpeed) / animatedMesh.layerBlendDuration;
+        if (animatedMesh.upperBodyLayerWeight >= 1.0f)
         {
-			animatedMesh.blendTime += dt * animatedMesh.playbackSpeed;
-			animatedMesh.previousAnimationTime += dt * animatedMesh.playbackSpeed;
-
-            // COULD LOOP THE PREVIOUS ANIMATION, NEEDS A HELPER TO GET DURATION
-			float previousDuration = GetAnimationDuration(animatedMesh, animatedMesh.previousAnimation);
-            if (animatedMesh.isLooping && previousDuration > 0.0f)
-                animatedMesh.previousAnimationTime = fmod(animatedMesh.previousAnimationTime, previousDuration);
-            else if (animatedMesh.previousAnimationTime > previousDuration)
-				animatedMesh.previousAnimationTime = previousDuration;
-
-            animatedMesh.blendFactor = glm::clamp(animatedMesh.blendTime / animatedMesh.blendDuration, 0.f, 1.f);
-            if (animatedMesh.blendFactor >= 1.0f)
-            {
-                animatedMesh.blendFactor = 0.0f;
-				animatedMesh.previousAnimation = -1;
-                animatedMesh.isBlending = false;
-                
-			}
+            animatedMesh.upperBodyLayerWeight = 1.0f;
+            animatedMesh.layerBlendDirection = 0;
         }
+        else if (animatedMesh.upperBodyLayerWeight <= 0.0f)
+        {
+            animatedMesh.upperBodyLayerWeight = 0.0f;
+            animatedMesh.isUpperlayerActive = false;
+            animatedMesh.layerBlendDirection = 0;
+		}
 
-		// Vector of bone transforms for the current pose
+
+		// Initialising vectors of transforms for the poses
 		int animatedBoneCount = animatedMesh.joint_count;
-		std::vector<BoneTransform> currentPose(animatedBoneCount);
+		std::vector<BoneTransform> lowerBodyPose(animatedBoneCount);
 		std::vector<BoneTransform> finalPose(animatedBoneCount);
         
         // Fill with default values so should just not animate if broken, then interpolate pose
         for (int i = 0; i < animatedBoneCount; ++i)
         {
-            currentPose[i].translation = glm::vec3(asset->skins[0].bones[i].translation[0], asset->skins[0].bones[i].translation[1], asset->skins[0].bones[i].translation[2]);
-            currentPose[i].rotation = glm::quat(asset->skins[0].bones[i].rotation[3], asset->skins[0].bones[i].rotation[0], asset->skins[0].bones[i].rotation[1], asset->skins[0].bones[i].rotation[2]);
-            currentPose[i].scale = glm::vec3(1.0f);
+            lowerBodyPose[i].translation = glm::vec3(asset->skins[0].bones[i].translation[0], asset->skins[0].bones[i].translation[1], asset->skins[0].bones[i].translation[2]);
+            lowerBodyPose[i].rotation = glm::quat(asset->skins[0].bones[i].rotation[3], asset->skins[0].bones[i].rotation[0], asset->skins[0].bones[i].rotation[1], asset->skins[0].bones[i].rotation[2]);
+            lowerBodyPose[i].scale = glm::vec3(1.0f);
 		}
-        AnimationInterpolation(asset, animation, animatedMesh.animationTime, currentPose);
 
-        // Do the same if blending, but for the previous pose
-        if (animatedMesh.isBlending && animatedMesh.previousAnimation >= 0)
+        // Get the pose for the animation currently active for the lower body layer
+		CalculateLayerPose(asset, animatedMesh.lowerBodyLayer, lowerBodyPose);
+
+        if (animatedMesh.isUpperlayerActive)
         {
-            // Previous pose filled with defaults
-			std::vector<BoneTransform> previousPose(animatedBoneCount);
+            // Get the pose for the animation currently active for the upper body layer
+			std::vector<BoneTransform> upperBodyPose = lowerBodyPose; // Just for correct size and some default values
+			CalculateLayerPose(asset, animatedMesh.upperBodyLayer, upperBodyPose);
+
+			// Overlay the upper body pose on top of the lower body pose using the bone mask and weight
             for (int i = 0; i < animatedBoneCount; ++i)
             {
-                previousPose[i].translation = currentPose[i].translation;
-                previousPose[i].rotation = currentPose[i].rotation;
-                previousPose[i].scale = currentPose[i].scale;
+                float maskValue = animatedMesh.boneMask[i] * animatedMesh.upperBodyLayerWeight;
+                if (maskValue > 0.0f)
+                {
+                    finalPose[i].translation = glm::mix(lowerBodyPose[i].translation, upperBodyPose[i].translation, maskValue);
+                    finalPose[i].rotation = glm::slerp(lowerBodyPose[i].rotation, upperBodyPose[i].rotation, maskValue);
+                    finalPose[i].scale = glm::mix(lowerBodyPose[i].scale, upperBodyPose[i].scale, maskValue);
+                }
             }
-
-			// Interpolate for the previous pose
-			AnimationInterpolation(asset, asset->animations[animatedMesh.previousAnimation], animatedMesh.previousAnimationTime, previousPose);
-
-            // Blend the transforms
-			BlendPoses(previousPose, currentPose, animatedMesh.blendFactor, finalPose);
         }
         else
-			finalPose = currentPose;
+			finalPose = lowerBodyPose;
+
 
         // Create vector of local joint matrices
 		std::vector<glm::mat4> localJointMatrices(animatedBoneCount);
@@ -101,6 +100,7 @@ void Animation_Update(AdvEng::ECS* ecs, float dt)
             glm::mat4 scaleMatrix = glm::scale(glm::mat4(1.0f), finalPose[i].scale);
             localJointMatrices[i] = translationMatrix * rotationMatrix * scaleMatrix;
 		}
+
 
         // Initialise world joint matrices with identity matrices
 		std::vector<glm::mat4> worldJointMatrices(animatedBoneCount, glm::mat4(1.0f));
@@ -121,84 +121,114 @@ void Animation_Update(AdvEng::ECS* ecs, float dt)
     });
 }
 
+
+
 // animation control
-void Start(C_AnimatedMesh& animatedMesh, const char* name) // by name
+void OnStartAnim(C_AnimatedMesh& animatedMesh, const char* animationName)
 {
+	// Check asset and animation index are valid, then start the animation on the lower body layer with no blending
     if (!animatedMesh.asset)
+        return;
+
+	int animationId = GetAnimationIdFromName(animatedMesh, animationName);
+    if (animationId == -1)
 		return;
 
-	// Find the animation with the given name and start it
-    for (size_t i = 0; i < animatedMesh.asset->animation_count; ++i)
-    {
-        if (strcmp(animatedMesh.asset->animations[i].name, name) == 0)
-			Start(animatedMesh, (int)i);
-	}   
+    animatedMesh.lowerBodyLayer.currentAnimation = animationId;
+    animatedMesh.lowerBodyLayer.currentAnimationTime = 0.0f;
+    animatedMesh.lowerBodyLayer.isCurrentLooping = true;
+    animatedMesh.isPlaying = true;
+	animatedMesh.playbackSpeed = 1.0f;
 }
 
-void Start(C_AnimatedMesh& animatedMesh, int id) // by index
-{ 
-	// Check asset and animation index are valid, then start the animation
-    if (!animatedMesh.asset || id < 0 || id >= animatedMesh.asset->animation_count)
-        return;
-
-	animatedMesh.currentAnimation = id;
-	animatedMesh.animationTime = 0.0f;
-	animatedMesh.isPlaying = true; 
-}
-
-void Stop(C_AnimatedMesh& animatedMesh) 
-{ 
-	animatedMesh.isPlaying = false;
-}
-
-
-// blending control
-void Blend(C_AnimatedMesh& animatedMesh, const char* name, float blendDuration)
+void PlayAnim(C_AnimatedMesh& animatedMesh, const char* animationName, float blendDuration)
 {
-    if (!animatedMesh.asset)
+    // Blends from the current lower body animation to the given one
+    int animationId = GetAnimationIdFromName(animatedMesh, animationName);
+	if (animationId == -1)
         return;
 
-    // Find the animation with the given name and blend to it
-    for (size_t i = 0; i < animatedMesh.asset->animation_count; ++i)
-    {
-        if (strcmp(animatedMesh.asset->animations[i].name, name) == 0)
-            Blend(animatedMesh, (int)i, blendDuration);
-    }   
+    animatedMesh.lowerBodyLayer.isBlending = true;
+	animatedMesh.lowerBodyLayer.previousAnimation = animatedMesh.lowerBodyLayer.currentAnimation;
+    animatedMesh.lowerBodyLayer.previousAnimationTime = animatedMesh.lowerBodyLayer.currentAnimationTime;
+    animatedMesh.lowerBodyLayer.currentAnimation = animationId;
+    animatedMesh.lowerBodyLayer.currentAnimationTime = 0.0f;
+    animatedMesh.lowerBodyLayer.isPreviousLooping = animatedMesh.lowerBodyLayer.isCurrentLooping;
+    animatedMesh.lowerBodyLayer.blendDuration = blendDuration;
+	animatedMesh.lowerBodyLayer.blendTime = 0.0f;
 }
 
-void Blend(C_AnimatedMesh& animatedMesh, int id, float blendDuration)
+void PlayUpperBodyAnim(C_AnimatedMesh& animatedMesh, const char* animationName, float blendDuration)
 {
-	// Check asset and animation index are valid, then start blending to the new animation
-    if (!animatedMesh.asset || id < 0 || id >= animatedMesh.asset->animation_count)
+    // Blends from either lower body or current upper body to the given one
+    int animationId = GetAnimationIdFromName(animatedMesh, animationName);
+    if (animationId == -1)
         return;
 
-    animatedMesh.isBlending = true;
-    animatedMesh.previousAnimation = animatedMesh.currentAnimation;
-    animatedMesh.previousAnimationTime = animatedMesh.animationTime;
+    // Creates bone mask if one doesnt currently exist
+    if (animatedMesh.boneMask.empty())
+        CreateUpperBodyLayer(animatedMesh, "Spine"); // ASSUMES "Spine" IS SPLIT JOINT
 
-    animatedMesh.currentAnimation = id;
-    animatedMesh.animationTime = 0.0f;
-    animatedMesh.blendDuration = blendDuration;
-    animatedMesh.blendFactor = 0.0f;
-    animatedMesh.blendTime = 0.0f;
+    // Check if upper body is playing, if not blend from lower body
+    if (!animatedMesh.isUpperlayerActive)
+    {
+        animatedMesh.isUpperlayerActive = true;
+        animatedMesh.upperBodyLayer.currentAnimation = animationId;
+        animatedMesh.upperBodyLayer.currentAnimationTime = 0.0f;
+        animatedMesh.layerBlendDirection = 1;
+        animatedMesh.layerBlendDuration = blendDuration;
+    }
+	// If upper body is already active, blend from current upper body to the new animation
+    else
+    {
+        animatedMesh.upperBodyLayer.isBlending = true;
+        animatedMesh.upperBodyLayer.previousAnimation = animatedMesh.upperBodyLayer.currentAnimation;
+        animatedMesh.upperBodyLayer.previousAnimationTime = animatedMesh.upperBodyLayer.currentAnimationTime;
+        animatedMesh.upperBodyLayer.currentAnimation = animationId;
+        animatedMesh.upperBodyLayer.currentAnimationTime = 0.0f;
+        animatedMesh.upperBodyLayer.isPreviousLooping = animatedMesh.upperBodyLayer.isCurrentLooping;
+        animatedMesh.upperBodyLayer.blendDuration = blendDuration;
+        animatedMesh.upperBodyLayer.blendTime = 0.0f;
+    }
+}
+
+void StopUpperBodyAnim(C_AnimatedMesh& animatedMesh, float blendDuration)
+{
+    // Blends from current upper body to lower body
+    if (!animatedMesh.isUpperlayerActive)
+        return;
+
+	animatedMesh.layerBlendDirection = -1;
+	animatedMesh.layerBlendDuration = blendDuration;
+}
+
+void PlayFullBodyAnim(C_AnimatedMesh& animatedMesh, const char* animationName, float blendDuration)
+{
+    // Stops the current upper body animation and blends from lower body to the given one
+    int animationId = GetAnimationIdFromName(animatedMesh, animationName);
+    if (animationId == -1)
+        return;
+    
+	StopUpperBodyAnim(animatedMesh, blendDuration);
+	PlayAnim(animatedMesh, animationName, blendDuration);
 }
 
 
 
 // settings
-void SetLooping(C_AnimatedMesh& animatedMesh, bool looping) 
+void SetLooping(C_AnimatedMesh& animatedMesh, AnimationLayer& layer, bool looping)
 { 
-    animatedMesh.isLooping = looping; 
+    layer.isCurrentLooping = looping; 
 } 
 
 
 
 // state checks
-bool IsRunning(const C_AnimatedMesh& animatedMesh) 
+bool IsRunning(const C_AnimatedMesh& animatedMesh, const AnimationLayer& layer) 
 { 
-    if (!animatedMesh.isPlaying || animatedMesh.animationTime > GetAnimationDuration(animatedMesh, animatedMesh.currentAnimation))
-		return false;
-    return true; 
+	if (layer.currentAnimation < 0 || layer.currentAnimation >= animatedMesh.asset->animation_count)
+        return false;
+	return true;
 }
 
 
@@ -206,14 +236,13 @@ bool IsRunning(const C_AnimatedMesh& animatedMesh)
 // getters
 float GetAnimationDuration(const C_AnimatedMesh& animatedMesh, int animationIndex)
 {
-    // Making sure an existing animation is playing
-    if (animatedMesh.currentAnimation < 0 || animatedMesh.currentAnimation >= animatedMesh.asset->animation_count)
+    // Check if the animation is valid
+    if (animationIndex < 0 || animationIndex >= animatedMesh.asset->animation_count)
         return 0.0f;
-
     Animation& animation = animatedMesh.asset->animations[animationIndex];
-    float duration = 0.0f;
 
     // Loop through all samplers to find the max timestamp, aka the duration
+    float duration = 0.0f;
     for (size_t i = 0; i < animation.sampler_count; ++i)
     {
         if (animation.samplers[i].inputs[animation.samplers[i].input_count - 1] > duration)
@@ -222,6 +251,17 @@ float GetAnimationDuration(const C_AnimatedMesh& animatedMesh, int animationInde
 
     return duration;
 } // Get last keyframe of the current animation and return the timestamp
+
+int GetAnimationIdFromName(const C_AnimatedMesh& animatedMesh, const char* animationName)
+{
+    // Find the id of an animation, return -1 if not found
+    for (int i = 0; i < animatedMesh.asset->animation_count; ++i)
+    {
+        if (strcmp(animatedMesh.asset->animations[i].name, animationName) == 0)
+            return i;
+	}
+    return -1;
+}
 
 
 
@@ -233,6 +273,58 @@ int find_bone_index(Skin* skin, int target_node_index) {
         }
     }
     return -1;
+}
+
+void UpdateLayerTime(C_AnimatedMesh& animatedMesh, AnimationLayer& layer, float dt, float playbackSpeed)
+{
+	// Update the current animation time
+    layer.currentAnimationTime += dt * playbackSpeed;
+	float duration = GetAnimationDuration(animatedMesh, layer.currentAnimation);
+    if (layer.currentAnimationTime > duration)
+    {
+        if (layer.isCurrentLooping)
+            layer.currentAnimationTime = fmod(layer.currentAnimationTime, duration);
+        else
+			layer.currentAnimationTime = duration; // Clamp to end of animation if not looping
+    }
+
+	// Update previous animation time and blending time if blending
+    if (layer.isBlending && layer.previousAnimation >= 0)
+    {
+		layer.blendTime += dt * playbackSpeed;
+		layer.previousAnimationTime += dt * playbackSpeed;
+		duration = GetAnimationDuration(animatedMesh, layer.previousAnimation);
+        if (layer.previousAnimationTime > duration)
+        {
+            if (layer.isPreviousLooping)
+                layer.previousAnimationTime = fmod(layer.previousAnimationTime, duration);
+            else
+                layer.previousAnimationTime = duration; // Clamp to end of animation if not looping
+        }
+
+        float blendFactor = glm::clamp(layer.blendTime / layer.blendDuration, 0.f, 1.f);
+        if (blendFactor >= 1.0f)
+        {
+            layer.blendTime = 0.0f;
+            layer.previousAnimation = -1;
+            layer.isBlending = false;
+        }
+    }
+}
+
+void CalculateLayerPose(Asset* asset, AnimationLayer& layer, std::vector<BoneTransform>& currentPose)
+{
+    // Sample and interpolate animation for the current pose
+    AnimationInterpolation(asset, asset->animations[layer.currentAnimation], layer.currentAnimationTime, currentPose);
+
+	// If blending, also sample the previous animation and blend the two poses together
+    if (layer.isBlending && layer.previousAnimation >= 0)
+    {
+        std::vector<BoneTransform> previousPose = currentPose; // Just for default values
+        AnimationInterpolation(asset, asset->animations[layer.previousAnimation], layer.previousAnimationTime, previousPose);
+		float blendFactor = glm::clamp(layer.blendTime / layer.blendDuration, 0.f, 1.f);
+        BlendPoses(previousPose, currentPose, blendFactor, currentPose);
+	}
 }
 
 void CalculateWorldMatrices(Asset* asset, int boneIndex, glm::mat4 parentMatrix, const std::vector<glm::mat4>& localJointMatrices, std::vector<glm::mat4>& worldJointMatrices)
@@ -300,10 +392,47 @@ void AnimationInterpolation(Asset* asset, Animation& animation, float animationT
 
 void BlendPoses(const std::vector<BoneTransform>& poseA, const std::vector<BoneTransform>& poseB, float blendFactor, std::vector<BoneTransform>& blendedPose)
 {
+    // Just blend em together
     for (size_t i = 0; i < poseA.size(); ++i)
     {
         blendedPose[i].translation = glm::mix(poseA[i].translation, poseB[i].translation, blendFactor);
         blendedPose[i].rotation = glm::slerp(poseA[i].rotation, poseB[i].rotation, blendFactor);
         blendedPose[i].scale = glm::mix(poseA[i].scale, poseB[i].scale, blendFactor);
+    }
+}
+
+
+
+// layered animation
+void SetBoneMask(C_AnimatedMesh& animatedMesh, int boneIndex)
+{
+    // This bone is fully in the layer
+	animatedMesh.boneMask[boneIndex] = 1.0f;
+
+    // Recursively set all the children bones in the mask
+    for (size_t i = 0; i < animatedMesh.asset->skins[0].bones[boneIndex].child_count; ++i)
+		SetBoneMask(animatedMesh, animatedMesh.asset->skins[0].bones[boneIndex].children_indices[i]);
+}
+
+void CreateUpperBodyLayer(C_AnimatedMesh& animatedMesh, const char* splitJointName)
+{
+	// Initialise bone mask with 0s, then find the index of the joint splitting upper/lower body
+	animatedMesh.boneMask.assign(animatedMesh.joint_count, 0.0f);
+
+    int splitJointIndex = -1;
+    for (size_t i = 0; i < animatedMesh.asset->skins[0].joint_count; ++i)
+    {
+        if (strcmp(animatedMesh.asset->skins[0].bones[i].name, splitJointName) == 0)
+        {
+            splitJointIndex = (int)i;
+            break;
+        }
+	}
+
+    // If the split joint is found, all its children will be upper body, so set all mask values to 1
+    if (splitJointIndex != -1)
+    {
+        animatedMesh.boneMask[splitJointIndex] = 0.5f;
+		SetBoneMask(animatedMesh, splitJointIndex);
     }
 }

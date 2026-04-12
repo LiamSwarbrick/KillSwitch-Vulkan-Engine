@@ -148,12 +148,7 @@ bool Scene::LoadAsset(const char* fileName)
                     asset
                 };
                 animMesh.joint_count = joint_count;
-                animMesh.currentAnimation = 0;
-                animMesh.animationTime = 0.0f;
-                animMesh.playbackSpeed = 1.0f;
-                animMesh.isPlaying = true;
-                animMesh.isLooping = true;
-				animMesh.isBlending = false;
+				OnStartAnim(animMesh, "walk"); // Start with walk animation by default
 
                 if (joint_count > 0) {
                     animMesh.joint_matrices = (glm::mat4*)malloc(joint_count * sizeof(glm::mat4));

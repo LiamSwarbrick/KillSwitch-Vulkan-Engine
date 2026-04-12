@@ -21,6 +21,20 @@ struct C_StaticMesh
     MeshPrefab renderer_prefab;  // Loaded by renderer (empty before that)
 };
 
+
+// stores layer animation state
+struct AnimationLayer {
+	bool isPreviousLooping = false;
+	bool isCurrentLooping = false;
+	int currentAnimation = -1;
+	int previousAnimation = -1;
+	float currentAnimationTime = 0.0f;
+	float previousAnimationTime = 0.0f;
+	float blendTime = 0.0f;
+	float blendDuration = 0.0f;
+	bool isBlending = false;
+};
+
 struct C_AnimatedMesh
 {
     Mesh* mesh;             
@@ -28,19 +42,19 @@ struct C_AnimatedMesh
     MeshPrefab renderer_prefab;
 
     // animator states
-    int currentAnimation;
-    float animationTime;
     bool isPlaying;
-    bool isLooping;
     float playbackSpeed;
 
-    // blending states
-    bool isBlending;
-    int previousAnimation;
-	float previousAnimationTime;
-	float blendDuration;
-	float blendFactor;
-	float blendTime;
+    // NEW LAYER STRUCTS
+    AnimationLayer lowerBodyLayer;
+	AnimationLayer upperBodyLayer;
+
+    // layer data
+	bool isUpperlayerActive = false;
+	float upperBodyLayerWeight = 0.0f;
+    std::vector<float> boneMask;
+	float layerBlendDuration = 0.0f;
+	int layerBlendDirection = 1; // 1 for blending to upper body, -1 for blending back to lower body
 
 	// skeletal animation data
     uint32_t joint_count;
