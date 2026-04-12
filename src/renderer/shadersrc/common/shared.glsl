@@ -25,11 +25,12 @@
 #include "shared_push_constants.glsl"
 #include "sampler_indices.glsl"
 
-#ifdef IS_GLSL
+// Include vertex fetch for vertex shaders and material read for frag shader
+// #ifdef IS_GLSL
 
-    #include "shared_vertex_fetch.glsl"
-    #include "shared_material_read.glsl"
+//     #include "shared_vertex_fetch.glsl"
+//     #include "shared_material_read.glsl"
 
-#endif
+// #endif
 
 #endif  // SHADERSRC_SHARED_GLSL

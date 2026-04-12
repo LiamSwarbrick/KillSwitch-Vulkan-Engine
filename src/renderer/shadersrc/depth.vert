@@ -1,6 +1,7 @@
 #version 460
 #extension GL_GOOGLE_include_directive : require
 #include "common/shared.glsl"
+#include "common/shared_vertex_fetch.glsl"
 
 layout (location = 0) out vec2 frag_uv;
 

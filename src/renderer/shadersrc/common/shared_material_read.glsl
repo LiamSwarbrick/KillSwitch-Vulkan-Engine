@@ -28,6 +28,12 @@ float process_alpha(float alpha, float cutoff)
 {
     if (CURRENT_BLEND_MODE == BLEND_MODE_MASKED)
     {
+        if (MSAA_SAMPLE_COUNT > 1)
+        {
+            // Sharpen for Alpha to Coverage (source: https://bgolus.medium.com/anti-aliased-alpha-test-the-esoteric-alpha-to-coverage-8b177335ae4f)
+            alpha = (alpha - cutoff) / max(fwidth(alpha), 0.0001) + 0.5;
+        }
+
         if (alpha < cutoff)
         {
             discard;

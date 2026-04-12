@@ -1,6 +1,7 @@
 #version 460
 #extension GL_GOOGLE_include_directive : require
 #include "common/shared.glsl"
+#include "common/shared_material_read.glsl"
 
 layout (location = 0) in vec2 frag_uv;
 layout (location = 1) in vec3 frag_vcolor;
