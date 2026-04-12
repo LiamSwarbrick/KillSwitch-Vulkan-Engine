@@ -15,14 +15,9 @@ void main()
     sample_material_basic(frag_uv, mat, base_color);
 
     vec4 final_color = vec4(frag_vcolor, 1.0) * base_color;
-    if (CURRENT_BLEND_MODE == BLEND_MODE_MASKED)
-    {
-        // Alpha masking
-        if (final_color.a < mat.alpha_cutoff)
-        {
-            discard;
-        }
-    }
 
-    out_color = final_color;
+    out_color = vec4(
+        final_color.rgb,
+        process_alpha(final_color.a, mat.alpha_cutoff)
+    );
 }

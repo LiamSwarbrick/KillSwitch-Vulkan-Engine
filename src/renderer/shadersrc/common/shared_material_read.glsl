@@ -24,4 +24,17 @@ void sample_material_basic(
     }
 }
 
+float process_alpha(float alpha, float cutoff)
+{
+    if (CURRENT_BLEND_MODE == BLEND_MODE_MASKED)
+    {
+        if (alpha < cutoff)
+        {
+            discard;
+        }
+    }
+
+    return alpha;
+}
+
 #endif  // SHADERSRC_SHARED_MATERIAL_READ_GLSL

@@ -45,10 +45,12 @@ void EndDrawCalls();
 // So call this function within the renderpass execute callback
 void UpdateGlobalSceneData(SceneData data);
 
+typedef int (*DrawPrimSortFunc)(const void*, const void*);
+int DrawPrimSortFunc_Default(const void* a, const void* b);
+
 void ResetDrawArena();
 void PushDrawPrimitive(DrawCall dc, PipelineKey pipeline_key, uint32_t prim_idx, uint32_t sort_key);
-#warning TODO: SortDraws()
-// void SortDraws(DrawPrimSortFunc sort_func);
+void SortDraws(DrawPrimSortFunc sort_func);
 void ExecuteDraws(VkCommandBuffer cmd, PushConstant_PassHeader push_pass);
 
 void ExecuteFullscreenPass(VkCommandBuffer cmd, uint32_t shader_id, PipelineKey key, PushConstant_PassHeader push_pass);

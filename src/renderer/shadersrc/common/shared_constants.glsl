@@ -6,8 +6,19 @@
     // Shader specialization constants
     layout (constant_id = 0) const uint CURRENT_VERTEX_TYPE = 0;
     layout (constant_id = 1) const uint CURRENT_BLEND_MODE  = 0;
+    layout (constant_id = 2) const uint MSAA_SAMPLE_COUNT   = 1;
 
     #define UINT32_MAX 0xFFFFFFFF
+
+#else
+
+    typedef struct SpecializationData
+    {
+        uint32_t vertex_type;
+        uint32_t blend_mode;
+        uint32_t msaa_sample_count;
+    }
+    SpecializationData;
 
 #endif  // IS_GLSL
 

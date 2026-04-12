@@ -69,9 +69,9 @@ void AddDrawCall(Renderable* r)
     
     const MaterialPipelineInfo* const shaders_for_material = &g_material_configs.array[r->mesh_prefab.mat_type];
 
-    // Submit draw with depth prepass
-    // TODO: Should I ALWAYS be depth prepassing? It may break under some materials that displace vertices in the vertex shader
+    // Submit draw with depth prepasss
     {
+        // TODO: Should I ALWAYS be depth prepassing? It may break under some materials that displace vertices in the vertex shader
         uint32_t shader_id = SHADER_DEPTH;
         uint32_t* shader_drawcall_count = &renderstate.drawcalls_collection.array[shader_id].drawcall_count;
 
@@ -168,8 +168,32 @@ void PushDrawPrimitive(DrawCall dc, PipelineKey pipeline_key, uint32_t prim_idx,
     };
 }
 
-// Maybe this is just a wrapper around qsort
-// void SortDraws(DrawPrimSortFunc)
+int DrawPrimSortFunc_Default(const void* a, const void* b)
+{
+    const DrawPrimitive* prim_a = (const DrawPrimitive*)a;
+    const DrawPrimitive* prim_b = (const DrawPrimitive*)b;
+    // First sorting by pipeline key because changing pipelines is expensive
+    if (prim_a->pipeline_key.value > prim_b->pipeline_key.value)
+    {
+        return 1;
+    }
+    else if (prim_a->pipeline_key.value < prim_b->pipeline_key.value)
+    {
+        return -1;
+    }
+    else
+    {
+        // TODO: Sort by quantized depth too.
+        // And maybe some passes will want to prioritize depth over pipeline key
+        // And others may want to only do alpha masked geometry last, etc.
+        return 0;
+    }
+}
+
+void SortDraws(DrawPrimSortFunc sort_func)
+{
+    qsort(loaded_draws, num_loaded_draws, sizeof(DrawPrimitive), sort_func);
+}
 
 void ExecuteDraws(VkCommandBuffer cmd, PushConstant_PassHeader push_pass)
 {

@@ -26,7 +26,11 @@ void DepthPrepass_Execute(VkCommandBuffer cmd, RenderPassDesc* desc)
         {
             PrimitiveRIDs* prim = &drawcall.renderable->mesh_prefab.mesh_rids.primitives[p];
             MaterialData* mat = &((MaterialData*)renderstate.mapped_material_data.mapped_data)[prim->material_index];
-        
+
+            // Skip alpha blend or masked geometry (masked skipped because of Alpha2Coverage)
+            if (mat->blend_mode != BLEND_MODE_BLEND)
+                continue;
+
             PipelineKey key = {
                 .pipeline_type  = PK_PIPELINE_TYPE_GRAPHICS,
                 .shader_id      = shader_id,
@@ -48,5 +52,6 @@ void DepthPrepass_Execute(VkCommandBuffer cmd, RenderPassDesc* desc)
         }
     }
 
+    SortDraws(DrawPrimSortFunc_Default);
     ExecuteDraws(cmd, push_pass);
 }

@@ -9,15 +9,12 @@ void main()
 {
     if (CURRENT_BLEND_MODE == BLEND_MODE_MASKED)
     {
-        // Alpha masking
+        // Alpha masking (ignore coverage in depth prepass)
         MaterialData mat;
         vec4 base_color;
 
         sample_material_basic(frag_uv, mat, base_color);
 
-        if (base_color.a < mat.alpha_cutoff)
-        {
-            discard;
-        }
+        process_alpha(base_color.a, mat.alpha_cutoff);
     }
 }

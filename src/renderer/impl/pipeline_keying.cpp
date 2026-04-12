@@ -98,13 +98,10 @@ VkPipeline create_graphics_pipeline(PipelineKey key)
     SDL_assert(shader_set->pipeline_type == PK_PIPELINE_TYPE_GRAPHICS);
 
     // Shader specialization constants
-    struct SpecializationData {
-        uint32_t vertex_type;
-        uint32_t blend_mode;
-    } spec_values;
-
+    SpecializationData spec_values = {};
     spec_values.vertex_type = key.vertex_type;
     spec_values.blend_mode = key.blend_mode;
+    spec_values.msaa_sample_count = renderstate.multisampling_count_flag;
 
     VkSpecializationMapEntry spec_entries[] = {
         { 0, offsetof(SpecializationData, vertex_type), sizeof(uint32_t) },
@@ -145,18 +142,6 @@ VkPipeline create_graphics_pipeline(PipelineKey key)
     raster_info.cullMode    = (VkCullModeFlags)key.cull_mode;
     raster_info.frontFace   = (VkFrontFace)key.front_face;
 
-    // Fixed-Function State (Multisampling)
-    VkPipelineMultisampleStateCreateInfo multisample_info = { .sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO };
-    switch (key.msaa_samples)
-    {
-        case (PKEY_MULTISAMPLING_1X): multisample_info.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT; break;
-        case (PKEY_MULTISAMPLING_2X): multisample_info.rasterizationSamples = VK_SAMPLE_COUNT_2_BIT; break;
-        case (PKEY_MULTISAMPLING_4X): multisample_info.rasterizationSamples = VK_SAMPLE_COUNT_4_BIT; break;
-        case (PKEY_MULTISAMPLING_8X): multisample_info.rasterizationSamples = VK_SAMPLE_COUNT_8_BIT; break;
-        default: SDL_assert(0);
-    }
-    // FUTURE: Implement MSAA with Specular AA if using shiny things
-
     // Fixed-Function State (Depth/Stencil)
     VkPipelineDepthStencilStateCreateInfo depth_info = { .sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO };
     depth_info.depthTestEnable   = (VkBool32)key.depth_test;
@@ -195,6 +180,25 @@ VkPipeline create_graphics_pipeline(PipelineKey key)
     }
     SDL_assert(color_attachment_count <= renderstate.physical_device_properties.limits.maxColorAttachments);
 
+    // Fixed-Function State (Multisampling)
+    VkPipelineMultisampleStateCreateInfo multisample_info = { .sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO };
+    switch (key.msaa_samples)
+    {
+        case (PKEY_MULTISAMPLING_1X): multisample_info.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT; break;
+        case (PKEY_MULTISAMPLING_2X): multisample_info.rasterizationSamples = VK_SAMPLE_COUNT_2_BIT; break;
+        case (PKEY_MULTISAMPLING_4X): multisample_info.rasterizationSamples = VK_SAMPLE_COUNT_4_BIT; break;
+        case (PKEY_MULTISAMPLING_8X): multisample_info.rasterizationSamples = VK_SAMPLE_COUNT_8_BIT; break;
+        default: SDL_assert(0);
+    }
+    if (key.msaa_samples && color_attachment_count > 0)
+    {
+        // Alpha to coverage for anti aliasing alpha masked geometry using multisampling
+        // TODO: Improve A2C with tricks from this: https://bgolus.medium.com/anti-aliased-alpha-test-the-esoteric-alpha-to-coverage-8b177335ae4f
+        // And mipmap should take this into account too (http://the-witness.net/news/2010/09/computing-alpha-mipmaps/?source=post_page-----8b177335ae4f---------------------------------------).
+        multisample_info.alphaToCoverageEnable = key.blend_mode == BLEND_MODE_MASKED;
+    }
+    // FUTURE: Implement MSAA with Specular AA if using shiny things
+    
     // Fixed-Function State (Blending)
     VkPipelineColorBlendAttachmentState color_blend_attachments[MAX_PASS_RESOURCE_BANDWIDTH] = {};
     for (uint32_t i = 0; i < color_attachment_count; ++i)

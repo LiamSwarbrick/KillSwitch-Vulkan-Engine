@@ -80,7 +80,7 @@ int main(int argc, char *argv[])
         .enable_validation = enabled_validation_layers,
         .preferred_initial_settings = {  // Will fallback if these aren't possible
             .uncapped_fps = 0,
-            .msaa_sample_count = 1,
+            .msaa_sample_count = 4,
             .fov_y = 90.0f
         }
     };

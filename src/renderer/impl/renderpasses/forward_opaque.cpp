@@ -36,8 +36,8 @@ void ForwardOpaque_Execute(VkCommandBuffer cmd, RenderPassDesc* desc)
                     .pass_type      = pass_type,
                     .vertex_type    = (uint64_t)drawcall.renderable->mesh_prefab.vertex_type,
                     .depth_test     = 1,
-                    .depth_write    = 0,  // <- Shouldn't need to depth write since opaque is covered by depth prepass
-                    .depth_op       = VK_COMPARE_OP_EQUAL,  // <- Equal prolly good bcuz of invariant gl_Position in shaders
+                    .depth_write    = 1,  // Still depth writing because of geometry not included in prepass
+                    .depth_op       = VK_COMPARE_OP_LESS_OR_EQUAL,  // <- Equal prolly good bcuz of invariant gl_Position in shaders
                     .stencil_mode   = 0,
                     .cull_mode      = VK_CULL_MODE_BACK_BIT,
                     .blend_mode     = mat->blend_mode,
@@ -52,5 +52,6 @@ void ForwardOpaque_Execute(VkCommandBuffer cmd, RenderPassDesc* desc)
         }
     }
 
+    SortDraws(DrawPrimSortFunc_Default);
     ExecuteDraws(cmd, push_pass);
 }
