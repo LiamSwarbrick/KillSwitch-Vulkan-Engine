@@ -151,6 +151,7 @@ bool Scene::LoadAsset(const char* fileName)
 				animMesh.idleAnimationName = "Idle";
                 animMesh.splitJointName = "Spine";
 				OnStartAnim(animMesh, animMesh.idleAnimationName); // Start with idle animation by default
+                
 
                 if (joint_count > 0) {
                     animMesh.joint_matrices = (glm::mat4*)malloc(joint_count * sizeof(glm::mat4));

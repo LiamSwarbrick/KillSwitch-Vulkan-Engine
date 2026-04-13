@@ -58,6 +58,12 @@ struct C_AnimatedMesh
 	float layerBlendDuration;
 	int layerBlendDirection; // 1 for blending to upper body, -1 for blending back to lower body
 
+	// aiming data
+	bool isAiming;
+	float aimYaw;
+	float aimPitch;
+	int spineIndices[3];
+
 	// skeletal animation data
     uint32_t joint_count;
     glm::mat4* joint_matrices;

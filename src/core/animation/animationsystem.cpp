@@ -92,6 +92,11 @@ void Animation_Update(AdvEng::ECS* ecs, float dt)
 			finalPose = lowerBodyPose;
 
 
+        // Aiming logic
+        if (animatedMesh.isAiming)
+			SetAimingRotations(animatedMesh, finalPose, animatedMesh.aimYaw, animatedMesh.aimPitch);
+
+
         // Create vector of local joint matrices
 		std::vector<glm::mat4> localJointMatrices(animatedBoneCount);
         for (int i = 0; i < animatedBoneCount; ++i)
@@ -107,7 +112,8 @@ void Animation_Update(AdvEng::ECS* ecs, float dt)
 		std::vector<glm::mat4> worldJointMatrices(animatedBoneCount, glm::mat4(1.0f));
         int rootBone = find_bone_index(&asset->skins[0], asset->skins[0].skeleton_root_node_index);
         auto& transform = ecs->GetComponent<C_Transform>(e);
-		CalculateWorldMatrices(asset, rootBone, transform.matrix, localJointMatrices, worldJointMatrices);
+        glm::mat4 standUpFix = glm::rotate(glm::mat4(1.0f), glm::radians(90.0f), glm::vec3(1, 0, 0)); // MIGHT WANT TO BE REMOVED/PERMANENT FIX
+		CalculateWorldMatrices(asset, rootBone, transform.matrix * standUpFix, localJointMatrices, worldJointMatrices);
 
 		// Make sure joint_matrices is allocated
         if (!animatedMesh.joint_matrices)
@@ -169,7 +175,7 @@ void PlayUpperBodyAnim(C_AnimatedMesh& animatedMesh, const char* animationName, 
 
     // Creates bone mask if one doesnt currently exist
     if (animatedMesh.boneMask.empty())
-        CreateUpperBodyLayer(animatedMesh, animatedMesh.splitJointName); // ASSUMES "Spine" IS SPLIT JOINT
+        CreateUpperBodyLayer(animatedMesh, animatedMesh.splitJointName);
 
     // Check if upper body is playing, if not blend from lower body
     if (!animatedMesh.isUpperLayerActive)
@@ -431,7 +437,7 @@ void CreateUpperBodyLayer(C_AnimatedMesh& animatedMesh, const char* splitJointNa
     int splitJointIndex = -1;
     for (size_t i = 0; i < animatedMesh.asset->skins[0].joint_count; ++i)
     {
-        if (strstr(animatedMesh.asset->skins[0].bones[i].name, animatedMesh.splitJointName) != nullptr)
+        if (strcmp(animatedMesh.asset->skins[0].bones[i].name, animatedMesh.splitJointName) == 0) // maybe use strcmp
         {
             splitJointIndex = (int)i;
             break;
@@ -443,5 +449,52 @@ void CreateUpperBodyLayer(C_AnimatedMesh& animatedMesh, const char* splitJointNa
     {
         animatedMesh.boneMask[splitJointIndex] = 0.5f;
 		SetBoneMask(animatedMesh, splitJointIndex);
+    }
+}
+
+
+
+// aiming control
+void FindUpperBodyBones(C_AnimatedMesh& animatedMesh)
+{
+    // Find the indices of the upper body (spine) bones for use in aiming
+    for (size_t i = 0; i < animatedMesh.asset->skins[0].joint_count; ++i)
+    {
+		if (strcmp(animatedMesh.asset->skins[0].bones[i].name, animatedMesh.splitJointName) == 0) // ASSUMING FIRST ONE IS SPLIT JOINT, maybe use strcmp
+            animatedMesh.spineIndices[0] = (int)i;
+    }
+
+    if (animatedMesh.asset->skins[0].bones[animatedMesh.spineIndices[0]].child_count > 0)
+    {
+        int childIndex = animatedMesh.asset->skins[0].bones[animatedMesh.spineIndices[0]].children_indices[0];
+        animatedMesh.spineIndices[1] = childIndex;
+        if (animatedMesh.spineIndices[1] != -1 && animatedMesh.asset->skins[0].bones[childIndex].child_count > 0)
+			animatedMesh.spineIndices[2] = animatedMesh.asset->skins[0].bones[childIndex].children_indices[0];
+	}
+}
+
+void SetAimingRotations(C_AnimatedMesh& animatedMesh, std::vector<BoneTransform>& pose, float yaw, float pitch)
+{
+	if (!animatedMesh.spineIndices[0] || !animatedMesh.spineIndices[1] || !animatedMesh.spineIndices[2])
+	    FindUpperBodyBones(animatedMesh);
+
+    // Clamp aiming angles to not distort character too much, and assign weights
+    float clampedYaw = glm::clamp(yaw, -60.0f, 60.0f);
+    float clampedPitch = glm::clamp(pitch, -60.0f, 40.0f);
+    animatedMesh.aimYaw = clampedYaw;
+    animatedMesh.aimPitch = clampedPitch;
+    float yawWeights[3] = { 0.2f, 0.3f, 0.5f };
+    float pitchWeights[3] = { 0.1f, 0.4f, 0.5f };
+
+    // For each spine bone, apply some of the rotation using the weights
+    for (int i = 0; i < 3; ++i)
+    {
+        int spineIndex = animatedMesh.spineIndices[i];
+        if (spineIndex >= 0 && spineIndex < animatedMesh.asset->skins[0].joint_count)
+        {
+            glm::quat yawRotation = glm::angleAxis(glm::radians(clampedYaw * yawWeights[i]), glm::vec3(0, 1, 0));
+            glm::quat pitchRotation = glm::angleAxis(glm::radians(clampedPitch * pitchWeights[i]), glm::vec3(1, 0, 0));
+            pose[spineIndex].rotation = pose[spineIndex].rotation * (yawRotation * pitchRotation);
+        }
     }
 }

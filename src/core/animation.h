@@ -43,5 +43,10 @@ void BlendPoses(const std::vector<BoneTransform>& poseA, const std::vector<BoneT
 void SetBoneMask(C_AnimatedMesh& animatedMesh, int boneIndex);
 void CreateUpperBodyLayer(C_AnimatedMesh& animatedMesh, const char* splitJointName);
 
+// lookat control
+void FindUpperBodyBones(C_AnimatedMesh& animatedMesh);
+void SetAimingRotations(C_AnimatedMesh& animatedMesh, std::vector<BoneTransform>& pose, float yaw, float pitch);
+
+
 
 #endif  // ANIMATION_H
