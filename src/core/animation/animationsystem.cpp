@@ -19,36 +19,35 @@ void Animation_Update(AdvEng::ECS* ecs, float dt)
          if (!animatedMesh.isPlaying || !asset || animatedMesh.lowerBodyLayer.currentAnimation < 0 || animatedMesh.lowerBodyLayer.currentAnimation >= asset->animation_count)
              return;
 
-        Animation& animation = asset->animations[animatedMesh.lowerBodyLayer.currentAnimation];
-
 
 		// Update the lower body animation time
 		UpdateLayerTime(animatedMesh, animatedMesh.lowerBodyLayer, dt, animatedMesh.playbackSpeed);
-        if (animatedMesh.lowerBodyLayer.currentAnimationTime >= GetAnimationDuration(animatedMesh, animatedMesh.lowerBodyLayer.currentAnimation))
-			PlayAnim(animatedMesh, "Idle", 0.2f); // SETTING TO IDLE IF ANIMATION ENDS
+        if (animatedMesh.lowerBodyLayer.currentAnimationTime >= GetAnimationDuration(animatedMesh, animatedMesh.lowerBodyLayer.currentAnimation) 
+            && strcmp(animatedMesh.idleAnimationName, asset->animations[animatedMesh.lowerBodyLayer.currentAnimation].name) != 0)
+			PlayAnim(animatedMesh, animatedMesh.idleAnimationName, 0.2f); // SETTING TO IDLE IF ANIMATION ENDS
 
         // Update the upper body animation time if active
-        if (animatedMesh.isUpperlayerActive)
+        if (animatedMesh.isUpperLayerActive)
         {
             UpdateLayerTime(animatedMesh, animatedMesh.upperBodyLayer, dt, animatedMesh.playbackSpeed);
 
             // If upper body animation has finished, blend back to lower body
-            if (animatedMesh.upperBodyLayer.currentAnimationTime >= GetAnimationDuration(animatedMesh, animatedMesh.upperBodyLayer.currentAnimation))
+            if (animatedMesh.upperBodyLayer.currentAnimationTime >= GetAnimationDuration(animatedMesh, animatedMesh.upperBodyLayer.currentAnimation) && animatedMesh.layerBlendDirection != -1.0f)
                 StopUpperBodyAnim(animatedMesh, 0.2f);
         }
 			
 
-        // Update the bone mask weight
-		animatedMesh.upperBodyLayerWeight += (dt * animatedMesh.layerBlendDirection * animatedMesh.playbackSpeed) / animatedMesh.layerBlendDuration;
+        // Update the bone mask weight, changing blend direction to 0 if finished blending
+		animatedMesh.upperBodyLayerWeight += (double)(dt * animatedMesh.layerBlendDirection * animatedMesh.playbackSpeed) / animatedMesh.layerBlendDuration;
         if (animatedMesh.upperBodyLayerWeight >= 1.0f)
         {
             animatedMesh.upperBodyLayerWeight = 1.0f;
             animatedMesh.layerBlendDirection = 0;
         }
-        else if (animatedMesh.upperBodyLayerWeight <= 0.0f)
+        else if (animatedMesh.upperBodyLayerWeight < 0.0f)
         {
             animatedMesh.upperBodyLayerWeight = 0.0f;
-            animatedMesh.isUpperlayerActive = false;
+            animatedMesh.isUpperLayerActive = false;
             animatedMesh.layerBlendDirection = 0;
 		}
 
@@ -58,7 +57,7 @@ void Animation_Update(AdvEng::ECS* ecs, float dt)
 		std::vector<BoneTransform> lowerBodyPose(animatedBoneCount);
 		std::vector<BoneTransform> finalPose(animatedBoneCount);
         
-        // Fill with default values so should just not animate if broken, then interpolate pose
+        // Fill with default values so should just not animate if broken
         for (int i = 0; i < animatedBoneCount; ++i)
         {
             lowerBodyPose[i].translation = glm::vec3(asset->skins[0].bones[i].translation[0], asset->skins[0].bones[i].translation[1], asset->skins[0].bones[i].translation[2]);
@@ -69,7 +68,7 @@ void Animation_Update(AdvEng::ECS* ecs, float dt)
         // Get the pose for the animation currently active for the lower body layer
 		CalculateLayerPose(asset, animatedMesh.lowerBodyLayer, lowerBodyPose);
 
-        if (animatedMesh.isUpperlayerActive)
+        if (animatedMesh.isUpperLayerActive)
         {
             // Get the pose for the animation currently active for the upper body layer
 			std::vector<BoneTransform> upperBodyPose = lowerBodyPose; // Just for correct size and some default values
@@ -85,6 +84,8 @@ void Animation_Update(AdvEng::ECS* ecs, float dt)
                     finalPose[i].rotation = glm::slerp(lowerBodyPose[i].rotation, upperBodyPose[i].rotation, maskValue);
                     finalPose[i].scale = glm::mix(lowerBodyPose[i].scale, upperBodyPose[i].scale, maskValue);
                 }
+                else
+					finalPose[i] = lowerBodyPose[i];
             }
         }
         else
@@ -148,6 +149,7 @@ void PlayAnim(C_AnimatedMesh& animatedMesh, const char* animationName, float ble
 	if (animationId == -1)
         return;
 
+	animatedMesh.lowerBodyLayer.isCurrentLooping = false;
     animatedMesh.lowerBodyLayer.isBlending = true;
 	animatedMesh.lowerBodyLayer.previousAnimation = animatedMesh.lowerBodyLayer.currentAnimation;
     animatedMesh.lowerBodyLayer.previousAnimationTime = animatedMesh.lowerBodyLayer.currentAnimationTime;
@@ -167,15 +169,16 @@ void PlayUpperBodyAnim(C_AnimatedMesh& animatedMesh, const char* animationName, 
 
     // Creates bone mask if one doesnt currently exist
     if (animatedMesh.boneMask.empty())
-        CreateUpperBodyLayer(animatedMesh, "Spine"); // ASSUMES "Spine" IS SPLIT JOINT
+        CreateUpperBodyLayer(animatedMesh, animatedMesh.splitJointName); // ASSUMES "Spine" IS SPLIT JOINT
 
     // Check if upper body is playing, if not blend from lower body
-    if (!animatedMesh.isUpperlayerActive)
+    if (!animatedMesh.isUpperLayerActive)
     {
-        animatedMesh.isUpperlayerActive = true;
+        animatedMesh.isUpperLayerActive = true;
+		animatedMesh.upperBodyLayerWeight = 0.0f;
         animatedMesh.upperBodyLayer.currentAnimation = animationId;
         animatedMesh.upperBodyLayer.currentAnimationTime = 0.0f;
-        animatedMesh.layerBlendDirection = 1;
+        animatedMesh.layerBlendDirection = 1.0f;
         animatedMesh.layerBlendDuration = blendDuration;
     }
 	// If upper body is already active, blend from current upper body to the new animation
@@ -192,13 +195,19 @@ void PlayUpperBodyAnim(C_AnimatedMesh& animatedMesh, const char* animationName, 
     }
 }
 
+void StopAnim(C_AnimatedMesh& animatedMesh, float blendDuration)
+{
+    // Just blend from current lower body to idle animation
+    PlayAnim(animatedMesh, animatedMesh.idleAnimationName, blendDuration);
+}
+
 void StopUpperBodyAnim(C_AnimatedMesh& animatedMesh, float blendDuration)
 {
     // Blends from current upper body to lower body
-    if (!animatedMesh.isUpperlayerActive)
+    if (!animatedMesh.isUpperLayerActive)
         return;
 
-	animatedMesh.layerBlendDirection = -1;
+	animatedMesh.layerBlendDirection = -1.0f;
 	animatedMesh.layerBlendDuration = blendDuration;
 }
 
@@ -422,7 +431,7 @@ void CreateUpperBodyLayer(C_AnimatedMesh& animatedMesh, const char* splitJointNa
     int splitJointIndex = -1;
     for (size_t i = 0; i < animatedMesh.asset->skins[0].joint_count; ++i)
     {
-        if (strcmp(animatedMesh.asset->skins[0].bones[i].name, splitJointName) == 0)
+        if (strstr(animatedMesh.asset->skins[0].bones[i].name, animatedMesh.splitJointName) != nullptr)
         {
             splitJointIndex = (int)i;
             break;

@@ -2,6 +2,7 @@
 #include "renderer/renderer.h"
 #include "foundations/scene.h"
 #include "core/components.h"
+#include "core/animation.h"
 
 // TODO: Implementation is exposed?
 #include "renderer/impl/debug_ui/debug_ui.h"
@@ -108,7 +109,7 @@ int main(int argc, char *argv[])
     // Testing Scene and ECS
     Scene scene{};
     Renderer_SetImGuiCallback(OnImGuiBuild, &scene);
-    scene.LoadLevel("assets/animations/cat.gltf");
+    scene.LoadLevel("assets/animations/SwatAnimsTrue.gltf");
     // scene.LoadLevel("assets/animations/Animationtest.gltf");
     // scene.LoadLevel("assets/levels/Untitled_skybox.gltf");
 
@@ -131,6 +132,63 @@ int main(int argc, char *argv[])
         while (SDL_PollEvent(&event))
         {
             if (event.type == SDL_EVENT_QUIT) running = false;
+
+
+            // Detect Key Presses for Animation Testing
+            if (event.type == SDL_EVENT_KEY_DOWN)
+            {
+                auto view = scene.GetECS().GetView<C_AnimatedMesh>();
+
+                view.ForEach([&](AdvEng::EntityID player, C_AnimatedMesh& anim)
+                {
+                    switch (event.key.scancode)
+                    {
+                    case SDL_SCANCODE_1:
+                        SDL_Log("Test: Blending to Idle");
+                        PlayAnim(anim, "Idle", 0.5f);
+                        break;
+
+                    case SDL_SCANCODE_2:
+                        SDL_Log("Test: Blending to Walk (loop on)");
+                        PlayAnim(anim, "Walk", 0.5f);
+                        SetLooping(anim, anim.lowerBodyLayer, true);
+                        break;
+
+                    case SDL_SCANCODE_3:
+                        SDL_Log("Test: Triggering Upper Body Reload (loop on)");
+                        PlayAnim(anim, "Reload", 0.3f);
+                        SetLooping(anim, anim.upperBodyLayer, true);
+                        break;
+
+                    case SDL_SCANCODE_4:
+                        SDL_Log("Test: Stopping Lower Body Action");
+                        StopAnim(anim, 0.5f);
+                        break;
+
+                    case SDL_SCANCODE_5:
+                        SDL_Log("Test: Stopping Upper Body Action");
+                        StopUpperBodyAnim(anim, 0.5f);
+                        break;
+
+                    case SDL_SCANCODE_6:
+                        SDL_Log("Test: Full Body Hit Reaction");
+                        PlayFullBodyAnim(anim, "Idle", 0.1f);
+                        break;
+
+                    case SDL_SCANCODE_7:
+                        SDL_Log("Test: Lower Looping Off");
+                        SetLooping(anim, anim.lowerBodyLayer, false);
+                        break;
+
+                    case SDL_SCANCODE_8:
+                        SDL_Log("Test: Upper Looping Off");
+                        SetLooping(anim, anim.upperBodyLayer, false);
+                        break;
+
+                    default: break;
+                    }
+                });
+            }
 
             Renderer_ListenToWindowEvent(event);
         }

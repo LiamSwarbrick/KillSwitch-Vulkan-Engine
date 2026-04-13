@@ -17,6 +17,7 @@ void Animation_Update(AdvEng::ECS* ecs, float dt);
 void OnStartAnim(C_AnimatedMesh& animatedMesh, const char* animationName); // Sets initial lower body animation with no blending
 void PlayAnim(C_AnimatedMesh& animatedMesh, const char* animationName, float blendDuration); // Blends from the current lower body animation to the given one
 void PlayUpperBodyAnim(C_AnimatedMesh& animatedMesh, const char* animationName, float blendDuration); // Blends from either lower body or current upper body to the given one
+void StopAnim(C_AnimatedMesh& animatedMesh, float blendDuration); // Just blends from current lower body to idle animation
 void StopUpperBodyAnim(C_AnimatedMesh& animatedMesh, float blendDuration); // Blends from current upper body to lower body
 void PlayFullBodyAnim(C_AnimatedMesh& animatedMesh, const char* animationName, float blendDuration); // Stops the current upper body animation and blends from lower body to the given one
 

@@ -44,17 +44,19 @@ struct C_AnimatedMesh
     // animator states
     bool isPlaying;
     float playbackSpeed;
+	char* idleAnimationName;
 
     // NEW LAYER STRUCTS
     AnimationLayer lowerBodyLayer;
 	AnimationLayer upperBodyLayer;
 
     // layer data
-	bool isUpperlayerActive = false;
-	float upperBodyLayerWeight = 0.0f;
+	char* splitJointName;
+	bool isUpperLayerActive = false;
+	double upperBodyLayerWeight;
     std::vector<float> boneMask;
-	float layerBlendDuration = 0.0f;
-	int layerBlendDirection = 1; // 1 for blending to upper body, -1 for blending back to lower body
+	float layerBlendDuration;
+	int layerBlendDirection; // 1 for blending to upper body, -1 for blending back to lower body
 
 	// skeletal animation data
     uint32_t joint_count;

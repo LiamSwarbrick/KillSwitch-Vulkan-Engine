@@ -148,7 +148,9 @@ bool Scene::LoadAsset(const char* fileName)
                     asset
                 };
                 animMesh.joint_count = joint_count;
-				OnStartAnim(animMesh, "walk"); // Start with walk animation by default
+				animMesh.idleAnimationName = "Idle";
+                animMesh.splitJointName = "Spine";
+				OnStartAnim(animMesh, animMesh.idleAnimationName); // Start with idle animation by default
 
                 if (joint_count > 0) {
                     animMesh.joint_matrices = (glm::mat4*)malloc(joint_count * sizeof(glm::mat4));
