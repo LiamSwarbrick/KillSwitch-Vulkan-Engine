@@ -134,7 +134,7 @@ int main(int argc, char *argv[])
             if (event.type == SDL_EVENT_QUIT) running = false;
 
 
-            // Detect Key Presses for Animation Testing
+            // Animation Testing
             if (event.type == SDL_EVENT_KEY_DOWN)
             {
                 auto view = scene.GetECS().GetView<C_AnimatedMesh>();
@@ -156,7 +156,7 @@ int main(int argc, char *argv[])
 
                     case SDL_SCANCODE_3:
                         SDL_Log("Test: Triggering Upper Body Reload (loop on)");
-                        PlayAnim(anim, "Reload", 0.3f);
+                        PlayUpperBodyAnim(anim, "Reload", 0.3f);
                         SetLooping(anim, anim.upperBodyLayer, true);
                         break;
 
