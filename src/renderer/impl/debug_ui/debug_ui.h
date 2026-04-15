@@ -103,7 +103,6 @@ namespace DebugUI
         ImGui::SetNextWindowSize(ImVec2(900, 600), ImGuiCond_FirstUseEver);
         if (ImGui::Begin("Framegraph", &state.show_framegraph))
         {
-            #warning NOTE(Liam), See warnings in debug_ui. Commenting out node editor until Nansong sends his working build of it to the repo.
             state.fg_viz.Draw();
         }
         ImGui::End();

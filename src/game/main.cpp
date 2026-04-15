@@ -130,11 +130,10 @@ int main(int argc, char *argv[])
 
     // Testing Scene and ECS
     Scene scene{};
-    scene.LoadLevel("assets/animations/SwatAnimsTrue.gltf");
-    // scene.LoadLevel("assets/animations/cat.gltf");
+    // scene.LoadLevel("assets/animations/SwatAnimsTrue.gltf");
+    scene.LoadLevel("assets/animations/cat.gltf");
     // scene.LoadLevel("assets/animations/Animationtest.gltf");
     // scene.LoadLevel("assets/levels/Untitled_skybox.gltf");
-
 
     bool running = true;
 
@@ -155,7 +154,8 @@ int main(int argc, char *argv[])
         {
             if (event.type == SDL_EVENT_QUIT) running = false;
             Renderer_ListenToWindowEvent(event);
-
+        }
+#if 0
             // Animation Testing, can be removed whenever
             if (event.type == SDL_EVENT_KEY_DOWN)
             {
@@ -248,6 +248,7 @@ int main(int argc, char *argv[])
             }
             });
 
+#endif
 
         // Game ticks
         scene.Update(dt);
