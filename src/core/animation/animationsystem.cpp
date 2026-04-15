@@ -16,91 +16,104 @@ void Animation_Update(ECS* ecs, float dt)
             return;
 
         // Skip if no animation is playing, asset is missing or animation is invalid
-         if (!animatedMesh.isPlaying || !asset || animatedMesh.currentAnimation < 0)
+         if (!animatedMesh.isPlaying || !asset || animatedMesh.lowerBodyLayer.currentAnimation < 0 || animatedMesh.lowerBodyLayer.currentAnimation >= asset->animation_count)
              return;
 
-        Animation& animation = asset->animations[animatedMesh.currentAnimation];
 
-		// Update the animation time
-        animatedMesh.animationTime += dt;
-        if (animatedMesh.isLooping && GetDuration(animatedMesh) > 0.0f)
-            animatedMesh.animationTime = fmod(animatedMesh.animationTime, GetDuration(animatedMesh));
-		else if (animatedMesh.animationTime > GetDuration(animatedMesh))
-			Stop(animatedMesh);
+		// Update the lower body animation time
+		UpdateLayerTime(animatedMesh, animatedMesh.lowerBodyLayer, dt, animatedMesh.playbackSpeed);
+        if (animatedMesh.lowerBodyLayer.currentAnimationTime >= GetAnimationDuration(animatedMesh, animatedMesh.lowerBodyLayer.currentAnimation) 
+            && strcmp(animatedMesh.idleAnimationName, asset->animations[animatedMesh.lowerBodyLayer.currentAnimation].name) != 0)
+			PlayAnim(animatedMesh, animatedMesh.idleAnimationName, 0.2f); // SETTING TO IDLE IF ANIMATION ENDS
 
-		// Vectors to store the interpolated transformations for each channel
-        // PUT THESE IN THE COMPONENT WHEN BLENDING
+        // Update the upper body animation time if active
+        if (animatedMesh.isUpperLayerActive)
+        {
+            UpdateLayerTime(animatedMesh, animatedMesh.upperBodyLayer, dt, animatedMesh.playbackSpeed);
+
+            // If upper body animation has finished, blend back to lower body
+            if (animatedMesh.upperBodyLayer.currentAnimationTime >= GetAnimationDuration(animatedMesh, animatedMesh.upperBodyLayer.currentAnimation) && animatedMesh.layerBlendDirection != -1.0f)
+                StopUpperBodyAnim(animatedMesh, 0.2f);
+        }
+			
+
+        // Update the bone mask weight, changing blend direction to 0 if finished blending
+		animatedMesh.upperBodyLayerWeight += (double)(dt * animatedMesh.layerBlendDirection * animatedMesh.playbackSpeed) / animatedMesh.layerBlendDuration;
+        if (animatedMesh.upperBodyLayerWeight >= 1.0f)
+        {
+            animatedMesh.upperBodyLayerWeight = 1.0f;
+            animatedMesh.layerBlendDirection = 0;
+        }
+        else if (animatedMesh.upperBodyLayerWeight < 0.0f)
+        {
+            animatedMesh.upperBodyLayerWeight = 0.0f;
+            animatedMesh.isUpperLayerActive = false;
+            animatedMesh.layerBlendDirection = 0;
+		}
+
+
+		// Initialising vectors of transforms for the poses
 		int animatedBoneCount = animatedMesh.joint_count;
-		std::vector<glm::vec3> translations(animatedBoneCount);
-		std::vector<glm::quat> rotations(animatedBoneCount);
-        std::vector<glm::vec3> scales(animatedBoneCount);
+		std::vector<BoneTransform> lowerBodyPose(animatedBoneCount);
+		std::vector<BoneTransform> finalPose(animatedBoneCount);
         
         // Fill with default values so should just not animate if broken
         for (int i = 0; i < animatedBoneCount; ++i)
         {
-            translations[i] = glm::vec3(asset->skins[0].bones[i].translation[0], asset->skins[0].bones[i].translation[1], asset->skins[0].bones[i].translation[2]); 
-			rotations[i] = glm::quat(asset->skins[0].bones[i].rotation[3], asset->skins[0].bones[i].rotation[0], asset->skins[0].bones[i].rotation[1], asset->skins[0].bones[i].rotation[2]);
-			scales[i] = glm::vec3(1.0f);
+            lowerBodyPose[i].translation = glm::vec3(asset->skins[0].bones[i].translation[0], asset->skins[0].bones[i].translation[1], asset->skins[0].bones[i].translation[2]);
+            lowerBodyPose[i].rotation = glm::quat(asset->skins[0].bones[i].rotation[3], asset->skins[0].bones[i].rotation[0], asset->skins[0].bones[i].rotation[1], asset->skins[0].bones[i].rotation[2]);
+            lowerBodyPose[i].scale = glm::vec3(1.0f);
 		}
 
-        // Loop through each channel and store the interpolated transform data for this frame in the vectors
-        for (size_t i = 0; i < animation.channel_count; ++i)
+        // Get the pose for the animation currently active for the lower body layer
+		CalculateLayerPose(asset, animatedMesh.lowerBodyLayer, lowerBodyPose);
+
+        if (animatedMesh.isUpperLayerActive)
         {
-            AnimationChannel& channel = animation.channels[i];
-            AnimationSampler& sampler = animation.samplers[channel.sampler_index];
+            // Get the pose for the animation currently active for the upper body layer
+			std::vector<BoneTransform> upperBodyPose = lowerBodyPose; // Just for correct size and some default values
+			CalculateLayerPose(asset, animatedMesh.upperBodyLayer, upperBodyPose);
 
-            // Find the keyframes and interpolation value from the current animation time
-            int firstKeyframe = 0;
-            int secondKeyframe = 0;
-            float interpolationFactor = 0.0f;
-            for (size_t j = 0; j < sampler.input_count - 1; j++)
+			// Overlay the upper body pose on top of the lower body pose using the bone mask and weight
+            for (int i = 0; i < animatedBoneCount; ++i)
             {
-                if (animatedMesh.animationTime < sampler.inputs[j + 1])
+                float maskValue = animatedMesh.boneMask[i] * animatedMesh.upperBodyLayerWeight;
+                if (maskValue > 0.0f)
                 {
-                    firstKeyframe = j;
-                    secondKeyframe = j + 1;
-                    break;
+                    finalPose[i].translation = glm::mix(lowerBodyPose[i].translation, upperBodyPose[i].translation, maskValue);
+                    finalPose[i].rotation = glm::slerp(lowerBodyPose[i].rotation, upperBodyPose[i].rotation, maskValue);
+                    finalPose[i].scale = glm::mix(lowerBodyPose[i].scale, upperBodyPose[i].scale, maskValue);
                 }
-            }
-            interpolationFactor = (animatedMesh.animationTime - sampler.inputs[firstKeyframe]) / (sampler.inputs[secondKeyframe] - sampler.inputs[firstKeyframe]);
-
-			// Interpolate the transformations to get local matrices for each joint, 0 = translation, 1 = rotation, 2 = scale
-			int jointIndex = find_bone_index(&asset->skins[0], channel.target_node_index);
-            if (jointIndex == -1) continue; // Channel is useless, not affecting a joint
-            if (channel.target_path == 0)
-            {
-                glm::vec3 start = glm::vec3(sampler.outputs[firstKeyframe * 3], sampler.outputs[firstKeyframe * 3 + 1], sampler.outputs[firstKeyframe * 3 + 2]);
-                glm::vec3 end = glm::vec3(sampler.outputs[secondKeyframe * 3], sampler.outputs[secondKeyframe * 3 + 1], sampler.outputs[secondKeyframe * 3 + 2]);
-                translations[jointIndex] = glm::mix(start, end, interpolationFactor);
-            }
-            else if (channel.target_path == 1)
-            {
-                glm::quat start = glm::quat(sampler.outputs[firstKeyframe * 4 + 3], sampler.outputs[firstKeyframe * 4], sampler.outputs[firstKeyframe * 4 + 1], sampler.outputs[firstKeyframe * 4 + 2]);
-                glm::quat end = glm::quat(sampler.outputs[secondKeyframe * 4 + 3], sampler.outputs[secondKeyframe * 4], sampler.outputs[secondKeyframe * 4 + 1], sampler.outputs[secondKeyframe * 4 + 2]);
-                rotations[jointIndex] = glm::slerp(start, end, interpolationFactor);
-            }
-            else if (channel.target_path == 2)
-            {
-                glm::vec3 start = glm::vec3(sampler.outputs[firstKeyframe * 3], sampler.outputs[firstKeyframe * 3 + 1], sampler.outputs[firstKeyframe * 3 + 2]);
-                glm::vec3 end = glm::vec3(sampler.outputs[secondKeyframe * 3], sampler.outputs[secondKeyframe * 3 + 1], sampler.outputs[secondKeyframe * 3 + 2]);
-                scales[jointIndex] = glm::mix(start, end, interpolationFactor);
+                else
+					finalPose[i] = lowerBodyPose[i];
             }
         }
+        else
+			finalPose = lowerBodyPose;
+
+
+        // Aiming logic
+        if (animatedMesh.isAiming)
+			SetAimingRotations(animatedMesh, finalPose, animatedMesh.aimYaw, animatedMesh.aimPitch);
+
 
         // Create vector of local joint matrices
 		std::vector<glm::mat4> localJointMatrices(animatedBoneCount);
         for (int i = 0; i < animatedBoneCount; ++i)
         {
-            glm::mat4 translationMatrix = glm::translate(glm::mat4(1.0f), translations[i]);
-            glm::mat4 rotationMatrix = glm::mat4_cast(rotations[i]);
-            glm::mat4 scaleMatrix = glm::scale(glm::mat4(1.0f), scales[i]);
+            glm::mat4 translationMatrix = glm::translate(glm::mat4(1.0f), finalPose[i].translation);
+            glm::mat4 rotationMatrix = glm::mat4_cast(finalPose[i].rotation);
+            glm::mat4 scaleMatrix = glm::scale(glm::mat4(1.0f), finalPose[i].scale);
             localJointMatrices[i] = translationMatrix * rotationMatrix * scaleMatrix;
 		}
+
 
         // Initialise world joint matrices with identity matrices
 		std::vector<glm::mat4> worldJointMatrices(animatedBoneCount, glm::mat4(1.0f));
         int rootBone = find_bone_index(&asset->skins[0], asset->skins[0].skeleton_root_node_index);
-		CalculateWorldMatrices(asset, rootBone, glm::mat4(1.0f), localJointMatrices, worldJointMatrices);
+        auto& transform = ecs->GetComponent<C_Transform>(e);
+        glm::mat4 standUpFix = glm::rotate(glm::mat4(1.0f), glm::radians(90.0f), glm::vec3(1, 0, 0)); // MIGHT WANT TO BE REMOVED/PERMANENT FIX
+		CalculateWorldMatrices(asset, rootBone, transform.matrix * standUpFix, localJointMatrices, worldJointMatrices);
 
 		// Make sure joint_matrices is allocated
         if (!animatedMesh.joint_matrices)
@@ -115,71 +128,136 @@ void Animation_Update(ECS* ecs, float dt)
     });
 }
 
-void Start(C_AnimatedMesh& animatedMesh, const char* name) // by name
+
+
+// animation control
+void OnStartAnim(C_AnimatedMesh& animatedMesh, const char* animationName)
 {
+	// Check asset and animation index are valid, then start the animation on the lower body layer with no blending
     if (!animatedMesh.asset)
-		return;
-
-	// Find the animation with the given name and start it
-    for (size_t i = 0; i < animatedMesh.asset->animation_count; ++i)
-    {
-        if (strcmp(animatedMesh.asset->animations[i].name, name) == 0)
-        {
-            animatedMesh.currentAnimation = i;
-            animatedMesh.animationTime = 0.0f;
-            animatedMesh.isPlaying = true;
-            return;
-        }
-	}   
-}
-
-void Start(C_AnimatedMesh& animatedMesh, int id) // by index
-{ 
-	// Check asset and animation index are valid, then start the animation
-    if (!animatedMesh.asset || id < 0 || id >= animatedMesh.asset->animation_count)
         return;
 
-	animatedMesh.currentAnimation = id;
-	animatedMesh.animationTime = 0.0f;
-	animatedMesh.isPlaying = true; 
+	int animationId = GetAnimationIdFromName(animatedMesh, animationName);
+    if (animationId == -1)
+		return;
+
+    animatedMesh.lowerBodyLayer.currentAnimation = animationId;
+    animatedMesh.lowerBodyLayer.currentAnimationTime = 0.0f;
+    animatedMesh.lowerBodyLayer.isCurrentLooping = true;
+    animatedMesh.isPlaying = true;
+	animatedMesh.playbackSpeed = 1.0f;
 }
 
-void Stop(C_AnimatedMesh& animatedMesh) 
-{ 
-	animatedMesh.isPlaying = false;
+void PlayAnim(C_AnimatedMesh& animatedMesh, const char* animationName, float blendDuration)
+{
+    // Blends from the current lower body animation to the given one
+    int animationId = GetAnimationIdFromName(animatedMesh, animationName);
+	if (animationId == -1)
+        return;
+
+	animatedMesh.lowerBodyLayer.isCurrentLooping = false;
+    animatedMesh.lowerBodyLayer.isBlending = true;
+	animatedMesh.lowerBodyLayer.previousAnimation = animatedMesh.lowerBodyLayer.currentAnimation;
+    animatedMesh.lowerBodyLayer.previousAnimationTime = animatedMesh.lowerBodyLayer.currentAnimationTime;
+    animatedMesh.lowerBodyLayer.currentAnimation = animationId;
+    animatedMesh.lowerBodyLayer.currentAnimationTime = 0.0f;
+    animatedMesh.lowerBodyLayer.isPreviousLooping = animatedMesh.lowerBodyLayer.isCurrentLooping;
+    animatedMesh.lowerBodyLayer.blendDuration = blendDuration;
+	animatedMesh.lowerBodyLayer.blendTime = 0.0f;
+}
+
+void PlayUpperBodyAnim(C_AnimatedMesh& animatedMesh, const char* animationName, float blendDuration)
+{
+    // Blends from either lower body or current upper body to the given one
+    int animationId = GetAnimationIdFromName(animatedMesh, animationName);
+    if (animationId == -1)
+        return;
+
+    // Creates bone mask if one doesnt currently exist
+    if (animatedMesh.boneMask.empty())
+        CreateUpperBodyLayer(animatedMesh, animatedMesh.splitJointName);
+
+    // Check if upper body is playing, if not blend from lower body
+    if (!animatedMesh.isUpperLayerActive)
+    {
+        animatedMesh.isUpperLayerActive = true;
+		animatedMesh.upperBodyLayerWeight = 0.0f;
+        animatedMesh.upperBodyLayer.currentAnimation = animationId;
+        animatedMesh.upperBodyLayer.currentAnimationTime = 0.0f;
+        animatedMesh.layerBlendDirection = 1.0f;
+        animatedMesh.layerBlendDuration = blendDuration;
+    }
+	// If upper body is already active, blend from current upper body to the new animation
+    else
+    {
+        animatedMesh.upperBodyLayer.isBlending = true;
+        animatedMesh.upperBodyLayer.previousAnimation = animatedMesh.upperBodyLayer.currentAnimation;
+        animatedMesh.upperBodyLayer.previousAnimationTime = animatedMesh.upperBodyLayer.currentAnimationTime;
+        animatedMesh.upperBodyLayer.currentAnimation = animationId;
+        animatedMesh.upperBodyLayer.currentAnimationTime = 0.0f;
+        animatedMesh.upperBodyLayer.isPreviousLooping = animatedMesh.upperBodyLayer.isCurrentLooping;
+        animatedMesh.upperBodyLayer.blendDuration = blendDuration;
+        animatedMesh.upperBodyLayer.blendTime = 0.0f;
+    }
+}
+
+void StopAnim(C_AnimatedMesh& animatedMesh, float blendDuration)
+{
+    // Just blend from current lower body to idle animation
+    PlayAnim(animatedMesh, animatedMesh.idleAnimationName, blendDuration);
+}
+
+void StopUpperBodyAnim(C_AnimatedMesh& animatedMesh, float blendDuration)
+{
+    // Blends from current upper body to lower body
+    if (!animatedMesh.isUpperLayerActive)
+        return;
+
+	animatedMesh.layerBlendDirection = -1.0f;
+	animatedMesh.layerBlendDuration = blendDuration;
+}
+
+void PlayFullBodyAnim(C_AnimatedMesh& animatedMesh, const char* animationName, float blendDuration)
+{
+    // Stops the current upper body animation and blends from lower body to the given one
+    int animationId = GetAnimationIdFromName(animatedMesh, animationName);
+    if (animationId == -1)
+        return;
+    
+	StopUpperBodyAnim(animatedMesh, blendDuration);
+	PlayAnim(animatedMesh, animationName, blendDuration);
 }
 
 
 
 // settings
-void SetLooping(C_AnimatedMesh& animatedMesh, bool looping) 
+void SetLooping(C_AnimatedMesh& animatedMesh, AnimationLayer& layer, bool looping)
 { 
-    animatedMesh.isLooping = looping; 
+    layer.isCurrentLooping = looping; 
 } 
 
 
 
 // state checks
-bool IsRunning(const C_AnimatedMesh& animatedMesh) 
+bool IsRunning(const C_AnimatedMesh& animatedMesh, const AnimationLayer& layer) 
 { 
-    if (!animatedMesh.isPlaying || animatedMesh.animationTime > GetDuration(animatedMesh))
-		return false;
-    return true; 
+	if (layer.currentAnimation < 0 || layer.currentAnimation >= animatedMesh.asset->animation_count)
+        return false;
+	return true;
 }
 
 
 
 // getters
-float GetDuration(const C_AnimatedMesh& animatedMesh)
+float GetAnimationDuration(const C_AnimatedMesh& animatedMesh, int animationIndex)
 {
-    // Making sure an existing animation is playing
-    if (animatedMesh.currentAnimation < 0 || animatedMesh.currentAnimation >= animatedMesh.asset->animation_count)
+    // Check if the animation is valid
+    if (animationIndex < 0 || animationIndex >= animatedMesh.asset->animation_count)
         return 0.0f;
-
-    Animation& animation = animatedMesh.asset->animations[animatedMesh.currentAnimation];
-    float duration = 0.0f;
+    Animation& animation = animatedMesh.asset->animations[animationIndex];
 
     // Loop through all samplers to find the max timestamp, aka the duration
+    float duration = 0.0f;
     for (size_t i = 0; i < animation.sampler_count; ++i)
     {
         if (animation.samplers[i].inputs[animation.samplers[i].input_count - 1] > duration)
@@ -188,6 +266,17 @@ float GetDuration(const C_AnimatedMesh& animatedMesh)
 
     return duration;
 } // Get last keyframe of the current animation and return the timestamp
+
+int GetAnimationIdFromName(const C_AnimatedMesh& animatedMesh, const char* animationName)
+{
+    // Find the id of an animation, return -1 if not found
+    for (int i = 0; i < animatedMesh.asset->animation_count; ++i)
+    {
+        if (strcmp(animatedMesh.asset->animations[i].name, animationName) == 0)
+            return i;
+	}
+    return -1;
+}
 
 
 
@@ -201,6 +290,58 @@ int find_bone_index(Skin* skin, int target_node_index) {
     return -1;
 }
 
+void UpdateLayerTime(C_AnimatedMesh& animatedMesh, AnimationLayer& layer, float dt, float playbackSpeed)
+{
+	// Update the current animation time
+    layer.currentAnimationTime += dt * playbackSpeed;
+	float duration = GetAnimationDuration(animatedMesh, layer.currentAnimation);
+    if (layer.currentAnimationTime > duration)
+    {
+        if (layer.isCurrentLooping)
+            layer.currentAnimationTime = fmod(layer.currentAnimationTime, duration);
+        else
+			layer.currentAnimationTime = duration; // Clamp to end of animation if not looping
+    }
+
+	// Update previous animation time and blending time if blending
+    if (layer.isBlending && layer.previousAnimation >= 0)
+    {
+		layer.blendTime += dt * playbackSpeed;
+		layer.previousAnimationTime += dt * playbackSpeed;
+		duration = GetAnimationDuration(animatedMesh, layer.previousAnimation);
+        if (layer.previousAnimationTime > duration)
+        {
+            if (layer.isPreviousLooping)
+                layer.previousAnimationTime = fmod(layer.previousAnimationTime, duration);
+            else
+                layer.previousAnimationTime = duration; // Clamp to end of animation if not looping
+        }
+
+        float blendFactor = glm::clamp(layer.blendTime / layer.blendDuration, 0.f, 1.f);
+        if (blendFactor >= 1.0f)
+        {
+            layer.blendTime = 0.0f;
+            layer.previousAnimation = -1;
+            layer.isBlending = false;
+        }
+    }
+}
+
+void CalculateLayerPose(Asset* asset, AnimationLayer& layer, std::vector<BoneTransform>& currentPose)
+{
+    // Sample and interpolate animation for the current pose
+    AnimationInterpolation(asset, asset->animations[layer.currentAnimation], layer.currentAnimationTime, currentPose);
+
+	// If blending, also sample the previous animation and blend the two poses together
+    if (layer.isBlending && layer.previousAnimation >= 0)
+    {
+        std::vector<BoneTransform> previousPose = currentPose; // Just for default values
+        AnimationInterpolation(asset, asset->animations[layer.previousAnimation], layer.previousAnimationTime, previousPose);
+		float blendFactor = glm::clamp(layer.blendTime / layer.blendDuration, 0.f, 1.f);
+        BlendPoses(previousPose, currentPose, blendFactor, currentPose);
+	}
+}
+
 void CalculateWorldMatrices(Asset* asset, int boneIndex, glm::mat4 parentMatrix, const std::vector<glm::mat4>& localJointMatrices, std::vector<glm::mat4>& worldJointMatrices)
 {
     // Calculate world matrix from local matrix and parent world matrix
@@ -211,3 +352,149 @@ void CalculateWorldMatrices(Asset* asset, int boneIndex, glm::mat4 parentMatrix,
 		CalculateWorldMatrices(asset, asset->skins[0].bones[boneIndex].children_indices[i], worldJointMatrices[boneIndex], localJointMatrices, worldJointMatrices);
 }
 
+void AnimationInterpolation(Asset* asset, Animation& animation, float animationTime, std::vector<BoneTransform>& pose) 
+{
+    // Loop through each channel and store the interpolated transform data for this frame in the vectors
+    for (size_t i = 0; i < animation.channel_count; ++i)
+    {
+        AnimationChannel& channel = animation.channels[i];
+        AnimationSampler& sampler = animation.samplers[channel.sampler_index];
+
+        // Find the keyframes and interpolation value from the current animation time
+        int firstKeyframe = 0;
+        int secondKeyframe = 0;
+        float interpolationFactor = 0.0f;
+        for (size_t j = 0; j < sampler.input_count - 1; j++)
+        {
+            if (animationTime < sampler.inputs[j + 1])
+            {
+                firstKeyframe = j;
+                secondKeyframe = j + 1;
+                break;
+            }
+        }
+        // If no keyframes are found, we're past the end of the animation, use last two keyframes
+        if (firstKeyframe == 0 && secondKeyframe == 0)
+        {
+            firstKeyframe = sampler.input_count - 2;
+            secondKeyframe = sampler.input_count - 1;
+		}
+        interpolationFactor = glm::clamp((animationTime - sampler.inputs[firstKeyframe]) / (sampler.inputs[secondKeyframe] - sampler.inputs[firstKeyframe]), 0.f, 1.f);
+
+        // Interpolate the transformations to get local matrices for each joint, 0 = translation, 1 = rotation, 2 = scale
+        int jointIndex = find_bone_index(&asset->skins[0], channel.target_node_index);
+        if (jointIndex == -1) continue; // Channel is useless, not affecting a joint
+        if (channel.target_path == 0)
+        {
+            glm::vec3 start = glm::vec3(sampler.outputs[firstKeyframe * 3], sampler.outputs[firstKeyframe * 3 + 1], sampler.outputs[firstKeyframe * 3 + 2]);
+            glm::vec3 end = glm::vec3(sampler.outputs[secondKeyframe * 3], sampler.outputs[secondKeyframe * 3 + 1], sampler.outputs[secondKeyframe * 3 + 2]);
+            pose[jointIndex].translation = glm::mix(start, end, interpolationFactor);
+        }
+        else if (channel.target_path == 1)
+        {
+            glm::quat start = glm::quat(sampler.outputs[firstKeyframe * 4 + 3], sampler.outputs[firstKeyframe * 4], sampler.outputs[firstKeyframe * 4 + 1], sampler.outputs[firstKeyframe * 4 + 2]);
+            glm::quat end = glm::quat(sampler.outputs[secondKeyframe * 4 + 3], sampler.outputs[secondKeyframe * 4], sampler.outputs[secondKeyframe * 4 + 1], sampler.outputs[secondKeyframe * 4 + 2]);
+            pose[jointIndex].rotation = glm::slerp(start, end, interpolationFactor);
+        }
+        else if (channel.target_path == 2)
+        {
+            glm::vec3 start = glm::vec3(sampler.outputs[firstKeyframe * 3], sampler.outputs[firstKeyframe * 3 + 1], sampler.outputs[firstKeyframe * 3 + 2]);
+            glm::vec3 end = glm::vec3(sampler.outputs[secondKeyframe * 3], sampler.outputs[secondKeyframe * 3 + 1], sampler.outputs[secondKeyframe * 3 + 2]);
+            pose[jointIndex].scale = glm::mix(start, end, interpolationFactor);
+        }
+    }
+}
+
+void BlendPoses(const std::vector<BoneTransform>& poseA, const std::vector<BoneTransform>& poseB, float blendFactor, std::vector<BoneTransform>& blendedPose)
+{
+    // Just blend em together
+    for (size_t i = 0; i < poseA.size(); ++i)
+    {
+        blendedPose[i].translation = glm::mix(poseA[i].translation, poseB[i].translation, blendFactor);
+        blendedPose[i].rotation = glm::slerp(poseA[i].rotation, poseB[i].rotation, blendFactor);
+        blendedPose[i].scale = glm::mix(poseA[i].scale, poseB[i].scale, blendFactor);
+    }
+}
+
+
+
+// layered animation
+void SetBoneMask(C_AnimatedMesh& animatedMesh, int boneIndex)
+{
+    // This bone is fully in the layer
+	animatedMesh.boneMask[boneIndex] = 1.0f;
+
+    // Recursively set all the children bones in the mask
+    for (size_t i = 0; i < animatedMesh.asset->skins[0].bones[boneIndex].child_count; ++i)
+		SetBoneMask(animatedMesh, animatedMesh.asset->skins[0].bones[boneIndex].children_indices[i]);
+}
+
+void CreateUpperBodyLayer(C_AnimatedMesh& animatedMesh, const char* splitJointName)
+{
+	// Initialise bone mask with 0s, then find the index of the joint splitting upper/lower body
+	animatedMesh.boneMask.assign(animatedMesh.joint_count, 0.0f);
+
+    int splitJointIndex = -1;
+    for (size_t i = 0; i < animatedMesh.asset->skins[0].joint_count; ++i)
+    {
+        if (strcmp(animatedMesh.asset->skins[0].bones[i].name, animatedMesh.splitJointName) == 0) // maybe use strcmp
+        {
+            splitJointIndex = (int)i;
+            break;
+        }
+	}
+
+    // If the split joint is found, all its children will be upper body, so set all mask values to 1
+    if (splitJointIndex != -1)
+    {
+        animatedMesh.boneMask[splitJointIndex] = 0.5f;
+		SetBoneMask(animatedMesh, splitJointIndex);
+    }
+}
+
+
+
+// aiming control
+void FindUpperBodyBones(C_AnimatedMesh& animatedMesh)
+{
+    // Find the indices of the upper body (spine) bones for use in aiming
+    for (size_t i = 0; i < animatedMesh.asset->skins[0].joint_count; ++i)
+    {
+		if (strcmp(animatedMesh.asset->skins[0].bones[i].name, animatedMesh.splitJointName) == 0) // ASSUMING FIRST ONE IS SPLIT JOINT, maybe use strcmp
+            animatedMesh.spineIndices[0] = (int)i;
+    }
+
+    if (animatedMesh.asset->skins[0].bones[animatedMesh.spineIndices[0]].child_count > 0)
+    {
+        int childIndex = animatedMesh.asset->skins[0].bones[animatedMesh.spineIndices[0]].children_indices[0];
+        animatedMesh.spineIndices[1] = childIndex;
+        if (animatedMesh.spineIndices[1] != -1 && animatedMesh.asset->skins[0].bones[childIndex].child_count > 0)
+			animatedMesh.spineIndices[2] = animatedMesh.asset->skins[0].bones[childIndex].children_indices[0];
+	}
+}
+
+void SetAimingRotations(C_AnimatedMesh& animatedMesh, std::vector<BoneTransform>& pose, float yaw, float pitch)
+{
+	if (!animatedMesh.spineIndices[0] || !animatedMesh.spineIndices[1] || !animatedMesh.spineIndices[2])
+	    FindUpperBodyBones(animatedMesh);
+
+    // Clamp aiming angles to not distort character too much, and assign weights
+    float clampedYaw = glm::clamp(yaw, -60.0f, 60.0f);
+    float clampedPitch = glm::clamp(pitch, -60.0f, 40.0f);
+    animatedMesh.aimYaw = clampedYaw;
+    animatedMesh.aimPitch = clampedPitch;
+    float yawWeights[3] = { 0.2f, 0.3f, 0.5f };
+    float pitchWeights[3] = { 0.1f, 0.4f, 0.5f };
+
+    // For each spine bone, apply some of the rotation using the weights
+    for (int i = 0; i < 3; ++i)
+    {
+        int spineIndex = animatedMesh.spineIndices[i];
+        if (spineIndex >= 0 && spineIndex < animatedMesh.asset->skins[0].joint_count)
+        {
+            glm::quat yawRotation = glm::angleAxis(glm::radians(clampedYaw * yawWeights[i]), glm::vec3(0, 1, 0));
+            glm::quat pitchRotation = glm::angleAxis(glm::radians(clampedPitch * pitchWeights[i]), glm::vec3(1, 0, 0));
+            pose[spineIndex].rotation = pose[spineIndex].rotation * (yawRotation * pitchRotation);
+        }
+    }
+}

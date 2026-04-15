@@ -123,11 +123,11 @@ bool Scene::LoadAsset(const char* fileName)
             // -- TRANSFORM --
             // ---------------
             C_Transform t;
-            t.position = glm::vec3(node->translation[0], node->translation[1], node->translation[2]);
-            t.rotation = glm::quat(node->rotation[0], node->rotation[1], node->rotation[2], node->rotation[3]);
-            t.matrix = glm::mat4_cast(t.rotation);
-            t.matrix = glm::translate(t.matrix, t.position);
-            m_ecs.AddComponent<C_Transform>(eID, { t.position, t.rotation, t.matrix });
+            glm::vec3 position = glm::vec3(node->translation[0], node->translation[1], node->translation[2]);
+            glm::quat rotation = glm::quat(node->rotation[0], node->rotation[1], node->rotation[2], node->rotation[3]);
+            t.matrix = glm::mat4_cast(rotation);
+            t.matrix = glm::translate(t.matrix, position);
+            m_ecs.AddComponent<C_Transform>(eID, { t.matrix });
 
             // -- MESH
             if (node->mesh_index >= 0)
@@ -146,16 +146,16 @@ bool Scene::LoadAsset(const char* fileName)
                         joint_count = 1;
                     }
 
-                    C_AnimatedMesh animMesh
-                    {
-                        mesh,
-                        asset
-                    };
-                    animMesh.joint_count = joint_count;
-                    animMesh.currentAnimation = 0;
-                    animMesh.animationTime = 0.0f;
-                    animMesh.isPlaying = true;
-                    animMesh.isLooping = true;
+                C_AnimatedMesh animMesh
+                {
+                    mesh,
+                    asset
+                };
+                animMesh.joint_count = joint_count;
+				animMesh.idleAnimationName = "Idle";
+                animMesh.splitJointName = "Spine";
+				OnStartAnim(animMesh, animMesh.idleAnimationName); // Start with idle animation by default
+                
 
                     if (joint_count > 0) {
                         animMesh.joint_matrices = (glm::mat4*)malloc(joint_count * sizeof(glm::mat4));

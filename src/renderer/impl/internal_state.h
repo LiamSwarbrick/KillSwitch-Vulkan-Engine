@@ -91,6 +91,7 @@ typedef struct RenderState
     // Scene Assets
     b32 is_next_scene_set;
     Scene_InitInfo next_scene_info;
+    MappedArena mapped_material_data;
 
     // Renderables arena
     RenderView renderables_arena;

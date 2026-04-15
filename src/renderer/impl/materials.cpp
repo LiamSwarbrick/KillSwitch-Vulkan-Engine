@@ -11,6 +11,13 @@ extern const MaterialConfigs g_material_configs = {
             .secondary_shader_id = SHADER_NONE,
             .is_opaque = 1,
             .is_ui = 0
+        },
+
+        .MAT_LIT_OPAQUE = {
+            .primary_shader_id = SHADER_LIT,
+            .secondary_shader_id = SHADER_NONE,
+            .is_opaque = 1,
+            .is_ui = 0
         }
     }
 };

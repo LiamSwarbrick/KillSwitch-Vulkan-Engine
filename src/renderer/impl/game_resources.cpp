@@ -179,12 +179,14 @@ void create_startup_resources()
             .usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT
                    | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT
                    | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
-        }
+        },
+        .is_buffer_cpu_accessible = 1  // <- Material stuff like blend mode is important to be CPU accessable, and we may want to dynamically change materials.
     };
     renderstate.rids.material_ssbo_rid = FG_CreateResource(
         "MaterialSSBO", FG_RESOURCE_TYPE_BUFFER, flags, &mat_info
     );
-
+    renderstate.mapped_material_data = MakeArenaOnBufferResource(renderstate.rids.material_ssbo_rid);
+    
 
     /////// MOVE BELOW TO create_scene_resources(scene resource list?) /////////////
 
@@ -373,7 +375,7 @@ void create_scene_resources()
         uint32_t default_texture_rid = UINT32_MAX;
         stbi_set_flip_vertically_on_load(1);
         int width, height, num_channels;
-        const char* filepath = "assets/godot.png";
+        const char* filepath = "assets/godot2.png";
         uint8_t* data = stbi_load(filepath, &width, &height, &num_channels, 4);
         if (data == NULL)
         {
@@ -387,6 +389,7 @@ void create_scene_resources()
         
         MaterialData default_mat = {
             .base_color = { 1.0f, 1.0f, 1.0f, 1.0f },
+            .blend_mode = BLEND_MODE_MASKED,
             .alpha_cutoff = 0.5f,
             .sampler_idx = FG_SAMPLER_LINEAR_REPEAT,
             .texture_idx_basecolor = renderstate.registry.resources[default_texture_rid].image_bindless_index
@@ -409,6 +412,7 @@ void create_scene_resources()
             gpu_mat.metalness = mat->metallic;
             gpu_mat.roughness = mat->roughness;
             memcpy(&gpu_mat.emissive_factor, mat->emissive_factor, sizeof(glm::vec3));
+            gpu_mat.blend_mode = mat->blend_mode;
             gpu_mat.alpha_cutoff = mat->alpha_cutoff;
 
             // NOTE: Just use one sampler for now at least
@@ -438,10 +442,10 @@ void create_scene_resources()
     }
 
     // Upload materials to global material buffer (all at once)
-    FG_UploadBufferData(&renderstate.main.staging_objects, rids->material_ssbo_rid,
+    ResetMappedArena(&renderstate.mapped_material_data);
+    PushToMappedArena(&renderstate.mapped_material_data,
         loaded_materials, num_loaded_materials * sizeof(MaterialData)
     );
-
 
     // Load Static meshes
     for (uint32_t i = 0; i < init_info->num_static_meshes; ++i)

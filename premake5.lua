@@ -218,11 +218,16 @@ workspace "AdventureEngine"
             EXTERNAL .. "imgui",
             EXTERNAL .. "imgui/backends",
             include_paths.Vulkan,
+            include_paths.Vulkan,
             include_paths.volk,
             include_paths.SDL3
         }
         defines {
             "IMGUI_IMPL_VULKAN_USE_VOLK"
+        }
+        libdirs {
+            lib_dirs.Vulkan,
+            lib_dirs.SDL3
         }
         libdirs {
             lib_dirs.Vulkan,
@@ -317,7 +322,7 @@ workspace "AdventureEngine"
         filter "files:**.vert or files:**.frag or files:**.comp"
             buildmessage "Compiling shader %{file.relpath}"
             buildcommands {
-                "%{glslc_cmd} %{file.relpath} -D__IS_GLSL -o shaderspv/%{file.name}.spv"
+                "%{glslc_cmd} %{file.relpath} -DIS_GLSL -o shaderspv/%{file.name}.spv"
             }
             buildoutputs {
                 "shaderspv/%{file.name}.spv"

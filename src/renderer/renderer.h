@@ -6,6 +6,8 @@
 #include "render_types.h"
 #include "core/components.h"
 
+// SETTINGS API
+
 typedef struct Renderer_Settings
 {
     b32         uncapped_fps;
@@ -21,6 +23,13 @@ typedef struct Renderer_SettingsCapabilities
 }
 Renderer_SettingsCapabilities;
 
+Renderer_SettingsCapabilities Renderer_GetSettingsCapabilities();
+Renderer_Settings Renderer_GetSettings();
+void Renderer_ChangeSettings(Renderer_Settings new_settings);
+
+
+// INIT/SHUTDOWN/EVENTS API
+
 typedef struct Renderer_InitInfo
 {
     SDL_Window* window;
@@ -33,12 +42,14 @@ void Renderer_Init(const Renderer_InitInfo* info);
 void Renderer_Shutdown();
 void Renderer_ListenToWindowEvent(SDL_Event event);
 
-Renderer_SettingsCapabilities Renderer_GetSettingsCapabilities();
-Renderer_Settings Renderer_GetSettings();
-void Renderer_ChangeSettings(Renderer_Settings new_settings);
+
+// DRAW API
 
 void Renderer_PushRenderable(Renderable renderable);
 void Renderer_DrawFrame(glm::mat4 primary_camera_view);
+
+
+// SCENE API (On scene change resources for GPU)
 
 typedef struct Scene_InitInfo
 {
@@ -53,9 +64,7 @@ void Renderer_ChangeScene(Scene_InitInfo new_scene_info);
 
 
 
-
 // ImGUI
-//
 
 // Optional callback: called between ImGui::NewFrame() and ImGui::Render()
 // Game code can set this to build its own ImGui UI

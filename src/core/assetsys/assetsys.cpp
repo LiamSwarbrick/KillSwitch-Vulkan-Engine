@@ -195,6 +195,15 @@ Asset* load_asset(const char* filename) {
 		}
 
 		memcpy(mat->emissive_factor, gltf_mat->emissive_factor, sizeof(float) * 3);
+		
+		switch (gltf_mat->alpha_mode)
+		{
+			case cgltf_alpha_mode_opaque:  mat->blend_mode = BLEND_MODE_OPAQUE; break; 
+			case cgltf_alpha_mode_mask:    mat->blend_mode = BLEND_MODE_MASKED; break;
+			case cgltf_alpha_mode_blend:   mat->blend_mode = BLEND_MODE_BLEND; break;
+			default: SDL_assert(0 && "Invalid blend mode");
+	#warning BLEND_MODE_ADDITIVE needs exposing through custom material properties
+		}
 		mat->alpha_cutoff = gltf_mat->alpha_cutoff;
 	}
 	// Create Default Material at the end of the array
@@ -353,7 +362,9 @@ Asset* load_asset(const char* filename) {
 		mesh->vertex_type = VERTEX_TYPE_STATIC;
 
 		// Default to UNLIT, the component system will set the actual value based on the extras json
-		mesh->mat_type = MAT_UNLIT_OPAQUE;
+		// mesh->mat_type = MAT_UNLIT_OPAQUE;
+		#warning WHILE TESTING, DEFAULT TO LIT UNTIL WE SORT OUT LEVEL EDITOR
+		mesh->mat_type = MAT_LIT_OPAQUE;
 
 		for (size_t p = 0; p < mesh->primitive_count; p++) {
 			cgltf_primitive* gltf_prim = &gltf_mesh->primitives[p];

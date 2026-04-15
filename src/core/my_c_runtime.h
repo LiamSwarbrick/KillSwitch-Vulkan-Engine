@@ -23,6 +23,17 @@ typedef int32_t b32;
 typedef uint8_t u8;
 typedef int8_t b8;
 
+
+// Thread local global variables
+#if defined(__cplusplus)
+    #define MY_THREAD_LOCAL thread_local
+#elif defined(__STDC_VERSION__) && __STDC_VERSION__ >= 201112L
+    #define MY_THREAD_LOCAL _Thread_local
+#else
+    #error "Assuming a modern C version, probably C23"
+    // #define THREAD_LOCAL __thread   // Fallback (GCC/Clang)
+#endif
+
 // NOTE: Old: use SDL_Log and friends instead
 // #define ENABLE_VERBOSE_LOGGING
 // #ifdef ENABLE_VERBOSE_LOGGING

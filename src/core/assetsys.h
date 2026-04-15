@@ -2,7 +2,7 @@
 #define ASSETSYS_H
 
 #include "cgltf.h"
-#include "renderer/shadersrc/shared_constants.glsl"  // VertexType
+#include "renderer/shadersrc/common/shared.glsl"  // VertexType
 #include "renderer/render_types.h"  // MaterialType
 
 #ifdef __cplusplus
@@ -45,6 +45,7 @@ typedef struct Material {
     float metallic;
     float roughness;
     float emissive_factor[3]; // RGB 
+    BlendMode blend_mode;
     float alpha_cutoff;      
 
     // Texture indices (-1 if not used)

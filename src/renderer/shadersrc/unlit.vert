@@ -1,62 +1,29 @@
 #version 460
-#extension GL_EXT_buffer_reference : require
-#extension GL_EXT_scalar_block_layout : require
-#extension GL_EXT_shader_explicit_arithmetic_types_int32 : require
-#extension GL_EXT_shader_explicit_arithmetic_types_int64 : require
 #extension GL_GOOGLE_include_directive : require
-#include "shared_constants.glsl"
+#include "common/shared.glsl"
+#include "common/shared_vertex_fetch.glsl"
 
-layout(push_constant, scalar) uniform PushConstants
-{
-    FullPushConstants_Graphics push;
-};
-
-layout(location = 0) out vec2 out_uv;
-layout(location = 1) out vec3 out_color;
+layout (location = 0) out vec2 uv;
+layout (location = 1) out vec3 color;
 
 // Multipass materials require different shaders have reproducable vertex positions
 invariant gl_Position;
 
 void main()
 {
-    // No casting push.pass because forward rendering doesn't read anything.
-    // TODO: Switch to deferred?
-
-    // Cast pointers
     SceneData scene  = SceneBuffer(push.dc.scene_ptr).scene;
-    ObjectData obj   = ObjectBuffer(push.dc.object_ptr).object;
     
-    // Pull vertex data
-    IndexBuffer ib   = IndexBuffer(push.dc.index_ptr);
-    uint index = ib.indices[gl_VertexIndex];
+    uint vertex_buf_index;
+    vec3 v_pos;
+    vec2 v_uv;
+    vec3 v_normal;
+    vec3 v_color;
 
-    vec3 v_pos    = VPositionBuffer(push.dc.v_positions_ptr).positions[index];
-    vec2 v_uv     = VTexcoordBuffer(push.dc.v_texcoords_ptr).texcoords[index];
-    vec3 v_normal = VNormalBuffer(push.dc.v_normals_ptr).normals[index];
-    vec3 v_color  = vec3(1.0);
-    if (push.dc.v_colors_ptr != 0)
-        v_color  = VColorBuffer(push.dc.v_colors_ptr).colors[index];
-    
-    mat4 model_matrix = obj.model;
+    fetch_vertex(gl_VertexIndex, vertex_buf_index, v_pos, v_uv, v_normal, v_color);
 
-    // Optional Skinning Logic (shader specialization constants btw)
-    if (CURRENT_VERTEX_TYPE == VERTEX_TYPE_SKINNED)
-    {
-        // Pull skinned vertex data
-        uvec4 v_joint_ids = VJointIDsBuffer(push.dc.v_joint_ids_ptr).joint_ids[index];
-        vec4 v_weights    = VJointWeightsBuffer(push.dc.v_joint_weights_ptr).weights[index];
+    mat4 model_matrix = compute_model_matrix(vertex_buf_index);
 
-        JointBuffer jb = JointBuffer(push.dc.joints_ptr);
-        mat4 skin = 
-            jb.joints[v_joint_ids.x] * v_weights.x +
-            jb.joints[v_joint_ids.y] * v_weights.y +
-            jb.joints[v_joint_ids.z] * v_weights.z +
-            jb.joints[v_joint_ids.w] * v_weights.w;
-        
-        model_matrix = model_matrix * skin;
-    }
-
-    out_uv = v_uv;
-    out_color = v_color;
+    uv = v_uv;
+    color = v_color;
     gl_Position = scene.view_proj * model_matrix * vec4(v_pos, 1.0);
 }

@@ -1,48 +1,24 @@
 #version 460
-#extension GL_EXT_buffer_reference : require
-#extension GL_EXT_scalar_block_layout : require
-#extension GL_EXT_shader_explicit_arithmetic_types_int32 : require
-#extension GL_EXT_shader_explicit_arithmetic_types_int64 : require
 #extension GL_GOOGLE_include_directive : require
-#include "shared_constants.glsl"
+#include "common/shared.glsl"
+#include "common/shared_vertex_fetch.glsl"
 
-layout(push_constant, scalar) uniform PushConstants
-{
-    FullPushConstants_Graphics push;
-};
+layout (location = 0) out vec2 frag_uv;
 
 invariant gl_Position;
 
 void main()
 {
-    // No casting push.pass because forward rendering doesn't read anything.
-    // TODO: Switch to deferred?
-
-    // Cast pointers
     SceneData scene  = SceneBuffer(push.dc.scene_ptr).scene;
-    ObjectData obj   = ObjectBuffer(push.dc.object_ptr).object;
-    
-    // Pull only vertex positions
-    IndexBuffer ib   = IndexBuffer(push.dc.index_ptr);
-    uint index = ib.indices[gl_VertexIndex];
-    vec3 v_pos    = VPositionBuffer(push.dc.v_positions_ptr).positions[index];
-    mat4 model_matrix = obj.model;
 
-    if (CURRENT_VERTEX_TYPE == VERTEX_TYPE_SKINNED)
-    {
-        // Pull skinned vertex data
-        uvec4 v_joint_ids = VJointIDsBuffer(push.dc.v_joint_ids_ptr).joint_ids[index];
-        vec4 v_weights    = VJointWeightsBuffer(push.dc.v_joint_weights_ptr).weights[index];
+    uint vertex_buf_index;
+    vec3 v_pos;
+    vec2 v_uv;
 
-        JointBuffer jb = JointBuffer(push.dc.joints_ptr);
-        mat4 skin = 
-            jb.joints[v_joint_ids.x] * v_weights.x +
-            jb.joints[v_joint_ids.y] * v_weights.y +
-            jb.joints[v_joint_ids.z] * v_weights.z +
-            jb.joints[v_joint_ids.w] * v_weights.w;
-        
-        model_matrix = model_matrix * skin;
-    }
+    fetch_vertex_pos_uv(gl_VertexIndex, vertex_buf_index, v_pos, v_uv);
+
+    mat4 model_matrix = compute_model_matrix(vertex_buf_index);
 
     gl_Position = scene.view_proj * model_matrix * vec4(v_pos, 1.0);
+    frag_uv = v_uv;
 }

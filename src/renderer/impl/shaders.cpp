@@ -47,7 +47,8 @@ void ShaderRegistry_Init()
 
     LOAD_GRAPHICS(SHADER_UNLIT, "unlit");
     LOAD_GRAPHICS(SHADER_DEPTH, "depth");
-    LOAD_GRAPHICS(SHADER_BLIT, "blit");
+    LOAD_GRAPHICS(SHADER_BLIT,  "blit");
+    LOAD_GRAPHICS(SHADER_LIT,   "lit");
     
     #undef LOAD_GRAPHICS
 
@@ -55,15 +56,23 @@ void ShaderRegistry_Init()
     for (uint32_t i = 0; i < SHADER_COUNT; ++i)
     {
         PipelineShaderSet* set = &sreg->shaders[i];
-        SDL_assert(set->pipeline_type != PK_PIPELINE_TYPE_INVALID);
+        SDL_assert(set->pipeline_type != PK_PIPELINE_TYPE_INVALID &&
+            "Forgot to LOAD this shader?"
+        );
         if (set->pipeline_type == PK_PIPELINE_TYPE_COMPUTE)
         {
-            SDL_assert(set->compute.compute_shader.pCode);
+            SDL_assert(set->compute.compute_shader.pCode &&
+                "Missing compute shader SPIRV... Have you reran premake to add any new shader files?"
+            );
         }
         else if (set->pipeline_type == PK_PIPELINE_TYPE_GRAPHICS)
         {
-            SDL_assert(set->graphics.vertex_shader.pCode);
-            SDL_assert(set->graphics.fragment_shader.pCode);
+            SDL_assert(set->graphics.vertex_shader.pCode &&
+                "Missing vertex shader SPIRV... Have you reran premake to add any new shader files?"
+            );
+            SDL_assert(set->graphics.fragment_shader.pCode &&
+                "Missing fragment shader SPIRV... Have you reran premake to add any new shader files?"
+            );
         }
     }
 }

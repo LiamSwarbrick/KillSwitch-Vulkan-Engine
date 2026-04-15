@@ -4,7 +4,7 @@
 #include "vulkan_wrapper.h"
 #include "../render_types.h"
 
-#include "renderer/shadersrc/shared_constants.glsl"
+#include "renderer/shadersrc/common/shared.glsl"
 static_assert(sizeof(FullPushConstants_Graphics) <= 256 &&
     "Vulkan 1.4 only guaruntees 256 bytes for pushconstants. So keep within that range."
 );
@@ -41,7 +41,7 @@ typedef union PipelineKey
         uint64_t depth_op      : 3;  // VkCompareOp
         uint64_t stencil_mode  : 4;  // None, Write, Test. (NOT YET IMPLEMENTED): TODO since VkStencilOpState not implemented/needed yet
         uint64_t cull_mode     : 2;  // VkCullModeFlagBits
-        uint64_t blend_mode    : 4;  // BLEND_MODE_OPAQUE / Alpha / Additive (see shadersrc/shared_constants.glsl)
+        uint64_t blend_mode    : 4;  // BLEND_MODE_OPAQUE / Alpha / Additive (see shared_constants.glsl)
         uint64_t polygon_mode  : 2;  // VkPolygonMode
         uint64_t front_face    : 1;  // VkFrontFace (we'll use CCW but things like mirrored objects would flip winding)
         uint64_t msaa_samples  : 2;  // PipelineKeyMultisamplingBits. 0=1x, 1=2x, 3=4x, 4=8x samples
