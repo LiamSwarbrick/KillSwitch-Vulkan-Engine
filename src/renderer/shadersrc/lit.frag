@@ -3,8 +3,8 @@
 #include "common/shared.glsl"
 #include "common/shared_material_read.glsl"
 
-layout (location = 0) in vec2 frag_uv;
-layout (location = 1) in vec3 frag_vcolor;
+layout (location = 0) in vec2 uv;
+layout (location = 1) in vec3 color;
 
 layout (location = 0) out vec4 out_color;
 
@@ -23,13 +23,13 @@ void main()
     MaterialData mat;
     vec4 base_color;
 
-    sample_material_basic(frag_uv, mat, base_color);
+    sample_material_basic(uv, mat, base_color);
 
     // LIGHTING (TODO)
-    // vec3 N = normalize(frag_world_normal);
+    // vec3 N = normalize(world_normal);
     // vec3 V = normalize(scene.camera_pos - in_world_pos);
 
-    vec4 final_color = vec4(frag_vcolor, 1.0) * base_color;
+    vec4 final_color = vec4(color, 1.0) * base_color;
 
     out_color = vec4(
         final_color.rgb,

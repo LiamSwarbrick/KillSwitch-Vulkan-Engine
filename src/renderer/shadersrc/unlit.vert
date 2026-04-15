@@ -3,8 +3,8 @@
 #include "common/shared.glsl"
 #include "common/shared_vertex_fetch.glsl"
 
-layout (location = 0) out vec2 frag_uv;
-layout (location = 1) out vec3 frag_vcolor;
+layout (location = 0) out vec2 uv;
+layout (location = 1) out vec3 color;
 
 // Multipass materials require different shaders have reproducable vertex positions
 invariant gl_Position;
@@ -23,7 +23,7 @@ void main()
 
     mat4 model_matrix = compute_model_matrix(vertex_buf_index);
 
-    frag_uv = v_uv;
-    frag_color = v_color;
+    uv = v_uv;
+    color = v_color;
     gl_Position = scene.view_proj * model_matrix * vec4(v_pos, 1.0);
 }
