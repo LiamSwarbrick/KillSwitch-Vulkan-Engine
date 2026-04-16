@@ -72,7 +72,7 @@ struct FrameGraphVisualizer
                 ? ImVec4(0.70f, 0.40f, 1.00f, 1.0f)   // compute  -> purple
                 : ImVec4(0.40f, 0.95f, 0.55f, 1.0f);  // graphics -> green
             ImGui::PushStyleColor(ImGuiCol_Text, header_col);
-            ImGui::Text("[%s] %s", pass->is_compute ? "C" : "G", pass->debug_name);
+            ImGui::Text("[%s] %s", pass->is_compute ? "COMP" : "GFX", pass->debug_name);
             ImGui::PopStyleColor();
 
             // Input pins
