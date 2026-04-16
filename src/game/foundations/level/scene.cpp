@@ -124,7 +124,7 @@ bool Scene::LoadAsset(const char* fileName)
             // ---------------
             C_Transform t;
             glm::vec3 position = glm::vec3(node->translation[0], node->translation[1], node->translation[2]);
-            glm::quat rotation = glm::quat(node->rotation[0], node->rotation[1], node->rotation[2], node->rotation[3]);
+            glm::quat rotation = glm::quat(node->rotation[3], node->rotation[0], node->rotation[1], node->rotation[2]);
             t.matrix = glm::mat4_cast(rotation);
             t.matrix = glm::translate(t.matrix, position);
             m_ecs.AddComponent<C_Transform>(eID, { t.matrix });

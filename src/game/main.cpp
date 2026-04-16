@@ -130,8 +130,9 @@ int main(int argc, char *argv[])
 
     // Testing Scene and ECS
     Scene scene{};
-    scene.LoadLevel("assets/animations/SwatAnimsTrue.gltf");
-    // scene.LoadLevel("assets/animations/cat.gltf");
+    scene.StartUp();
+    // scene.LoadLevel("assets/animations/SwatAnimsTrue.gltf");
+    scene.LoadLevel("assets/animations/cat.gltf");
     // scene.LoadLevel("assets/animations/Animationtest.gltf");
     // scene.LoadLevel("assets/levels/Untitled_skybox.gltf");
 
