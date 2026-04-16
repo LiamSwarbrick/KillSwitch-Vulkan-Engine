@@ -41,6 +41,7 @@ void BeginDrawCalls()
     }
 
     // Empty object data (e.g. model transforms)
+    ResetMappedArena(&renderstate.scenes_arena);
     ResetMappedArena(&renderstate.object_transforms);
     ResetMappedArena(&renderstate.joint_transforms);
 
@@ -120,11 +121,10 @@ void AddDrawCall(Renderable* r)
 
 // DRAW CALL SORTING AND EXECUTION
 
-/*  NOTE(Liam):
+/*  NOTE:
     While keeping the drawcall API simple as it already is,
     under the hood we can do as many optimisations as needed.
-    (because it's not OOP template metaprogrammed c++ inspired dog)
-    
+        
     In this case, our renderables are made up of many primitives,
     these primitives may have different pipeline state to each other.
     For instance, alpha blending vs masked vs opaque.
@@ -139,6 +139,9 @@ void AddDrawCall(Renderable* r)
     - Depth sort: The depth prepass is faster front to back, 
       also alpha masked geometry should be the done lastly in the depth prepass.
 
+
+    TODO: Whilst using glTF we gotta deal with meshes being multiple primitives.
+    In the future, when reusing this with a custom format, decide whether this is still a good choice.
 */
 
 typedef struct DrawPrimitive
@@ -146,7 +149,7 @@ typedef struct DrawPrimitive
     DrawCall dc;
     PipelineKey pipeline_key;
     uint32_t prim_idx;
-    uint32_t sort_key;  // TODO
+    uint32_t sort_key;  // TODO unused
 }
 DrawPrimitive;
 
@@ -186,6 +189,14 @@ int DrawPrimSortFunc_Default(const void* a, const void* b)
         // TODO: Sort by quantized depth too.
         // And maybe some passes will want to prioritize depth over pipeline key
         // And others may want to only do alpha masked geometry last, etc.
+
+        // TODO: Sort by mesh/primitive rid
+        //  Then we can use an instanced drawcall for the same meshes.
+        //  Note however that things like grass should not be sorted this though
+        //  as it's too expensive CPU side. Which is why I'd like to rework the
+        //  mesh->primitive thing that glTF has made us use. (I.e. cut off glTF)
+        //  This way we can design to minimize overhead for hugely batched draws like grass.
+
         return 0;
     }
 }
@@ -195,7 +206,7 @@ void SortDraws(DrawPrimSortFunc sort_func)
     qsort(loaded_draws, num_loaded_draws, sizeof(DrawPrimitive), sort_func);
 }
 
-void ExecuteDraws(VkCommandBuffer cmd, PushConstant_PassHeader push_pass)
+void ExecuteDraws(VkCommandBuffer cmd, PushConstant_PassHeader push_pass, uint64_t scene_ptr)
 {
     for (uint32_t i = 0; i < num_loaded_draws; ++i)
     {
@@ -218,7 +229,7 @@ void ExecuteDraws(VkCommandBuffer cmd, PushConstant_PassHeader push_pass)
         };
 
         // Prepare the draw call part of Push Constants 
-        push.dc.scene_ptr    = renderstate.registry.resources[renderstate.rids.global_scene_buffer_rid].buffer_gpu_address;
+        push.dc.scene_ptr    = scene_ptr;
         push.dc.material_ptr = renderstate.registry.resources[renderstate.rids.material_ssbo_rid].buffer_gpu_address;
         push.dc.object_ptr   = draw->dc.object_ptr;
         push.dc.joints_ptr = draw->dc.joints_ptr;
@@ -267,81 +278,6 @@ void ExecuteDraws(VkCommandBuffer cmd, PushConstant_PassHeader push_pass)
     }
 }
 
-
-#warning IMPLEMENT NEW STUFF THEN REMOVE THE BELOW
-#if 0
-void ExecuteDrawCall(VkCommandBuffer cmd, DrawCall drawcall, PipelineKey key, PushConstant_PassHeader push_pass)
-{
-    // ASSUMES: global texture descriptor set is already bound to VK_PIPELINE_BIND_POINT_GRAPHICS
-
-    // Get/Create and Bind Pipeline
-    VkPipeline pipeline = PK_GetOrCreatePipeline(&renderstate.pipeline_map, key);
-    if (renderstate.currently_bound_pipeline != pipeline)  // <- No redundant ass pipeline binds
-    {
-        renderstate.currently_bound_pipeline = pipeline;
-        vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
-    }
-
-    FullPushConstants_Graphics push = {
-        .dc = {},
-        .pass = push_pass
-    };
-
-    // Prepare the draw call part of Push Constants 
-    push.dc.scene_ptr    = renderstate.registry.resources[renderstate.rids.global_scene_buffer_rid].buffer_gpu_address;
-    push.dc.material_ptr = renderstate.registry.resources[renderstate.rids.material_ssbo_rid].buffer_gpu_address;
-    push.dc.object_ptr   = drawcall.object_ptr;
-    push.dc.joints_ptr = drawcall.joints_ptr;
-
-    for (uint32_t prim_i = 0; prim_i < drawcall.renderable->mesh_prefab.mesh_rids.primitive_count; ++prim_i)
-    {
-        PrimitiveRIDs* prim_rids = &drawcall.renderable->mesh_prefab.mesh_rids.primitives[prim_i];
-
-        // Prepare per primitive Push Constants
-        push.dc.material_idx     = prim_rids->material_index;
-        push.dc.index_ptr        = renderstate.registry.resources[prim_rids->index_buf_rid].buffer_gpu_address;
-
-        // Mandatory vertex attributes
-        push.dc.v_positions_ptr  = renderstate.registry.resources[prim_rids->v_pos_buf_rid].buffer_gpu_address;
-        push.dc.v_texcoords_ptr  = renderstate.registry.resources[prim_rids->v_texcoord_buf_rid].buffer_gpu_address;
-        push.dc.v_normals_ptr    = renderstate.registry.resources[prim_rids->v_normal_buf_rid].buffer_gpu_address;
-
-        // Optional vertex attributes:
-
-        // TODO: Add tangents?
-
-        if (prim_rids->v_color_buf_rid != UINT32_MAX)
-            push.dc.v_colors_ptr = renderstate.registry.resources[prim_rids->v_color_buf_rid].buffer_gpu_address;
-        else
-            push.dc.v_colors_ptr = 0;
-
-        if (prim_rids->v_joint_ids_buf_rid != UINT32_MAX)
-            push.dc.v_joint_ids_ptr = renderstate.registry.resources[prim_rids->v_joint_ids_buf_rid].buffer_gpu_address;
-        else
-            push.dc.v_joint_ids_ptr = 0;
-
-        if (prim_rids->v_joint_weights_buf_rid != UINT32_MAX)
-            push.dc.v_joint_weights_ptr = renderstate.registry.resources[prim_rids->v_joint_weights_buf_rid].buffer_gpu_address;
-        else
-            push.dc.v_joint_weights_ptr = 0;
-
-
-        vkCmdPushConstants(cmd, renderstate.global_pipeline_layout,
-            VK_SHADER_STAGE_ALL, 0, sizeof(push), &push
-        );
-
-        // Draw
-        // NOTE: Since we use Vertex Pulling, we don't bind vertex or index buffers.
-        //       In fact, here we gotta use vkCmdDraw, but with the index count.
-        //       Not using vkCmdDrawIndexed because the index buffer is not the one part of pipeline pVertexInputState
-        uint32_t index_count = renderstate.registry.resources[prim_rids->index_buf_rid].buffer.size / sizeof(uint32_t);
-        uint32_t instance_count = 1;  // TODO: Instanced rendering
-
-        vkCmdDraw(cmd, index_count, instance_count, 0, 0);
-    }
-}
-#endif
-
 void ExecuteFullscreenPass(VkCommandBuffer cmd, uint32_t shader_id, PipelineKey key, PushConstant_PassHeader push_pass)
 {
     VkPipeline pipeline = PK_GetOrCreatePipeline(&renderstate.pipeline_map, key);
@@ -366,17 +302,4 @@ void ExecuteFullscreenPass(VkCommandBuffer cmd, uint32_t shader_id, PipelineKey 
 
     // Push 3 empty vertices we'll use for a fullscreen triangle
     vkCmdDraw(cmd, 3, 1, 0, 0);
-}
-
-
-// SCENE DATA UPDATION DURING FRAME
-// E.g. different renderpasses have different cameras, and other scene information.
-// Such as forward pass vs shadow mapping.
-
-void UpdateGlobalSceneData(SceneData data)
-{
-    FG_UploadBufferData(&renderstate.main.staging_objects, 
-                        renderstate.rids.global_scene_buffer_rid, 
-                        &data, sizeof(SceneData)
-    );
 }

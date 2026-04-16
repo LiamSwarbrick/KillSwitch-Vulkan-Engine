@@ -120,7 +120,7 @@ typedef struct RenderPassDesc
     VkRect2D   custom_scissor;
 
     // A function pointer to what executes the draw calls
-    void (*execute_callback)(VkCommandBuffer cmd, RenderPassDesc* desc);
+    void (*execute_callback)(VkCommandBuffer cmd, uint32_t pass_id);
     void* user_data;
 }
 RenderPassDesc;

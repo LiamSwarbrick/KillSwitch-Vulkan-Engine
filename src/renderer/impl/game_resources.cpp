@@ -125,23 +125,28 @@ void create_startup_resources()
     FG_ResourceFlags flags = FG_RESOURCE_FLAGS_ON_STARTUP;
 
     // Scene Buffer
+    // NOTE: One SceneData per renderpass so there's no worrying about synchronisation to update the scene data between renderpasses.
+    //       Index scene buffer with the pass_idx!
     ResourceCreateInfo scene_info = {
         .buffer_create_info = {
             .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
-            .size = sizeof(SceneData),
+            .size = MAX_PASSES * PaddedSizeForMappedArena(sizeof(SceneData)),
             .usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT |
                 VK_BUFFER_USAGE_TRANSFER_DST_BIT
         },
+        .is_buffer_cpu_accessible = 1  // <- Mapped bcuz small data upload is most efficient this way
     };
     renderstate.rids.global_scene_buffer_rid = FG_CreateResource(
         "GlobalSceneBuffer", FG_RESOURCE_TYPE_BUFFER, flags, &scene_info
     );
+    renderstate.scenes_arena = MakeArenaOnBufferResource(renderstate.rids.global_scene_buffer_rid);
+
 
     // Objects Buffer (Mapped so we rapidly upload transforms each frame)
     ResourceCreateInfo objects_info = {
         .buffer_create_info = {
             .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
-            .size = MAX_RENDERED_OBJECTS * sizeof(ObjectData),
+            .size = MAX_RENDERED_OBJECTS * PaddedSizeForMappedArena(sizeof(ObjectData)),
             .usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT
                 | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT
                 | VK_BUFFER_USAGE_TRANSFER_DST_BIT
@@ -158,17 +163,20 @@ void create_startup_resources()
     ResourceCreateInfo joints_info = {
         .buffer_create_info = {
             .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
-            .size = MAX_JOINTS_FOR_ALL_OBJECTS * sizeof(glm::mat4),
+            // Alignment: mat4 is obviously 64 byte aligned, so each object's joint transforms have no padding between them.
+            //      But just to be clear I've included the differences between different object's joint arrays 
+            //      (but Padded(mat4)-mat4 = 0 so it cancel out due to 64 byte alignment and 64 byte size of mat4)
+            .size = MAX_JOINTS_FOR_ALL_OBJECTS * sizeof(glm::mat4) + MAX_RENDERED_OBJECTS*(PaddedSizeForMappedArena(sizeof(glm::mat4))-sizeof(glm::mat4)),
             .usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT
                 | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT
                 | VK_BUFFER_USAGE_TRANSFER_DST_BIT
         },
         .is_buffer_cpu_accessible = 1  // <- Hence mapped
     };
-    renderstate.rids.objects_buffer_rid = FG_CreateResource(
+    renderstate.rids.joints_buffer_rid = FG_CreateResource(
         "JointsBuffer", FG_RESOURCE_TYPE_BUFFER, flags, &objects_info
     );
-    renderstate.joint_transforms = MakeArenaOnBufferResource(renderstate.rids.objects_buffer_rid);
+    renderstate.joint_transforms = MakeArenaOnBufferResource(renderstate.rids.joints_buffer_rid);
 
 
     // Materials SSBO (materials get uploaded on scene change all at once)
@@ -185,7 +193,6 @@ void create_startup_resources()
     renderstate.rids.material_ssbo_rid = FG_CreateResource(
         "MaterialSSBO", FG_RESOURCE_TYPE_BUFFER, flags, &mat_info
     );
-    renderstate.mapped_material_data = MakeArenaOnBufferResource(renderstate.rids.material_ssbo_rid);
     
 
     /////// MOVE BELOW TO create_scene_resources(scene resource list?) /////////////
@@ -442,10 +449,8 @@ void create_scene_resources()
     }
 
     // Upload materials to global material buffer (all at once)
-    ResetMappedArena(&renderstate.mapped_material_data);
-    PushToMappedArena(&renderstate.mapped_material_data,
-        loaded_materials, num_loaded_materials * sizeof(MaterialData)
-    );
+    FG_Resource* materials_res = &renderstate.registry.resources[renderstate.rids.material_ssbo_rid];
+    memcpy(materials_res->buffer.mapped_data, loaded_materials, num_loaded_materials * sizeof(MaterialData));
 
     // Load Static meshes
     for (uint32_t i = 0; i < init_info->num_static_meshes; ++i)

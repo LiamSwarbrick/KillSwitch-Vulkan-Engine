@@ -6,6 +6,8 @@ struct SceneData
     mat4 view;
     mat4 proj;
     mat4 view_proj;
+
+    uvec2 rendertarget_size;
 };
 
 struct ObjectData

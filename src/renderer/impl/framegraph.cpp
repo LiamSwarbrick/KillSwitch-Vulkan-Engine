@@ -92,12 +92,6 @@ void FG_Empty()
     // Empty pass descriptions
     renderstate.framegraph.pass_count = 0;
     memset(renderstate.framegraph.passes, 0, sizeof(renderstate.framegraph.passes));
-
-    // Empty table
-    for (uint32_t i = 0; i < PASS_TYPE_COUNT; ++i)
-    {
-        renderstate.pass_id_from_type[i] = PASS_TYPE_INVALID;
-    }
 }
 
 uint32_t FG_AddPass(RenderPassDesc pass_description)
@@ -119,12 +113,6 @@ uint32_t FG_AddPass(RenderPassDesc pass_description)
     uint32_t pass_id = fg->pass_count++;
     RenderPassDesc* pass = &fg->passes[pass_id];
     memcpy(pass, &pass_description, sizeof(RenderPassDesc));
-
-    // Add to table
-    SDL_assert(renderstate.pass_id_from_type[pass_description.pass_type] == PASS_TYPE_INVALID &&
-        "Can't add the same pass twice, give it a unique PassType enumeration"
-    );
-    renderstate.pass_id_from_type[pass_description.pass_type] = pass_id;
 
     return pass_id;
 }
@@ -260,7 +248,7 @@ void fg_execute_pass(uint32_t pass_idx, VkCommandBuffer cmd)
     if (pass->is_compute)
     {
         // Compute passes don't use vkCmdBeginRendering
-        pass->execute_callback(cmd, pass);
+        pass->execute_callback(cmd, pass_idx);
     }
     else  // Graphics Pass:
     {
@@ -372,7 +360,7 @@ void fg_execute_pass(uint32_t pass_idx, VkCommandBuffer cmd)
             vkCmdSetScissor(cmd, 0, 1, &pass->render_area);
         }
 
-        pass->execute_callback(cmd, pass);
+        pass->execute_callback(cmd, pass_idx);
 
         vkCmdEndRendering(cmd);
     }

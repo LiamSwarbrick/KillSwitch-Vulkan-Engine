@@ -73,10 +73,8 @@ typedef struct RenderState
     ShaderRegistry shader_registry;
     ResourceIDs rids;  // IDs into registry, framegraph, or pipeline hash
 
-    // Per Frame Table for converting Pass Type into framegraph.passes array index
-    uint32_t pass_id_from_type[PASS_TYPE_COUNT];  // ONLY use after framegraph has been build that frame
-
     // Arenas reset each frame
+    MappedArena scenes_arena;
     MappedArena object_transforms;
     MappedArena joint_transforms;
 
@@ -91,7 +89,6 @@ typedef struct RenderState
     // Scene Assets
     b32 is_next_scene_set;
     Scene_InitInfo next_scene_info;
-    MappedArena mapped_material_data;
 
     // Renderables arena
     RenderView renderables_arena;

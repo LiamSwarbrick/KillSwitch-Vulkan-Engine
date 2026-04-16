@@ -3,21 +3,30 @@
 #include "../../render_types.h"
 #include "shaders.h"
 
-void ForwardOpaque_Execute(VkCommandBuffer cmd, RenderPassDesc* desc)
+void ForwardOpaque_Execute(VkCommandBuffer cmd, uint32_t pass_idx)
 {
-    const uint32_t pass_type = desc->pass_type;
+    RenderPassDesc* desc = &renderstate.framegraph.passes[pass_idx];
 
-    SceneData scene_data = {};
-    scene_data.view = renderstate.camera_view;
-    scene_data.proj = renderstate.fullscreen_proj;
-    scene_data.view_proj = scene_data.proj * scene_data.view;
-    UpdateGlobalSceneData(scene_data);
+    uint64_t scene_ptr = 0;
+    {
+        SceneData scene_data = {};
+        scene_data.view = renderstate.camera_view;
+        scene_data.proj = renderstate.fullscreen_proj;
+        scene_data.view_proj = scene_data.proj * scene_data.view;
+
+        VkExtent3D extents = renderstate.registry.resources[renderstate.rids.hdr_color_target_rid].image.extent;
+        scene_data.rendertarget_size = glm::uvec2(extents.width, extents.height);
+        scene_ptr = PushToMappedArena(&renderstate.scenes_arena, &scene_data, sizeof(SceneData));
+    }
+    
 
     uint32_t forward_shaders[] = { SHADER_UNLIT, SHADER_LIT };
     PushConstant_PassHeader push_pass = {};  // Unused
 
     ResetDrawArena();
-
+    
+    // For each shader s, drawcall i, primitive p:
+    //     PushDrawPrimitive()
     for (uint32_t s = 0; s < sizeof(forward_shaders)/sizeof(forward_shaders[0]); ++s)
     {
         const uint32_t shader_id = forward_shaders[s];
@@ -28,12 +37,12 @@ void ForwardOpaque_Execute(VkCommandBuffer cmd, RenderPassDesc* desc)
             for (uint32_t p = 0; p < drawcall.renderable->mesh_prefab.mesh_rids.primitive_count; ++p)
             {
                 PrimitiveRIDs* prim = &drawcall.renderable->mesh_prefab.mesh_rids.primitives[p];
-                MaterialData* mat = &((MaterialData*)renderstate.mapped_material_data.mapped_data)[prim->material_index];
+                MaterialData* mat = &((MaterialData*)renderstate.registry.resources[renderstate.rids.material_ssbo_rid].buffer.mapped_data)[prim->material_index];
 
                 PipelineKey key = {
                     .pipeline_type  = PK_PIPELINE_TYPE_GRAPHICS,
                     .shader_id      = shader_id,
-                    .pass_type      = pass_type,
+                    .pass_idx       = pass_idx,
                     .vertex_type    = (uint64_t)drawcall.renderable->mesh_prefab.vertex_type,
                     .depth_test     = 1,
                     .depth_write    = 1,  // Still depth writing because of geometry not included in prepass
@@ -53,5 +62,5 @@ void ForwardOpaque_Execute(VkCommandBuffer cmd, RenderPassDesc* desc)
     }
 
     SortDraws(DrawPrimSortFunc_Default);
-    ExecuteDraws(cmd, push_pass);
+    ExecuteDraws(cmd, push_pass, scene_ptr);
 }

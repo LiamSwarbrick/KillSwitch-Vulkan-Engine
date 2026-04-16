@@ -1,6 +1,12 @@
 #include "mapped_linear_allocator.h"
 #include "internal_state.h"
 
+uint64_t PaddedSizeForMappedArena(uint64_t size)
+{
+    return (size + (MAPPED_ARENA_ALIGNMENT - 1)) & ~(MAPPED_ARENA_ALIGNMENT - 1);
+}
+
+
 MappedArena MakeArenaOnBufferResource(uint32_t underlying_mapped_buffer_rid)
 {
     // A series of assertions to ensure the underlying resource is valid to be used as a linear allocator for transient memory.
@@ -33,7 +39,7 @@ MappedArena MakeArenaOnBufferResource(uint32_t underlying_mapped_buffer_rid)
 uint64_t PushToMappedArena(MappedArena* arena, void* data, uint64_t size)
 {
     // Align to 64 bytes (helpful/required for many BDA operations)
-    uint32_t aligned_offset = (arena->current_offset + 63) & ~63;
+    uint64_t aligned_offset = PaddedSizeForMappedArena(arena->current_offset);
     SDL_assert((aligned_offset + size <= arena->total_size) &&
         "Size of mapped arena's underlying buffer resource is being exceeded!"
     );

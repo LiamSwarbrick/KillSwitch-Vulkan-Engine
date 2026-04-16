@@ -3,6 +3,10 @@
 
 #include <stdint.h>
 
+// Necessary byte alignment between pushed elements for quite a few BDA operations
+#define MAPPED_ARENA_ALIGNMENT 64
+uint64_t PaddedSizeForMappedArena(uint64_t size);
+
 typedef struct MappedArena
 {
     uint32_t rid;               // ON_STARTUP flagged resources only for simplicity.

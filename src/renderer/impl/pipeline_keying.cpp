@@ -150,7 +150,7 @@ VkPipeline create_graphics_pipeline(PipelineKey key)
     depth_info.stencilTestEnable = key.stencil_mode != 0;
 
     // Find attachment formats from the framegraph using key.pass_type to get pass_id
-    RenderPassDesc* pass = &renderstate.framegraph.passes[renderstate.pass_id_from_type[key.pass_type]];
+    RenderPassDesc* pass = &renderstate.framegraph.passes[key.pass_idx];
     ResourceRegistry* reg = &renderstate.registry;
 
     // NOTE: Local array for color_attachment_formats, so make sure to not to refactor things into different scopes

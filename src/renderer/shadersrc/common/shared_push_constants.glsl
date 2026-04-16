@@ -42,7 +42,9 @@ struct FullPushConstants_Graphics  // Defined for the CPU side to use
 
 #else
 
-    static_assert(sizeof(FullPushConstants_Graphics) <= 256);
+    static_assert(sizeof(FullPushConstants_Graphics) <= 256 &&
+        "Vulkan 1.4 only guaruntees 256 bytes for pushconstants. So keep within that range."
+    );
 
 #endif  // IS_GLSL
 
