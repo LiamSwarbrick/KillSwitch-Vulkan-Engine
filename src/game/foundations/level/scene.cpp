@@ -15,36 +15,44 @@ namespace rj = rapidjson;
 
 void Scene::StartUp()
 {
-    // NOT NEEDED, AddComponent uses GetComponentPoolPtr, ...
-    // ... which registers the component
     m_ecs.RegisterComponent<C_Transform>();
     m_ecs.RegisterComponent<C_StaticMesh>();
     m_ecs.RegisterComponent<C_AnimatedMesh>();
 
-    m_asset = NULL;
+    m_prefabs.clear();
 }
 
 void Scene::Shutdown()
 {
-    // for now
-    free_asset(m_asset);
+    for (Asset* asset : m_prefabs)
+    {
+        free_asset(asset);
+    }
+
+    m_prefabs.clear();
 }
 
-bool Scene::LoadAsset(const char* fileName) 
+Asset* Scene::LoadPrefab(const char* fileName)
 {
-    if (m_asset)
-    {
-        free_asset(m_asset);
-    }
     Asset* asset = load_asset(fileName);
-
-    // Load the nodes
-    for (size_t i = 0; i < asset->node_count; i++)
+    if (asset)
     {
-        Node* node = &asset->nodes[i];
-        
-        // RapidJSON to ECS tutorial!!1!1!!!!!1
-        // 1. We parse extras_json with rapidjson::Document
+        m_prefabs.push_back(asset);
+    }
+    return asset;
+}
+
+AdvEng::EntityID Scene::InstantiatePrefab(Asset* prefab, glm::vec3 spawnPosition)
+{
+    if (!prefab) return AdvEng::MAX_ENTITIES; // or any other invalid ID
+
+    AdvEng::EntityID rootEntity = AdvEng::MAX_ENTITIES;
+
+    // Load the nodes into the ECS
+    for (size_t i = 0; i < prefab->node_count; i++)
+    {
+        Node* node = &prefab->nodes[i];
+
         rj::Document doc;
         bool has_ecs_data = false;
 
@@ -56,35 +64,16 @@ bool Scene::LoadAsset(const char* fileName)
             }
         }
 
-        #define TEMPORARY_FIX
-#ifdef TEMPORARY_FIX
-        EntityID eID;
-        eID = m_ecs.CreateEntity((node->name) ? (node->name) : "");
-#endif
+        AdvEng::EntityID eID = m_ecs.CreateEntity((node->name) ? (node->name) : "");
+        if (i == 0) rootEntity = eID;
+
         if (has_ecs_data)
         {
-            #warning IMPORTANT: Need to change level editor so that every entity has ecs_data for this to work
-#ifndef TEMPORARY_FIX
-            EntityID eID;
-            eID = m_ecs.CreateEntity((node->name) ? (node->name) : "");
-#endif
-
             // 2. And put the "_ecs" value in the following
             rj::Value& components = doc["_ecs"];
 
-            // 2-extra.
-            // We will probably need to add a single flag in _ecs, like "isEntity" or "EntityComponent" idk, 
-            // saying if it is an entity, to create it (bones are not going to be i think)
-            // if (components.HasMember("isEntity") && (components.GetBool() == true)) {}
-
-            // 3. For ImportedComponents that use mirrored data from the json,
-            // Check if it cointains the member "____Component" and fill it using Struct
-            // ---------------
-            // -- COLLIDER ---
-            // ---------------
             if (components.HasMember("ColliderComponent"))
             {
-                // 3.1. Automated import!!!! you don't have to do anything just declare it!!!!
                 ImportedCollider importedCollider = StructFromRapidJsonValue<ImportedCollider>(components["ColliderComponent"]);
 
             // 3.2. use the ImportedComponent as a helper for your C_Component
@@ -116,7 +105,6 @@ bool Scene::LoadAsset(const char* fileName)
                 // 3.4 Finally add the component to the ECS!!!
                 m_ecs.AddComponent<C_Collider>(eID, std::move(colliderComponent));
             }
-#ifdef TEMPORARY_FIX
         }
 #endif
             // ---------------
@@ -129,28 +117,24 @@ bool Scene::LoadAsset(const char* fileName)
             t.matrix = glm::translate(t.matrix, position);
             m_ecs.AddComponent<C_Transform>(eID, { t.matrix });
 
-            // -- MESH
-            if (node->mesh_index >= 0)
+        // -- MESH
+        if (node->mesh_index >= 0)
+        {
+            Mesh* mesh = &asset->meshes[node->mesh_index];
+            if (mesh->vertex_type == VERTEX_TYPE_SKINNED)
             {
-                Mesh* mesh = &asset->meshes[node->mesh_index];
-                if (mesh->vertex_type == VERTEX_TYPE_SKINNED)
-                {
-                    uint32_t joint_count = 0;
-                    if (node->skin_index >= 0) {
-                        joint_count = (uint32_t)asset->skins[node->skin_index].joint_count;
-                    }
-                    else if (asset->skin_count > 0) {
-                        joint_count = (uint32_t)asset->skins[0].joint_count;
-                    }
-                    else {
-                        joint_count = 1;
-                    }
+                uint32_t joint_count = 0;
+                if (node->skin_index >= 0) {
+                    joint_count = (uint32_t)asset->skins[node->skin_index].joint_count;
+                }
+                else if (asset->skin_count > 0) {
+                    joint_count = (uint32_t)asset->skins[0].joint_count;
+                }
+                else {
+                    joint_count = 1;
+                }
 
-                C_AnimatedMesh animMesh
-                {
-                    mesh,
-                    asset
-                };
+                C_AnimatedMesh animMesh{ mesh, prefab };
                 animMesh.joint_count = joint_count;
 				animMesh.idleAnimationName = "Idle";
                 animMesh.splitJointName = "Spine";
@@ -167,26 +151,17 @@ bool Scene::LoadAsset(const char* fileName)
                         animMesh.joint_matrices = nullptr;
                     }
 
-                    m_ecs.AddComponent<C_AnimatedMesh>(eID, std::move(animMesh));
-                }
-                else
-                {
-                    C_StaticMesh staticMesh{
-                        &asset->meshes[node->mesh_index],
-                        asset
-                    };
-                    m_ecs.AddComponent<C_StaticMesh>(eID, { staticMesh.mesh, staticMesh.parent_asset });
-                }
+                m_ecs.AddComponent<C_AnimatedMesh>(eID, std::move(animMesh));
             }
-#ifndef TEMPORARY_FIX
+            else
+            {
+                C_StaticMesh staticMesh{ &prefab->meshes[node->mesh_index], prefab };
+                m_ecs.AddComponent<C_StaticMesh>(eID, { staticMesh.mesh, staticMesh.parent_asset });
+            }
         }
-#endif
-        // 4. END OF RAPIDJSON EXAMPLE AND OUR REFLECTION SYSTEM !!!
     }
 
-    m_asset = asset;
-
-    return true;
+    return rootEntity;
 }
 
 bool Scene::FreeAsset(Asset* asset)
@@ -196,22 +171,17 @@ bool Scene::FreeAsset(Asset* asset)
     return true;
 }
 
-bool Scene::LoadLevel(const char* fileName)
+void Scene::BuildRendererScene()
 {
-    uint64_t start_time = SDL_GetPerformanceCounter();
-
     // For now
     bool success = LoadAsset(fileName);
     if (!success) return false;
 
-    uint64_t after_loadasset = SDL_GetPerformanceCounter();
-
-    
     // NOTE: Jaime's view returns a sparse set, aka, some C++ iterator.
     // The renderer takes a contiguous array of data.
     // Therefore, get the view, and iterate over it to build the contiguous array to init the scene.
     auto packed = m_ecs.GetView<C_StaticMesh>().GetPacked();
-    
+
     std::vector<C_StaticMesh*> meshes;
     for (size_t i = 0; i < packed.size(); ++i)
     {
