@@ -130,6 +130,7 @@ int main(int argc, char *argv[])
 
     // Testing Scene and ECS
     Scene scene{};
+    scene.StartUp();
     // scene.LoadLevel("assets/animations/SwatAnimsTrue.gltf");
     scene.LoadLevel("assets/animations/cat.gltf");
     // scene.LoadLevel("assets/animations/Animationtest.gltf");
@@ -139,6 +140,7 @@ int main(int argc, char *argv[])
     //       This must change with the new scene system that can load many asset prefabs.
     DebugUI_SetECS(&scene.GetECS());
     DebugUI_SetAsset(scene.GetAsset());  // Now m_asset is populated
+    
 
     bool running = true;
 
