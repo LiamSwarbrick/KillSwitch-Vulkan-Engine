@@ -614,6 +614,7 @@ void Renderer_Init(const Renderer_InitInfo* info)
         ImGuiIO& io = ImGui::GetIO();
         io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
         io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
+        io.IniFilename = nullptr;
 
         // SDL3 backend
         ImGui_ImplSDL3_InitForVulkan(renderstate.window);
@@ -1714,6 +1715,7 @@ void create_or_recreate_swapchain()
     SwapchainSupportDetails details = get_and_alloc_swap_chain_support_details(renderstate.physical_device);
 
     // Choose format
+    // TODO: Support HDR colorspaces (like VK_COLOR_SPACE_DISPLAY_P3_NONLINEAR_EXT)
     SDL_assert(details.format_count > 0);
     int chosen_format_index = 0;
     for (uint32_t i = 0; i < details.format_count; ++i)

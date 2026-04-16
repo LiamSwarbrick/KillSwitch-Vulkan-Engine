@@ -51,31 +51,35 @@ namespace DebugUI
     inline void DrawDockSpace(DebugUIState& state)
     {
         if (!state.show_debug_ui) return;
-        ImGuiID dockspace_id = ImGui::DockSpaceOverViewport(0, ImGui::GetMainViewport(), ImGuiDockNodeFlags_PassthruCentralNode);
+
+        ImGuiDockNodeFlags dockspace_flags = ImGuiDockNodeFlags_PassthruCentralNode;
+        ImGuiID dockspace_id = ImGui::DockSpaceOverViewport(0, ImGui::GetMainViewport(), dockspace_flags);
 
         // Build default layout once; skipped if imgui.ini already has a saved layout.
         ImGuiDockNode* node = ImGui::DockBuilderGetNode(dockspace_id);
-        if (node && node->IsLeafNode())
+        if (node && node->ChildNodes[0] == nullptr)
         {
+            ImGuiStyle& style = ImGui::GetStyle();
+            style.Colors[ImGuiCol_DockingEmptyBg] = ImVec4(0, 0, 0, 0);
+            style.Colors[ImGuiCol_WindowBg].w = 0.5f;  // Keep normal windows translucent
+
             ImGui::DockBuilderRemoveNode(dockspace_id);
-            ImGui::DockBuilderAddNode(dockspace_id, ImGuiDockNodeFlags_PassthruCentralNode);
+            ImGui::DockBuilderAddNode(dockspace_id, dockspace_flags);
             ImGui::DockBuilderSetNodeSize(dockspace_id, ImGui::GetMainViewport()->Size);
 
-            // Split off bottom strip (30% height) — full width
             ImGuiID top, bottom;
             ImGui::DockBuilderSplitNode(dockspace_id, ImGuiDir_Down, 0.30f, &bottom, &top);
 
-            // Split top: ECS on the left (30% of total width), game viewport on the right (passthru)
             ImGuiID top_left, top_right;
-            ImGui::DockBuilderSplitNode(top, ImGuiDir_Left, 0.30f, &top_left, &top_right);
+            ImGui::DockBuilderSplitNode(top, ImGuiDir_Left, 0.25f, &top_left, &top_right);
 
-            // Split bottom strip 50/50
             ImGuiID bottom_left, bottom_right;
-            ImGui::DockBuilderSplitNode(bottom, ImGuiDir_Left, 0.50f, &bottom_left, &bottom_right);
+            ImGui::DockBuilderSplitNode(bottom, ImGuiDir_Left, 0.25f, &bottom_left, &bottom_right);
 
-            ImGui::DockBuilderDockWindow("ECS Inspector",  top_left);
-            ImGui::DockBuilderDockWindow("Asset Browser",  bottom_left);
-            ImGui::DockBuilderDockWindow("Framegraph",     bottom_right);
+            ImGui::DockBuilderDockWindow("ECS Inspector", top_left);
+            ImGui::DockBuilderDockWindow("Asset Browser", bottom_left);
+            ImGui::DockBuilderDockWindow("Framegraph", bottom_right);
+            ImGui::DockBuilderDockWindow("##EmptySpace", top_right);
 
             ImGui::DockBuilderFinish(dockspace_id);
         }
@@ -124,6 +128,19 @@ namespace DebugUI
     {
         HandleInput(state);
         DrawDockSpace(state);
+
+        // Empty viewport
+        if (ImGui::Begin("##EmptySpace",
+            nullptr,
+            ImGuiWindowFlags_NoNav |
+            ImGuiWindowFlags_NoDecoration |
+            ImGuiWindowFlags_NoInputs |
+            ImGuiWindowFlags_NoBackground))
+        {
+            // Intentionally empty
+        }
+        ImGui::End();
+
         DrawECSInspector(state, ecs);
         DrawFramegraph(state);
         DrawAssetBrowser(state);

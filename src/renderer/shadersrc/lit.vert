@@ -6,7 +6,6 @@
 layout (location = 0) out vec2 uv;
 layout (location = 1) out vec3 color;
 
-// Multipass materials require different shaders have reproducable vertex positions
 invariant gl_Position;
 
 void main()

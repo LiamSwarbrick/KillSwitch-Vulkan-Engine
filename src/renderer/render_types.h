@@ -39,7 +39,7 @@ typedef struct PrimitiveRIDs
     uint32_t index_buf_rid;
     uint32_t material_index;  // Index into the global Material SSBO
 
-    // Set to UINT32_MAX for unused attribute (specifically cuz static meshes don't have joints)
+    // Set to UINT32_MAX for unused attribute (specifically cuz static meshes don't have joints and color is optional too)
     uint32_t v_pos_buf_rid;
     uint32_t v_texcoord_buf_rid;
     uint32_t v_normal_buf_rid;

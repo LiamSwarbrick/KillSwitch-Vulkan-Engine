@@ -14,10 +14,6 @@ layout (location = 0) out vec4 out_color;
 //     return c;
 // }
 
-/*
-    TODO: Pass in camera position in scene data nad do world space lighting, start with blinn phong?.
-*/
-
 void main()
 {
     MaterialData mat;
