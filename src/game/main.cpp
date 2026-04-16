@@ -132,7 +132,7 @@ int main(int argc, char *argv[])
     Scene scene{};
     scene.StartUp();
     // scene.LoadLevel("assets/animations/SwatAnimsTrue.gltf");
-    scene.LoadLevel("assets/animations/cat.gltf");
+    scene.LoadLevel("assets/animations/Room.gltf");
     // scene.LoadLevel("assets/animations/Animationtest.gltf");
     // scene.LoadLevel("assets/levels/Untitled_skybox.gltf");
 
