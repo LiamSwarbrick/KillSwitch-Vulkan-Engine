@@ -112,10 +112,10 @@ int main(int argc, char *argv[])
     scene.StartUp();
 
     Asset* catPrefab = scene.LoadPrefab("assets/animations/cat.gltf");
-    Asset* animationPrefab = scene.LoadPrefab("assets/animations/Animationtest.gltf");
+    Asset* animationPrefab = scene.LoadPrefab("assets/animations/sceneglb.glb");
 
     scene.InstantiatePrefab(catPrefab, glm::vec3(0, 0, 0));
-    scene.InstantiatePrefab(animationPrefab, glm::vec3(0, 10, 0));
+    scene.InstantiatePrefab(animationPrefab, glm::vec3(5, 20, 0));
     // render a second cat
     AdvEng::EntityID playerEntity = scene.InstantiatePrefab(catPrefab, glm::vec3(10, 0, 10));
 
@@ -209,6 +209,30 @@ int main(int argc, char *argv[])
 
             // keep this
             Renderer_ListenToWindowEvent(event);
+        }
+
+        // controller test not ideal at all
+        const bool* state = SDL_GetKeyboardState(NULL);
+        float speed = 5.0f * dt;
+        glm::vec3 movement(0.0f);
+
+        if (state[SDL_SCANCODE_I]) movement.z -= speed;
+        if (state[SDL_SCANCODE_K]) movement.z += speed;
+
+        if (state[SDL_SCANCODE_J]) movement.x -= speed;
+        if (state[SDL_SCANCODE_L]) movement.x += speed;
+
+        if (glm::length(movement) > 0.0f)
+        {
+            for (uint32_t i = 0; i < catPrefab->node_count; i++)
+            {
+                C_Transform* tf = scene.GetECS().GetComponentPtr<C_Transform>(playerEntity + i);
+                if (tf)
+                {
+                    tf->position += movement;
+                    tf->matrix = glm::translate(glm::mat4(1.0f), tf->position) * glm::mat4_cast(tf->rotation);
+                }
+            }
         }
 
         // more aiming testing logic, can be removed whenever

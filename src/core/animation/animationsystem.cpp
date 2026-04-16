@@ -349,7 +349,7 @@ void CalculateWorldMatrices(Asset* asset, int boneIndex, glm::mat4 parentMatrix,
 
     // Recursively call for all children
     for (size_t i = 0; i < asset->skins[0].bones[boneIndex].child_count; ++i)
-		CalculateModelMatrices(asset, asset->skins[0].bones[boneIndex].children_indices[i], worldJointMatrices[boneIndex], localJointMatrices, worldJointMatrices);
+		CalculateWorldMatrices(asset, asset->skins[0].bones[boneIndex].children_indices[i], worldJointMatrices[boneIndex], localJointMatrices, worldJointMatrices);
 }
 
 void AnimationInterpolation(Asset* asset, Animation& animation, float animationTime, std::vector<BoneTransform>& pose) 
