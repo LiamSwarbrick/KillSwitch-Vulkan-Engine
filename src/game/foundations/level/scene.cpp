@@ -1,5 +1,5 @@
-#include "foundations/scene.h"
-#include "foundations/components.h"
+#include "game/foundations/scene.h"
+#include "game/foundations/components.h"
 #include "renderer/renderer.h"
 
 // animation update
@@ -198,10 +198,15 @@ bool Scene::FreeAsset(Asset* asset)
 
 bool Scene::LoadLevel(const char* fileName)
 {
+    uint64_t start_time = SDL_GetPerformanceCounter();
+
     // For now
     bool success = LoadAsset(fileName);
     if (!success) return false;
 
+    uint64_t after_loadasset = SDL_GetPerformanceCounter();
+
+    
     // NOTE: Jaime's view returns a sparse set, aka, some C++ iterator.
     // The renderer takes a contiguous array of data.
     // Therefore, get the view, and iterate over it to build the contiguous array to init the scene.
@@ -223,6 +228,8 @@ bool Scene::LoadLevel(const char* fileName)
         anim_meshes.push_back(&anim_mesh);
     }
 
+    uint64_t after_entity_load = SDL_GetPerformanceCounter();
+
     Scene_InitInfo info = {};
     info.num_static_meshes = (uint32_t)meshes.size();
     info.static_meshes = meshes.data();
@@ -231,6 +238,14 @@ bool Scene::LoadLevel(const char* fileName)
 
     Renderer_ChangeScene(info);
     
+    uint64_t after_uploadtogpu = SDL_GetPerformanceCounter();
+
+    uint64_t counter_freq = SDL_GetPerformanceFrequency();
+    double disk_time        = (double)(after_loadasset - start_time) / (double)counter_freq;
+    double entity_time     = (double)(after_entity_load - after_loadasset) / (double)counter_freq;
+    double gpu_upload_time  = (double)(after_uploadtogpu - after_entity_load) / (double)counter_freq;
+    SDL_Log("Times:\n- LoadAsset(): %f\n- Renderer_ChangeScene(): %f\n", disk_time, gpu_upload_time);
+
     return true;
 }
 
