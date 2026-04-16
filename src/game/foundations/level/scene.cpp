@@ -129,11 +129,10 @@ AdvEng::EntityID Scene::InstantiatePrefab(Asset* prefab, glm::vec3 spawnPosition
 
                 C_AnimatedMesh animMesh{ mesh, prefab };
                 animMesh.joint_count = joint_count;
-                animMesh.currentAnimation = 0;
-                animMesh.animationTime = 0.0f;
-                animMesh.playbackSpeed = 1.0f;
-                animMesh.isPlaying = true;
-                animMesh.isLooping = true;
+				animMesh.idleAnimationName = "Idle";
+                animMesh.splitJointName = "Spine";
+				OnStartAnim(animMesh, animMesh.idleAnimationName); // Start with idle animation by default
+                
 
                 if (joint_count > 0) {
                     animMesh.joint_matrices = (glm::mat4*)malloc(joint_count * sizeof(glm::mat4));

@@ -2,6 +2,7 @@
 #include "renderer/renderer.h"
 #include "foundations/scene.h"
 #include "core/components.h"
+#include "core/animation.h"
 
 // TODO: Implementation is exposed?
 #include "renderer/impl/debug_ui/debug_ui.h"
@@ -140,8 +141,97 @@ int main(int argc, char *argv[])
         {
             if (event.type == SDL_EVENT_QUIT) running = false;
 
+
+            // Animation Testing, can be removed whenever
+            if (event.type == SDL_EVENT_KEY_DOWN)
+            {
+                auto view = scene.GetECS().GetView<C_AnimatedMesh>();
+
+                view.ForEach([&](AdvEng::EntityID player, C_AnimatedMesh& anim)
+                {
+                    switch (event.key.scancode)
+                    {
+                    case SDL_SCANCODE_1:
+                        SDL_Log("Test: Blending to Idle");
+                        PlayAnim(anim, "Idle", 0.5f);
+                        break;
+
+                    case SDL_SCANCODE_2:
+                        SDL_Log("Test: Blending to Walk (loop on)");
+                        PlayAnim(anim, "Walk", 0.5f);
+                        SetLooping(anim, anim.lowerBodyLayer, true);
+                        break;
+
+                    case SDL_SCANCODE_3:
+                        SDL_Log("Test: Triggering Upper Body Reload (loop on)");
+                        PlayUpperBodyAnim(anim, "Reload", 0.3f);
+                        SetLooping(anim, anim.upperBodyLayer, true);
+                        break;
+
+                    case SDL_SCANCODE_4:
+                        SDL_Log("Test: Stopping Lower Body Action");
+                        StopAnim(anim, 0.5f);
+                        break;
+
+                    case SDL_SCANCODE_5:
+                        SDL_Log("Test: Stopping Upper Body Action");
+                        StopUpperBodyAnim(anim, 0.5f);
+                        break;
+
+                    case SDL_SCANCODE_6:
+                        SDL_Log("Test: Full Body Hit Reaction");
+                        PlayFullBodyAnim(anim, "Idle", 0.1f);
+                        break;
+
+                    case SDL_SCANCODE_7:
+                        SDL_Log("Test: Lower Looping Off");
+                        SetLooping(anim, anim.lowerBodyLayer, false);
+                        break;
+
+                    case SDL_SCANCODE_8:
+                        SDL_Log("Test: Upper Looping Off");
+                        SetLooping(anim, anim.upperBodyLayer, false);
+                        break;
+
+                    default: break;
+                    }
+                });
+
+                // Toggle Aiming with T
+                if (event.key.scancode == SDL_SCANCODE_T) {
+                    auto view = scene.GetECS().GetView<C_AnimatedMesh>();
+                    view.ForEach([&](AdvEng::EntityID p, C_AnimatedMesh& anim) {
+                        anim.isAiming = !anim.isAiming;
+                        SDL_Log("Aiming: %s", anim.isAiming ? "ON" : "OFF");
+                    });
+                }
+            }
+
+            // keep this
             Renderer_ListenToWindowEvent(event);
         }
+
+        // more aiming testing logic, can be removed whenever
+        const bool* keyboard = SDL_GetKeyboardState(NULL);
+        auto view = scene.GetECS().GetView<C_AnimatedMesh>();
+        view.ForEach([&](AdvEng::EntityID p, C_AnimatedMesh& anim) {
+            if (anim.isAiming) {
+                float speed = 60.0f; // Degrees per second
+                if (keyboard[SDL_SCANCODE_V])    anim.aimPitch += dt * speed;
+                if (keyboard[SDL_SCANCODE_B])    anim.aimPitch -= dt * speed;
+                if (keyboard[SDL_SCANCODE_N])    anim.aimYaw -= dt * speed;
+                if (keyboard[SDL_SCANCODE_M])    anim.aimYaw += dt * speed;
+
+                // Log it occasionally so you can see the values
+                static float logTimer = 0;
+                logTimer += dt;
+                if (logTimer > 0.5f) {
+                    SDL_Log("Aim - Pitch: %.2f, Yaw: %.2f", anim.aimPitch, anim.aimYaw);
+                    logTimer = 0;
+                }
+            }
+            });
+
 
         // Game ticks
         scene.Update(dt);
