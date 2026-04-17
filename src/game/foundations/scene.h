@@ -9,14 +9,12 @@ class Scene {
 private:
     ECS m_ecs;
 
-    // For now
-    Asset* m_asset;
+    std::vector<Asset*> m_prefabs;
 
-    // Not usable for now
     Hierarchy<u32> m_hierarchy;
 
 private:
-    bool LoadAsset(const char* fileName);
+    //bool LoadAsset(const char* fileName);
     bool FreeAsset(Asset* asset);
 
 public:
@@ -26,10 +24,15 @@ public:
     void StartUp();
     void Shutdown();
 
-    // bool LoadLevel(u32 levelNumber);
-    bool LoadLevel(const char* fileName);
-    ECS& GetECS()   { return m_ecs;    };
-    Asset*        GetAsset() { return m_asset;  };
+    // loads asset and stores it in m_prefabs
+    Asset* LoadPrefab(const char* fileName);
+    // converts prefab into an entity with a given position
+    // return ID of first node
+    EntityID InstantiatePrefab(Asset* prefab, glm::vec3 position);
+    // collects all renderables and initializes the renderer scene
+    void BuildRendererScene();
+
+    ECS& GetECS() { return m_ecs; };
 
     void Update(float dt);
     void Render();

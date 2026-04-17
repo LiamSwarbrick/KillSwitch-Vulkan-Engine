@@ -140,10 +140,46 @@ Asset* load_asset(const char* filename) {
 
 	// Copy Images
 	for (size_t i = 0; i < asset->image_count; i++) {
-		const char* img_name = duplicate_string(data->images[i].name);
-		const char* img_uri = duplicate_string(data->images[i].uri);
-		
-		asset->images[i] = load_image(img_name, img_uri);
+		cgltf_image* gltf_image = &data->images[i];
+
+		if (gltf_image->buffer_view) {
+			// GLB
+			if (gltf_image->name) {
+				asset->images[i].name = duplicate_string(gltf_image->name);
+				asset->images[i].uri = duplicate_string(gltf_image->name);
+			}
+			else {
+				// default uri for images with no names
+				char fallback_name[64];
+				snprintf(fallback_name, sizeof(fallback_name), "EmbeddedTexture_%zu", i);
+				asset->images[i].name = duplicate_string(fallback_name);
+				asset->images[i].uri = duplicate_string(fallback_name);
+			}
+
+			// extract the raw binary image data
+			uint8_t* buffer_data = (uint8_t*)gltf_image->buffer_view->buffer->data + gltf_image->buffer_view->offset;
+			size_t buffer_size = gltf_image->buffer_view->size;
+
+			int width, height, num_channels;
+			stbi_set_flip_vertically_on_load(0);
+			asset->images[i].data = stbi_load_from_memory(buffer_data, (int)buffer_size, &width, &height, &num_channels, 4);
+
+			if (!asset->images[i].data) {
+				SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Failure to load embedded image from glb");
+			}
+			else {
+				asset->images[i].width = width;
+				asset->images[i].height = height;
+				asset->images[i].data_size = width * height * 4;
+			}
+		}
+		else {
+			// GLTF
+			const char* img_name = duplicate_string(gltf_image->name);
+			const char* img_uri = duplicate_string(gltf_image->uri);
+
+			asset->images[i] = load_image(img_name, img_uri);
+		}
 	}
 
 	// Copy Textures

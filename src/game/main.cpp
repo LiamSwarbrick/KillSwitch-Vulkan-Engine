@@ -59,12 +59,7 @@ glm::mat4 temp_camera_view_matrix()
 
 int main(int argc, char *argv[])
 {
-    bool is_debugging = true;
     bool enabled_validation_layers = true;
-#ifdef NDEBUG
-    is_debugging = false;
-#endif
-
     // NOTE: For non production builds, we still want Vulkan validation layers on in release mode, because release mode can have different bugs
     // To make sure it's obvious when validation layers are used, we'll put it in the window title.
     // Note that validation layers degrade performance significantly, so should be disabled in performance metrics and absolutely in production builds
@@ -130,17 +125,20 @@ int main(int argc, char *argv[])
 
     // Testing Scene and ECS
     Scene scene{};
+    //Renderer_SetImGuiCallback(OnImGuiBuild, &scene);
     scene.StartUp();
-    // scene.LoadLevel("assets/animations/SwatAnimsTrue.gltf");
-    scene.LoadLevel("assets/animations/Room.gltf");
-    // scene.LoadLevel("assets/animations/Animationtest.gltf");
-    // scene.LoadLevel("assets/levels/Untitled_skybox.gltf");
 
-    // TODO: Debug UI is built around the idea of 1 asset at the moment.
-    //       This must change with the new scene system that can load many asset prefabs.
-    DebugUI_SetECS(&scene.GetECS());
-    DebugUI_SetAsset(scene.GetAsset());  // Now m_asset is populated
-    
+    Asset* catPrefab = scene.LoadPrefab("assets/animations/scene.gltf");
+    Asset* animationPrefab = scene.LoadPrefab("assets/animations/sceneglb.glb");
+
+    scene.InstantiatePrefab(catPrefab, glm::vec3(0, 0, 0));
+    scene.InstantiatePrefab(animationPrefab, glm::vec3(5, 20, 0));
+    // render a second cat
+    EntityID playerEntity = scene.InstantiatePrefab(catPrefab, glm::vec3(10, 0, 10));
+
+    scene.BuildRendererScene();
+
+
     bool running = true;
 
     // Set up the time tracker
@@ -152,109 +150,41 @@ int main(int argc, char *argv[])
         uint64_t current_time = SDL_GetTicksNS();
         float dt = (float)(current_time - last_time) / 1000000000.0f;
         last_time = current_time;
-        if (dt > 0.1f) dt = 0.1f;
+        if (dt > 0.1f) dt = 0.1f;   
 
         // Event Loop
         SDL_Event event;
         while (SDL_PollEvent(&event))
         {
             if (event.type == SDL_EVENT_QUIT) running = false;
-            Renderer_ListenToWindowEvent(event);
+
         }
-#if 0
-            // Animation Testing, can be removed whenever
-            if (event.type == SDL_EVENT_KEY_DOWN)
+
+        // controller test not ideal at all
+        const bool* state = SDL_GetKeyboardState(NULL);
+        float speed = 5.0f * dt;
+        glm::vec3 movement(0.0f);
+
+        if (state[SDL_SCANCODE_I]) movement.z -= speed;
+        if (state[SDL_SCANCODE_K]) movement.z += speed;
+
+        if (state[SDL_SCANCODE_J]) movement.x -= speed;
+        if (state[SDL_SCANCODE_L]) movement.x += speed;
+
+        if (glm::length(movement) > 0.0f)
+        {
+            for (uint32_t i = 0; i < catPrefab->node_count; i++)
             {
-                auto view = scene.GetECS().GetView<C_AnimatedMesh>();
-
-                view.ForEach([&](EntityID player, C_AnimatedMesh& anim)
+                C_Transform* tf = scene.GetECS().GetComponentPtr<C_Transform>(playerEntity + i);
+                if (tf)
                 {
-                    C_Transform& transform = scene.GetECS().GetComponent<C_Transform>(player);
-                    transform.matrix[0][0] = 0.1f;
-                    transform.matrix[1][1] = 0.1f;
-                    transform.matrix[2][2] = 0.1f;
-
-                    switch (event.key.scancode)
-                    {
-                    case SDL_SCANCODE_1:
-                        SDL_Log("Test: Blending to Idle");
-                        PlayAnim(anim, "Idle", 0.5f);
-                        break;
-
-                    case SDL_SCANCODE_2:
-                        SDL_Log("Test: Blending to Walk (loop on)");
-                        PlayAnim(anim, "Walk", 0.5f);
-                        SetLooping(anim, anim.lowerBodyLayer, true);
-                        break;
-
-                    case SDL_SCANCODE_3:
-                        SDL_Log("Test: Triggering Upper Body Reload (loop on)");
-                        PlayUpperBodyAnim(anim, "Reload", 0.3f);
-                        SetLooping(anim, anim.upperBodyLayer, true);
-                        break;
-
-                    case SDL_SCANCODE_4:
-                        SDL_Log("Test: Stopping Lower Body Action");
-                        StopAnim(anim, 0.5f);
-                        break;
-
-                    case SDL_SCANCODE_5:
-                        SDL_Log("Test: Stopping Upper Body Action");
-                        StopUpperBodyAnim(anim, 0.5f);
-                        break;
-
-                    case SDL_SCANCODE_6:
-                        SDL_Log("Test: Full Body Hit Reaction");
-                        PlayFullBodyAnim(anim, "Idle", 0.1f);
-                        break;
-
-                    case SDL_SCANCODE_7:
-                        SDL_Log("Test: Lower Looping Off");
-                        SetLooping(anim, anim.lowerBodyLayer, false);
-                        break;
-
-                    case SDL_SCANCODE_8:
-                        SDL_Log("Test: Upper Looping Off");
-                        SetLooping(anim, anim.upperBodyLayer, false);
-                        break;
-
-                    default: break;
-                    }
-                });
-
-                // Toggle Aiming with T
-                if (event.key.scancode == SDL_SCANCODE_T) {
-                    auto view = scene.GetECS().GetView<C_AnimatedMesh>();
-                    view.ForEach([&](EntityID p, C_AnimatedMesh& anim) {
-                        anim.isAiming = !anim.isAiming;
-                        SDL_Log("Aiming: %s", anim.isAiming ? "ON" : "OFF");
-                    });
+                    // Apply movement directly to the world translation (column 3 of the matrix)
+                    tf->matrix[3][0] += movement.x;
+                    tf->matrix[3][1] += movement.y;
+                    tf->matrix[3][2] += movement.z;
                 }
             }
         }
-
-        // more aiming testing logic, can be removed whenever
-        const bool* keyboard = SDL_GetKeyboardState(NULL);
-        auto view = scene.GetECS().GetView<C_AnimatedMesh>();
-        view.ForEach([&](EntityID p, C_AnimatedMesh& anim) {
-            if (anim.isAiming) {
-                float speed = 60.0f; // Degrees per second
-                if (keyboard[SDL_SCANCODE_V])    anim.aimPitch += dt * speed;
-                if (keyboard[SDL_SCANCODE_B])    anim.aimPitch -= dt * speed;
-                if (keyboard[SDL_SCANCODE_N])    anim.aimYaw -= dt * speed;
-                if (keyboard[SDL_SCANCODE_M])    anim.aimYaw += dt * speed;
-
-                // Log it occasionally so you can see the values
-                static float logTimer = 0;
-                logTimer += dt;
-                if (logTimer > 0.5f) {
-                    SDL_Log("Aim - Pitch: %.2f, Yaw: %.2f", anim.aimPitch, anim.aimYaw);
-                    logTimer = 0;
-                }
-            }
-            });
-
-#endif
 
         // Game ticks
         scene.Update(dt);
