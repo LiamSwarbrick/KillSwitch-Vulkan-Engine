@@ -89,7 +89,8 @@ bool Scene::LoadAsset(const char* fileName)
             // 3.1. Automated import!!!! you don't have to do anything just declare it!!!!
             ImportedRigidbody importedRigidbody = StructFromRapidJsonValue<ImportedRigidbody>(components["RigidbodyComponent"]);
 
-            
+            bool supported = true;
+            float halfHeight;
             // 3.2. use the ImportedComponent as a helper for your C_Component
             ShapeDesc shapeDesc;
             switch (importedRigidbody.collider_type)
@@ -102,10 +103,16 @@ bool Scene::LoadAsset(const char* fileName)
                 break;
             case ImportedColliderType::COL_TYPE_CAPSULE:
                 // convert importedRigidbody.height (full height with radii) to halfHeight (center to sphere)
-                float halfHeight = std::max(0.0f, importedRigidbody.height / 2 - importedRigidbody.radius);
+                halfHeight = std::max(0.0f, importedRigidbody.height / 2 - importedRigidbody.radius);
                 shapeDesc = ShapeDesc::makeCapsule(importedRigidbody.radius, halfHeight);
                 break;
+            default:
+                supported = false;
+                SDL_assert(false && "Shape Type not supported for now");
+                break;
             }
+
+            if (!supported) continue; // ignore current entity if has unsupported shape type
 
             shapeDesc.localOffset = importedRigidbody.collider_position_offset;
             shapeDesc.localOrientation = importedRigidbody.collider_rotation_offset;
