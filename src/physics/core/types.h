@@ -4,7 +4,6 @@
 #include "SDL3/SDL.h"
 
 #include "core/utils/enum_bitmask.h"
-#include "core/my_c_runtime.h"
 
 #include "glm/glm.hpp"
 #include "glm/gtc/quaternion.hpp"
@@ -15,7 +14,6 @@ constexpr float F_EPSILON = 1e-6f;
 // ------------------
 // SHAPES RELATED
 // ------------------
-
 struct AABB
 {
 
@@ -32,8 +30,8 @@ struct AABB
     // paranoid functions in case the aabb wasn't centered
     // center should be glm::vec3{0.0f}
     glm::vec3 center() const { return (min + max) * 0.5f; }
-    // halfSizes should be this.max
-    glm::vec3 halfSizes() const { return (max - min) * 0.5f; }
+    // halfWidths should be this.max
+    glm::vec3 halfWidths() const { return (max - min) * 0.5f; }
 
 
     bool overlaps(const AABB& o) const
@@ -102,15 +100,19 @@ enum class ShapeType : uint8_t
 
 struct ShapeDesc
 {
+    glm::vec3 localOffset;
+    glm::quat localOrientation;
+
     ShapeType type;
 
     union
     {
         struct { float radius; }                        sphere;
-        struct { glm::vec3 halfExtents; }               box;
+        struct { glm::vec3 halfWidths; }               box;
         struct { float radius; float halfHeight; }      capsule;
         struct { glm::vec3 normal; float distance; }    plane;
     };
+
 
     // For easiness at construction
     static ShapeDesc makeSphere(float radius)
@@ -122,11 +124,11 @@ struct ShapeDesc
         return d;
     }
 
-    static ShapeDesc makeBox(glm::vec3 halfExtents)
+    static ShapeDesc makeBox(glm::vec3 halfWidths)
     {
         ShapeDesc d;
         d.type = ShapeType::Box;
-        d.box.halfExtents = halfExtents;
+        d.box.halfWidths = halfWidths;
 
         return d;
     }
@@ -208,7 +210,8 @@ enum class ForceLayer : uint32_t
 {
     None = 0,
     Default = 1 << 0,
-    MagneticTrap = 1 << 1
+    Wind = 1 << 1,
+    MagneticTrap = 1 << 2
 };
 DEFINE_ENUM_CLASS_BITWISE_OPERATORS(ForceLayer);
 
@@ -216,6 +219,8 @@ DEFINE_ENUM_CLASS_BITWISE_OPERATORS(ForceLayer);
 // ------------------
 // RIGIDBODY RELATED
 // ------------------
+
+// Descriptor to create RigidBodies via PhysicsManager.createBody()
 struct RigidBodyDesc
 {
     glm::vec3 position = glm::vec3{};
@@ -230,7 +235,7 @@ struct RigidBodyDesc
     // Damping (to extend to linear and angular if i add it)
     float damping = 0.99f; // physics book
 
-    ForceLayer forceLayers = ForceLayer::Default;
+    uint32_t forceLayers = (uint32_t) ForceLayer::Default;
 
     // RigidBody type
     bool isStatic = false;
@@ -253,7 +258,8 @@ struct RigidBody
     float gravityScale = 1.0f;
     float damping = 0.99f;
 
-    uint32_t forceLayers = (uint32_t)ForceLayer::Default;
+    // We could add body layer (as in player, enemy, etc, to provide better query options, but idk)
+    uint32_t forceLayers = (uint32_t) ForceLayer::Default;
 
     ShapeHandle shapeHandle; // get shape via physicsWorld.getShape()
 
@@ -266,6 +272,8 @@ struct RigidBody
     bool sleeping = false;
 
     AABB aabb; // maintained by broadphase
+
+    uint32_t bodyID; // to backtrack to handle in O(1)
 };
 
 struct RigidBodyHandle
@@ -275,6 +283,22 @@ struct RigidBodyHandle
     bool isValid() const
     {
         return index != UINT32_MAX;
+    }
+
+    // For automatic casting
+    operator uint32_t() const
+    {
+        return index;
+    }
+
+    operator int() const
+    {
+        return static_cast<int>(index);
+    }
+
+    void operator=(uint32_t value)
+    {
+        index = value;
     }
 
     bool operator==(const RigidBodyHandle& o) const
@@ -289,6 +313,7 @@ struct RigidBodyHandle
 };
 
 static constexpr RigidBodyHandle InvalidRigidBodyHandle = { UINT32_MAX };
+
 
 
 struct BodyPair
@@ -323,5 +348,6 @@ struct BodyPair
 
     bool isValid() const { return bodyA != nullptr; }
 };
+
 
 #endif // !PHYSICS_CORE_TYPES_H

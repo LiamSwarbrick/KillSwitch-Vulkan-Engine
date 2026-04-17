@@ -9,7 +9,7 @@ class IForceGenerator
 public:
 	virtual ~IForceGenerator() = default;
 
-	uint32_t targetLayers = (uint32_t)ForceLayer::Default;
+	uint32_t targetLayers = (uint32_t) ForceLayer::Default;
 
 	virtual void apply(RigidBody& body, float dt) = 0;
 };
@@ -18,7 +18,7 @@ public:
 class GravityGenerator : public IForceGenerator
 {
 public: 
-	glm::vec3 gravity = { 0, -9.81f, 0 };
+	glm::vec3 gravity = glm::vec3(0.0f, -9.81f, 0.0f);
 
 	void apply(RigidBody& body, float dt) override
 	{

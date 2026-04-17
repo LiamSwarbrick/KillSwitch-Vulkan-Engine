@@ -52,24 +52,24 @@ private:
             m_pages[pageIndex].fill(NULL_ID);
         }
 
-            SparsePage& page = m_pages[pageIndex];
-            page[pageOffset] = index;
-            // page[pageOffset] = m_size++;
-        }
+        SparsePage& page = m_pages[pageIndex];
+        page[pageOffset] = index;
+        // page[pageOffset] = m_size++;
+    }
 
-        inline const EntityID GetDenseIndex(EntityID id) const
+    inline const EntityID GetDenseIndex(EntityID id) const
+    {
+        EntityID pageIndex = id / PAGE_SIZE;
+        EntityID pageOffset = id % PAGE_SIZE;
+
+        if (pageIndex < m_pages.size())
         {
-            EntityID pageIndex = id / PAGE_SIZE;
-            EntityID pageOffset = id % PAGE_SIZE;
-
-            if (pageIndex < m_pages.size())
-            {
-                const SparsePage& page = m_pages[pageIndex];
-                return page[pageOffset];
-            }
-
-            return NULL_ID;
+            const SparsePage& page = m_pages[pageIndex];
+            return page[pageOffset];
         }
+
+        return NULL_ID;
+    }
 
     inline EntityID GetDenseIndex(EntityID id)
     {
@@ -147,23 +147,23 @@ public:
         return m_dense[index];
     }
 
-        T* GetPtr(EntityID id)
-        {
-            EntityID index = GetDenseIndex(id);
-            return (index == NULL_ID) ? nullptr : &m_dense[index];
-        }
+    T* GetPtr(EntityID id)
+    {
+        EntityID index = GetDenseIndex(id);
+        return (index == NULL_ID) ? nullptr : &m_dense[index];
+    }
 
-        const T* GetPtr(EntityID id) const
-        {
-            EntityID index = GetDenseIndex(id);
-            return (index == NULL_ID) ? nullptr : &m_dense[index];
-        }
+    const T* GetPtr(EntityID id) const
+    {
+        EntityID index = GetDenseIndex(id);
+        return (index == NULL_ID) ? nullptr : &m_dense[index];
+    }
             
-        // PLEASE DO NOT MODIFY THE VECTOR ITSELF ONLY ITS VALUES
-        std::vector<T>& Data()
-        {
-            return m_dense;
-        }
+    // PLEASE DO NOT MODIFY THE VECTOR ITSELF ONLY ITS VALUES
+    std::vector<T>& Data()
+    {
+        return m_dense;
+    }
 
     const std::vector<T>& Data() const
     {

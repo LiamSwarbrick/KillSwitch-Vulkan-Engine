@@ -33,9 +33,10 @@ public:
 	// ----------------
 	// QUERIES
 	// ----------------
-	std::vector<BodyPair> queryPairs() const;
+	void queryPairs(std::vector<BodyPair>& outPairs) const;
 
-	std::vector<RigidBody*> queryAABB() const;
+	void queryAABB(const AABB& aabb, const QueryFilter& filter, std::vector<RigidBody*> outBodies) const;
+	void queryRay(const Ray& ray, const QueryFilter& filter, std::vector<RigidBody*> outBodies) const;
 };
 
 #endif // !PHYSICS_COLLISION_BROADPHASE_BROADPHASE_H

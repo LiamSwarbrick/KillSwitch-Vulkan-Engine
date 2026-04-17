@@ -1,7 +1,7 @@
 #ifndef PHYSICS_COLLISION_NARROWPHASE_GJK_H
 #define PHYSICS_COLLISION_NARROWPHASE_GJK_H
 
-#include "shape.h"
+#include "physics/collision/shapes/shape.h"
 
 #include "physics/core/types.h"
 

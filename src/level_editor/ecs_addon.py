@@ -8,9 +8,254 @@ bl_info = {
 
 import bpy
 from bpy_extras.io_utils import ExportHelper, ImportHelper
+import bmesh
+
+import math
+import mathutils
 
 import inspect
 
+
+# ------------------------
+# Helpers for colliders (important)
+# ------------------------
+def build_capsule(obj, radius, height):
+
+    print(f"Build Capsule")
+
+    height = max(height, 2*radius)
+    offset = (height / 2) - radius
+    
+    mesh = obj.data
+    bm = bmesh.new()
+
+    # create the uv sphere
+    bmesh.ops.create_uvsphere(
+        bm,
+        u_segments=32,
+        v_segments=16,
+        radius=radius
+    )
+
+    bm.verts.ensure_lookup_table()
+    for vert in bm.verts:
+        if vert.co[2] < 0:
+            vert.co[2] -= offset
+        elif vert.co[2] > 0:
+            vert.co[2] += offset
+
+    bm.to_mesh(mesh)
+    bm.free()
+
+def build_sphere(obj, radius):
+    bm = bmesh.new()
+
+    print(f"Build Sphere")
+
+    bmesh.ops.create_uvsphere(
+        bm,
+        u_segments=32,
+        v_segments=16,
+        radius=radius
+    )
+
+    bm.to_mesh(obj.data)
+    bm.free()
+
+
+def build_box(obj, size):
+    bm = bmesh.new()
+
+    print(f"Build Box")
+
+    bmesh.ops.create_cube(bm, size=1.0)
+
+    for v in bm.verts:
+        v.co.x *= size[0]*2
+        v.co.y *= size[1]*2
+        v.co.z *= size[2]*2
+
+    bm.to_mesh(obj.data)
+    bm.free()
+
+def build_convex_hull(collider, parent):
+
+    if parent.type != 'MESH':
+        return
+
+    mesh = collider.data
+    mesh.clear_geometry()
+
+    bm = bmesh.new()
+
+    print(f"Build Convex Hull")
+
+    # add the vertices manually from the parent mesh
+    for v in parent.data.vertices:
+        bm.verts.new(v.co)
+    bm.verts.ensure_lookup_table()
+    
+    # create the convex hull
+    if bm.verts:
+        bmesh.ops.convex_hull(bm, input=bm.verts)
+        print(f"Convex hull supposedly created")
+
+    bm.to_mesh(mesh)
+    bm.free()
+
+def fit_sphere_collider(obj, rigidbody):
+    mesh = obj.data
+    if mesh is None:
+        return
+
+    max_dist = 0
+    for v in mesh.vertices:
+        dist = v.co.length
+        if dist > max_dist:
+            max_dist = dist
+
+    rigidbody.radius = max_dist
+
+def fit_box_collider(obj, rigidbody):
+    mesh = obj.data
+    if mesh is None:
+        return
+
+    # Create rotation matrix from collider_rotation_offset
+    rot = mathutils.Euler(rigidbody.collider_rotation_offset, 'XYZ').to_matrix().to_4x4()
+    rot_inv = rot.inverted()
+
+    # Compute bounding box in rotated local space
+    min_co = mathutils.Vector((float('inf'), float('inf'), float('inf')))
+    max_co = mathutils.Vector((float('-inf'), float('-inf'), float('-inf')))
+    for v in mesh.vertices:
+        # Apply inverse rotation to vertex so we get its position in the collider's local rotated space
+        local_co = rot_inv @ v.co
+
+        min_co.x = min(min_co.x, local_co.x)
+        min_co.y = min(min_co.y, local_co.y)
+        min_co.z = min(min_co.z, local_co.z)
+        max_co.x = max(max_co.x, local_co.x)
+        max_co.y = max(max_co.y, local_co.y)
+        max_co.z = max(max_co.z, local_co.z)
+
+    rigidbody.half_widths = (
+        (max_co.x - min_co.x)/2,
+        (max_co.y - min_co.y)/2,
+        (max_co.z - min_co.z)/2
+    )
+
+def fit_capsule_collider(obj, rigidbody):
+    mesh = obj.data
+    if mesh is None:
+        return
+
+    min_z = float('inf')
+    max_z = float('-inf')
+    max_radius = 0
+    for v in mesh.vertices:
+        # Distance in XY plane from origin
+        dist = math.hypot(v.co.x, v.co.y)
+        max_radius = max(max_radius, dist)
+        min_z = min(min_z, v.co.z)
+        max_z = max(max_z, v.co.z)
+
+    rigidbody.radius = max_radius
+    rigidbody.height = max_z - min_z
+
+def fit_collider(obj, rigidbody, context):
+    if rigidbody.collider_type == "COL_TYPE_SPHERE":
+        fit_sphere_collider(obj, rigidbody)
+    elif rigidbody.collider_type == "COL_TYPE_BOX":
+        fit_box_collider(obj, rigidbody)
+    elif rigidbody.collider_type == "COL_TYPE_CAPSULE":
+        fit_capsule_collider(obj, rigidbody) 
+
+    # rebuild collider after fitting
+    update_collider(rigidbody, context)
+
+def remove_collider(parent):
+    if parent is None:
+        return
+
+    colliders = [c for c in parent.children if c.get("is_collider")]
+
+    for obj in colliders:
+        mesh = obj.data
+        # remove the object from the scene
+        bpy.data.objects.remove(obj, do_unlink=True)
+        # remove orphan mesh datablock if unused
+        if mesh.users == 0:
+            bpy.data.meshes.remove(mesh)
+
+
+def update_collider(self, context):
+    parent = context.object
+
+    print(f"Update Collider")
+
+    # if not obj or obj.type != 'MESH':
+    #     return
+
+    collider = get_or_create_collider(parent)
+
+    mesh = collider.data
+    mesh.clear_geometry()
+
+    if self.collider_type == 'COL_TYPE_SPHERE':
+        build_sphere(collider, self.radius)
+    elif self.collider_type == 'COL_TYPE_BOX':
+        build_box(collider, self.half_widths)
+    elif self.collider_type == 'COL_TYPE_CAPSULE':
+        build_capsule(collider, self.radius, self.height)
+    elif self.collider_type == 'COL_TYPE_CONVEX_HULL':
+        build_convex_hull(collider, parent)
+    elif self.collider_type == 'COL_TYPE_NONE':
+        remove_collider(parent)
+        return
+
+    collider.location = self.collider_position_offset
+    collider.rotation_mode = 'QUATERNION'
+    euler = mathutils.Euler(self.collider_rotation_offset, 'XYZ')
+    quat = euler.to_quaternion()  # convert to quaternion
+    collider.rotation_quaternion = quat
+    collider.hide_select = True
+    collider.show_in_front = True
+
+def get_collider(parent):
+    # Try to find existing collider child
+    for child in parent.children:
+        if child.get("is_collider"):
+            return child
+
+def create_collider(parent):
+    # Create new collider
+    mesh = bpy.data.meshes.new(parent.name + "_Collider")
+    obj = bpy.data.objects.new(parent.name + "_Collider", mesh)
+    bpy.context.collection.objects.link(obj)
+
+    # Parent it
+    obj.parent = parent
+    obj.matrix_parent_inverse = parent.matrix_world.inverted()
+
+    # Tag it
+    obj["is_collider"] = True
+
+    # Display as wireframe
+    obj.display_type = 'WIRE'
+    obj.hide_render = True
+
+    return obj
+
+
+def get_or_create_collider(parent):
+    import bpy
+
+    collider = get_collider(parent)
+    if not collider is None:
+        return collider
+
+    return create_collider(parent)
 
 # ------------------------
 # Components
@@ -36,30 +281,113 @@ class TransformComponent(BaseComponent):
     rotation: bpy.props.FloatVectorProperty(size=3, default=(0,0,0), subtype='XYZ')
     scale: bpy.props.FloatVectorProperty(size=3, default=(1,1,1), subtype='XYZ')
 
-class ColliderComponent(BaseComponent):
-    bl_label = "Collider"
-    collider_type: bpy.props.EnumProperty(
-        name="Type",
+class RigidbodyComponent(BaseComponent):
+    bl_label = "Rigidbody"
+
+    mass: bpy.props.FloatProperty(name="Mass", default=1.0, min=0.01)
+    gravity_scale: bpy.props.FloatProperty(name="Gravity Scale", default=1.0)
+    damping: bpy.props.FloatProperty(name="Damping", default=0.99)
+
+    force_layers: bpy.props.EnumProperty(
+        name="Force Layers",
         items=[
-            ("SPHERE","Sphere",""),
-            ("BOX","Box",""),
-            ("CAPSULE","Capsule",""),
-            ("AABB","AABB","")],
-        default="SPHERE"
+            ("FORCE_TYPE_NONE", "None", "Force doesn't affect this rigidbody", 0),
+            ("FORCE_TYPE_DEFAULT", "Default", "Default forces: gravity for now", 1),
+            ("FORCE_TYPE_WIND", "Wind", "Wind", 2),
+            ("FORCE_TYPE_MAGNETIC_TRAP", "Magnetic Trap", "not implemented yet", 4)
+        ],
+        options={"ENUM_FLAG"},
+        default={"FORCE_TYPE_DEFAULT"}
     )
-    radius: bpy.props.FloatProperty(default=1.0)
-    half_widths: bpy.props.FloatVectorProperty(size=3, default=(0.5,0.5,0.5), subtype='XYZ')
-    height: bpy.props.FloatProperty(default=2.0)
+
+    collider_position_offset: bpy.props.FloatVectorProperty(
+        name="Collider's position offset", 
+        size=3, 
+        default=(0,0,0), 
+        subtype='XYZ', 
+        update=update_collider
+    )
+    # to be changed to a quaternion when exporting / importing
+    collider_rotation_offset: bpy.props.FloatVectorProperty(
+        name="Collider Orientation Offset",
+        size=3,  # XYZ Euler
+        default=(0,0,0),
+        subtype='EULER',
+        update=update_collider
+    )
+    collider_type: bpy.props.EnumProperty(
+        items=[
+            ("COL_TYPE_NONE", "None", ""),
+            ("COL_TYPE_SPHERE","Sphere",""),
+            ("COL_TYPE_BOX","Box",""),
+            ("COL_TYPE_CAPSULE","Capsule",""),
+            ("COL_TYPE_CONVEX_HULL","Convex_Hull","Not yet implemented")
+        ],
+        default="COL_TYPE_BOX",
+        update=update_collider
+    )
+    radius: bpy.props.FloatProperty(
+        name="Radius",
+        default=1.0,
+        min=0.01,
+        update=update_collider
+    )
+    half_widths: bpy.props.FloatVectorProperty(
+        name="Half Widths",
+        size=3, 
+        default=(1,1,1),
+        min=0.01,
+        subtype='XYZ', 
+        update=update_collider
+    )
+    height: bpy.props.FloatProperty(
+        name="Height",
+        default=4.0,
+        min=0.01,
+        update=update_collider
+    )
+
+
+    # we could get these defined by other components...
+    # like: TriggerComponent (if exists then rigidbody is trigger)
+    is_static: bpy.props.BoolProperty(name="Is Static", default=True)
+    is_kinematic: bpy.props.BoolProperty(name="Is Kinematic",default=False)
+    is_character: bpy.props.BoolProperty(name="Is Character",default=False)
+    is_trigger: bpy.props.BoolProperty(name="Is Trigger",default=False)
+
 
     def draw(self, layout):
-        layout.prop(self, "collider_type")
-        if self.collider_type == "SPHERE":
-            layout.prop(self, "radius")
-        elif self.collider_type == "BOX":
-            layout.prop(self, "half_widths")
-        elif self.collider_type == "CAPSULE":
-            layout.prop(self, "radius")
-            layout.prop(self, "height")
+
+        layout.prop(self, "mass")
+        layout.prop(self, "gravity_scale")
+        layout.prop(self, "damping")
+
+        layout.separator()
+        force_box = layout.box()
+        force_box.label(text="Force Layers")
+        force_box.prop(self, "force_layers")
+
+        collider_box = layout.box()
+        collider_box.label(text="Collider info")
+        collider_box.prop(self, "collider_position_offset")
+        collider_box.prop(self, "collider_rotation_offset")
+
+        collider_box.prop(self, "collider_type")
+        collider_box.operator("object.fit_collider_to_mesh", text="Fit collider to mesh")
+
+        if self.collider_type == "COL_TYPE_SPHERE":
+            collider_box.prop(self, "radius")
+        elif self.collider_type == "COL_TYPE_BOX":
+            collider_box.prop(self, "half_widths")
+        elif self.collider_type == "COL_TYPE_CAPSULE":
+            collider_box.prop(self, "radius")
+            collider_box.prop(self, "height")
+
+        layout.prop(self, "is_static")
+        layout.prop(self, "is_kinematic")
+        layout.prop(self, "is_character")
+        layout.prop(self, "is_trigger")
+
 
 # ------------------------
 # ECS Registry
@@ -128,6 +456,14 @@ class OBJECT_OT_add_component(bpy.types.Operator):
 
         item = obj.ecs_components.add()
         item.name = comp_name
+
+        # extra logic to create a collider by default on adding a rigidbody component
+        if comp_name == "RigidbodyComponent":
+            rigidbody = getattr(obj, "rigidbodycomponent", None)
+            if rigidbody:
+                collider = get_or_create_collider(obj)
+                fit_collider(obj, rigidbody, context)
+
         self.report({'INFO'}, f"Added {comp_name} to {obj.name}")
         print(f"[ECS DEBUG] Added {comp_name} to {obj.name}")
         return {'FINISHED'}
@@ -147,6 +483,11 @@ class OBJECT_OT_remove_component(bpy.types.Operator):
         found = False
         for i,c in enumerate(obj.ecs_components):
             if c.name == self.component:
+
+                # extra logic to remove the collider from rigidbody
+                if self.component == "RigidbodyComponent":
+                    remove_collider(obj)
+
                 obj.ecs_components.remove(i)
                 found = True
                 self.report({'INFO'}, f"Removed {self.component} from {obj.name}")
@@ -157,6 +498,58 @@ class OBJECT_OT_remove_component(bpy.types.Operator):
             print(f"[ECS DEBUG] Tried to remove {self.component} from {obj.name}, not found")
         return {'FINISHED'}
 
+
+class OBJECT_OT_toggle_colliders(bpy.types.Operator):
+    bl_idname = "object.toggle_colliders"
+    bl_label = "Toggle Colliders"
+    bl_description = "Toggle visibility of all colliders in the scene"
+
+    def execute(self, context):
+        # Find all collider objects
+        colliders = [obj for obj in bpy.data.objects if obj.get("is_collider")]
+
+        if not colliders:
+            self.report({'INFO'}, "No colliders found")
+            return {'CANCELLED'}
+
+        # Determine new visibility: toggle based on first collider
+        new_visibility = not colliders[0].hide_viewport
+
+        for obj in colliders:
+            obj.hide_viewport = new_visibility
+
+        return {'FINISHED'}
+
+class OBJECT_OT_fit_collider_to_mesh(bpy.types.Operator):
+    bl_idname = "object.fit_collider_to_mesh"
+    bl_label = "Fit Collider To Mesh"
+    bl_description = "Fits the current collider to the mesh"
+
+    def execute(self, context):
+        obj = context.object
+        if obj is None or obj.type != 'MESH':
+            self.report({'WARNING'}, "Select a mesh object")
+            return {'CANCELLED'}
+        
+        rigidbody = getattr(obj, "rigidbodycomponent", None)
+        if rigidbody is None:
+            self.report({'WARNING'}, "Object has no RigidbodyComponent")
+            return {'CANCELLED'}
+
+        # Calculate farthest vertex from origin in local space
+        mesh = obj.data
+        if mesh is None:
+            self.report({'WARNING'}, "Object has no mesh data")
+            return {'CANCELLED'}
+
+        if rigidbody.collider_type == "COL_TYPE_NONE":
+            return {'FINISHED'}
+        else:
+            fit_collider(obj, rigidbody, context)
+
+        self.report({'INFO'}, f"Collider Fitted to mesh")
+        return {'FINISHED'}
+
 # -----------------------------------------
 # --- EXPORT TO GLTF ----------------------
 # -----------------------------------------
@@ -164,9 +557,10 @@ class OBJECT_OT_remove_component(bpy.types.Operator):
 # serializer from BaseComponent / ECSProperty to gltf extra
 def serialize_ecs(obj):
     data = {}
-
+    print(f"--- Serializing Object {obj.name} ---")
     for comp in getattr(obj, "ecs_components", []):
         name = comp.name
+        print(f"   Component {obj.name}")
         attr_name = name.lower()
         comp_data = getattr(obj, attr_name, None)
 
@@ -184,6 +578,27 @@ def serialize_ecs(obj):
             # Convert Blender types → JSON-friendly
             if isinstance(value, (list, tuple)):
                 value = list(value)
+
+            # Handle ENUM_FLAG properties (i have been stuck for 3 hours here), (make it 4 hours)
+            if getattr(prop, "is_enum_flag", False):
+                value = list(value)
+                # instead of returning the current value, convert directly to bitmask
+                bitmask = 0
+                for flag in value:  # value is a set of strings
+                    bitmask |= prop.enum_items[flag].value
+                value = bitmask
+
+            # Special case: convert Euler to quaternion
+            if prop.identifier == "collider_rotation_offset":
+                euler = mathutils.Euler(value, 'XYZ')
+                value = list(euler.to_quaternion())  # [w, x, y, z]
+            elif prop.identifier == "half_widths":
+                # Convert from Blender's XYZ to engine's XZY
+                value = list(value)  # ensure it's a list
+                if len(value) == 3:
+                    value = [value[0], value[2], value[1]]  # X,Z,Y
+
+            print(f"      Property {prop.identifier}: {value}")
 
             comp_dict[prop.identifier] = value
 
@@ -302,10 +717,9 @@ class EXPORT_OT_level_glb(bpy.types.Operator, ExportHelper):
                     del scene[key]
 
 
-        strip_ecs_runtime_properties()
-
         bake_ecs_to_custom_properties()
-        
+
+        strip_ecs_runtime_properties()
 
         bpy.ops.export_scene.gltf(
             filepath=self.filepath,
@@ -350,6 +764,20 @@ class IMPORT_OT_level_glb(bpy.types.Operator, ImportHelper):
 # ------------------------
 # Panels
 # ------------------------
+
+# Panel for toggling colliders
+class VIEW3D_PT_toggle_colliders(bpy.types.Panel):
+    bl_label = "Toggle Colliders"
+    bl_idname = "VIEW3D_PT_toggle_colliders"
+    bl_space_type = 'VIEW_3D'
+    bl_region_type = 'UI'
+    bl_category = "ECS"
+
+    def draw(self, context):
+        layout = self.layout
+
+        layout.label(text="Toggle Colliders")
+        layout.operator("object.toggle_colliders", icon='MOD_WIREFRAME')
 
 class ECSPanelMixin:
     def draw(self, context):
@@ -414,7 +842,7 @@ class VIEW3D_PT_export(bpy.types.Panel):
 # Register / Unregister
 # ------------------------
 
-classes = [ComponentTag, ECSProperties, OBJECT_OT_add_component, OBJECT_OT_remove_component, EXPORT_OT_level_glb, IMPORT_OT_level_glb, OBJECT_PT_ecs, VIEW3D_PT_ecs, VIEW3D_PT_export]
+classes = [ComponentTag, ECSProperties, OBJECT_OT_add_component, OBJECT_OT_remove_component, OBJECT_OT_toggle_colliders, OBJECT_OT_fit_collider_to_mesh, EXPORT_OT_level_glb, IMPORT_OT_level_glb, OBJECT_PT_ecs, VIEW3D_PT_toggle_colliders, VIEW3D_PT_ecs, VIEW3D_PT_export]
 
 def register():
     discover_components()

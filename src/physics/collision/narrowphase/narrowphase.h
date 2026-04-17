@@ -2,11 +2,11 @@
 #define PHYSICS_COLLISION_NARROWPHASE_NARROWPHASE_H
 
 #include "physics/core/types.h"
-#include "shapes/shape.h"
-#include "shapes/sphere.h"
-#include "shapes/box.h"
-#include "shapes/capsule.h"
-#include "shapes/plane.h"
+#include "physics/collision/shapes/shape.h"
+#include "physics/collision/shapes/sphere.h"
+#include "physics/collision/shapes/box.h"
+#include "physics/collision/shapes/capsule.h"
+#include "physics/collision/shapes/plane.h"
 #include "contact.h"
 
 #include "physics/queries/raycast.h"
@@ -32,7 +32,7 @@ public:
 
 	// Helper to transform shapes's pos and ori in case the shape has offset
 	void resolveShapeTransform(const IShape* shape,
-		const glm::vec3& bodyPosition, const glm::quat bodyOrientation,
+		const glm::vec3& bodyPosition, const glm::quat& bodyOrientation,
 		glm::vec3& outPosition, glm::quat& outOrientation) const;
 
 private:

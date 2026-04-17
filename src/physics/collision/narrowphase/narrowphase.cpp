@@ -51,7 +51,7 @@ RaycastHit NarrowPhase::raycastPlane(const Ray& ray, const PlaneShape& plane, co
 }
 
 void NarrowPhase::resolveShapeTransform(const IShape* shape,
-	const glm::vec3& bodyPosition, const glm::quat bodyOrientation, 
+	const glm::vec3& bodyPosition, const glm::quat& bodyOrientation, 
 	glm::vec3& outPosition, glm::quat& outOrientation) const
 {
 	if (!shape->hasOffset())

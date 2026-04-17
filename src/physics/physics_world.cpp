@@ -7,6 +7,7 @@
 
 #include "SDL3/SDL.h"
 #include <vector>
+#include "physics_manager.h"
 
 PhysicsWorld::PhysicsWorld(uint32_t expectedBodies)
 {
@@ -15,38 +16,56 @@ PhysicsWorld::PhysicsWorld(uint32_t expectedBodies)
 	planes.Reserve(100);
 	
 	contacts.reserve(expectedBodies * 2);
+
+	// add the gravity to the generator
+	gravityGen.gravity = glm::vec3(0.0f, -9.81f, 0.0f);
+	addGenerator(&gravityGen);
 }
 
 PhysicsWorld::~PhysicsWorld()
 {
+	clear();
+}
+
+void PhysicsWorld::clear()
+{
 	bodies.Clear();
-	shapes.Clear();
+	clearShapeRefs();
 	planes.Clear();
 }
 
+void PhysicsWorld::clearShapeRefs()
+{
+	for (ShapeRef& s : shapes.Data())
+	{
+		delete s.shape;
+		s.shape = nullptr;
+	}
+	shapes.Clear();
+}
 
 void PhysicsWorld::syncTransformsIn(std::span<const TransformData> transforms)
 {
 	for (const TransformData& transform : transforms)
 	{
 		RigidBody* body = getBody(transform.handle);
-		// skip if we are a static mesh (not kinematic)
-		if (!body || !body->isKinematic)
+		// skip if the body is static
+		if (body==nullptr || body->isStatic)
 			continue;
 
 		body->position = transform.position;
 		body->orientation = transform.orientation;
 
-		calculateAABB(body);
+		//calculateAABB(body);
 	}
 }
 
-void PhysicsWorld::syncTransformsOut(std::span<TransformData> transforms)
+void PhysicsWorld::syncTransformsOut(std::span<TransformData> outTransforms)
 {
-	for (TransformData& transform : transforms)
+	for (TransformData& transform : outTransforms)
 	{
 		const RigidBody* body = getBody(transform.handle);
-		if (!body || !body->isKinematic)
+		if (body == nullptr || body->isStatic)
 			continue;
 
 		transform.position = body->position;
@@ -69,6 +88,79 @@ void PhysicsWorld::update(float dt)
 	if (steps == maxSteps)
 		stepAccumulator = 0.0f;
 }
+
+glm::vec3 PhysicsWorld::getVelocity(RigidBodyHandle r)
+{
+	RigidBody* b = getBody(r);
+	return b->velocity;
+}
+
+float PhysicsWorld::getGravityScale(RigidBodyHandle r)
+{
+	RigidBody* b = getBody(r);
+	return b->gravityScale;
+}
+
+uint32_t PhysicsWorld::getForceLayers(RigidBodyHandle r)
+{
+	RigidBody* b = getBody(r);
+	return b->forceLayers;
+}
+
+IShape* PhysicsWorld::getShape(RigidBodyHandle r)
+{
+	RigidBody* b = getBody(r);
+	return getShape(b->shapeHandle);
+}
+
+ShapeHandle PhysicsWorld::getShapeHandle(RigidBodyHandle r)
+{
+	RigidBody* b = getBody(r);
+	if (!b) return InvalidShapeHandle;
+	return b->shapeHandle;
+}
+
+void PhysicsWorld::setVelocity(RigidBodyHandle r, glm::vec3 velocity)
+{
+	RigidBody* b = getBody(r);
+	if (!b) return;
+	b->velocity = velocity;
+}
+
+void PhysicsWorld::addVelocity(RigidBodyHandle r, glm::vec3 velocity)
+{
+	RigidBody* b = getBody(r);
+	if (!b) return;
+	b->velocity += velocity;
+}
+
+void PhysicsWorld::setGravityScale(RigidBodyHandle r, float scale)
+{
+	RigidBody* b = getBody(r);
+	if (!b) return;
+	b->gravityScale = scale;
+}
+
+void PhysicsWorld::setForceLayers(RigidBodyHandle r, uint32_t layers)
+{
+	RigidBody* b = getBody(r);
+	if (!b) return;
+	b->forceLayers = layers;
+}
+
+void PhysicsWorld::addForceLayers(RigidBodyHandle r, uint32_t layers)
+{
+	RigidBody* b = getBody(r);
+	if (!b) return;
+	b->forceLayers |= layers;
+}
+
+void PhysicsWorld::removeForceLayers(RigidBodyHandle r, uint32_t layers)
+{
+	RigidBody* b = getBody(r);
+	b->forceLayers &= ~layers;
+}
+
 
 RigidBodyHandle PhysicsWorld::addBody(const RigidBodyDesc& desc)
 {
@@ -107,7 +199,7 @@ RigidBodyHandle PhysicsWorld::addBody(const RigidBodyDesc& desc)
 	body.invMass = desc.isStatic ? 0.0f : (1.0f / desc.mass);
 	body.gravityScale = desc.gravityScale;
 	body.damping = desc.damping;
-	body.forceLayers = (uint32_t) desc.forceLayers;
+	body.forceLayers = desc.forceLayers;
 
 	body.shapeHandle = desc.shape;
 
@@ -116,18 +208,22 @@ RigidBodyHandle PhysicsWorld::addBody(const RigidBodyDesc& desc)
 	body.isCharacter = desc.isCharacter;
 	body.isTrigger = desc.isTrigger;
 
+	// vERY IMPORTANT
+	body.bodyID = index;
+
 	// Unused as we are not putting bodies to sleep for now
 	body.sleeping = false;
 
 	calculateAABB(&body);
 
-	// TODO: reminder to insert and remove into broadphase
-	broadPhase.insert(&body);
-
 	// Retain shape ref
 	retainShape(desc.shape);
 
-	bodies.Set(index, body);
+	bodies.Set(index, std::move(body));
+
+	// TODO: reminder to insert and remove into broadphase
+	broadPhase.insert(bodies.GetPtr(index));
+
 
 	return RigidBodyHandle{ index };
 }
@@ -162,6 +258,7 @@ void PhysicsWorld::removeBody(RigidBodyHandle handle)
 
 RigidBody* PhysicsWorld::getBody(RigidBodyHandle handle)
 {
+	SDL_assert(handle.isValid() && "BodyHandle is invalid");
 	if (!handle.isValid()) return nullptr;
 
 	return bodies.GetPtr(handle.index);
@@ -169,6 +266,7 @@ RigidBody* PhysicsWorld::getBody(RigidBodyHandle handle)
 
 const RigidBody* PhysicsWorld::getBody(RigidBodyHandle handle) const
 {
+	SDL_assert(handle.isValid() && "BodyHandle is invalid");
 	if (!handle.isValid()) return nullptr;
 
 	return bodies.GetPtr(handle.index);
@@ -180,7 +278,7 @@ void PhysicsWorld::setBodyShape(RigidBodyHandle bodyHandle, ShapeHandle shapeHan
 	IShape* shape = shapes.GetPtr(shapeHandle.index)->shape;
 	if (!body || !shape) return;
 
-	// Doing retain first just in case we set the shape with the same handle
+	// Doing retain first just in case our newHandle is the oldHandle
 	// So we avoid automatic deletion and then retaining. It would bug otherwise
 	retainShape(shapeHandle);
 	releaseShape(body->shapeHandle);
@@ -222,7 +320,7 @@ ShapeHandle PhysicsWorld::createShape(const ShapeDesc& desc)
 		ref.shape = new SphereShape(desc.sphere.radius);
 		break;
 	case ShapeType::Box:
-		ref.shape = new BoxShape(desc.box.halfExtents);
+		ref.shape = new BoxShape(desc.box.halfWidths);
 		break;
 	case ShapeType::Capsule:
 		ref.shape = new CapsuleShape(desc.capsule.radius, desc.capsule.halfHeight);
@@ -234,6 +332,10 @@ ShapeHandle PhysicsWorld::createShape(const ShapeDesc& desc)
 		SDL_assert(false && "Unknown ShapeType in PhysicsWorld::createShape");
 		break;
 	}
+
+	// don't forget to add the offset (even thought i might delete these 2 parameters later)
+	ref.shape->localOffset = desc.localOffset;
+	ref.shape->localOrientation = desc.localOrientation;
 
 	shapes.Set(index, std::move(ref));
 
@@ -254,7 +356,10 @@ void PhysicsWorld::retainShape(ShapeHandle handle)
 void PhysicsWorld::releaseShape(ShapeHandle handle)
 {
 	ShapeRef* ref = getShapeRef(handle);
-	SDL_assert(ref->refCount > 0 && "Releasing a shape with 0 references");
+
+	SDL_assert(ref && "Invalid ShapeRef");
+	SDL_assert(ref->refCount > 0 && "Releasing a shape with 0 or less references");
+	if (!ref) return;
 
 	ref->refCount--;
 
@@ -390,12 +495,12 @@ int PhysicsWorld::getMaxSteps() const
 
 void PhysicsWorld::step(float dt)
 {
-	applyForces(dt); // apply all forces before integrating
+	applyForces(dt);
 	integrate(dt);
-	updateBroadPhase(); // empty for now
-	detectCollisions(); // get bodypairs
+	updateBroadPhase();
+	detectCollisions();
 	testPlanes();
-	solve(dt); // dt for 
+	solve(dt);
 }
 
 void PhysicsWorld::applyForces(float dt)
@@ -446,12 +551,14 @@ void PhysicsWorld::detectCollisions()
 {
 	contacts.clear();
 	
-	std::vector<BodyPair> pairs = broadPhase.queryPairs();
+	std::vector<BodyPair> pairs;
+
+	broadPhase.queryPairs(pairs);
 
 	for (const BodyPair& pair : pairs)
 	{
 		if (pair.bodyA->isStatic && pair.bodyB->isStatic) continue;
-		if (!pair.bodyA->isKinematic && !pair.bodyB->isKinematic) continue; // this should be the case right????
+		if (pair.bodyA->isKinematic && pair.bodyB->isKinematic) continue; // this should be the case right????
 
 		Contact contact = narrowPhase.testPair(*pair.bodyA, *pair.bodyB, *this);
 		if (contact.isValid())

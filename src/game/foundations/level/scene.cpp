@@ -7,6 +7,9 @@
 // Imported components for automated de-serialization
 #include "imported_components.h"
 
+// types from physics
+#include "physics/core/types.h"
+
 #include "SDL3/SDL.h"
 
 namespace rj = rapidjson;
@@ -29,10 +32,10 @@ void Scene::Shutdown()
 
 bool Scene::LoadAsset(const char* fileName) 
 {
-    if (m_asset)
+    /*if (m_asset)
     {
         free_asset(m_asset);
-    }
+    }*/
     Asset* asset = load_asset(fileName);
 
     // Load the nodes
@@ -53,6 +56,8 @@ bool Scene::LoadAsset(const char* fileName)
         }
         
         // 2. And put the "_ecs" value in the following
+        if (!doc.HasMember("_ecs")) continue;
+        
         rj::Value& components = doc["_ecs"];
         
         // 2-extra.
@@ -66,29 +71,36 @@ bool Scene::LoadAsset(const char* fileName)
         // 3. For ImportedComponents that use mirrored data from the json,
         // Check if it cointains the member "____Component" and fill it using Struct
         // ---------------
-        // -- COLLIDER ---
+        // -- TRANSFORM --
         // ---------------
-        if (components.HasMember("ColliderComponent"))
+        C_Transform t;
+        t.position = glm::vec3(node->translation[0], node->translation[1], node->translation[2]);
+        t.rotation = glm::quat(node->rotation[3], node->rotation[0], node->rotation[1], node->rotation[2]);
+        t.matrix = glm::mat4_cast(t.rotation);
+        t.matrix = glm::translate(t.matrix, t.position);
+        m_ecs.AddComponent<C_Transform>(eID, { t.position, t.rotation, t.matrix });
+
+
+        // -------------------
+     // RIGIDBODY COMPONENT
+     // -------------------
+        if (components.HasMember("RigidbodyComponent"))
         {
             // 3.1. Automated import!!!! you don't have to do anything just declare it!!!!
-            ImportedCollider importedCollider = StructFromRapidJsonValue<ImportedCollider>(components["ColliderComponent"]);
+            ImportedRigidbody importedRigidbody = StructFromRapidJsonValue<ImportedRigidbody>(components["RigidbodyComponent"]);
 
             // 3.2. use the ImportedComponent as a helper for your C_Component
-            C_Collider colliderComponent;
-            switch (importedCollider.collider_type)
+            ShapeDesc shapeDesc;
+            switch (importedRigidbody.collider_type)
             {
-            case ImportedColliderType::BOX:
-                colliderComponent.type = ColliderType::Box;
-                colliderComponent.box.halfWidths = importedCollider.half_widths;
+            case ImportedColliderType::COL_TYPE_BOX:
+                shapeDesc = ShapeDesc::makeBox(importedRigidbody.half_widths);
                 break;
-            case ImportedColliderType::SPHERE:
-                colliderComponent.type = ColliderType::Sphere;
-                colliderComponent.sphere.radius = importedCollider.radius;
+            case ImportedColliderType::COL_TYPE_SPHERE:
+                shapeDesc = ShapeDesc::makeSphere(importedRigidbody.radius);
                 break;
-            case ImportedColliderType::CAPSULE:
-                colliderComponent.type = ColliderType::Capsule;
-                colliderComponent.capsule.radius = importedCollider.radius;
-                colliderComponent.capsule.height = importedCollider.height;
+            case ImportedColliderType::COL_TYPE_CAPSULE:
+                shapeDesc = ShapeDesc::makeCapsule(importedRigidbody.radius, importedRigidbody.height);
                 break;
             default:
                 // what the helly (sorry im tired)
@@ -96,24 +108,37 @@ bool Scene::LoadAsset(const char* fileName)
                 break;
             }
 
+            shapeDesc.localOffset = importedRigidbody.collider_position_offset;
+            shapeDesc.localOrientation = importedRigidbody.collider_rotation_offset;
+
+            // Create the shape
+            ShapeHandle shapeHandle = m_physicsManager.createShape(shapeDesc);
+
+            RigidBodyDesc rbDesc;
+
+            rbDesc.position = t.position;
+            rbDesc.orientation = t.rotation;
+            rbDesc.mass = importedRigidbody.mass;
+            rbDesc.gravityScale = importedRigidbody.gravity_scale;
+            rbDesc.damping = importedRigidbody.damping;
+            rbDesc.forceLayers = importedRigidbody.force_layers;
+            rbDesc.isStatic = importedRigidbody.is_static;
+            rbDesc.isKinematic = importedRigidbody.is_kinematic;
+            rbDesc.isCharacter = importedRigidbody.is_character;
+            rbDesc.isTrigger = importedRigidbody.is_trigger;
+
+            rbDesc.shape = shapeHandle;
+
+            RigidBodyHandle rbHandle = m_physicsManager.createBody(eID, rbDesc);
+
             // 3.3 If we had more data to acces (in the node), feel free to add data to your component, 
             // but that won't probably be the case for player defined components
 
             // 3.4 Finally add the component to the ECS!!!
-            m_ecs.AddComponent<C_Collider>(eID, std::move(colliderComponent));
+            /*m_ecs.AddComponent<C_Collider>(eID, std::move(colliderComponent));*/
+            m_ecs.AddComponent<C_RigidBody>(eID, { rbHandle });
         }
         // 4. END OF RAPIDJSON EXAMPLE AND OUR REFLECTION SYSTEM !!!
-
-
-        // ---------------
-        // -- TRANSFORM --
-        // ---------------
-        C_Transform t;
-        t.position = glm::vec3(node->translation[0], node->translation[1], node->translation[2]);
-        t.rotation = glm::quat(node->rotation[0], node->rotation[1], node->rotation[2], node->rotation[3]);
-        t.matrix = glm::mat4_cast(t.rotation);
-        t.matrix = glm::translate(t.matrix, t.position);
-        m_ecs.AddComponent<C_Transform>(eID, { t.position, t.rotation, t.matrix });
 
         // -- MESH
         if (node->mesh_index >= 0)
@@ -218,7 +243,7 @@ bool Scene::LoadLevel(const char* fileName)
 
 void Scene::Update(float dt)
 {
-
+    m_physicsManager.update(m_ecs, dt);
 }
 
 void Scene::Render()

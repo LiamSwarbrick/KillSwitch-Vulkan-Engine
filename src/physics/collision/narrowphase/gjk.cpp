@@ -12,11 +12,11 @@ SimplexPoint gjk_worldSupport(
 
 	// Get local support points
 	glm::vec3 localSupportA = shapeA->support(localDirA);
-	glm::vec3 localSupportB = shapeA->support(localDirB);
+	glm::vec3 localSupportB = shapeB->support(localDirB);
 
 	// Transform supports from local to world space
 	glm::vec3 worldSupportA = (oriA * localSupportA) + posA;
-	glm::vec3 worldSupportB = (oriA * localSupportB) + posA;
+	glm::vec3 worldSupportB = (oriB * localSupportB) + posB;
 
 	return SimplexPoint(
 		worldSupportA - worldSupportB,
@@ -194,7 +194,7 @@ GJKResult gjk_runGJK(const IShape* shapeA, const glm::vec3& posA, const glm::qua
 		direction = glm::vec3(1.0f, 0.0f, 0.0f);
 	}
 	
-	SimplexPoint supportPoint = gjk_worldSupport(shapeA, posA, oriA, shapeB, posB, oriB, direction);;
+	SimplexPoint supportPoint = gjk_worldSupport(shapeA, posA, oriA, shapeB, posB, oriB, direction);
 	result.simplex.add(supportPoint);
 
 	direction = -supportPoint.point;

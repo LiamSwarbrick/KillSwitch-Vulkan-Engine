@@ -8,12 +8,15 @@
 
 #include "physics/core/types.h"
 
-#include "broadphase/broadphase.h"
-#include "narrowphase/narrowphase.h"
+#include "physics/collision/broadphase/broadphase.h"
+#include "physics/collision/narrowphase/narrowphase.h"
 #include "simulation/integrator.h"
 #include "simulation/solver.h"
 #include "simulation/force_registry.h"
 #include "simulation/force_generators.h"
+
+#include "queries/query_filter.h"
+#include "queries/raycast.h"
 
 #include "collision/shapes/shape.h"
 #include "collision/shapes/plane.h"
@@ -25,6 +28,7 @@
 #include <span>
 #include <memory>
 
+
 class PhysicsWorld
 {
 public:
@@ -34,6 +38,9 @@ public:
 	// Non-copyable constructors
 	PhysicsWorld(const PhysicsWorld&) = delete;
 	PhysicsWorld& operator=(const PhysicsWorld&) = delete;
+
+	// Method to reset bodies
+	void clear();
 
 
 	// To sync the data in & out
@@ -46,9 +53,28 @@ public:
 	};
 
 	void syncTransformsIn(std::span<const TransformData> transforms);
-	void syncTransformsOut(std::span<TransformData> transforms);
+	void syncTransformsOut(std::span<TransformData> outTransforms);
 
 	void update(float dt);
+
+
+	// ------------------------------
+	// GETTERS & SETTERS
+	// ------------------------------
+	// setters & getters
+	glm::vec3 getVelocity(RigidBodyHandle r);
+	float getGravityScale(RigidBodyHandle r);
+	uint32_t getForceLayers(RigidBodyHandle r);
+	ShapeHandle getShapeHandle(RigidBodyHandle r);
+	IShape* getShape(RigidBodyHandle r); // extra
+
+	void setVelocity(RigidBodyHandle r, glm::vec3 velocity);
+	void addVelocity(RigidBodyHandle r, glm::vec3 velocity);
+	void setGravityScale(RigidBodyHandle r, float scale);
+	void setForceLayers(RigidBodyHandle r, uint32_t layers);
+	void addForceLayers(RigidBodyHandle r, uint32_t layers);
+	void removeForceLayers(RigidBodyHandle r, uint32_t layers);
+
 
 	// ------------------------------
 	// BODY MANAGEMENT
@@ -92,10 +118,19 @@ public:
 	// ------------------------------
 	// QUERIES (TODO)
 	// ------------------------------
+	RaycastHit raycast(const Ray& ray, const QueryFilter& filter = {}) const;
+
+	std::vector<RaycastHit> raycastAll(const Ray& ray, const QueryFilter& filter = {}) const;
+
+	// Shape-casting too (might change the input to be ShapeCast or something like that, but for now this, will see when i implement it)
+	std::vector<EntityID> shapecast(
+		ShapeHandle shape, const glm::vec3& position, const glm::quat& orientation,
+		const QueryFilter& filter = {}) const;
 
 	// ------------------------------
 	// EVENTS (TODO)
 	// ------------------------------
+
 
 	// ------------------------------
 	// SETTERS & GETTERS
@@ -128,6 +163,8 @@ private:
 	// Helper for AABB
 	void calculateAABB(RigidBody* body);
 
+	inline RigidBody& getBody();
+
 private:
 	// --- SYSTEMS ---
 	BroadPhase broadPhase;
@@ -153,7 +190,8 @@ private:
 	ShapeRef* getShapeRef(ShapeHandle handle);
 	void retainShape(ShapeHandle handle);
 	void releaseShape(ShapeHandle handle);
-	
+	void clearShapeRefs(); // Have to free the memory using delete manually
+		
 	SparseSet<ShapeRef> shapes;
 	std::vector<uint32_t> freeShapeIndices;
 

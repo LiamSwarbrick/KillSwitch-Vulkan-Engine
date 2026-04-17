@@ -77,7 +77,9 @@ void ForceRegistry::applyAll(std::vector<RigidBody>& bodies, float dt)
 	for (Entry& entry : pairedGenerators)
 	{
 		if (entry.body->isStatic) continue;
-		// We skip the check of forceLayers, because its a pair
+		// We skip the check of 
+		// 
+		// , because its a pair
 		entry.generator->apply(*entry.body, dt);
 	}
 

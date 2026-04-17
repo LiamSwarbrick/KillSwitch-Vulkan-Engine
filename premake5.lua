@@ -216,6 +216,8 @@ workspace "AdventureEngine"
             SRC,  -- Exported API headers
             SRC .. "physics/**",
             include_paths.glm,
+            include_paths.cgltf, -- because we include core/components.h
+            include_paths.rapidjson,
             include_paths.SDL3 -- Assertions (in case)
         }
 
@@ -350,6 +352,7 @@ workspace "AdventureEngine"
 
         links {  -- NOTE: Must link from highest level dependency to lowest level.   
             "renderer",
+            "physics",
             "core",
             "SDL3"
         }

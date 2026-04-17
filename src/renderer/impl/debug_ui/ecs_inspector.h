@@ -33,9 +33,9 @@ namespace DebugUI
     }
 
     template <>
-    inline void DrawComponentFields<C_Collider>(C_Collider& c)
+    inline void DrawComponentFields<C_RigidBody>(C_RigidBody& c)
     {
-        const char* type_names[] = { "Box", "Sphere", "Capsule", "AABB" };
+        /*const char* type_names[] = { "Box", "Sphere", "Capsule", "AABB" };
         ImGui::Text("Type: %s", type_names[(int)c.type]);
         switch (c.type)
         {
@@ -52,7 +52,7 @@ namespace DebugUI
             default:
                 ImGui::TextDisabled("(unknown collider type)");
                 break;
-        }
+        }*/
     }
 
     // Registry: bit_index → draw function
@@ -149,7 +149,7 @@ namespace DebugUI
         static std::vector<ComponentDrawEntry> draw_entries = {
             MakeDrawEntry<C_Transform>(ecs),
             MakeDrawEntry<C_StaticMesh>(ecs),
-            MakeDrawEntry<C_Collider>(ecs),
+            //MakeDrawEntry<C_Collider>(ecs),
         };
 
         // Left: Entity list
