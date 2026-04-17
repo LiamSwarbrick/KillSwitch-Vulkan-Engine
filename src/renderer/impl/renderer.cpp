@@ -716,6 +716,7 @@ void Renderer_Shutdown()
 void Renderer_ListenToWindowEvent(SDL_Event event)
 {
     // event to imgui
+    printf("HIH");
     ImGui_ImplSDL3_ProcessEvent(&event);
     
     switch (event.type)
@@ -833,24 +834,6 @@ void Renderer_PushRenderable(Renderable renderable)
     );
     renderstate.renderables_arena.items[renderstate.renderables_arena.num_renderables++] = renderable;
 }
-
-void Renderer_SetImGuiCallback(Renderer_ImGuiBuildCallback callback, void* user_data)
-{
-    renderstate.imgui_callback      = callback;
-    renderstate.imgui_callback_data = user_data;
-}
-
-void Renderer_SetDebugECS(ECS* ecs)
-{
-    debug_ecs_ptr = ecs;
-}
-
-void Renderer_SetDebugAsset(Asset* asset)
-{
-    debug_asset_ptr = asset;
-    debug_ui_state.debug_asset = asset;
-}
-
 
 void Renderer_DrawFrame(glm::mat4 primary_camera_view)
 {
@@ -1136,20 +1119,19 @@ void Renderer_DrawFrame(glm::mat4 primary_camera_view)
 
 
     /*
-        Render ImGUI Frame
+        Build and Render ImGUI Frame
         - Doing this after the framegraph is built so we can visualize the framegraph too!
     */
-    // ImGui: Start new frame
+
     ImGui_ImplVulkan_NewFrame();
     ImGui_ImplSDL3_NewFrame();
     ImGui::NewFrame();
 
-    // Build ImGui UI here, e.g.
-    // ImGui::ShowDemoWindow();  // TODO: Remove after testing
     if (debug_ecs_ptr)
         DebugUI::Draw(debug_ui_state, *debug_ecs_ptr);
     if (renderstate.imgui_callback)
         renderstate.imgui_callback(renderstate.imgui_callback_data);
+
     // Finalize ImGui draw data (must happen before command buffer recording)
     ImGui::Render();
 

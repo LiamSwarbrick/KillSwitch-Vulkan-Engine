@@ -125,12 +125,13 @@ int main(int argc, char *argv[])
 
     // Testing Scene and ECS
     Scene scene{};
-    //Renderer_SetImGuiCallback(OnImGuiBuild, &scene);
     scene.StartUp();
 
+    Asset* room_prefab = scene.LoadPrefab("assets/levels/testroom.gltf");
     Asset* catPrefab = scene.LoadPrefab("assets/animations/scene.gltf");
     Asset* animationPrefab = scene.LoadPrefab("assets/animations/sceneglb.glb");
 
+    scene.InstantiatePrefab(room_prefab, glm::vec3(0,0,0));
     scene.InstantiatePrefab(catPrefab, glm::vec3(0, 0, 0));
     scene.InstantiatePrefab(animationPrefab, glm::vec3(5, 20, 0));
     // render a second cat
@@ -138,6 +139,10 @@ int main(int argc, char *argv[])
 
     scene.BuildRendererScene();
 
+    // TODO: Debug UI is built around the idea of 1 asset at the moment.
+    //       This must change with the new scene system that can load many asset prefabs.
+    DebugUI_SetECS(&scene.GetECS());
+    DebugUI_SetAsset(animationPrefab);
 
     bool running = true;
 
@@ -157,7 +162,7 @@ int main(int argc, char *argv[])
         while (SDL_PollEvent(&event))
         {
             if (event.type == SDL_EVENT_QUIT) running = false;
-
+            Renderer_ListenToWindowEvent(event);
         }
 
         // controller test not ideal at all

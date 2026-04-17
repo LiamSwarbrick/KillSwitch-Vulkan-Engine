@@ -15,3 +15,9 @@ void DebugUI_SetAsset(Asset* asset)
     debug_asset_ptr = asset;
     debug_ui_state.debug_asset = asset;
 }
+
+void DebugUI_SetImGuiCallback(DebugUI_ImGuiBuildCallback callback, void* user_data)
+{
+    renderstate.imgui_callback      = callback;
+    renderstate.imgui_callback_data = user_data;
+}

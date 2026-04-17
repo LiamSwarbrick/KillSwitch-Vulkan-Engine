@@ -14,6 +14,7 @@
 #include "renderpasses/metadata.h"
 #include "game_resources.h"
 
+#include "debug_ui_api.h"
 #include "imgui.h"
 #include "imgui_impl_sdl3.h"
 #include "imgui_impl_vulkan.h"
@@ -97,7 +98,7 @@ typedef struct RenderState
     VkDescriptorPool imgui_descriptor_pool;
 
     // ImGui game-side UI callback
-    Renderer_ImGuiBuildCallback imgui_callback      = nullptr;
+    DebugUI_ImGuiBuildCallback  imgui_callback      = nullptr;
     void*                       imgui_callback_data = nullptr;
 }
 RenderState;

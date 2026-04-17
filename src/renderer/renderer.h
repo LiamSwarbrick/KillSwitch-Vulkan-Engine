@@ -62,25 +62,4 @@ typedef struct Scene_InitInfo
 Scene_InitInfo;
 void Renderer_ChangeScene(Scene_InitInfo new_scene_info);
 
-
-
-// ImGUI
-
-// Optional callback: called between ImGui::NewFrame() and ImGui::Render()
-// Game code can set this to build its own ImGui UI
-typedef void (*Renderer_ImGuiBuildCallback)(void* user_data);
-
-void Renderer_SetImGuiCallback(Renderer_ImGuiBuildCallback callback, void* user_data);
-
-// Register the ECS so the renderer can drive the debug UI internally.
-// Call once after Renderer_Init, passing the scene's ECS reference.
-class ECS;
-void Renderer_SetDebugECS(ECS* ecs);
-
-// Register the loaded asset so the Asset Browser can inspect it.
-// Pass nullptr to clear (e.g. before loading a new scene).
-struct Asset;
-void Renderer_SetDebugAsset(Asset* asset);
-
-
 #endif  // ENGINE_RENDERER_H
