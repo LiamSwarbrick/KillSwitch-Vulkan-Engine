@@ -34,19 +34,28 @@ void Scene::Shutdown()
 
 Asset* Scene::LoadPrefab(const char* fileName)
 {
+    uint64_t start_time = SDL_GetTicksNS();
+
     Asset* asset = load_asset(fileName);
+
+    uint64_t end_time = SDL_GetTicksNS();
+    float elapsed_ms = (float)(end_time - start_time) / 1000000.0f;
+
     if (asset)
     {
+        SDL_Log("[Disk Time] Loaded prefab '%s' in %.2f ms", fileName, elapsed_ms);
         m_prefabs.push_back(asset);
     }
     return asset;
 }
 
-AdvEng::EntityID Scene::InstantiatePrefab(Asset* prefab, glm::vec3 spawnPosition)
+EntityID Scene::InstantiatePrefab(Asset* prefab, glm::vec3 spawnPosition)
 {
-    if (!prefab) return AdvEng::MAX_ENTITIES; // or any other invalid ID
+    if (!prefab) return MAX_ENTITIES; // or any other invalid ID
 
-    AdvEng::EntityID rootEntity = AdvEng::MAX_ENTITIES;
+    uint64_t start_time = SDL_GetTicksNS();
+
+    EntityID rootEntity = MAX_ENTITIES;
 
     // Load the nodes into the ECS
     for (size_t i = 0; i < prefab->node_count; i++)
@@ -64,7 +73,7 @@ AdvEng::EntityID Scene::InstantiatePrefab(Asset* prefab, glm::vec3 spawnPosition
             }
         }
 
-        AdvEng::EntityID eID = m_ecs.CreateEntity((node->name) ? (node->name) : "");
+        EntityID eID = m_ecs.CreateEntity((node->name) ? (node->name) : "");
         if (i == 0) rootEntity = eID;
 
         if (has_ecs_data)
@@ -106,12 +115,11 @@ AdvEng::EntityID Scene::InstantiatePrefab(Asset* prefab, glm::vec3 spawnPosition
                 m_ecs.AddComponent<C_Collider>(eID, std::move(colliderComponent));
             }
         }
-#endif
             // ---------------
             // -- TRANSFORM --
             // ---------------
             C_Transform t;
-            glm::vec3 position = glm::vec3(node->translation[0], node->translation[1], node->translation[2]);
+            glm::vec3 position = glm::vec3(node->translation[0], node->translation[1], node->translation[2]) + spawnPosition;
             glm::quat rotation = glm::quat(node->rotation[3], node->rotation[0], node->rotation[1], node->rotation[2]);
             t.matrix = glm::mat4_cast(rotation);
             t.matrix = glm::translate(t.matrix, position);
@@ -120,15 +128,15 @@ AdvEng::EntityID Scene::InstantiatePrefab(Asset* prefab, glm::vec3 spawnPosition
         // -- MESH
         if (node->mesh_index >= 0)
         {
-            Mesh* mesh = &asset->meshes[node->mesh_index];
+            Mesh* mesh = &prefab->meshes[node->mesh_index];
             if (mesh->vertex_type == VERTEX_TYPE_SKINNED)
             {
                 uint32_t joint_count = 0;
                 if (node->skin_index >= 0) {
-                    joint_count = (uint32_t)asset->skins[node->skin_index].joint_count;
+                    joint_count = (uint32_t)prefab->skins[node->skin_index].joint_count;
                 }
-                else if (asset->skin_count > 0) {
-                    joint_count = (uint32_t)asset->skins[0].joint_count;
+                else if (prefab->skin_count > 0) {
+                    joint_count = (uint32_t)prefab->skins[0].joint_count;
                 }
                 else {
                     joint_count = 1;
@@ -161,6 +169,11 @@ AdvEng::EntityID Scene::InstantiatePrefab(Asset* prefab, glm::vec3 spawnPosition
         }
     }
 
+    uint64_t end_time = SDL_GetTicksNS();
+    float elapsed_ms = (float)(end_time - start_time) / 1000000.0f;
+    SDL_Log("[Entity Time] Instantiated %zu nodes into ECS in %.2f ms", prefab->node_count, elapsed_ms);
+
+
     return rootEntity;
 }
 
@@ -173,13 +186,6 @@ bool Scene::FreeAsset(Asset* asset)
 
 void Scene::BuildRendererScene()
 {
-    // For now
-    bool success = LoadAsset(fileName);
-    if (!success) return false;
-
-    // NOTE: Jaime's view returns a sparse set, aka, some C++ iterator.
-    // The renderer takes a contiguous array of data.
-    // Therefore, get the view, and iterate over it to build the contiguous array to init the scene.
     auto packed = m_ecs.GetView<C_StaticMesh>().GetPacked();
 
     std::vector<C_StaticMesh*> meshes;
@@ -211,12 +217,8 @@ void Scene::BuildRendererScene()
     uint64_t after_uploadtogpu = SDL_GetPerformanceCounter();
 
     uint64_t counter_freq = SDL_GetPerformanceFrequency();
-    double disk_time        = (double)(after_loadasset - start_time) / (double)counter_freq;
-    double entity_time     = (double)(after_entity_load - after_loadasset) / (double)counter_freq;
     double gpu_upload_time  = (double)(after_uploadtogpu - after_entity_load) / (double)counter_freq;
-    SDL_Log("Times:\n- LoadAsset(): %f\n- Renderer_ChangeScene(): %f\n", disk_time, gpu_upload_time);
-
-    return true;
+    SDL_Log("Times:\n- LoadAsset():   - Renderer_ChangeScene(): %f\n", gpu_upload_time);
 }
 
 void Scene::Update(float dt)

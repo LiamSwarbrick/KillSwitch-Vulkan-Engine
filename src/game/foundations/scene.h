@@ -28,11 +28,11 @@ public:
     Asset* LoadPrefab(const char* fileName);
     // converts prefab into an entity with a given position
     // return ID of first node
-    AdvEng::EntityID InstantiatePrefab(Asset* prefab, glm::vec3 position);
+    EntityID InstantiatePrefab(Asset* prefab, glm::vec3 position);
     // collects all renderables and initializes the renderer scene
     void BuildRendererScene();
 
-    AdvEng::ECS& GetECS() { return m_ecs; };
+    ECS& GetECS() { return m_ecs; };
 
     void Update(float dt);
     void Render();
