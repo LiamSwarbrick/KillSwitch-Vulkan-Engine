@@ -158,6 +158,7 @@ void create_startup_resources()
     );
     renderstate.object_transforms = MakeArenaOnBufferResource(renderstate.rids.objects_buffer_rid);
 
+    
     // Joints Buffer (Mapped so we upload to them each frame)
     const uint32_t MAX_JOINTS_FOR_ALL_OBJECTS = MAX_RENDERED_OBJECTS * 50;
     ResourceCreateInfo joints_info = {
@@ -398,7 +399,7 @@ void create_scene_resources()
             .base_color = { 1.0f, 1.0f, 1.0f, 1.0f },
             .blend_mode = BLEND_MODE_MASKED,
             .alpha_cutoff = 0.5f,
-            .sampler_idx = FG_SAMPLER_LINEAR_REPEAT,
+            .sampler_idx = FG_SAMPLER_ANISOTROPIC_REPEAT,
             .texture_idx_basecolor = renderstate.registry.resources[default_texture_rid].image_bindless_index
         };
         loaded_materials[num_loaded_materials++] = default_mat;
@@ -424,7 +425,7 @@ void create_scene_resources()
 
             // NOTE: Just use one sampler for now at least
             // (maybe I'd want to check the base colour texture's min/mag filter and s/t wrap to choose a better one if we need)
-            gpu_mat.sampler_idx = FG_SAMPLER_LINEAR_REPEAT;
+            gpu_mat.sampler_idx = FG_SAMPLER_ANISOTROPIC_REPEAT;
             
             if (mat->base_color_texture_index >= 0)
             {

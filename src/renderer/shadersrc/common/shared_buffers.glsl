@@ -28,7 +28,8 @@ struct MaterialData
     uint32_t sampler_idx;
     
     uint32_t texture_idx_basecolor;
-    // TODO: Switch to this layout:
+    uint32_t texture_idx_emissive;
+    // Full PBR would be something like the following, but dunno how much we want that at the moment.:
     // uint32_t texture_idx_basecolor_rgb_metalness_a;
     // uint32_t texture_idx_emissive_rgb_roughness_a;
     // uint32_t texture_idx_normalmap;
