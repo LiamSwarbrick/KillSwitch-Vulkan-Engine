@@ -82,7 +82,7 @@ int main(int argc, char *argv[])
         .preferred_initial_settings = {  // Will fallback if these aren't possible
             .uncapped_fps = 0,
             .msaa_sample_count = 4,
-            .fov_y = 90.0f
+            .fov_y = 70.0f
         }
     };
     Renderer_Init(&renderer_info);
@@ -132,7 +132,8 @@ int main(int argc, char *argv[])
     Scene scene{};
     scene.StartUp();
     // scene.LoadLevel("assets/animations/SwatAnimsTrue.gltf");
-    scene.LoadLevel("assets/animations/Room.gltf");
+    // scene.LoadLevel("assets/animations/Room.gltf");
+    scene.LoadLevel("assets/levels/testroom.gltf");
     // scene.LoadLevel("assets/animations/Animationtest.gltf");
     // scene.LoadLevel("assets/levels/Untitled_skybox.gltf");
 
