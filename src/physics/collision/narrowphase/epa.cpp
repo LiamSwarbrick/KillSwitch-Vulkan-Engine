@@ -65,13 +65,11 @@ static EPAFace epa_makeEPAFace(const std::vector<SimplexPoint>& vertices, const 
 	res.vIndices[1] = b;
 	res.vIndices[2] = c;
 
+	glm::vec3 ab = vertices[b].point - vertices[a].point,
+		ac = vertices[c].point - vertices[a].point;
+
 	// cross(ab, ac).normalize() for a better understanding
-	glm::vec3 normal = glm::normalize(
-		glm::cross(
-			vertices[b].point - vertices[a].point, 
-			vertices[c].point - vertices[a].point
-		)
-	);
+	glm::vec3 normal = glm::normalize(glm::cross(ab, ac));
 	float distance = glm::dot(normal, vertices[a].point);
 
 	// TODO: Remove assertion once checked the winding order is correct (and following IF clause)
@@ -92,7 +90,7 @@ static EPAFace epa_makeEPAFace(const std::vector<SimplexPoint>& vertices, const 
 }
 
 
-static void epa_AddIfEdgesFromFace(std::set<EPAEdge, decltype(&epa_compareEdges)> edges, const EPAFace& face)
+static void epa_AddIfEdgesFromFace(std::set<EPAEdge, decltype(&epa_compareEdges)>& edges, const EPAFace& face)
 {
 	// Check the 3 edges
 	// TODO: We could manually unroll the loop to avoid the (i+1)%3
@@ -133,7 +131,7 @@ static void epa_FillEPAResult(const std::vector<SimplexPoint>& vertices, const s
 	result.pointB = contactB;
 	result.point = (contactA + contactB) * 0.5f;
 
-	result.normal = faces[closestFaceIdx].normal;
+	result.normal = -faces[closestFaceIdx].normal; // normal is for some reason facing the other side
 	result.depth = faces[closestFaceIdx].distanceToOrigin;
 }
 
@@ -180,6 +178,8 @@ EPAResult epa_runEPA(
 	{ // Epa iterations
 
 		// Check which face is closest
+		closestFaceIdx = 0;
+		closestDistance = faces[0].distanceToOrigin;
 		for (size_t i = 0; i < faces.size(); i++)
 		{
 			if (faces[i].distanceToOrigin < closestDistance)
@@ -213,18 +213,20 @@ EPAResult epa_runEPA(
 		{ // Face deletion & edge addition
 			// Remove faces that are visible from the point. dot(faces[closest].normal, support-vertices[faces[closest].vIndices[0]]
 			// So if the normal points in the same direction as AP(:from vertex A of face to Support Point)
-			glm::vec3 vA = vertices[faces[closestFaceIdx].vIndices[0]].point;
-			if (glm::dot(faces[closestFaceIdx].normal, p.point - vA) > 0.0f)
+			glm::vec3 vA = vertices[faces[i].vIndices[0]].point;
+
+			glm::vec3 aux = p.point - vA;
+			float isVisible = glm::dot(faces[i].normal, aux);
+			if (isVisible > 0.0f)
 			{
 				// Add edges (if their opposite is not found)
-				epa_AddIfEdgesFromFace(danglingEdges, faces[closestFaceIdx]);
+				epa_AddIfEdgesFromFace(danglingEdges, faces[i]);
+
+				// Remove the face (back-to-curr pop)
+				faces[i] = faces.back();
+				faces.pop_back();
+				i--; // we have to check the same index because we're deleting the current element
 			}
-
-			// Remove the face (back-to-curr pop)
-			faces[closestFaceIdx] = faces.back();
-			faces.pop_back();
-			i--; // we have to check the same index because we're deleting the current element
-
 		} // Face deletion & edge addition
 
 		// Add new faces looking at the support point

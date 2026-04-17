@@ -592,7 +592,7 @@ def serialize_ecs(obj):
             if prop.identifier == "collider_rotation_offset":
                 euler = mathutils.Euler(value, 'XYZ')
                 value = list(euler.to_quaternion())  # [w, x, y, z]
-            elif prop.identifier == "half_widths":
+            elif prop.identifier == "half_widths" or prop.identifier == "collider_position_offset":
                 # Convert from Blender's XYZ to engine's XZY
                 value = list(value)  # ensure it's a list
                 if len(value) == 3:
