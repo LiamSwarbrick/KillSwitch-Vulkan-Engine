@@ -81,8 +81,7 @@ typedef struct RenderState
 
     // Draw Calls are accumulated each frame per shader
     DrawCallsPerShader drawcalls_collection;
-    glm::mat4 camera_view;
-    glm::mat4 fullscreen_proj;
+    CameraInfo main_camera;
 
     // Renderer execution state:
     VkPipeline currently_bound_pipeline;  // Used to avoid  vkCmdBindPipeline call if it's already bound

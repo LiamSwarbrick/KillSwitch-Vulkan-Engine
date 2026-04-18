@@ -1,14 +1,19 @@
 #ifndef SHADERSRC_SHARED_BUFFERS_GLSL
 #define SHADERSRC_SHARED_BUFFERS_GLSL
 
+/*  NOTE: Scalar block layout,
+    but for performance I may throw some padding in anyway :)
+*/
+
 struct SceneData
 {
     mat4 view;
     mat4 proj;
     mat4 view_proj;
-
-    uvec2 rendertarget_size;
+    vec3 cam_position;
+    
     float aspect;
+    uvec2 rendertarget_size;
 };
 
 struct ObjectData

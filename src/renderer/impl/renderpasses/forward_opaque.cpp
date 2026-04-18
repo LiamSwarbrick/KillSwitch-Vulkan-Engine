@@ -9,22 +9,8 @@ void ForwardOpaque_Execute(VkCommandBuffer cmd, uint32_t pass_idx)
 
     uint64_t scene_ptr = 0;
     {
-        SceneData scene_data = {};
-
-        glm::mat4 view, proj, view_proj;
-        view = renderstate.camera_view;
-        proj = renderstate.fullscreen_proj;
-        view_proj = proj * view;
-
         VkExtent3D extents = renderstate.registry.resources[renderstate.rids.hdr_color_target_rid].image.extent;
-        glm::uvec2 extents_uvec2 = glm::uvec2(extents.width, extents.height);
-
-        memcpy(scene_data.view, glm::value_ptr(view), sizeof(glm::mat4));
-        memcpy(scene_data.proj, glm::value_ptr(proj), sizeof(glm::mat4));
-        memcpy(scene_data.view_proj, glm::value_ptr(view_proj), sizeof(glm::mat4));
-        memcpy(scene_data.rendertarget_size, glm::value_ptr(extents_uvec2), sizeof(glm::uvec2));
-
-        scene_data.aspect = (float)extents.width / (float)extents.height;
+        SceneData scene_data = MakeSceneData(renderstate.main_camera, (VkExtent2D){ extents.width, extents.height });
         scene_ptr = PushToMappedArena(&renderstate.scenes_arena, &scene_data, sizeof(SceneData));
     }
 
