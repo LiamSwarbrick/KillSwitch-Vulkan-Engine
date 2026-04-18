@@ -4,9 +4,28 @@
 #include "foundations/scene.h"
 #include "core/components.h"
 #include "core/animation.h"
+#include "game/foundations/components.h"
 
 #include "SDL3/SDL.h"
 #include "SDL3/SDL_main.h"
+
+void PlayerInput(ECS& ecs, const bool* keyboardState, float dt)
+{
+    ecs.GetView<C_PlayerInput, C_CharacterController>().ForEach([&](EntityID id, C_PlayerInput& input, C_CharacterController& controller)
+    {
+        glm::vec3 input_dir(0.0f);
+        if (keyboardState[SDL_SCANCODE_W]) input_dir.z -= 1.0f;
+        if (keyboardState[SDL_SCANCODE_S]) input_dir.z += 1.0f;
+        if (keyboardState[SDL_SCANCODE_A]) input_dir.x -= 1.0f;
+        if (keyboardState[SDL_SCANCODE_D]) input_dir.x += 1.0f;
+
+        if (glm::length(input_dir) > 0.0f)
+            input_dir = glm::normalize(input_dir);
+
+        controller.target_position = input_dir;
+        controller.jumping = keyboardState[SDL_SCANCODE_SPACE];
+    });
+}
 
 glm::mat4 temp_camera_view_matrix()
 {
