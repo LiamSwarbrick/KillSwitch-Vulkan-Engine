@@ -35,24 +35,9 @@ namespace DebugUI
     template <>
     inline void DrawComponentFields<C_RigidBody>(C_RigidBody& c)
     {
-        /*const char* type_names[] = { "Box", "Sphere", "Capsule", "AABB" };
-        ImGui::Text("Type: %s", type_names[(int)c.type]);
-        switch (c.type)
-        {
-            case ColliderType::Sphere:
-                ImGui::Text("Radius:  %.3f", c.sphere.radius);
-                break;
-            case ColliderType::Box:
-                ImGui::Text("Half Widths:  %.3f  %.3f  %.3f", c.box.halfWidths.x, c.box.halfWidths.y, c.box.halfWidths.z);
-                break;
-            case ColliderType::Capsule:
-                ImGui::Text("Radius:  %.3f", c.capsule.radius);
-                ImGui::Text("Height:  %.3f", c.capsule.height);
-                break;
-            default:
-                ImGui::TextDisabled("(unknown collider type)");
-                break;
-        }*/
+        // To visualize the rigidbody we would either define the function using RigidBody 
+        // or somehow have access to the Scene / PhysicsManager to get the RigidBody here
+        ImGui::Text("RigidBodyHandle: %p", c.handle.index);
     }
 
     // Registry: bit_index → draw function
@@ -149,7 +134,7 @@ namespace DebugUI
         static std::vector<ComponentDrawEntry> draw_entries = {
             MakeDrawEntry<C_Transform>(ecs),
             MakeDrawEntry<C_StaticMesh>(ecs),
-            //MakeDrawEntry<C_Collider>(ecs),
+            MakeDrawEntry<C_RigidBody>(ecs),
         };
 
         // Left: Entity list
