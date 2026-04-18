@@ -433,7 +433,8 @@ glm::mat4 CalculateBaseTransform(Asset* asset)
 {
     // Initialise transform with identity, start current node at skeleton root
 	glm::mat4 baseTransform = glm::mat4(1.0f);
-	int currentNodeIndex = asset->skins[0].skeleton_root_node_index;
+	int rootNodeIndex = asset->skins[0].skeleton_root_node_index;
+	int currentNodeIndex = asset->nodes[rootNodeIndex].parent_index;
 
     // Traverse up parents until reaching root
 	while (currentNodeIndex != -1)
@@ -441,7 +442,7 @@ glm::mat4 CalculateBaseTransform(Asset* asset)
 		Node& node = asset->nodes[currentNodeIndex];
 
         // Calculate transfrom matrix if it exists, if not, use TRS values, if not them, no change i.e. identity
-        if (IsIdentityMatrix(node.matrix))
+        if (!IsIdentityMatrix(node.matrix))
         {
 			glm::mat4 nodeMatrix = glm::make_mat4(node.matrix);
             baseTransform = nodeMatrix * baseTransform;
