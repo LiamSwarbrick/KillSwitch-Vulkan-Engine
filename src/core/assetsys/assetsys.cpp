@@ -306,6 +306,9 @@ Asset* load_asset(const char* filename) {
 		if (gltf_node->has_matrix) {
 			memcpy(node->matrix, gltf_node->matrix, sizeof(float) * 16);
 		}
+		else {
+			memcpy(node->matrix, glm::value_ptr(glm::mat4(1.0f)), sizeof(float) * 16);
+		}
 
 		if (gltf_node->children_count > 0) {
 			node->child_count = gltf_node->children_count;
