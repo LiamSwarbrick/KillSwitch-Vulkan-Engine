@@ -31,6 +31,4 @@ void main()
         final_color.rgb,
         process_alpha(final_color.a, mat.alpha_cutoff)
     );
-
-    out_color = vec4(N, 1.0);
 }
