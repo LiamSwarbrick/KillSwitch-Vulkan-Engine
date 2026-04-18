@@ -1181,6 +1181,29 @@ void bindless_heap_create_all_samplers()
                     .unnormalizedCoordinates = VK_FALSE
                 };
                 break;
+            
+            case FG_SAMPLER_LINEAR_BLACK_BORDER:
+                sampler_create_info = (VkSamplerCreateInfo){
+                    .sType             = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO,
+                    .pNext             = NULL,
+                    .flags             = 0,
+                    .magFilter         = VK_FILTER_LINEAR,
+                    .minFilter         = VK_FILTER_LINEAR,
+                    .mipmapMode        = VK_SAMPLER_MIPMAP_MODE_LINEAR,
+                    .addressModeU      = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER,
+                    .addressModeV      = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER,
+                    .addressModeW      = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER,
+                    .mipLodBias        = 0.0f,
+                    .anisotropyEnable  = VK_FALSE,
+                    .maxAnisotropy     = 0.0f,
+                    .compareEnable     = VK_FALSE,
+                    .compareOp         = VK_COMPARE_OP_NEVER,
+                    .minLod            = 0.0f,
+                    .maxLod            = VK_LOD_CLAMP_NONE,
+                    .borderColor       = VK_BORDER_COLOR_FLOAT_TRANSPARENT_BLACK,
+                    .unnormalizedCoordinates = VK_FALSE
+                };
+                break;
 
             case FG_SAMPLER_ANISOTROPIC_REPEAT:
                 sampler_create_info = (VkSamplerCreateInfo){

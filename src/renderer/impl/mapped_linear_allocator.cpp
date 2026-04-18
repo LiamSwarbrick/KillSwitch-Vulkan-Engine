@@ -45,10 +45,9 @@ uint64_t PushToMappedArena(MappedArena* arena, void* data, uint64_t size)
     );
 
     // Copy data to the mapped pointer
-    // NOTE: If we just use memcpy, we'd have to check if the memory was not HOST_COHERENT
-    //       and then call vkFlushMappedMemoryRanges(). This VMA helper function does it for us :)
     vmaCopyMemoryToAllocation(renderstate.vma_allocator, data, renderstate.registry.resources[arena->rid].allocation, aligned_offset, size);
     // memcpy(arena->mapped_data + aligned_offset, data, size);
+    // vmaFlushAllocation(renderstate.vma_allocator, renderstate.registry.resources[arena->rid].allocation, aligned_offset, size);
     arena->current_offset = aligned_offset + size;
 
     

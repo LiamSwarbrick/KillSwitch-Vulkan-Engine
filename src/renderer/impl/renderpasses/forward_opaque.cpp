@@ -10,15 +10,23 @@ void ForwardOpaque_Execute(VkCommandBuffer cmd, uint32_t pass_idx)
     uint64_t scene_ptr = 0;
     {
         SceneData scene_data = {};
-        scene_data.view = renderstate.camera_view;
-        scene_data.proj = renderstate.fullscreen_proj;
-        scene_data.view_proj = scene_data.proj * scene_data.view;
+
+        glm::mat4 view, proj, view_proj;
+        view = renderstate.camera_view;
+        proj = renderstate.fullscreen_proj;
+        view_proj = proj * view;
 
         VkExtent3D extents = renderstate.registry.resources[renderstate.rids.hdr_color_target_rid].image.extent;
-        scene_data.rendertarget_size = glm::uvec2(extents.width, extents.height);
+        glm::uvec2 extents_uvec2 = glm::uvec2(extents.width, extents.height);
+
+        memcpy(scene_data.view, glm::value_ptr(view), sizeof(glm::mat4));
+        memcpy(scene_data.proj, glm::value_ptr(proj), sizeof(glm::mat4));
+        memcpy(scene_data.view_proj, glm::value_ptr(view_proj), sizeof(glm::mat4));
+        memcpy(scene_data.rendertarget_size, glm::value_ptr(extents_uvec2), sizeof(glm::uvec2));
+
+        scene_data.aspect = (float)extents.width / (float)extents.height;
         scene_ptr = PushToMappedArena(&renderstate.scenes_arena, &scene_data, sizeof(SceneData));
     }
-    
 
     uint32_t forward_shaders[] = { SHADER_UNLIT, SHADER_LIT };
     PushConstant_PassHeader push_pass = {};  // Unused

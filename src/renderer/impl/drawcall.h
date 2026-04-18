@@ -45,6 +45,6 @@ void PushDrawPrimitive(DrawCall dc, PipelineKey pipeline_key, uint32_t prim_idx,
 void SortDraws(DrawPrimSortFunc sort_func);
 void ExecuteDraws(VkCommandBuffer cmd, PushConstant_PassHeader push_pass, uint64_t scene_ptr);
 
-void ExecuteFullscreenPass(VkCommandBuffer cmd, uint32_t shader_id, PipelineKey key, PushConstant_PassHeader push_pass);
+void ExecuteFullscreenPass(VkCommandBuffer cmd, uint32_t shader_id, PipelineKey key, PushConstant_PassHeader push_pass, uint64_t scene_ptr);
 
 #endif  // RENDERER_DRAWCALL_H

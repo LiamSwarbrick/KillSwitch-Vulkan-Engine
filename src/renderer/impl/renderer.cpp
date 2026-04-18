@@ -716,7 +716,6 @@ void Renderer_Shutdown()
 void Renderer_ListenToWindowEvent(SDL_Event event)
 {
     // event to imgui
-    printf("HIH");
     ImGui_ImplSDL3_ProcessEvent(&event);
     
     switch (event.type)
@@ -1210,7 +1209,6 @@ void Renderer_DrawFrame(glm::mat4 primary_camera_view)
     };
     VK_CHECK(vkQueueSubmit2(renderstate.graphics_queue, 1, &submit_info, renderstate.frames[frame_in_flight].rendering_complete_fence));
 
-    
     // Present to screen
     // (after waiting on the rendering complete semaphore so that all drawing is completed first)
     VkPresentInfoKHR present_info = {

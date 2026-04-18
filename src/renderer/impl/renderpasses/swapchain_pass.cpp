@@ -7,14 +7,27 @@ void SwapchainPass_Execute(VkCommandBuffer cmd, uint32_t pass_idx)
 {
     RenderPassDesc* desc = &renderstate.framegraph.passes[pass_idx];
 
-    // SceneData scene_data = {};
-    // scene_data.view = glm::mat4(1.0f);
-    // scene_data.proj = glm::mat4(1.0f);
-    // scene_data.view_proj = scene_data.proj * scene_data.view;
+    uint64_t scene_ptr = 0;
+    {
+        SceneData scene_data = {};
 
-    // VkExtent2D extents = renderstate.swapchain_extent;
-    // scene_data.rendertarget_size = glm::uvec2(extents.width, extents.height);
-    // UpdateGlobalSceneData(scene_data);
+        // Unused matrices
+        glm::mat4 view, proj, view_proj;
+        view = glm::mat4(1.0f);
+        proj = glm::mat4(1.0f);
+        view_proj = proj * view;
+
+        VkExtent2D extents = renderstate.swapchain_extent;
+        glm::uvec2 extents_uvec2 = glm::uvec2(extents.width, extents.height);
+
+        memcpy(scene_data.view, glm::value_ptr(view), sizeof(glm::mat4));
+        memcpy(scene_data.proj, glm::value_ptr(proj), sizeof(glm::mat4));
+        memcpy(scene_data.view_proj, glm::value_ptr(view_proj), sizeof(glm::mat4));
+        memcpy(scene_data.rendertarget_size, glm::value_ptr(extents_uvec2), sizeof(glm::uvec2));
+
+        scene_data.aspect = (float)extents.width / (float)extents.height;
+        scene_ptr = PushToMappedArena(&renderstate.scenes_arena, &scene_data, sizeof(SceneData));
+    }
 
     const uint32_t shader_id = SHADER_BLIT;
     PipelineKey key = {
@@ -38,7 +51,7 @@ void SwapchainPass_Execute(VkCommandBuffer cmd, uint32_t pass_idx)
 
     PushConstant_PassHeader push_pass = {};
     push_pass.texture_indices[0] = renderstate.registry.resources[renderstate.rids.hdr_color_target_rid].image_bindless_index;
-    ExecuteFullscreenPass(cmd, shader_id, key, push_pass);
+    ExecuteFullscreenPass(cmd, shader_id, key, push_pass, scene_ptr);
 
     // Draw Debug GUI
     ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), cmd);

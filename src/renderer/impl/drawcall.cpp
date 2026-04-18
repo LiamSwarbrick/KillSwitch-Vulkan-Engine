@@ -278,7 +278,7 @@ void ExecuteDraws(VkCommandBuffer cmd, PushConstant_PassHeader push_pass, uint64
     }
 }
 
-void ExecuteFullscreenPass(VkCommandBuffer cmd, uint32_t shader_id, PipelineKey key, PushConstant_PassHeader push_pass)
+void ExecuteFullscreenPass(VkCommandBuffer cmd, uint32_t shader_id, PipelineKey key, PushConstant_PassHeader push_pass, uint64_t scene_ptr)
 {
     VkPipeline pipeline = PK_GetOrCreatePipeline(&renderstate.pipeline_map, key);
     if (renderstate.currently_bound_pipeline != pipeline) 
@@ -289,10 +289,11 @@ void ExecuteFullscreenPass(VkCommandBuffer cmd, uint32_t shader_id, PipelineKey 
 
     // Prepare the pass part of Push Constants
     // We only need the .pass part (texture/sampler indices)
-    // TODO: If it turns I'm never using both dc and pass, then I can remove one of them
-    //       This would half the push constants size requirements from 256 to 128
+    // And the scene data is so we can do special effects.
     FullPushConstants_Graphics push = {
-        .dc = {}, 
+        .dc = {
+            .scene_ptr = scene_ptr
+        },
         .pass = push_pass
     };
 

@@ -11,6 +11,7 @@
         FG_SAMPLER_LINEAR_REPEAT       =1,
         FG_SAMPLER_ANISOTROPIC_REPEAT  =2,
         FG_SAMPLER_SHADOW              =3,
+        FG_SAMPLER_LINEAR_BLACK_BORDER =4,
 
         FG_SAMPLER_COUNT,
         FG_SAMPLER_NOT_SAMPLABLE,  // For output resources
@@ -23,6 +24,7 @@
     #define FG_SAMPLER_LINEAR_REPEAT      1
     #define FG_SAMPLER_ANISOTROPIC_REPEAT 2
     #define FG_SAMPLER_SHADOW             3
+    #define FG_SAMPLER_LINEAR_BLACK_BORDER 4
 
 #endif
 

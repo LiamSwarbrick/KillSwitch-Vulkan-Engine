@@ -3,6 +3,7 @@
 
 // Way for game to communicate thing sfor the renderer
 #include "glm/glm.hpp"
+#include "glm/gtc/type_ptr.hpp"
 
 #include "shadersrc/common/shared.glsl"
 
@@ -67,7 +68,7 @@ MeshPrefab;
 
 typedef struct Renderable
 {
-    mat4 transform;
+    glm::mat4 transform;
     MeshPrefab mesh_prefab;  // The GPU resource buffers containing the vertex and index data
     
     // CPU-side joints buffer we memcpy from to GPU joints buffer

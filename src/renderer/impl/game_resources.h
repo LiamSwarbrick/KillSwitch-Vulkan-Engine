@@ -15,7 +15,7 @@ typedef struct ResourceIDs
     b32 window_resources_created;
 
     // Global (on startup)
-    uint32_t global_scene_buffer_rid;
+    uint32_t scenes_buffer_rid;
     uint32_t objects_buffer_rid;
     uint32_t joints_buffer_rid;
     uint32_t material_ssbo_rid;

@@ -131,15 +131,16 @@ void create_startup_resources()
         .buffer_create_info = {
             .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
             .size = MAX_PASSES * PaddedSizeForMappedArena(sizeof(SceneData)),
-            .usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT |
-                VK_BUFFER_USAGE_TRANSFER_DST_BIT
+            .usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT
+                | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT
+                | VK_BUFFER_USAGE_TRANSFER_DST_BIT
         },
         .is_buffer_cpu_accessible = 1  // <- Mapped bcuz small data upload is most efficient this way
     };
-    renderstate.rids.global_scene_buffer_rid = FG_CreateResource(
+    renderstate.rids.scenes_buffer_rid = FG_CreateResource(
         "GlobalSceneBuffer", FG_RESOURCE_TYPE_BUFFER, flags, &scene_info
     );
-    renderstate.scenes_arena = MakeArenaOnBufferResource(renderstate.rids.global_scene_buffer_rid);
+    renderstate.scenes_arena = MakeArenaOnBufferResource(renderstate.rids.scenes_buffer_rid);
 
 
     // Objects Buffer (Mapped so we rapidly upload transforms each frame)
@@ -451,7 +452,9 @@ void create_scene_resources()
 
     // Upload materials to global material buffer (all at once)
     FG_Resource* materials_res = &renderstate.registry.resources[renderstate.rids.material_ssbo_rid];
-    memcpy(materials_res->buffer.mapped_data, loaded_materials, num_loaded_materials * sizeof(MaterialData));
+    vmaCopyMemoryToAllocation(renderstate.vma_allocator, loaded_materials, materials_res->allocation, 0, num_loaded_materials * sizeof(MaterialData));
+    // memcpy(materials_res->buffer.mapped_data, loaded_materials, mat_upload_size);
+    // vmaFlushAllocation(renderstate.vma_allocator, materials_res->allocation, 0, mat_upload_size);
 
     // Load Static meshes
     for (uint32_t i = 0; i < init_info->num_static_meshes; ++i)
