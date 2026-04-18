@@ -6,3 +6,16 @@ But since this is all currently on one thread (the main thread), we can only do 
 The simple improvement would be to multithread this.
 I.e. one ThreadStagingObjects per thread, and load textures + mipmap generation across threads.
 Then while one thread is waiting on a fence, other work is not blocked along with it.
+
+
+Tiled architectures aren't fully utilised (Apply and mobile)
+- There is a big bandwidth usage between passes.
+  Because after the depth prepass, an unresolved MSAA depth buffer
+  must be written back to main memory before the next renderpass (which loads it again).
+  The way around requires keeping the depth prepass and subsequent opaque pass within
+  the same vkCmdBeginRendering() block, and using a pipeline barrier on it
+  via the dynamic rendering local read extension.
+
+- This mostly applies to Apple's hardware, which is more like mobile.
+  We currently don't plan on support for either, but supporting Mac
+  wouldn't be too hard, so in the future it's a possibility.

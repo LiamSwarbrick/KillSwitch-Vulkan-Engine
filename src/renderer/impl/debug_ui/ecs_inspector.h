@@ -8,6 +8,8 @@
 #include <cstdint>
 #include <string>
 #include <functional>
+#define GLM_ENABLE_EXPERIMENTAL
+#include "glm/gtx/matrix_decompose.hpp"
 
 namespace DebugUI
 {
@@ -21,8 +23,17 @@ namespace DebugUI
     template <>
     inline void DrawComponentFields<C_Transform>(C_Transform& t)
     {
-        ImGui::Text("Position:  %.3f  %.3f  %.3f", t.position.x, t.position.y, t.position.z);
-        ImGui::Text("Rotation:  %.3f  %.3f  %.3f  %.3f", t.rotation.x, t.rotation.y, t.rotation.z, t.rotation.w);
+        glm::vec3 scale;
+        glm::quat rotation;
+        glm::vec3 translation;
+        glm::vec3 skew;
+        glm::vec4 perspective;
+        glm::decompose(t.matrix, scale, rotation, translation, skew, perspective);
+        ImGui::Text("Position:  %.3f  %.3f  %.3f", translation.x, translation.y, translation.z);
+        ImGui::Text("Rotation:  %.3f  %.3f  %.3f  %.3f", rotation.x, rotation.y, rotation.z, rotation.w);
+        ImGui::Text("Scale:  %.3f  %.3f  %.3f", scale.x, scale.y, scale.z);
+        ImGui::Text("Skew:  %.3f  %.3f  %.3f", skew.x, skew.y, skew.z);
+        ImGui::Text("Perspective:  %.3f  %.3f  %.3f  %.3f", perspective.x, perspective.y, perspective.z, perspective.w);
     }
 
     template <>

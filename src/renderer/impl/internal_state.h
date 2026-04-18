@@ -14,6 +14,7 @@
 #include "renderpasses/metadata.h"
 #include "game_resources.h"
 
+#include "debug_ui_api.h"
 #include "imgui.h"
 #include "imgui_impl_sdl3.h"
 #include "imgui_impl_vulkan.h"
@@ -73,17 +74,14 @@ typedef struct RenderState
     ShaderRegistry shader_registry;
     ResourceIDs rids;  // IDs into registry, framegraph, or pipeline hash
 
-    // Per Frame Table for converting Pass Type into framegraph.passes array index
-    uint32_t pass_id_from_type[PASS_TYPE_COUNT];  // ONLY use after framegraph has been build that frame
-
     // Arenas reset each frame
+    MappedArena scenes_arena;
     MappedArena object_transforms;
     MappedArena joint_transforms;
 
     // Draw Calls are accumulated each frame per shader
     DrawCallsPerShader drawcalls_collection;
-    glm::mat4 camera_view;
-    glm::mat4 fullscreen_proj;
+    CameraInfo main_camera;
 
     // Renderer execution state:
     VkPipeline currently_bound_pipeline;  // Used to avoid  vkCmdBindPipeline call if it's already bound
@@ -99,7 +97,7 @@ typedef struct RenderState
     VkDescriptorPool imgui_descriptor_pool;
 
     // ImGui game-side UI callback
-    Renderer_ImGuiBuildCallback imgui_callback      = nullptr;
+    DebugUI_ImGuiBuildCallback  imgui_callback      = nullptr;
     void*                       imgui_callback_data = nullptr;
 }
 RenderState;

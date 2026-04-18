@@ -3,8 +3,9 @@
 
 // Way for game to communicate thing sfor the renderer
 #include "glm/glm.hpp"
+#include "glm/gtc/type_ptr.hpp"
 
-#include "shadersrc/shared_constants.glsl"
+#include "shadersrc/common/shared.glsl"
 
 #define MAX_RENDERED_OBJECTS 10000
 
@@ -19,13 +20,16 @@ MAT_PAUSE_UI           // E.g. pause menu material renderables are part of a pas
 MAT_HUD                // E.g. Minimap, current weapon, ammo. These are ui elements that are on the screen by default.
 */
 
-#define MATERIAL_LIST \
-    X(MAT_UNLIT_OPAQUE)
+// WARNING(Liam): Make sure core/imported_components.h is up to date with this
+#define MATERIAL_LIST(X) \
+    X(MAT_UNLIT_OPAQUE)  \
+    X(MAT_LIT_OPAQUE)
+
 
 typedef enum
 {
     #define X(name) name,
-    MATERIAL_LIST
+    MATERIAL_LIST(X)
     #undef X
     MATERIAL_TYPE_COUNT
 }
@@ -34,9 +38,9 @@ MaterialType;
 typedef struct PrimitiveRIDs
 {
     uint32_t index_buf_rid;
-    uint32_t material_index;     // Index into the global Material SSBO
+    uint32_t material_index;  // Index into the global Material SSBO
 
-    // Set to UINT32_MAX for unused attribute (specifically cuz static meshes don't have joints)
+    // Set to UINT32_MAX for unused attribute (specifically cuz static meshes don't have joints and color is optional too)
     uint32_t v_pos_buf_rid;
     uint32_t v_texcoord_buf_rid;
     uint32_t v_normal_buf_rid;
@@ -64,7 +68,7 @@ MeshPrefab;
 
 typedef struct Renderable
 {
-    mat4 transform;
+    glm::mat4 transform;
     MeshPrefab mesh_prefab;  // The GPU resource buffers containing the vertex and index data
     
     // CPU-side joints buffer we memcpy from to GPU joints buffer
@@ -73,12 +77,5 @@ typedef struct Renderable
     // NOTE: Fucking make sure joints arrays are not allocated every frame
 }
 Renderable;
-
-typedef struct RenderView
-{
-    uint32_t num_renderables;
-    Renderable* items;
-}
-RenderView;
 
 #endif  // RENDERER_RENDER_TYPES_H

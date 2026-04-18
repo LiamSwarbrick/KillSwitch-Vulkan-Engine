@@ -125,23 +125,29 @@ void create_startup_resources()
     FG_ResourceFlags flags = FG_RESOURCE_FLAGS_ON_STARTUP;
 
     // Scene Buffer
+    // NOTE: One SceneData per renderpass so there's no worrying about synchronisation to update the scene data between renderpasses.
+    //       Index scene buffer with the pass_idx!
     ResourceCreateInfo scene_info = {
         .buffer_create_info = {
             .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
-            .size = sizeof(SceneData),
-            .usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT |
-                VK_BUFFER_USAGE_TRANSFER_DST_BIT
+            .size = MAX_PASSES * PaddedSizeForMappedArena(sizeof(SceneData)),
+            .usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT
+                | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT
+                | VK_BUFFER_USAGE_TRANSFER_DST_BIT
         },
+        .is_buffer_cpu_accessible = 1  // <- Mapped bcuz small data upload is most efficient this way
     };
-    renderstate.rids.global_scene_buffer_rid = FG_CreateResource(
+    renderstate.rids.scenes_buffer_rid = FG_CreateResource(
         "GlobalSceneBuffer", FG_RESOURCE_TYPE_BUFFER, flags, &scene_info
     );
+    renderstate.scenes_arena = MakeArenaOnBufferResource(renderstate.rids.scenes_buffer_rid);
+
 
     // Objects Buffer (Mapped so we rapidly upload transforms each frame)
     ResourceCreateInfo objects_info = {
         .buffer_create_info = {
             .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
-            .size = MAX_RENDERED_OBJECTS * sizeof(ObjectData),
+            .size = MAX_RENDERED_OBJECTS * PaddedSizeForMappedArena(sizeof(ObjectData)),
             .usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT
                 | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT
                 | VK_BUFFER_USAGE_TRANSFER_DST_BIT
@@ -153,22 +159,26 @@ void create_startup_resources()
     );
     renderstate.object_transforms = MakeArenaOnBufferResource(renderstate.rids.objects_buffer_rid);
 
+    
     // Joints Buffer (Mapped so we upload to them each frame)
     const uint32_t MAX_JOINTS_FOR_ALL_OBJECTS = MAX_RENDERED_OBJECTS * 50;
     ResourceCreateInfo joints_info = {
         .buffer_create_info = {
             .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
-            .size = MAX_JOINTS_FOR_ALL_OBJECTS * sizeof(glm::mat4),
+            // Alignment: mat4 is obviously 64 byte aligned, so each object's joint transforms have no padding between them.
+            //      But just to be clear I've included the differences between different object's joint arrays 
+            //      (but Padded(mat4)-mat4 = 0 so it cancel out due to 64 byte alignment and 64 byte size of mat4)
+            .size = MAX_JOINTS_FOR_ALL_OBJECTS * sizeof(glm::mat4) + MAX_RENDERED_OBJECTS*(PaddedSizeForMappedArena(sizeof(glm::mat4))-sizeof(glm::mat4)),
             .usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT
                 | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT
                 | VK_BUFFER_USAGE_TRANSFER_DST_BIT
         },
         .is_buffer_cpu_accessible = 1  // <- Hence mapped
     };
-    renderstate.rids.objects_buffer_rid = FG_CreateResource(
+    renderstate.rids.joints_buffer_rid = FG_CreateResource(
         "JointsBuffer", FG_RESOURCE_TYPE_BUFFER, flags, &objects_info
     );
-    renderstate.joint_transforms = MakeArenaOnBufferResource(renderstate.rids.objects_buffer_rid);
+    renderstate.joint_transforms = MakeArenaOnBufferResource(renderstate.rids.joints_buffer_rid);
 
 
     // Materials SSBO (materials get uploaded on scene change all at once)
@@ -179,12 +189,13 @@ void create_startup_resources()
             .usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT
                    | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT
                    | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
-        }
+        },
+        .is_buffer_cpu_accessible = 1  // <- Material stuff like blend mode is important to be CPU accessable, and we may want to dynamically change materials.
     };
     renderstate.rids.material_ssbo_rid = FG_CreateResource(
         "MaterialSSBO", FG_RESOURCE_TYPE_BUFFER, flags, &mat_info
     );
-
+    
 
     /////// MOVE BELOW TO create_scene_resources(scene resource list?) /////////////
 
@@ -373,7 +384,7 @@ void create_scene_resources()
         uint32_t default_texture_rid = UINT32_MAX;
         stbi_set_flip_vertically_on_load(1);
         int width, height, num_channels;
-        const char* filepath = "assets/godot.png";
+        const char* filepath = "assets/godot2.png";
         uint8_t* data = stbi_load(filepath, &width, &height, &num_channels, 4);
         if (data == NULL)
         {
@@ -387,8 +398,9 @@ void create_scene_resources()
         
         MaterialData default_mat = {
             .base_color = { 1.0f, 1.0f, 1.0f, 1.0f },
+            .blend_mode = BLEND_MODE_MASKED,
             .alpha_cutoff = 0.5f,
-            .sampler_idx = FG_SAMPLER_LINEAR_REPEAT,
+            .sampler_idx = FG_SAMPLER_ANISOTROPIC_REPEAT,
             .texture_idx_basecolor = renderstate.registry.resources[default_texture_rid].image_bindless_index
         };
         loaded_materials[num_loaded_materials++] = default_mat;
@@ -409,11 +421,12 @@ void create_scene_resources()
             gpu_mat.metalness = mat->metallic;
             gpu_mat.roughness = mat->roughness;
             memcpy(&gpu_mat.emissive_factor, mat->emissive_factor, sizeof(glm::vec3));
+            gpu_mat.blend_mode = mat->blend_mode;
             gpu_mat.alpha_cutoff = mat->alpha_cutoff;
 
             // NOTE: Just use one sampler for now at least
             // (maybe I'd want to check the base colour texture's min/mag filter and s/t wrap to choose a better one if we need)
-            gpu_mat.sampler_idx = FG_SAMPLER_LINEAR_REPEAT;
+            gpu_mat.sampler_idx = FG_SAMPLER_ANISOTROPIC_REPEAT;
             
             if (mat->base_color_texture_index >= 0)
             {
@@ -438,10 +451,10 @@ void create_scene_resources()
     }
 
     // Upload materials to global material buffer (all at once)
-    FG_UploadBufferData(&renderstate.main.staging_objects, rids->material_ssbo_rid,
-        loaded_materials, num_loaded_materials * sizeof(MaterialData)
-    );
-
+    FG_Resource* materials_res = &renderstate.registry.resources[renderstate.rids.material_ssbo_rid];
+    vmaCopyMemoryToAllocation(renderstate.vma_allocator, loaded_materials, materials_res->allocation, 0, num_loaded_materials * sizeof(MaterialData));
+    // memcpy(materials_res->buffer.mapped_data, loaded_materials, mat_upload_size);
+    // vmaFlushAllocation(renderstate.vma_allocator, materials_res->allocation, 0, mat_upload_size);
 
     // Load Static meshes
     for (uint32_t i = 0; i < init_info->num_static_meshes; ++i)

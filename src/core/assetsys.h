@@ -2,7 +2,7 @@
 #define ASSETSYS_H
 
 #include "cgltf.h"
-#include "renderer/shadersrc/shared_constants.glsl"  // VertexType
+#include "renderer/shadersrc/common/shared.glsl"  // VertexType
 #include "renderer/render_types.h"  // MaterialType
 
 #ifdef __cplusplus
@@ -31,7 +31,7 @@ typedef struct Primitive {
 typedef struct Mesh {
     const char* name;
     VertexType vertex_type;     // 0 = static, 1 = animated (as per shared_constants.glsl)
-    MaterialType mat_type;
+    MaterialType mat_type;  // NOTE: Assetsys initializes this but component system finds the material in the extras json and sets it later
 
     Primitive* primitives;
     size_t primitive_count;
@@ -45,6 +45,7 @@ typedef struct Material {
     float metallic;
     float roughness;
     float emissive_factor[3]; // RGB 
+    BlendMode blend_mode;
     float alpha_cutoff;      
 
     // Texture indices (-1 if not used)

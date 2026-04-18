@@ -4,6 +4,7 @@
 #include "internal_state.h"
 #include "mapped_linear_allocator.h"
 #include "glm/gtc/matrix_transform.hpp"
+#include "core/my_c_runtime.h"
 
 void InitDrawCallCollections()
 {
@@ -40,6 +41,7 @@ void BeginDrawCalls()
     }
 
     // Empty object data (e.g. model transforms)
+    ResetMappedArena(&renderstate.scenes_arena);
     ResetMappedArena(&renderstate.object_transforms);
     ResetMappedArena(&renderstate.joint_transforms);
 
@@ -60,9 +62,6 @@ void AddDrawCall(Renderable* r)
 
     DrawCall drawcall = {
         .renderable = r,
-        
-        #warning TODO: Sorting should actually be in the transparent renderpasses execute callback
-        .sort_depth = 0,
 
         // Push renderables transform to the mapped buffer and keep the pointer to it in draw calls.
         .object_ptr = PushToMappedArena(&renderstate.object_transforms, &r->transform, sizeof(r->transform)),
@@ -71,9 +70,9 @@ void AddDrawCall(Renderable* r)
     
     const MaterialPipelineInfo* const shaders_for_material = &g_material_configs.array[r->mesh_prefab.mat_type];
 
-    // Submit draw with depth prepass
-    // TODO: Should I ALWAYS be depth prepassing? It may break under some materials that displace vertices in the vertex shader
+    // Submit draw with depth prepasss
     {
+        // TODO: Should I ALWAYS be depth prepassing? It may break under some materials that displace vertices in the vertex shader
         uint32_t shader_id = SHADER_DEPTH;
         uint32_t* shader_drawcall_count = &renderstate.drawcalls_collection.array[shader_id].drawcall_count;
 
@@ -120,34 +119,122 @@ void AddDrawCall(Renderable* r)
 }
 
 
-void ExecuteDrawCall(VkCommandBuffer cmd, DrawCall drawcall, PipelineKey key, PushConstant_PassHeader push_pass)
+// DRAW CALL SORTING AND EXECUTION
+
+/*  NOTE:
+    While keeping the drawcall API simple as it already is,
+    under the hood we can do as many optimisations as needed.
+        
+    In this case, our renderables are made up of many primitives,
+    these primitives may have different pipeline state to each other.
+    For instance, alpha blending vs masked vs opaque.
+
+    So under the hood, our 'atomic' draw call unit is for a primitive.
+    A primitive gets the actual pipeline associated with it then.
+    And we can also optimise draw order based on sort key.
+
+    Draw order:
+    - Most important: limit the number of pipeline changes,
+      some pipeline state changes are extremely expensive.
+    - Depth sort: The depth prepass is faster front to back, 
+      also alpha masked geometry should be the done lastly in the depth prepass.
+
+
+    TODO: Whilst using glTF we gotta deal with meshes being multiple primitives.
+    In the future, when reusing this with a custom format, decide whether this is still a good choice.
+*/
+
+typedef struct DrawPrimitive
 {
-    // ASSUMES: global texture descriptor set is already bound to VK_PIPELINE_BIND_POINT_GRAPHICS
+    DrawCall dc;
+    PipelineKey pipeline_key;
+    uint32_t prim_idx;
+    uint32_t sort_key;  // TODO unused
+}
+DrawPrimitive;
 
-    // Get/Create and Bind Pipeline
-    VkPipeline pipeline = PK_GetOrCreatePipeline(&renderstate.pipeline_map, key);
-    if (renderstate.currently_bound_pipeline != pipeline)  // <- No redundant ass pipeline binds
-    {
-        renderstate.currently_bound_pipeline = pipeline;
-        vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
-    }
+uint32_t num_loaded_draws = 0;
+MY_THREAD_LOCAL DrawPrimitive loaded_draws[MAX_DRAWCALLS_PER_SHADER];
 
-    FullPushConstants_Graphics push = {
-        .dc = {},
-        .pass = push_pass
+void ResetDrawArena()
+{
+    num_loaded_draws = 0;    
+}
+
+void PushDrawPrimitive(DrawCall dc, PipelineKey pipeline_key, uint32_t prim_idx, uint32_t sort_key)
+{
+    loaded_draws[num_loaded_draws++] = {
+        .dc           = dc,
+        .pipeline_key = pipeline_key,
+        .prim_idx     = prim_idx,
+        .sort_key     = sort_key
     };
+}
 
-    // Prepare the draw call part of Push Constants 
-    push.dc.scene_ptr    = renderstate.registry.resources[renderstate.rids.global_scene_buffer_rid].buffer_gpu_address;
-    push.dc.material_ptr = renderstate.registry.resources[renderstate.rids.material_ssbo_rid].buffer_gpu_address;
-    push.dc.object_ptr   = drawcall.object_ptr;
-    push.dc.joints_ptr = drawcall.joints_ptr;
-
-    for (uint32_t prim_i = 0; prim_i < drawcall.renderable->mesh_prefab.mesh_rids.primitive_count; ++prim_i)
+int DrawPrimSortFunc_Default(const void* a, const void* b)
+{
+    const DrawPrimitive* prim_a = (const DrawPrimitive*)a;
+    const DrawPrimitive* prim_b = (const DrawPrimitive*)b;
+    // First sorting by pipeline key because changing pipelines is expensive
+    if (prim_a->pipeline_key.value > prim_b->pipeline_key.value)
     {
-        PrimitiveRIDs* prim_rids = &drawcall.renderable->mesh_prefab.mesh_rids.primitives[prim_i];
+        return 1;
+    }
+    else if (prim_a->pipeline_key.value < prim_b->pipeline_key.value)
+    {
+        return -1;
+    }
+    else
+    {
+        // TODO: Sort by quantized depth too.
+        // And maybe some passes will want to prioritize depth over pipeline key
+        // And others may want to only do alpha masked geometry last, etc.
 
-        // Prepare per primitive Push Constants
+        // TODO: Sort by mesh/primitive rid
+        //  Then we can use an instanced drawcall for the same meshes.
+        //  Note however that things like grass should not be sorted this though
+        //  as it's too expensive CPU side. Which is why I'd like to rework the
+        //  mesh->primitive thing that glTF has made us use. (I.e. cut off glTF)
+        //  This way we can design to minimize overhead for hugely batched draws like grass.
+
+        return 0;
+    }
+}
+
+void SortDraws(DrawPrimSortFunc sort_func)
+{
+    qsort(loaded_draws, num_loaded_draws, sizeof(DrawPrimitive), sort_func);
+}
+
+void ExecuteDraws(VkCommandBuffer cmd, PushConstant_PassHeader push_pass, uint64_t scene_ptr)
+{
+    for (uint32_t i = 0; i < num_loaded_draws; ++i)
+    {
+        DrawPrimitive* draw = &loaded_draws[i];
+        PrimitiveRIDs* prim_rids = &draw->dc.renderable->mesh_prefab.mesh_rids.primitives[draw->prim_idx];
+
+        // ASSUMES: global texture descriptor set is already bound to VK_PIPELINE_BIND_POINT_GRAPHICS
+
+        // Get/Create and Bind Pipeline
+        VkPipeline pipeline = PK_GetOrCreatePipeline(&renderstate.pipeline_map, draw->pipeline_key);
+        if (renderstate.currently_bound_pipeline != pipeline)  // <- No redundant ass pipeline binds
+        {
+            renderstate.currently_bound_pipeline = pipeline;
+            vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
+        }
+
+        FullPushConstants_Graphics push = {
+            .dc = {},
+            .pass = push_pass
+        };
+
+        // Prepare the draw call part of Push Constants 
+        push.dc.scene_ptr    = scene_ptr;
+        push.dc.material_ptr = renderstate.registry.resources[renderstate.rids.material_ssbo_rid].buffer_gpu_address;
+        push.dc.object_ptr   = draw->dc.object_ptr;
+        push.dc.joints_ptr = draw->dc.joints_ptr;
+
+        // Prepare push constants draw call section
         push.dc.material_idx     = prim_rids->material_index;
         push.dc.index_ptr        = renderstate.registry.resources[prim_rids->index_buf_rid].buffer_gpu_address;
 
@@ -177,7 +264,7 @@ void ExecuteDrawCall(VkCommandBuffer cmd, DrawCall drawcall, PipelineKey key, Pu
 
 
         vkCmdPushConstants(cmd, renderstate.global_pipeline_layout,
-            VK_SHADER_STAGE_ALL, 0, sizeof(push), &push.dc
+            VK_SHADER_STAGE_ALL, 0, sizeof(push), &push
         );
 
         // Draw
@@ -191,7 +278,7 @@ void ExecuteDrawCall(VkCommandBuffer cmd, DrawCall drawcall, PipelineKey key, Pu
     }
 }
 
-void ExecuteFullscreenPass(VkCommandBuffer cmd, uint32_t shader_id, PipelineKey key, PushConstant_PassHeader push_pass)
+void ExecuteFullscreenPass(VkCommandBuffer cmd, uint32_t shader_id, PipelineKey key, PushConstant_PassHeader push_pass, uint64_t scene_ptr)
 {
     VkPipeline pipeline = PK_GetOrCreatePipeline(&renderstate.pipeline_map, key);
     if (renderstate.currently_bound_pipeline != pipeline) 
@@ -202,10 +289,11 @@ void ExecuteFullscreenPass(VkCommandBuffer cmd, uint32_t shader_id, PipelineKey 
 
     // Prepare the pass part of Push Constants
     // We only need the .pass part (texture/sampler indices)
-    // TODO: If it turns I'm never using both dc and pass, then I can remove one of them
-    //       This would half the push constants size requirements from 256 to 128
+    // And the scene data is so we can do special effects.
     FullPushConstants_Graphics push = {
-        .dc = {}, 
+        .dc = {
+            .scene_ptr = scene_ptr
+        },
         .pass = push_pass
     };
 
@@ -215,78 +303,4 @@ void ExecuteFullscreenPass(VkCommandBuffer cmd, uint32_t shader_id, PipelineKey 
 
     // Push 3 empty vertices we'll use for a fullscreen triangle
     vkCmdDraw(cmd, 3, 1, 0, 0);
-}
-
-
-// SCENE DATA UPDATION DURING FRAME
-
-static SceneData temp_default_camera_scene_data()
-{
-    SceneData data = {};
-    
-    static glm::vec3 pos = glm::vec3(0.0f, 0.0f, 3.0f);
-
-    // Rotation state
-    static float yaw   = -90.0f;  // Looking down -Z initially
-    static float pitch =  0.0f;
-
-    const bool* state = SDL_GetKeyboardState(NULL);
-
-    float move_speed = 0.05f;
-    float rot_speed  = 1.5f;  // Degrees per frame
-
-    // --- ROTATION (arrow keys) ---
-    if (state[SDL_SCANCODE_LEFT])  yaw   -= rot_speed;
-    if (state[SDL_SCANCODE_RIGHT]) yaw   += rot_speed;
-    if (state[SDL_SCANCODE_UP])    pitch += rot_speed;
-    if (state[SDL_SCANCODE_DOWN])  pitch -= rot_speed;
-
-    // Clamp pitch to avoid flipping
-    if (pitch > 89.0f)  pitch = 89.0f;
-    if (pitch < -89.0f) pitch = -89.0f;
-
-    // --- DIRECTION VECTOR ---
-    glm::vec3 forward;
-    forward.x = cos(glm::radians(yaw)) * cos(glm::radians(pitch));
-    forward.y = sin(glm::radians(pitch));
-    forward.z = sin(glm::radians(yaw)) * cos(glm::radians(pitch));
-    forward = glm::normalize(forward);
-
-    glm::vec3 right = glm::normalize(glm::cross(forward, glm::vec3(0.0f, 1.0f, 0.0f)));
-    glm::vec3 up = glm::vec3(0.0f, 1.0f, 0.0f);
-
-    // --- MOVEMENT (WASD relative to camera) ---
-    if (state[SDL_SCANCODE_W]) pos += forward * move_speed;
-    if (state[SDL_SCANCODE_S]) pos -= forward * move_speed;
-    if (state[SDL_SCANCODE_A]) pos -= right   * move_speed;
-    if (state[SDL_SCANCODE_D]) pos += right   * move_speed;
-    if (state[SDL_SCANCODE_E]) pos += up  * move_speed;
-    if (state[SDL_SCANCODE_Q]) pos -= up  * move_speed;
-
-    // --- VIEW MATRIX ---
-    data.view = glm::lookAt(pos, pos + forward, up);
-
-    // --- PROJECTION ---
-    float fov = glm::radians(60.0f);
-    float aspect = (float)renderstate.swapchain_extent.width / (float)renderstate.swapchain_extent.height;
-
-    data.proj = glm::perspective(fov, aspect, 0.1f, 100.0f);
-    // GLM is OpenGL-style by default:
-    // - Y is flipped
-    // - Z is -1..1 instead of 0..1
-    data.proj[1][1] *= -1.0f;
-
-
-    data.view_proj = data.proj * data.view;
-
-    return data;
-}
-
-void UpdateGlobalSceneData(SceneData data)
-{
-    // data = temp_default_camera_scene_data();   
-    FG_UploadBufferData(&renderstate.main.staging_objects, 
-                        renderstate.rids.global_scene_buffer_rid, 
-                        &data, sizeof(SceneData)
-    );
 }

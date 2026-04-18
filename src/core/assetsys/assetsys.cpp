@@ -36,16 +36,34 @@ static int find_bone_index(Skin* skin, int target_node_index) {
 	return -1;
 }
 
+// find the root node of the skeleton (blender doesn't export it explicitly)
+static int find_skeleton_root(Skin* skin) {
+	for (size_t i = 0; i < skin->joint_count; ++i) {
+		if (skin->bones[i].parent_index == -1) {
+			return skin->joint_node_indices[i];
+		}
+	}
+	return 1;
+}
+
 Image load_image(const char* name, const char* uri)
 {
+	// Extract just the filename from the uri
+	const char* slash = strrchr(uri, '/');
+	const char* filename = slash ? slash + 1 : uri;
+
+	// all textures stored in assets/
+	char full_path[1024];
+	snprintf(full_path, sizeof(full_path), "assets/%s", filename);
+
 	// Load images from disk (4 channels: RGBA8 image).
 	// (No decision necessary here about whether it's sRGB or linear)
 	Image image = {
-		.name = name,
-		.uri = uri
+		.name = duplicate_string(name),
+		.uri = duplicate_string(full_path)
 	};
 
-	stbi_set_flip_vertically_on_load(1);
+	stbi_set_flip_vertically_on_load(0);
 
 	int width, height, num_channels;
 	image.data = stbi_load(image.uri, &width, &height, &num_channels, 4);
@@ -122,10 +140,46 @@ Asset* load_asset(const char* filename) {
 
 	// Copy Images
 	for (size_t i = 0; i < asset->image_count; i++) {
-		const char* img_name = duplicate_string(data->images[i].name);
-		const char* img_uri = duplicate_string(data->images[i].uri);
-		
-		asset->images[i] = load_image(img_name, img_uri);
+		cgltf_image* gltf_image = &data->images[i];
+
+		if (gltf_image->buffer_view) {
+			// GLB
+			if (gltf_image->name) {
+				asset->images[i].name = duplicate_string(gltf_image->name);
+				asset->images[i].uri = duplicate_string(gltf_image->name);
+			}
+			else {
+				// default uri for images with no names
+				char fallback_name[64];
+				snprintf(fallback_name, sizeof(fallback_name), "EmbeddedTexture_%zu", i);
+				asset->images[i].name = duplicate_string(fallback_name);
+				asset->images[i].uri = duplicate_string(fallback_name);
+			}
+
+			// extract the raw binary image data
+			uint8_t* buffer_data = (uint8_t*)gltf_image->buffer_view->buffer->data + gltf_image->buffer_view->offset;
+			size_t buffer_size = gltf_image->buffer_view->size;
+
+			int width, height, num_channels;
+			stbi_set_flip_vertically_on_load(0);
+			asset->images[i].data = stbi_load_from_memory(buffer_data, (int)buffer_size, &width, &height, &num_channels, 4);
+
+			if (!asset->images[i].data) {
+				SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Failure to load embedded image from glb");
+			}
+			else {
+				asset->images[i].width = width;
+				asset->images[i].height = height;
+				asset->images[i].data_size = width * height * 4;
+			}
+		}
+		else {
+			// GLTF
+			const char* img_name = duplicate_string(gltf_image->name);
+			const char* img_uri = duplicate_string(gltf_image->uri);
+
+			asset->images[i] = load_image(img_name, img_uri);
+		}
 	}
 
 	// Copy Textures
@@ -177,6 +231,15 @@ Asset* load_asset(const char* filename) {
 		}
 
 		memcpy(mat->emissive_factor, gltf_mat->emissive_factor, sizeof(float) * 3);
+		
+		switch (gltf_mat->alpha_mode)
+		{
+			case cgltf_alpha_mode_opaque:  mat->blend_mode = BLEND_MODE_OPAQUE; break; 
+			case cgltf_alpha_mode_mask:    mat->blend_mode = BLEND_MODE_MASKED; break;
+			case cgltf_alpha_mode_blend:   mat->blend_mode = BLEND_MODE_BLEND; break;
+			default: SDL_assert(0 && "Invalid blend mode");
+	#warning BLEND_MODE_ADDITIVE needs exposing through custom material properties
+		}
 		mat->alpha_cutoff = gltf_mat->alpha_cutoff;
 	}
 	// Create Default Material at the end of the array
@@ -267,7 +330,6 @@ Asset* load_asset(const char* filename) {
 		Skin* skin = &asset->skins[i];
 
 		skin->name = duplicate_string(gltf_skin->name);
-		skin->skeleton_root_node_index = get_node_index(data, gltf_skin->skeleton);
 		skin->joint_count = gltf_skin->joints_count;
 
 		if (skin->joint_count > 0) {
@@ -318,6 +380,8 @@ Asset* load_asset(const char* filename) {
 					}
 				}
 			}
+			// Has to be done after finding the parent indices for all bones
+			skin->skeleton_root_node_index = find_skeleton_root(skin);
 		}
 	}
 
@@ -333,9 +397,10 @@ Asset* load_asset(const char* filename) {
 		// default static mesh
 		mesh->vertex_type = VERTEX_TYPE_STATIC;
 
-		// default unlit mesh TODO: better defaults once lighting implemented.
-		mesh->mat_type = MAT_UNLIT_OPAQUE;
-		// TODO: Not retrieving material type yet from gltf (need a way of exposing it in blender)
+		// Default to UNLIT, the component system will set the actual value based on the extras json
+		// mesh->mat_type = MAT_UNLIT_OPAQUE;
+		#warning WHILE TESTING, DEFAULT TO LIT UNTIL WE SORT OUT LEVEL EDITOR
+		mesh->mat_type = MAT_LIT_OPAQUE;
 
 		for (size_t p = 0; p < mesh->primitive_count; p++) {
 			cgltf_primitive* gltf_prim = &gltf_mesh->primitives[p];

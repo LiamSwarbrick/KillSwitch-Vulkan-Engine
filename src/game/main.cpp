@@ -1,12 +1,14 @@
 #include "core/core.h"
 #include "renderer/renderer.h"
+#include "renderer/debug_ui_api.h"
 #include "foundations/scene.h"
 #include "core/components.h"
+#include "core/animation.h"
 
 #include "SDL3/SDL.h"
 #include "SDL3/SDL_main.h"
 
-glm::mat4 temp_camera_view_matrix()
+CameraInfo temp_camera()
 {
     static glm::vec3 pos = glm::vec3(0.0f, 0.0f, 3.0f);
 
@@ -52,29 +54,34 @@ glm::mat4 temp_camera_view_matrix()
     // --- VIEW MATRIX ---
     glm::mat4 view = glm::lookAt(pos, pos + forward, up);
 
-    return view;
+    return {
+        .view = view,
+        .position = pos,
+        .lense_distortion = 0.0f
+    };
 }
 
 int main(int argc, char *argv[])
 {
-    bool is_debugging = true;
-#ifdef NDEBUG
-    is_debugging = false;
-#endif
-
+    bool enabled_validation_layers = true;
+    // NOTE: For non production builds, we still want Vulkan validation layers on in release mode, because release mode can have different bugs
+    // To make sure it's obvious when validation layers are used, we'll put it in the window title.
+    // Note that validation layers degrade performance significantly, so should be disabled in performance metrics and absolutely in production builds
+    char title[256] = {};
+    snprintf(title, sizeof(title), "Close-quarters Adventure Game [%s]", enabled_validation_layers ? "VULKAN VALIDATION LAYERS ENABLED" : "VULKAN VALIDATION LAYERS DISABLED");
     SDL_Window* window = Core_Init((Core_InitInfo){
-        "Close-quarters Adventure Game",
+        title,
         1280, 720
     });
 
     // NOTE: Currently checking validation in release mode, but on realse you would normally disable it
     Renderer_InitInfo renderer_info = {
         .window = window,
-        .enable_validation = 1,//is_debugging
+        .enable_validation = enabled_validation_layers,
         .preferred_initial_settings = {  // Will fallback if these aren't possible
             .uncapped_fps = 0,
-            .msaa_sample_count = 1,
-            .fov_y = 90.0f
+            .msaa_sample_count = 4,
+            .fov_y = 70.0f
         }
     };
     Renderer_Init(&renderer_info);
@@ -122,13 +129,24 @@ int main(int argc, char *argv[])
 
     // Testing Scene and ECS
     Scene scene{};
-    Renderer_SetDebugECS(&scene.GetECS());
-    Renderer_SetDebugAsset(scene.GetAsset());  // Will be null until LoadLevel finishes, updated below
-    scene.LoadLevel("assets/levels/bodies.gltf");
-    Renderer_SetDebugAsset(scene.GetAsset());  // Now m_asset is populated
-    // scene.LoadLevel("assets/animations/Animationtest.gltf");
-    // scene.LoadLevel("assets/levels/Untitled_skybox.gltf");
+    scene.StartUp();
 
+    Asset* room_prefab = scene.LoadPrefab("assets/levels/testroom.gltf");
+    Asset* catPrefab = scene.LoadPrefab("assets/animations/scene.gltf");
+    Asset* animationPrefab = scene.LoadPrefab("assets/animations/sceneglb.glb");
+
+    scene.InstantiatePrefab(room_prefab, glm::vec3(0,0,0));
+    scene.InstantiatePrefab(catPrefab, glm::vec3(0, 0, 0));
+    scene.InstantiatePrefab(animationPrefab, glm::vec3(5, 20, 0));
+    // render a second cat
+    EntityID playerEntity = scene.InstantiatePrefab(catPrefab, glm::vec3(10, 0, 10));
+
+    scene.BuildRendererScene();
+
+    // TODO: Debug UI is built around the idea of 1 asset at the moment.
+    //       This must change with the new scene system that can load many asset prefabs.
+    DebugUI_SetECS(&scene.GetECS());
+    DebugUI_SetAsset(animationPrefab);
 
     bool running = true;
 
@@ -141,15 +159,40 @@ int main(int argc, char *argv[])
         uint64_t current_time = SDL_GetTicksNS();
         float dt = (float)(current_time - last_time) / 1000000000.0f;
         last_time = current_time;
-        if (dt > 0.1f) dt = 0.1f;
+        if (dt > 0.1f) dt = 0.1f;   
 
         // Event Loop
         SDL_Event event;
         while (SDL_PollEvent(&event))
         {
             if (event.type == SDL_EVENT_QUIT) running = false;
-
             Renderer_ListenToWindowEvent(event);
+        }
+
+        // controller test not ideal at all
+        const bool* state = SDL_GetKeyboardState(NULL);
+        float speed = 5.0f * dt;
+        glm::vec3 movement(0.0f);
+
+        if (state[SDL_SCANCODE_I]) movement.z -= speed;
+        if (state[SDL_SCANCODE_K]) movement.z += speed;
+
+        if (state[SDL_SCANCODE_J]) movement.x -= speed;
+        if (state[SDL_SCANCODE_L]) movement.x += speed;
+
+        if (glm::length(movement) > 0.0f)
+        {
+            for (uint32_t i = 0; i < catPrefab->node_count; i++)
+            {
+                C_Transform* tf = scene.GetECS().GetComponentPtr<C_Transform>(playerEntity + i);
+                if (tf)
+                {
+                    // Apply movement directly to the world translation (column 3 of the matrix)
+                    tf->matrix[3][0] += movement.x;
+                    tf->matrix[3][1] += movement.y;
+                    tf->matrix[3][2] += movement.z;
+                }
+            }
         }
 
         // Game ticks
@@ -159,12 +202,9 @@ int main(int argc, char *argv[])
         uint32_t flags = SDL_GetWindowFlags(window);
         if (!(flags & SDL_WINDOW_MINIMIZED))
         {
-            // Do this buddo:
-            // Renderer_PushRenderable(renderable);
-
             scene.Render();
-            
-            Renderer_DrawFrame(temp_camera_view_matrix());
+
+            Renderer_DrawFrame(temp_camera());
         }
     }
 

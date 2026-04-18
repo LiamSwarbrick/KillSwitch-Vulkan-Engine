@@ -16,6 +16,8 @@ local SDL_BUILD_FLAGS = "" -- initialized later in the SDL section
 local VULKAN_SDK = os.getenv("VULKAN_SDK") or ""
 -- TODO: Check for good enough Vulkan SDK version. e.g. 1.4
 
+-- TODO: Some of these modules should really not be in include_paths,
+-- i.e. we should want to use module/name.h header instead of just name.h
 include_paths = {}
 include_paths.SDL3 = SDL_DIR .. "/include"
 include_paths.Vulkan = VULKAN_SDK .. "/include"
@@ -231,6 +233,60 @@ workspace "AdventureEngine"
         }
 
 
+    -- Third Party ImGUI Node Editor (do not want external code to produce warnings)
+    project "imgui"
+        kind "StaticLib"
+        warnings "Off"
+        files {
+            EXTERNAL .. "imgui/imgui.cpp",
+            EXTERNAL .. "imgui/imgui_demo.cpp",
+            EXTERNAL .. "imgui/imgui_draw.cpp",
+            EXTERNAL .. "imgui/imgui_tables.cpp",
+            EXTERNAL .. "imgui/imgui_widgets.cpp",
+            EXTERNAL .. "imgui/backends/imgui_impl_sdl3.cpp",
+            EXTERNAL .. "imgui/backends/imgui_impl_vulkan.cpp",
+        }
+        includedirs {
+            EXTERNAL .. "imgui",
+            EXTERNAL .. "imgui/backends",
+            include_paths.Vulkan,
+            include_paths.Vulkan,
+            include_paths.volk,
+            include_paths.SDL3
+        }
+        defines {
+            "IMGUI_IMPL_VULKAN_USE_VOLK"
+        }
+        libdirs {
+            lib_dirs.Vulkan,
+            lib_dirs.SDL3
+        }
+        libdirs {
+            lib_dirs.Vulkan,
+            lib_dirs.SDL3
+        }
+        links {
+            "SDL3"
+        }
+
+    project "imgui_node_editor"
+        kind "StaticLib"
+        warnings "Off"
+        files {
+            EXTERNAL .. "imgui-node-editor/imgui_node_editor.cpp",
+            EXTERNAL .. "imgui-node-editor/imgui_node_editor_api.cpp",
+            EXTERNAL .. "imgui-node-editor/imgui_canvas.cpp",
+            EXTERNAL .. "imgui-node-editor/crude_json.cpp",
+        }
+        includedirs {
+            EXTERNAL .. "imgui"
+        }
+        links {
+            "imgui"
+        }
+
+
+
     -- --------------------------------------------------------------------
     -- Renderer Module (Vulkan implementation)
     -- --------------------------------------------------------------------
@@ -243,23 +299,6 @@ workspace "AdventureEngine"
             SRC .. "renderer/**.h",
             SRC .. "renderer/impl/**.cpp",
             EXTERNAL .. "volk/volk.c",
-
-            -- ImGui
-            EXTERNAL .. "imgui/imgui.cpp",
-            EXTERNAL .. "imgui/imgui_demo.cpp",
-            EXTERNAL .. "imgui/imgui_draw.cpp",
-            EXTERNAL .. "imgui/imgui_tables.cpp",
-            EXTERNAL .. "imgui/imgui_widgets.cpp",
-            EXTERNAL .. "imgui/backends/imgui_impl_sdl3.cpp",
-            EXTERNAL .. "imgui/backends/imgui_impl_vulkan.cpp",
-
-
-            -- ImGui Node Editor
-            EXTERNAL .. "imgui-node-editor/imgui_node_editor.cpp",
-            EXTERNAL .. "imgui-node-editor/imgui_node_editor_api.cpp",
-            EXTERNAL .. "imgui-node-editor/imgui_canvas.cpp",
-            EXTERNAL .. "imgui-node-editor/crude_json.cpp",
-
 
             -- Shader src
             SRC .. "renderer/shadersrc/**.vert",
@@ -303,7 +342,9 @@ workspace "AdventureEngine"
 
         links {
             "core",
-            "SDL3"
+            "SDL3",
+            "imgui",
+            "imgui_node_editor"
         }
 
         -- Shader compilation
@@ -313,7 +354,7 @@ workspace "AdventureEngine"
         filter "files:**.vert or files:**.frag or files:**.comp"
             buildmessage "Compiling shader %{file.relpath}"
             buildcommands {
-                "%{glslc_cmd} %{file.relpath} -o shaderspv/%{file.name}.spv"
+                "%{glslc_cmd} %{file.relpath} -DIS_GLSL -o shaderspv/%{file.name}.spv"
             }
             buildoutputs {
                 "shaderspv/%{file.name}.spv"
@@ -354,7 +395,9 @@ workspace "AdventureEngine"
             "renderer",
             "physics",
             "core",
-            "SDL3"
+            "SDL3",
+            "imgui",
+            "imgui_node_editor",
         }
 
         filter "system:windows"

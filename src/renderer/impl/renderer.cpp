@@ -9,9 +9,6 @@
 #include "debug_ui/debug_ui.h"
 
 RenderState renderstate;
-static DebugUI::DebugUIState debug_ui_state;
-static ECS*          debug_ecs_ptr   = nullptr;
-static Asset*                debug_asset_ptr = nullptr;
 
 // STB DS for hash maps (pipeilne hashing), with the main thread alloc tracker.
 void* external_malloc(size_t size) { return L_calloc(1, size, &renderstate.main.tt); }
@@ -617,6 +614,7 @@ void Renderer_Init(const Renderer_InitInfo* info)
         ImGuiIO& io = ImGui::GetIO();
         io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
         io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
+        io.IniFilename = nullptr;
 
         // SDL3 backend
         ImGui_ImplSDL3_InitForVulkan(renderstate.window);
@@ -836,25 +834,7 @@ void Renderer_PushRenderable(Renderable renderable)
     renderstate.renderables_arena.items[renderstate.renderables_arena.num_renderables++] = renderable;
 }
 
-void Renderer_SetImGuiCallback(Renderer_ImGuiBuildCallback callback, void* user_data)
-{
-    renderstate.imgui_callback      = callback;
-    renderstate.imgui_callback_data = user_data;
-}
-
-void Renderer_SetDebugECS(ECS* ecs)
-{
-    debug_ecs_ptr = ecs;
-}
-
-void Renderer_SetDebugAsset(Asset* asset)
-{
-    debug_asset_ptr = asset;
-    debug_ui_state.debug_asset = asset;
-}
-
-
-void Renderer_DrawFrame(glm::mat4 primary_camera_view)
+void Renderer_DrawFrame(CameraInfo main_camera)
 {
     /*  Get current swapchain image, and wait on sync structures
 
@@ -963,12 +943,8 @@ void Renderer_DrawFrame(glm::mat4 primary_camera_view)
     // Reset renderables arena head for next frame
     renderstate.renderables_arena.num_renderables = 0;
 
-    // Set player camera
-    renderstate.camera_view = primary_camera_view;
-    float aspect = (float)renderstate.swapchain_extent.width / (float)renderstate.swapchain_extent.height;
-    renderstate.fullscreen_proj =  MakeProjectionMatrix(renderstate.settings.fov_y, aspect, 0.1f, 100.0f);
-
-
+    // Set main camera
+    renderstate.main_camera = main_camera;
 
 
     /*  Build FrameGraph
@@ -1138,20 +1114,19 @@ void Renderer_DrawFrame(glm::mat4 primary_camera_view)
 
 
     /*
-        Render ImGUI Frame
+        Build and Render ImGUI Frame
         - Doing this after the framegraph is built so we can visualize the framegraph too!
     */
-    // ImGui: Start new frame
+
     ImGui_ImplVulkan_NewFrame();
     ImGui_ImplSDL3_NewFrame();
     ImGui::NewFrame();
 
-    // Build ImGui UI here, e.g.
-    // ImGui::ShowDemoWindow();  // TODO: Remove after testing
     if (debug_ecs_ptr)
         DebugUI::Draw(debug_ui_state, *debug_ecs_ptr);
     if (renderstate.imgui_callback)
         renderstate.imgui_callback(renderstate.imgui_callback_data);
+
     // Finalize ImGui draw data (must happen before command buffer recording)
     ImGui::Render();
 
@@ -1230,7 +1205,6 @@ void Renderer_DrawFrame(glm::mat4 primary_camera_view)
     };
     VK_CHECK(vkQueueSubmit2(renderstate.graphics_queue, 1, &submit_info, renderstate.frames[frame_in_flight].rendering_complete_fence));
 
-    
     // Present to screen
     // (after waiting on the rendering complete semaphore so that all drawing is completed first)
     VkPresentInfoKHR present_info = {
@@ -1717,6 +1691,7 @@ void create_or_recreate_swapchain()
     SwapchainSupportDetails details = get_and_alloc_swap_chain_support_details(renderstate.physical_device);
 
     // Choose format
+    // TODO: Support HDR colorspaces (like VK_COLOR_SPACE_DISPLAY_P3_NONLINEAR_EXT)
     SDL_assert(details.format_count > 0);
     int chosen_format_index = 0;
     for (uint32_t i = 0; i < details.format_count; ++i)

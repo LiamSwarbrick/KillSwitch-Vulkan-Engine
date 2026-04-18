@@ -8,7 +8,6 @@ typedef struct DrawCall
 {
     Renderable* renderable;
 
-    float      sort_depth;   // <-TODO unused (move this step to render pass execute callback).
     uint64_t   object_ptr;   // GPU Address of the glsl ObjectData struct (contains model matrix etc.)
     uint64_t   joints_ptr;   // GPU Address of the skinning matrices (0 if not skinned)
 }
@@ -38,14 +37,14 @@ void BeginDrawCalls();
 void AddDrawCall(Renderable* r);
 void EndDrawCalls();
 
-// After draw calls collected, each renderpass will
-// want to set their own scene data e.g.
-// - custom camera matrices,
-// - custom rendertarget size
-// etc.
-// So call this function within the renderpass execute callback
-void UpdateGlobalSceneData(SceneData data);
-void ExecuteDrawCall(VkCommandBuffer cmd, DrawCall drawcall, PipelineKey key, PushConstant_PassHeader push_pass);
-void ExecuteFullscreenPass(VkCommandBuffer cmd, uint32_t shader_id, PipelineKey key, PushConstant_PassHeader push_pass);
+typedef int (*DrawPrimSortFunc)(const void*, const void*);
+int DrawPrimSortFunc_Default(const void* a, const void* b);
+
+void ResetDrawArena();
+void PushDrawPrimitive(DrawCall dc, PipelineKey pipeline_key, uint32_t prim_idx, uint32_t sort_key);
+void SortDraws(DrawPrimSortFunc sort_func);
+void ExecuteDraws(VkCommandBuffer cmd, PushConstant_PassHeader push_pass, uint64_t scene_ptr);
+
+void ExecuteFullscreenPass(VkCommandBuffer cmd, uint32_t shader_id, PipelineKey key, PushConstant_PassHeader push_pass, uint64_t scene_ptr);
 
 #endif  // RENDERER_DRAWCALL_H

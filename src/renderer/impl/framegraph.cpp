@@ -92,12 +92,6 @@ void FG_Empty()
     // Empty pass descriptions
     renderstate.framegraph.pass_count = 0;
     memset(renderstate.framegraph.passes, 0, sizeof(renderstate.framegraph.passes));
-
-    // Empty table
-    for (uint32_t i = 0; i < PASS_TYPE_COUNT; ++i)
-    {
-        renderstate.pass_id_from_type[i] = PASS_TYPE_INVALID;
-    }
 }
 
 uint32_t FG_AddPass(RenderPassDesc pass_description)
@@ -119,12 +113,6 @@ uint32_t FG_AddPass(RenderPassDesc pass_description)
     uint32_t pass_id = fg->pass_count++;
     RenderPassDesc* pass = &fg->passes[pass_id];
     memcpy(pass, &pass_description, sizeof(RenderPassDesc));
-
-    // Add to table
-    SDL_assert(renderstate.pass_id_from_type[pass_description.pass_type] == PASS_TYPE_INVALID &&
-        "Can't add the same pass twice, give it a unique PassType enumeration"
-    );
-    renderstate.pass_id_from_type[pass_description.pass_type] = pass_id;
 
     return pass_id;
 }
@@ -260,7 +248,7 @@ void fg_execute_pass(uint32_t pass_idx, VkCommandBuffer cmd)
     if (pass->is_compute)
     {
         // Compute passes don't use vkCmdBeginRendering
-        pass->execute_callback(cmd, pass);
+        pass->execute_callback(cmd, pass_idx);
     }
     else  // Graphics Pass:
     {
@@ -372,7 +360,7 @@ void fg_execute_pass(uint32_t pass_idx, VkCommandBuffer cmd)
             vkCmdSetScissor(cmd, 0, 1, &pass->render_area);
         }
 
-        pass->execute_callback(cmd, pass);
+        pass->execute_callback(cmd, pass_idx);
 
         vkCmdEndRendering(cmd);
     }
@@ -1182,6 +1170,29 @@ void bindless_heap_create_all_samplers()
                     .addressModeU      = VK_SAMPLER_ADDRESS_MODE_REPEAT,
                     .addressModeV      = VK_SAMPLER_ADDRESS_MODE_REPEAT,
                     .addressModeW      = VK_SAMPLER_ADDRESS_MODE_REPEAT,
+                    .mipLodBias        = 0.0f,
+                    .anisotropyEnable  = VK_FALSE,
+                    .maxAnisotropy     = 0.0f,
+                    .compareEnable     = VK_FALSE,
+                    .compareOp         = VK_COMPARE_OP_NEVER,
+                    .minLod            = 0.0f,
+                    .maxLod            = VK_LOD_CLAMP_NONE,
+                    .borderColor       = VK_BORDER_COLOR_FLOAT_TRANSPARENT_BLACK,
+                    .unnormalizedCoordinates = VK_FALSE
+                };
+                break;
+            
+            case FG_SAMPLER_LINEAR_BLACK_BORDER:
+                sampler_create_info = (VkSamplerCreateInfo){
+                    .sType             = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO,
+                    .pNext             = NULL,
+                    .flags             = 0,
+                    .magFilter         = VK_FILTER_LINEAR,
+                    .minFilter         = VK_FILTER_LINEAR,
+                    .mipmapMode        = VK_SAMPLER_MIPMAP_MODE_LINEAR,
+                    .addressModeU      = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER,
+                    .addressModeV      = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER,
+                    .addressModeW      = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER,
                     .mipLodBias        = 0.0f,
                     .anisotropyEnable  = VK_FALSE,
                     .maxAnisotropy     = 0.0f,

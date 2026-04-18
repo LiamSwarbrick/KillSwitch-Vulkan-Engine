@@ -6,6 +6,8 @@
 #include "render_types.h"
 #include "core/components.h"
 
+// SETTINGS API
+
 typedef struct Renderer_Settings
 {
     b32         uncapped_fps;
@@ -21,6 +23,13 @@ typedef struct Renderer_SettingsCapabilities
 }
 Renderer_SettingsCapabilities;
 
+Renderer_SettingsCapabilities Renderer_GetSettingsCapabilities();
+Renderer_Settings Renderer_GetSettings();
+void Renderer_ChangeSettings(Renderer_Settings new_settings);
+
+
+// INIT/SHUTDOWN/EVENTS API
+
 typedef struct Renderer_InitInfo
 {
     SDL_Window* window;
@@ -33,12 +42,23 @@ void Renderer_Init(const Renderer_InitInfo* info);
 void Renderer_Shutdown();
 void Renderer_ListenToWindowEvent(SDL_Event event);
 
-Renderer_SettingsCapabilities Renderer_GetSettingsCapabilities();
-Renderer_Settings Renderer_GetSettings();
-void Renderer_ChangeSettings(Renderer_Settings new_settings);
+
+// DRAW API
+
+typedef struct CameraInfo
+{
+    glm::mat4 view;
+    // glm::mat4 proj;  // <- Taken from fov setting
+    glm::vec3 position;
+    float lense_distortion;
+}
+CameraInfo;
 
 void Renderer_PushRenderable(Renderable renderable);
-void Renderer_DrawFrame(glm::mat4 primary_camera_view);
+void Renderer_DrawFrame(CameraInfo main_camera);
+
+
+// SCENE API (On scene change resources for GPU)
 
 typedef struct Scene_InitInfo
 {
@@ -50,21 +70,5 @@ typedef struct Scene_InitInfo
 }
 Scene_InitInfo;
 void Renderer_ChangeScene(Scene_InitInfo new_scene_info);
-
-// Optional callback: called between ImGui::NewFrame() and ImGui::Render()
-// Game code can set this to build its own ImGui UI
-typedef void (*Renderer_ImGuiBuildCallback)(void* user_data);
-
-void Renderer_SetImGuiCallback(Renderer_ImGuiBuildCallback callback, void* user_data);
-
-// Register the ECS so the renderer can drive the debug UI internally.
-// Call once after Renderer_Init, passing the scene's ECS reference.
-class ECS;
-void Renderer_SetDebugECS(ECS* ecs);
-
-// Register the loaded asset so the Asset Browser can inspect it.
-// Pass nullptr to clear (e.g. before loading a new scene).
-struct Asset;
-void Renderer_SetDebugAsset(Asset* asset);
 
 #endif  // ENGINE_RENDERER_H
