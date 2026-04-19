@@ -1030,7 +1030,8 @@ void Renderer_DrawFrame(CameraInfo main_camera)
 
                 .load_op = VK_ATTACHMENT_LOAD_OP_CLEAR,
                 .store_op = use_msaa ? VK_ATTACHMENT_STORE_OP_DONT_CARE : VK_ATTACHMENT_STORE_OP_STORE,  // DO NOT STORE MSAA TARGETS BACK TO MAIN MEMORY (Applies to tiled architectures)
-                .clear_value = { .color = { .float32 = { 0.392f, 0.584f, 0.929f, 0.0f } } }
+                // .clear_value = { .color = { .float32 = { 0.392f, 0.584f, 0.929f, 0.0f } } }  // Cornflower blue
+                .clear_value = { .color = { .float32 = { 0.0f, 0.0f, 0.0f, 0.0f } } }
             },
 
             // Depth attachment (preloading with depth from the prepass)
@@ -1060,8 +1061,11 @@ void Renderer_DrawFrame(CameraInfo main_camera)
     };
     uint32_t forward_opaque_pass = FG_AddPass(forward_opaque_desc);
     
+    
 
     // Swapchain pass
+    FullscreenPass_UserData swapchain_pass_user_data = { .shader_id = SHADER_BLIT };
+    swapchain_pass_user_data.push_pass.texture_indices[0] = renderstate.registry.resources[renderstate.rids.hdr_color_target_rid].bindless_texture_idx;
     RenderPassDesc swapchain_pass_desc = {
         .debug_name = "Swapchain Pass",
         .pass_type = PASS_TYPE_SWAPCHAIN_PASS,
@@ -1105,8 +1109,8 @@ void Renderer_DrawFrame(CameraInfo main_camera)
         .is_compute = 0,
         .render_area = { .offset = { 0, 0 }, .extent = renderstate.swapchain_extent },
         
-        .execute_callback = SwapchainPass_Execute,
-        .user_data = NULL
+        .execute_callback = FullscreenPass_Execute,
+        .user_data = &swapchain_pass_user_data
     };
     uint32_t swapchain_pass = FG_AddPass(swapchain_pass_desc);
 
@@ -1769,6 +1773,8 @@ void create_or_recreate_swapchain()
         min_image_count = details.capabilities.maxImageCount;
     }
 
+    renderstate.swapchain_usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;  // Transfer for blit/copy operations
+
     // Swapchain Create Info
     VkSwapchainKHR old_swapchain = renderstate.swapchain;
     VkSwapchainCreateInfoKHR swapchain_create_info = {
@@ -1781,7 +1787,7 @@ void create_or_recreate_swapchain()
         .imageColorSpace        = chosen_format.colorSpace,
         .imageExtent            = chosen_swap_extent,
         .imageArrayLayers       = 1,  // One layer since we aren't making a stereoscopic 3D application
-        .imageUsage             = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT,  // Transfer for blit/copy operations
+        .imageUsage             = renderstate.swapchain_usage,
 
         // NOTE: With explicit queue ownership transfers of the swapchain images via pipeline barriers between
         // graphics queue and present queue commands involving the swapchain,

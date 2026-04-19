@@ -23,11 +23,18 @@ static_assert(PASS_TYPE_COUNT <= MAX_PASSES,
     "Must increase MAX_PASSES in framegraph.h to store these. Realistically, MAX_PASSES should be substantially higher."
 );
 
+typedef struct FullscreenPass_UserData
+{
+    uint32_t shader_id;
+    PushConstant_PassHeader push_pass;
+}
+FullscreenPass_UserData;
+
 
 glm::mat4 MakeProjectionMatrix(float fov_y_radians, float aspect, float near, float far);
 SceneData MakeSceneData(CameraInfo cam, VkExtent2D extents);
 
-void SwapchainPass_Execute(VkCommandBuffer cmd, uint32_t pass_idx);
+void FullscreenPass_Execute(VkCommandBuffer cmd, uint32_t pass_idx);
 void DepthPrepass_Execute(VkCommandBuffer cmd,  uint32_t pass_idx);
 void ForwardOpaque_Execute(VkCommandBuffer cmd, uint32_t pass_idx);
 

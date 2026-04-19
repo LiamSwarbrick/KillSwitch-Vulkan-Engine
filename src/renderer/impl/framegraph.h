@@ -220,7 +220,7 @@ typedef struct ImageResourceData
 
     // Metadata about the image needed for parts of the frame graph
     VkFormat                format;
-    VkExtent3D              extent;  // TODO: Use for checking if render_area matches (also can use custom scissor and viewport if it's oversized?)
+    VkExtent3D              extent;
     VkImageUsageFlags       usage;   // Tells us if we can go into BindlessHeap (when has SAMPLED_BIT)
     VkImageSubresourceRange subresource_range;  // Required for barriers
 }
@@ -265,7 +265,7 @@ typedef struct FG_Resource
     // Shader side access to resources
     union
     {
-        uint32_t image_bindless_index;       // Index into the global texture array, UINT32_MAX for nonsamplable images e.g. the swapchain
+        uint32_t bindless_texture_idx;       // Index into the global texture array, UINT32_MAX for nonsamplable images e.g. the swapchain
         VkDeviceAddress buffer_gpu_address;  // Buffer device address for shader
     };
 

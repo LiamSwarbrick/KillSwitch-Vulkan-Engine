@@ -81,7 +81,7 @@ int main(int argc, char *argv[])
         .preferred_initial_settings = {  // Will fallback if these aren't possible
             .uncapped_fps = 0,
             .msaa_sample_count = 4,
-            .fov_y = 70.0f
+            .fov_y = 50.0f
         }
     };
     Renderer_Init(&renderer_info);
@@ -133,6 +133,7 @@ int main(int argc, char *argv[])
 
     Asset* room_prefab = scene.LoadPrefab("assets/levels/testroom.gltf");
     Asset* catPrefab = scene.LoadPrefab("assets/animations/scene.gltf");
+    // Asset* catPrefab = scene.LoadPrefab("assets/animations/flatzombo.gltf");
     Asset* animationPrefab = scene.LoadPrefab("assets/animations/sceneglb.glb");
 
     scene.InstantiatePrefab(room_prefab, glm::vec3(0,0,0));

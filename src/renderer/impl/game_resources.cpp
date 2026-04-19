@@ -260,6 +260,8 @@ void create_window_dependent_resources()
                 .handle  = renderstate.swapchain_images[i],
                 .view    = renderstate.swapchain_image_views[i],
                 .format  = renderstate.swapchain_image_format,
+                .extent  = (VkExtent3D){ renderstate.swapchain_extent.width, renderstate.swapchain_extent.height, 1 },
+                .usage   = renderstate.swapchain_usage,
                 .subresource_range = {
                     .aspectMask      = VK_IMAGE_ASPECT_COLOR_BIT,
                     .baseMipLevel    = 0,
@@ -401,7 +403,7 @@ void create_scene_resources()
             .blend_mode = BLEND_MODE_MASKED,
             .alpha_cutoff = 0.5f,
             .sampler_idx = FG_SAMPLER_ANISOTROPIC_REPEAT,
-            .texture_idx_basecolor = renderstate.registry.resources[default_texture_rid].image_bindless_index
+            .texture_idx_basecolor = renderstate.registry.resources[default_texture_rid].bindless_texture_idx
         };
         loaded_materials[num_loaded_materials++] = default_mat;
     }
@@ -439,7 +441,7 @@ void create_scene_resources()
                     base_color_image->width, base_color_image->height,
                     VK_FORMAT_R8G8B8A8_SRGB  // <- is a colour texture
                 );
-                gpu_mat.texture_idx_basecolor = renderstate.registry.resources[new_texture_rid].image_bindless_index;
+                gpu_mat.texture_idx_basecolor = renderstate.registry.resources[new_texture_rid].bindless_texture_idx;
             }
             else
             {

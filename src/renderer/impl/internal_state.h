@@ -53,6 +53,7 @@ typedef struct RenderState
     VkSwapchainKHR swapchain;
     VkFormat    swapchain_image_format;
     VkExtent2D  swapchain_extent;
+    VkImageUsageFlags swapchain_usage;
     u32         swapchain_image_count;
     VkImage     swapchain_images[MAX_SWAPCHAIN_IMAGE_COUNT];
     VkImageView swapchain_image_views[MAX_SWAPCHAIN_IMAGE_COUNT];

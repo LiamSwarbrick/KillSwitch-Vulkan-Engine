@@ -565,7 +565,7 @@ uint32_t add_resource_to_registry_and_heap(const char* debug_name, FG_ResourceTy
             printf("Adding " ANSI_CYAN "%s" ANSI_RESET " to heap at index %u (is samplable).\n", res->debug_name, renderstate.heap.texture_count);
 
             // Register in  bindless descriptor array
-            res->image_bindless_index = renderstate.heap.texture_count++;
+            res->bindless_texture_idx = renderstate.heap.texture_count++;
             VkDescriptorImageInfo descriptor_image_info = {
                 .imageView    = res->image.view,
                 .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
@@ -576,7 +576,7 @@ uint32_t add_resource_to_registry_and_heap(const char* debug_name, FG_ResourceTy
                 .pNext             = NULL,
                 .dstSet            = renderstate.heap.global_set,
                 .dstBinding        = 0,  // <- Take note, images array is binding=0
-                .dstArrayElement   = res->image_bindless_index,
+                .dstArrayElement   = res->bindless_texture_idx,
                 .descriptorCount   = 1,
                 .descriptorType    = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
                 .pImageInfo        = &descriptor_image_info,
@@ -588,7 +588,7 @@ uint32_t add_resource_to_registry_and_heap(const char* debug_name, FG_ResourceTy
         else
         {
             // UINT32_MAX to represent nonsamplable images not being part of the bindless heap.
-            res->image_bindless_index = UINT32_MAX;
+            res->bindless_texture_idx = UINT32_MAX;
         }
     }
 

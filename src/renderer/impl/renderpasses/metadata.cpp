@@ -18,7 +18,7 @@ glm::mat4 MakeProjectionMatrix(float fov_y_radians, float aspect, float near, fl
 SceneData MakeSceneData(CameraInfo cam, VkExtent2D extents)
 {
     float aspect = (float)extents.width / (float)extents.height;
-    glm::mat4 proj = MakeProjectionMatrix(renderstate.settings.fov_y, aspect, 0.1f, 100.0f);
+    glm::mat4 proj = MakeProjectionMatrix(glm::radians(renderstate.settings.fov_y), aspect, 0.1f, 100.0f);
     glm::mat4 view_proj = proj * cam.view;
     glm::uvec2 extents_uvec2 = glm::uvec2(extents.width, extents.height);
 
