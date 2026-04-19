@@ -6,6 +6,8 @@
 #include "renderer/render_types.h"
 #include "core/assetsys.h"
 
+#include <vector>
+
 struct C_Transform
 {
     glm::mat4 matrix;

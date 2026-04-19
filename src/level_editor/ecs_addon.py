@@ -17,7 +17,7 @@ import inspect
 
 
 # ------------------------
-# Helpers for colliders (important)
+# Helpers for colliders (important) (COMPONENTS ARE NEXT SECTION)
 # ------------------------
 def build_capsule(obj, radius, height):
 
@@ -103,10 +103,12 @@ def build_convex_hull(collider, parent):
     bm.to_mesh(mesh)
     bm.free()
 
-def fit_sphere_collider(obj, rigidbody):
-    mesh = obj.data
+def fit_sphere_collider(parent, rigidbody_comp):
+    mesh = parent.data
     if mesh is None:
         return
+
+    # no need to use parent's rotation
 
     max_dist = 0
     for v in mesh.vertices:
@@ -114,23 +116,26 @@ def fit_sphere_collider(obj, rigidbody):
         if dist > max_dist:
             max_dist = dist
 
-    rigidbody.radius = max_dist
+    rigidbody_comp.radius = max_dist
 
-def fit_box_collider(obj, rigidbody):
-    mesh = obj.data
+def fit_box_collider(parent, rigidbody_comp):
+    mesh = parent.data
     if mesh is None:
         return
 
     # Create rotation matrix from collider_rotation_offset
-    rot = mathutils.Euler(rigidbody.collider_rotation_offset, 'XYZ').to_matrix().to_4x4()
-    rot_inv = rot.inverted()
+
+    parent_rot = parent.rotation_quaternion.copy()
 
     # Compute bounding box in rotated local space
     min_co = mathutils.Vector((float('inf'), float('inf'), float('inf')))
     max_co = mathutils.Vector((float('-inf'), float('-inf'), float('-inf')))
     for v in mesh.vertices:
-        # Apply inverse rotation to vertex so we get its position in the collider's local rotated space
-        local_co = rot_inv @ v.co
+        # Apply object's rotation in case it is NOT 0,0,0 (should do the same with scale BUT please use scale 1,1,1)
+        # local_co = parent_rot @ v.co
+        local_co = v.co
+        # (not needed) Apply inverse rotation to vertex so we get its position in the collider's local rotated space 
+        # local_co = rb_rot_inv @ local_co
 
         min_co.x = min(min_co.x, local_co.x)
         min_co.y = min(min_co.y, local_co.y)
@@ -139,40 +144,46 @@ def fit_box_collider(obj, rigidbody):
         max_co.y = max(max_co.y, local_co.y)
         max_co.z = max(max_co.z, local_co.z)
 
-    rigidbody.half_widths = (
+    rigidbody_comp.half_widths = (
         (max_co.x - min_co.x)/2,
         (max_co.y - min_co.y)/2,
         (max_co.z - min_co.z)/2
     )
 
-def fit_capsule_collider(obj, rigidbody):
-    mesh = obj.data
+def fit_capsule_collider(parent, rigidbody_comp):
+    mesh = parent.data
     if mesh is None:
         return
+
+    # same as fit_box
+    parent_rot = parent.rotation_quaternion.copy()
 
     min_z = float('inf')
     max_z = float('-inf')
     max_radius = 0
     for v in mesh.vertices:
+        # local_co = parent_rot @ v.co
+        local_co = v.co
+
         # Distance in XY plane from origin
-        dist = math.hypot(v.co.x, v.co.y)
+        dist = math.hypot(local_co.x, local_co.y)
         max_radius = max(max_radius, dist)
-        min_z = min(min_z, v.co.z)
-        max_z = max(max_z, v.co.z)
+        min_z = min(min_z, local_co.z)
+        max_z = max(max_z, local_co.z)
 
-    rigidbody.radius = max_radius
-    rigidbody.height = max_z - min_z
+    rigidbody_comp.radius = max_radius
+    rigidbody_comp.height = max_z - min_z
 
-def fit_collider(obj, rigidbody, context):
-    if rigidbody.collider_type == "COL_TYPE_SPHERE":
-        fit_sphere_collider(obj, rigidbody)
-    elif rigidbody.collider_type == "COL_TYPE_BOX":
-        fit_box_collider(obj, rigidbody)
-    elif rigidbody.collider_type == "COL_TYPE_CAPSULE":
-        fit_capsule_collider(obj, rigidbody) 
+def fit_collider(parent, rigidbody_comp, context):
+    if rigidbody_comp.collider_type == "COL_TYPE_SPHERE":
+        fit_sphere_collider(parent, rigidbody_comp)
+    elif rigidbody_comp.collider_type == "COL_TYPE_BOX":
+        fit_box_collider(parent, rigidbody_comp)
+    elif rigidbody_comp.collider_type == "COL_TYPE_CAPSULE":
+        fit_capsule_collider(parent, rigidbody_comp) 
 
     # rebuild collider after fitting
-    update_collider(rigidbody, context)
+    update_collider(rigidbody_comp, context)
 
 def remove_collider(parent):
     if parent is None:
@@ -214,11 +225,13 @@ def update_collider(self, context):
         remove_collider(parent)
         return
 
-    collider.location = self.collider_position_offset
-    collider.rotation_mode = 'QUATERNION'
-    euler = mathutils.Euler(self.collider_rotation_offset, 'XYZ')
-    quat = euler.to_quaternion()  # convert to quaternion
-    collider.rotation_quaternion = quat
+    collider.location = parent.location.copy() + self.collider_position_offset
+
+    if collider.rotation_mode != 'QUATERNION':
+        collider.rotation_mode = 'QUATERNION'
+    if parent.rotation_mode != 'QUATERNION':
+        parent.rotation_mode = 'QUATERNION'
+    collider.rotation_quaternion = mathutils.Euler(self.collider_rotation_offset, 'XYZ').to_quaternion() @ parent.rotation_quaternion.copy()
     collider.hide_select = True
     collider.show_in_front = True
 
@@ -266,7 +279,7 @@ class BaseComponent(bpy.types.PropertyGroup):
 
     def draw(self, layout):
         for prop in self.bl_rna.properties.keys():
-            if prop != "rna_type":
+            if prop != "rna_type" and prop != "bl_label":
                 layout.prop(self, prop)
 
 class HealthComponent(BaseComponent):
@@ -310,12 +323,13 @@ class RigidbodyComponent(BaseComponent):
     # to be changed to a quaternion when exporting / importing
     collider_rotation_offset: bpy.props.FloatVectorProperty(
         name="Collider Orientation Offset",
-        size=3,  # XYZ Euler
-        default=(0,0,0),
+        size=3,
+        default=(0.0, 0.0, 0.0),
         subtype='EULER',
         update=update_collider
     )
     collider_type: bpy.props.EnumProperty(
+        name="Collider Type",
         items=[
             ("COL_TYPE_NONE", "None", ""),
             ("COL_TYPE_SPHERE","Sphere",""),
@@ -459,10 +473,10 @@ class OBJECT_OT_add_component(bpy.types.Operator):
 
         # extra logic to create a collider by default on adding a rigidbody component
         if comp_name == "RigidbodyComponent":
-            rigidbody = getattr(obj, "rigidbodycomponent", None)
-            if rigidbody:
-                collider = get_or_create_collider(obj)
-                fit_collider(obj, rigidbody, context)
+            rigidbody_comp = getattr(obj, "rigidbodycomponent", None)
+            if rigidbody_comp:
+                # it implicitly does get_or_create_collider(obj)
+                fit_collider(obj, rigidbody_comp, context) 
 
         self.report({'INFO'}, f"Added {comp_name} to {obj.name}")
         print(f"[ECS DEBUG] Added {comp_name} to {obj.name}")
@@ -517,6 +531,9 @@ class OBJECT_OT_toggle_colliders(bpy.types.Operator):
 
         for obj in colliders:
             obj.hide_viewport = new_visibility
+            if new_visibility:
+                obj.display_type = 'WIRE'
+                obj.hide_render = True
 
         return {'FINISHED'}
 
@@ -531,8 +548,8 @@ class OBJECT_OT_fit_collider_to_mesh(bpy.types.Operator):
             self.report({'WARNING'}, "Select a mesh object")
             return {'CANCELLED'}
         
-        rigidbody = getattr(obj, "rigidbodycomponent", None)
-        if rigidbody is None:
+        rigidbody_comp = getattr(obj, "rigidbodycomponent", None)
+        if rigidbody_comp is None:
             self.report({'WARNING'}, "Object has no RigidbodyComponent")
             return {'CANCELLED'}
 
@@ -542,10 +559,10 @@ class OBJECT_OT_fit_collider_to_mesh(bpy.types.Operator):
             self.report({'WARNING'}, "Object has no mesh data")
             return {'CANCELLED'}
 
-        if rigidbody.collider_type == "COL_TYPE_NONE":
+        if rigidbody_comp.collider_type == "COL_TYPE_NONE":
             return {'FINISHED'}
         else:
-            fit_collider(obj, rigidbody, context)
+            fit_collider(obj, rigidbody_comp, context)
 
         self.report({'INFO'}, f"Collider Fitted to mesh")
         return {'FINISHED'}
@@ -590,13 +607,26 @@ def serialize_ecs(obj):
 
             # Special case: convert Euler to quaternion
             if prop.identifier == "collider_rotation_offset":
-                euler = mathutils.Euler(value, 'XYZ')
-                value = list(euler.to_quaternion())  # [w, x, y, z]
-            elif prop.identifier == "half_widths" or prop.identifier == "collider_position_offset":
+                # X Y Z to
+                # Z X Y
+                euler = mathutils.Euler([value[0], value[1], value[2]], "XYZ")
+                quat_xyz = euler.to_quaternion()
+                # Axis conversion: -90° around X
+                q_axis = mathutils.Quaternion((1, 0, 0), math.radians(-90))
+                q_final = q_axis @ quat_xyz @ q_axis.inverted()
+                print(f"XYZ: {euler}, Quat: {quat_xyz}")
+                print(f"XYZ: {euler}, Quat: {q_final}")
+                value = list(q_final)  # [w, x, y, z]
+                
+            if prop.identifier == "half_widths":
                 # Convert from Blender's XYZ to engine's XZY
                 value = list(value)  # ensure it's a list
                 if len(value) == 3:
                     value = [value[0], value[2], value[1]]  # X,Z,Y
+            if prop.identifier == "collider_position_offset":
+                value = list(value)  # ensure it's a list
+                if len(value) == 3:
+                    value = [value[0], -value[2], value[1]]  # X,Z,Y
 
             print(f"      Property {prop.identifier}: {value}")
 
@@ -611,28 +641,42 @@ def bake_ecs_to_custom_properties():
     for obj in bpy.data.objects:
         ecs_data = serialize_ecs(obj)
 
+        # if we do not have any ecs_data BUT have the boolean "is_ecs_entity" on, create a dummy _ecs json
+        if not ecs_data:
+            if obj.is_ecs_entity:
+                ecs_data = {} 
+                ecs_data["_is_ecs_entity"] = True
+                obj["_ecs"] = ecs_data
+
         if ecs_data:
             obj["_ecs"] = ecs_data
 
 
 def strip_ecs_runtime_properties():
-    ECS_RUNTIME_KEYS = [
+    ECS_RUNTIME_KEYS = {
         "ecs_components",
         *[name.lower() for name in COMPONENT_CLASSES.keys()]
-    ]
+    }
+
+    print("Stripping ECS RUNTIME")
 
     for obj in bpy.data.objects:
-        for key in ECS_RUNTIME_KEYS:
-            if key in obj:
+        for key in list(obj.keys()):
+            print(f"--Trying to delete {key} of {obj.name}")
+            if key in ECS_RUNTIME_KEYS:
                 try:
                     del obj[key]
-                except Exception:
+                    print(f"----Succesfully deleted {key} in {obj.name}")
+                except Exception as e:
+                    print(f"----Failed deleting {key} in {obj.name}: {e}")
                     pass
 
 
 def apply_ecs_to_object(obj, ecs_data):
     # Clear existing components
     obj.ecs_components.clear()
+
+    obj.is_ecs_entity = ecs_data.get("_is_ecs_entity", False)
 
     for comp_name, comp_values in ecs_data.items():
 
@@ -663,16 +707,32 @@ def apply_ecs_to_object(obj, ecs_data):
                 continue
 
             try:
-                # 🔧 Handle vector conversion (VERY important)
                 prop_meta = comp_data.bl_rna.properties.get(key)
 
-                if prop_meta and prop_meta.type == 'FLOAT' and prop_meta.is_array:
+                # handle if it is 
+                if getattr(prop_meta, "is_enum_flag", False):
+                    flags = set()
+                    for item in prop_meta.enum_items:
+                        if value & item.value:
+                            flags.add(item.identifier)
+                    value = flags
+
+                elif prop_meta and prop_meta.type == 'FLOAT' and prop_meta.is_array:
                     value = tuple(value)
+                    if len(value) == 4 and prop_meta.subtype == 'EULER':
+                        quat = mathutils.Quaternion(value)
+                        q_axis = mathutils.Quaternion((1, 0, 0), math.radians(-90))
+                        q_final = q_axis.inverted() @ quat @ q_axis
+                        euler_xyz = q_final.to_euler('XYZ')
+                        print(f"XYZ: {euler_xyz}, Quat: {q_final}")
+                        value = euler_xyz
+
 
                 setattr(comp_data, key, value)
 
             except Exception as e:
                 print(f"[ECS IMPORT] Failed to set {comp_name}.{key}: {e}")
+
 
 
 def import_ecs_from_scene():
@@ -682,8 +742,12 @@ def import_ecs_from_scene():
         if not ecs_data:
             continue
 
+        if hasattr(ecs_data, "items"):
+            print(f"[ECS IMPORT] ECS data is IDPropertyGroup on {obj.name}. {type(ecs_data)}")
+            ecs_data = dict(ecs_data)
+
         if not isinstance(ecs_data, dict):
-            print(f"[ECS IMPORT] Invalid ECS data on {obj.name}")
+            print(f"[ECS IMPORT] Invalid ECS data on {obj.name}. {type(ecs_data)}")
             continue
 
         apply_ecs_to_object(obj, ecs_data)
@@ -719,7 +783,8 @@ class EXPORT_OT_level_glb(bpy.types.Operator, ExportHelper):
 
         bake_ecs_to_custom_properties()
 
-        strip_ecs_runtime_properties()
+        # strip_ecs_runtime_properties()
+
 
         bpy.ops.export_scene.gltf(
             filepath=self.filepath,
@@ -758,6 +823,14 @@ class IMPORT_OT_level_glb(bpy.types.Operator, ImportHelper):
         # Rebuild ECS from extras
         import_ecs_from_scene()
 
+        # hide all colliders
+        colliders = [obj for obj in bpy.data.objects if obj.get("is_collider")]
+        if not colliders:
+            print("[ECS Import] Found no colliders at the scene importation")
+        for obj in colliders:   
+            obj.display_type = 'WIRE'
+            obj.hide_render = True
+
         self.report({'INFO'}, f"Level imported successfully from {self.filepath}")
         return {'FINISHED'}
 
@@ -787,6 +860,10 @@ class ECSPanelMixin:
         if obj is None:
             layout.label(text="Select an object to use ECS")
             return
+
+        # extra boolean added per object
+        layout.prop(obj, "is_ecs_entity")
+
 
         props = context.scene.ecs_props
         layout.prop(props, "component_to_add")
@@ -851,6 +928,13 @@ def register():
         bpy.utils.register_class(cls)
     bpy.types.Object.ecs_components = bpy.props.CollectionProperty(type=ComponentTag)
     bpy.types.Scene.ecs_props = bpy.props.PointerProperty(type=ECSProperties)
+
+    bpy.types.Object.is_ecs_entity = bpy.props.BoolProperty(
+        name="Is ECS Entity",
+        description="Tag this object as an ECS entity (if it doesn't have any components)",
+        default=False
+    )
+
     print("[ECS DEBUG] ECS Addon Registered")
 
 def unregister():
@@ -859,6 +943,7 @@ def unregister():
         bpy.utils.unregister_class(cls)
     del bpy.types.Object.ecs_components
     del bpy.types.Scene.ecs_props
+    del bpy.types.Object.is_ecs_entity
     print("[ECS DEBUG] ECS Addon Unregistered")
 
 if __name__ == "__main__":

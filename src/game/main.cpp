@@ -131,7 +131,7 @@ int main(int argc, char *argv[])
     Scene scene{};
     scene.StartUp();
 
-    Asset* room_prefab = scene.LoadPrefab("assets/levels/testroom.gltf");
+    Asset* room_prefab = scene.LoadPrefab("assets/levels/testroom_aux.gltf");
     Asset* catPrefab = scene.LoadPrefab("assets/animations/scene.gltf");
     Asset* animationPrefab = scene.LoadPrefab("assets/animations/sceneglb.glb");
 

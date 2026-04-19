@@ -1,7 +1,10 @@
 #include "physics_manager.h"
 
+#define GLM_ENABLE_EXPERIMENTAL
+
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/quaternion.hpp>
+#include <glm/gtx/matrix_decompose.hpp>
 
 #include "core/components.h"
 #include "physics/components.h"
@@ -106,7 +109,14 @@ void PhysicsManager::update(ECS& ecs, float dt)
 	{
 		auto [t, rb] = packed[i].components;
 
-		transforms.push_back({ t.position, t.rotation, rb.handle });
+		glm::vec3 scale;
+		glm::quat rotation;
+		glm::vec3 translation;
+		glm::vec3 skew;
+		glm::vec4 perspective;
+		glm::decompose(t.matrix, scale, rotation, translation, skew, perspective);
+
+		transforms.push_back({ translation, rotation, rb.handle });
 	}
 
 	world.syncTransformsIn(transforms);
@@ -118,8 +128,8 @@ void PhysicsManager::update(ECS& ecs, float dt)
 	{
 		auto [t, rb] = packed[i].components;
 		PhysicsWorld::TransformData outData = transforms[i];
-		t.position = outData.position;
-		t.rotation = outData.orientation;
+		/*t.position = outData.position;
+		t.rotation = outData.orientation;*/
 
 		t.matrix = glm::translate(glm::mat4(1.0f), outData.position) * glm::mat4(outData.orientation);
 	}
