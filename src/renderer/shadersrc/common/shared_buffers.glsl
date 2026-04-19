@@ -12,6 +12,7 @@ struct SceneData
     mat4 view_proj;
     vec3 cam_position;
     
+    float time;
     float aspect;
     uvec2 rendertarget_size;
 };

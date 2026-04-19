@@ -29,6 +29,7 @@ SceneData MakeSceneData(CameraInfo cam, VkExtent2D extents)
     memcpy(data.cam_position, glm::value_ptr(cam.position), sizeof(glm::vec3));
 
     memcpy(data.rendertarget_size, glm::value_ptr(extents_uvec2), sizeof(glm::uvec2));
+    data.time = (float)((double)SDL_GetTicks() / 1000.0);
     data.aspect = aspect;
 
     return data;
