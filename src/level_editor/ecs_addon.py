@@ -727,7 +727,7 @@ def apply_ecs_to_object(obj, ecs_data):
                         print(f"XYZ: {euler_xyz}, Quat: {q_final}")
                         value = euler_xyz
 
-
+                print(f"[ECS IMPORT] Imported {key}: {value}")
                 setattr(comp_data, key, value)
 
             except Exception as e:

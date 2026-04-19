@@ -100,7 +100,23 @@ Contact NarrowPhase::dispatch(
 Contact NarrowPhase::testSphereSphere(const SphereShape& a, const glm::vec3& posA, const SphereShape& b, const glm::vec3& posB) const
 {
 	// We need to check for weird cases (spheres with same position) because we have triggers and those do not solve interpenetration
+	glm::vec3 posBA = posA - posB;
+	float dist = glm::length(posBA);
+	float radiiSum = a.radius + b.radius;
 
+	if (dist >= radiiSum) return Contact::none();
+
+	glm::vec3 normal = (dist > F_EPSILON) ? posBA / dist : glm::vec3(0.0f, 1.0f, 0.0f);
+	
+	Contact c;
+	c.normal = normal;
+	c.depth = radiiSum - dist;
+	c.pointA = posA + -normal * a.radius;
+	c.pointA = posA + -normal * a.radius;
+	c.pointB = posB + normal * b.radius;
+	c.point = (posA + posB) * 0.5f;
+
+	return c;
 }
 
 Contact NarrowPhase::testSpherePlane(const SphereShape& a, const glm::vec3& posA, const PlaneShape& plane) const
