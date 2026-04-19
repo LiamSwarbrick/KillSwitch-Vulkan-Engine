@@ -8,21 +8,6 @@
 
 // NOTE(Liam): Now supporting multiple passes of the same type in the framegraph.
 
-
-typedef enum
-{
-    PASS_TYPE_SWAPCHAIN_PASS,
-    PASS_TYPE_DEPTH_PREPASS,
-    PASS_TYPE_FORWARD_OPAQUE,
-
-    PASS_TYPE_COUNT,
-    PASS_TYPE_INVALID
-}
-PassType;
-static_assert(PASS_TYPE_COUNT <= MAX_PASSES,
-    "Must increase MAX_PASSES in framegraph.h to store these. Realistically, MAX_PASSES should be substantially higher."
-);
-
 typedef struct FullscreenPass_UserData
 {
     uint32_t shader_id;

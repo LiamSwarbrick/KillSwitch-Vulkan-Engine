@@ -125,7 +125,6 @@ typedef struct PassResourceUsage
 {
     uint32_t rid;                 // Index into a resource array (the internal registry)
     FG_UsageFlags usage_flags;    // Tells the graph HOW to use this resource in this pass
-    FG_SamplerType sampler_type;  // Only for input image resources. Not using combined image samplers so we can have different samplers for the same image in different passes
 
     // Optional MSAA resolve step for outputs
     uint32_t resolve_rid;  // Set to UINT32_MAX when not used
