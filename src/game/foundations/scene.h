@@ -4,10 +4,14 @@
 
 #include "level/hierarchy.h"
 
+#include "physics/physics_manager.h"
+
+
 class Scene {
 
 private:
     ECS m_ecs;
+    PhysicsManager m_physicsManager;
 
     std::vector<Asset*> m_prefabs;
 
