@@ -132,9 +132,9 @@ int main(int argc, char *argv[])
     scene.StartUp();
 
     Asset* room_prefab = scene.LoadPrefab("assets/levels/testroom_new.gltf");
-    Asset* cube_prefab = scene.LoadPrefab("assets/levels/simple_cube.gltf");
-    Asset* sphere_prefab = scene.LoadPrefab("assets/levels/simple_sphere.gltf");
-    Asset* capsule_prefab = scene.LoadPrefab("assets/levels/simple_capsule.gltf");
+    Asset* cube_prefab = scene.LoadPrefab("assets/props/simple_cube.gltf");
+    Asset* sphere_prefab = scene.LoadPrefab("assets/props/simple_sphere.gltf");
+    Asset* capsule_prefab = scene.LoadPrefab("assets/props/simple_capsule.gltf");
     // TODO: Change the following 2 prefabs so they can be imported (add the boolean "Is ECS Entity" with the new script where it is needed)
     Asset* catPrefab = scene.LoadPrefab("assets/animations/scene.gltf");
     Asset* animationPrefab = scene.LoadPrefab("assets/animations/sceneglb.glb");
