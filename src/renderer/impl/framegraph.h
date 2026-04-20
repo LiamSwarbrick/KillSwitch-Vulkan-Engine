@@ -146,7 +146,6 @@ PassResourceUsage;
 typedef struct RenderPassDesc
 {
     char debug_name[64];  // TODO: Add to renderdoc with vkDebugMarkerSetObjectNameEXT somehow
-    uint32_t pass_type;
 
     // Resource inputs/outputs (buffers and image attachments)
     // NOTE: Output is just an attachment, so things like input depth buffer from another pass would be an output if used for forward rendering

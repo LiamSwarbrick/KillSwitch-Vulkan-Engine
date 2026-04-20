@@ -20,6 +20,8 @@ glm::mat4 MakeProjectionMatrix(float fov_y_radians, float aspect, float near, fl
 SceneData MakeSceneData(CameraInfo cam, VkExtent2D extents);
 
 void FullscreenPass_Execute(VkCommandBuffer cmd, uint32_t pass_idx);
+void FullscreenPass_Execute_With_ImGui(VkCommandBuffer cmd, uint32_t pass_idx);
+
 void DepthPrepass_Execute(VkCommandBuffer cmd,  uint32_t pass_idx);
 void ForwardOpaque_Execute(VkCommandBuffer cmd, uint32_t pass_idx);
 

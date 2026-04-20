@@ -149,7 +149,7 @@ VkPipeline create_graphics_pipeline(PipelineKey key)
     depth_info.depthCompareOp    = (VkCompareOp)key.depth_op;
     depth_info.stencilTestEnable = key.stencil_mode != 0;
 
-    // Find attachment formats from the framegraph using key.pass_type to get pass_id
+    // Find attachment formats from the framegraph using key.pass_idx
     RenderPassDesc* pass = &renderstate.framegraph.passes[key.pass_idx];
     ResourceRegistry* reg = &renderstate.registry;
 

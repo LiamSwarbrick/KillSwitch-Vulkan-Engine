@@ -38,7 +38,13 @@ void FullscreenPass_Execute(VkCommandBuffer cmd, uint32_t pass_idx)
     };
 
     ExecuteFullscreenPass(cmd, shader_id, key, user_data->push_pass, scene_ptr);
+}
+
+void FullscreenPass_Execute_With_ImGui(VkCommandBuffer cmd, uint32_t pass_idx)
+{
+    FullscreenPass_Execute(cmd, pass_idx);
 
     // Draw Debug GUI
     ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), cmd);
+    renderstate.currently_bound_pipeline = VK_NULL_HANDLE;  // <- ImGUI fucks up our state
 }

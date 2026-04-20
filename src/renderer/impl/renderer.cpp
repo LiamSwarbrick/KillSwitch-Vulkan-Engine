@@ -972,7 +972,6 @@ void Renderer_DrawFrame(CameraInfo main_camera)
     // Depth prepass
     RenderPassDesc depth_prepass_desc = {
         .debug_name = "Depth Prepass",
-        .pass_type = PASS_TYPE_DEPTH_PREPASS,
 
         .input_count = {},
         .output_count = 1,
@@ -980,7 +979,6 @@ void Renderer_DrawFrame(CameraInfo main_camera)
             {
                 .rid = renderstate.rids.depth_buffer_rid,
                 .usage_flags = FG_USAGE_DEPTH,
-                .sampler_type = FG_SAMPLER_NOT_SAMPLABLE,
 
                 // Make sure you set resolve_rid to UINT32_MAX when not resolving anything (I added an assertion in FG_AddPass to catch this just in case, because it took hours to debug with synchronisation layers on)
                 .resolve_rid  = UINT32_MAX,
@@ -1008,7 +1006,6 @@ void Renderer_DrawFrame(CameraInfo main_camera)
     // Forward Opaque Pass
     RenderPassDesc forward_opaque_desc = {
         .debug_name = "Forward Opaque Pass",
-        .pass_type = PASS_TYPE_FORWARD_OPAQUE,
 
         .input_count = {},
         .output_count = 2,
@@ -1018,7 +1015,6 @@ void Renderer_DrawFrame(CameraInfo main_camera)
             {
                 .rid = renderstate.rids.forward_target_rid,
                 .usage_flags = FG_USAGE_COLOR,
-                .sampler_type = FG_SAMPLER_NOT_SAMPLABLE,
                 
                 .resolve_rid  = use_msaa ? renderstate.rids.hdr_color_target_rid : UINT32_MAX,
                 .resolve_mode = VK_RESOLVE_MODE_AVERAGE_BIT,  // Automatically handling the edge case where resolve mode must not be set for 1 sample
@@ -1038,7 +1034,6 @@ void Renderer_DrawFrame(CameraInfo main_camera)
             {
                 .rid = renderstate.rids.depth_buffer_rid,
                 .usage_flags = FG_USAGE_DEPTH,
-                .sampler_type = FG_SAMPLER_NOT_SAMPLABLE,
 
                 .resolve_rid  = UINT32_MAX,
                 .resolve_mode = VK_RESOLVE_MODE_NONE,
@@ -1061,22 +1056,78 @@ void Renderer_DrawFrame(CameraInfo main_camera)
     };
     uint32_t forward_opaque_pass = FG_AddPass(forward_opaque_desc);
     
-    
+    // Bloom
+    #warning TODO: Add in bloom passes
+
+
+    // PostProcess Tone-mapping and Lens Effect
+    FullscreenPass_UserData tonemap_pass_user_data = {
+        .shader_id = SHADER_TONEMAP 
+    };
+    tonemap_pass_user_data.push_pass.texture_indices[0] = renderstate.registry.resources[renderstate.rids.hdr_color_target_rid].bindless_texture_idx;
+
+    RenderPassDesc tonemap_pass_desc = {
+        .debug_name = "Tone Map",
+        
+        .input_count = 1,
+        .inputs = {
+            {
+                // Read from HDR
+                .rid = renderstate.rids.hdr_color_target_rid,
+                .usage_flags = FG_USAGE_SAMPLED,
+
+                .layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                .access = VK_ACCESS_2_SHADER_READ_BIT,
+                .stage  = VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
+                .queue_family_index = renderstate.queue_family_indices.graphics_family
+            }
+        },
+        .output_count = 1,
+        .outputs = {
+            // Output to LDR (Low dynamic range) i.e. the range the display has
+            {
+                .rid = renderstate.rids.ldr_color_target_rid,
+                .usage_flags = FG_USAGE_COLOR,
+
+                .resolve_rid  = UINT32_MAX,
+                .resolve_mode = VK_RESOLVE_MODE_NONE,
+
+                .layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+                .access = VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,
+                .stage  = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
+                .queue_family_index = renderstate.queue_family_indices.graphics_family,
+                
+                .load_op = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
+                .store_op = VK_ATTACHMENT_STORE_OP_STORE,
+                // .clear_value
+            }
+        },
+
+        .is_compute = 0,
+        .render_area = { .offset = { 0, 0 }, .extent = renderstate.swapchain_extent },
+        
+        .execute_callback = FullscreenPass_Execute,
+        .user_data = &tonemap_pass_user_data
+    };
+    uint32_t tonemap_pass = FG_AddPass(tonemap_pass_desc);
+
+
 
     // Swapchain pass
-    FullscreenPass_UserData swapchain_pass_user_data = { .shader_id = SHADER_BLIT };
-    swapchain_pass_user_data.push_pass.texture_indices[0] = renderstate.registry.resources[renderstate.rids.hdr_color_target_rid].bindless_texture_idx;
+    FullscreenPass_UserData swapchain_pass_user_data = {
+        .shader_id = SHADER_BLIT
+    };
+    swapchain_pass_user_data.push_pass.texture_indices[0] = renderstate.registry.resources[renderstate.rids.ldr_color_target_rid].bindless_texture_idx;
+
     RenderPassDesc swapchain_pass_desc = {
         .debug_name = "Swapchain Pass",
-        .pass_type = PASS_TYPE_SWAPCHAIN_PASS,
         
         .input_count = 1,
         .inputs = {
             {
                 // Resource aliasing: when not using MSAA, hdr_color_target equals forward_target_rid
-                .rid = renderstate.rids.hdr_color_target_rid,
+                .rid = renderstate.rids.ldr_color_target_rid,
                 .usage_flags = FG_USAGE_SAMPLED,
-                .sampler_type = FG_SAMPLER_LINEAR_REPEAT,
 
                 .layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
                 .access = VK_ACCESS_2_SHADER_READ_BIT,
@@ -1090,7 +1141,6 @@ void Renderer_DrawFrame(CameraInfo main_camera)
             {
                 .rid = swapchain_image_resource_id,
                 .usage_flags = FG_USAGE_COLOR,
-                .sampler_type = FG_SAMPLER_NOT_SAMPLABLE,  // NOTE: Outputs attachment, can ignore sampler_type
 
                 .resolve_rid  = UINT32_MAX,
                 .resolve_mode = VK_RESOLVE_MODE_NONE,
@@ -1102,14 +1152,14 @@ void Renderer_DrawFrame(CameraInfo main_camera)
                 
                 .load_op = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
                 .store_op = VK_ATTACHMENT_STORE_OP_STORE,
-                // .clear_value = { .color = { .float32 = { 0.0f, 0.584f, 0.929f, 0.0f } } }
+                // .clear_value
             }
         },
 
         .is_compute = 0,
         .render_area = { .offset = { 0, 0 }, .extent = renderstate.swapchain_extent },
         
-        .execute_callback = FullscreenPass_Execute,
+        .execute_callback = FullscreenPass_Execute_With_ImGui,
         .user_data = &swapchain_pass_user_data
     };
     uint32_t swapchain_pass = FG_AddPass(swapchain_pass_desc);

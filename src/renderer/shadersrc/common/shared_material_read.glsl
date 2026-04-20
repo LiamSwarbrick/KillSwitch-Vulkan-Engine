@@ -8,7 +8,7 @@ vec2 texture2d_size(uint32_t texture_idx)
     return textureSize(global_textures[nonuniformEXT(texture_idx)], 0);
 }
 
-vec4 sample_texture2d(vec2 uv, uint32_t texture_idx, uint32_t sampler_idx, vec4 fallback_value)
+vec4 sample_texture2d_with_fallback(vec2 uv, uint32_t texture_idx, uint32_t sampler_idx, vec4 fallback_value)
 {
     // Bindless Sampling
     if (texture_idx != UINT32_MAX)  // UINT32_MAX for 'no texture'
@@ -35,7 +35,7 @@ void sample_material_basic(
     // Intended for when the only thing the shader needs a material for is to read the base color texture
     MaterialBuffer mb = MaterialBuffer(push.dc.material_ptr);
     mat = mb.materials[push.dc.material_idx];
-    base_color = sample_texture2d(uv, mat.texture_idx_basecolor, mat.sampler_idx, mat.base_color);
+    base_color = sample_texture2d_with_fallback(uv, mat.texture_idx_basecolor, mat.sampler_idx, mat.base_color);
 }
 
 

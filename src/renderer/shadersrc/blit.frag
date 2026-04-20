@@ -23,11 +23,8 @@ vec2 lens_distortion(vec2 uv, float k, float aspect)
 
 void main()
 {
-    // TEMP: Testing fun stuff (maybe use scene.resolution)
     SceneData scene  = SceneBuffer(push.dc.scene_ptr).scene;
-
-    // vec2 uv = frag_uv;
-    vec2 uv = lens_distortion(frag_uv, -0.03, scene.aspect);  // Negative = wide-angle feel
+    vec2 uv = lens_distortion(frag_uv, -0.03, scene.aspect);  // Negative = wide-angle / fish-eye lens
 
     // NOTE: Blit pass puts the texture it blit's in pass.texture_indices[0]
     //       and samples with the linear sampler

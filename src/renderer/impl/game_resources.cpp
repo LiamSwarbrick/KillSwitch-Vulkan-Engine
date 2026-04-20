@@ -278,6 +278,7 @@ void create_window_dependent_resources()
 
     const uint32_t width = renderstate.swapchain_extent.width;
     const uint32_t height = renderstate.swapchain_extent.height;
+    const VkFormat HDR_COLOR_FORMAT = VK_FORMAT_R16G16B16A16_SFLOAT;
     
     // Depth buffer
     renderstate.rids.depth_buffer_rid = create_rendertarget2d_resource(
@@ -290,7 +291,7 @@ void create_window_dependent_resources()
     // Foward render target
     renderstate.rids.forward_target_rid = create_rendertarget2d_resource(
         "Forward Render Target", flags, width, height,
-        VK_FORMAT_R16G16B16A16_SFLOAT,
+        HDR_COLOR_FORMAT,
         VK_IMAGE_ASPECT_COLOR_BIT,
         1, 1
     );
@@ -299,8 +300,8 @@ void create_window_dependent_resources()
     if (renderstate.multisampling_count_flag > VK_SAMPLE_COUNT_1_BIT)
     {
         renderstate.rids.hdr_color_target_rid = create_rendertarget2d_resource(
-            "Forward Render Target", flags, width, height,
-            VK_FORMAT_R16G16B16A16_SFLOAT,
+            "HDR Color Target", flags, width, height,
+            HDR_COLOR_FORMAT,
             VK_IMAGE_ASPECT_COLOR_BIT,
             0, 0
         );
@@ -311,6 +312,21 @@ void create_window_dependent_resources()
         renderstate.rids.hdr_color_target_rid = renderstate.rids.forward_target_rid;
     }
 
+    // HDR color ping pong buffer for bloom
+    // renderstate.rids.hdr_color_target_pingpong_rid = create_rendertarget2d_resource(
+    //     "Forward Render Target", flags, width, height,
+    //     HDR_COLOR_FORMAT,
+    //     VK_IMAGE_ASPECT_COLOR_BIT,
+    //     0, 0
+    // );
+
+    // LDR color ping pong buffer for bloom
+    renderstate.rids.ldr_color_target_rid = create_rendertarget2d_resource(
+        "LDR Color Target", flags, width, height,
+        renderstate.swapchain_image_format,  // <- TODO: Is matching the swapchain image always best? I.e. sRGB?
+        VK_IMAGE_ASPECT_COLOR_BIT,
+        0, 0
+    );
 }
 
 void create_scene_resources()

@@ -128,7 +128,7 @@ void main()
         vec2 dither_uv_offset = (vec2(dith_threshold) - 0.5) * (1.0 / texture2d_size(mat.texture_idx_basecolor));
         st += dither_uv_offset;
     }
-    vec4 base_color = sample_texture2d(st, mat.texture_idx_basecolor, mat.sampler_idx, mat.base_color);
+    vec4 base_color = sample_texture2d_with_fallback(st, mat.texture_idx_basecolor, mat.sampler_idx, mat.base_color);
     // base_color = vec4(1.0);
 
     vec3 N = normalize(world_normal);
