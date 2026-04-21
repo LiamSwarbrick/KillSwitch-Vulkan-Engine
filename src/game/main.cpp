@@ -134,8 +134,10 @@ int main(int argc, char *argv[])
 
     Asset* room_prefab = scene.LoadPrefab("assets/levels/testroom.gltf");
     Asset* catPrefab = scene.LoadPrefab("assets/animations/scene.gltf");
+    Asset* piru = scene.LoadPrefab("assets/blender/scene.gltf");
 
     scene.InstantiatePrefab(room_prefab, glm::vec3(0,0,0));
+    scene.InstantiatePrefab(piru, glm::vec3(1, 0, 0));
     EntityID playerEntity = scene.InstantiatePrefab(catPrefab, glm::vec3(0, 0, 0));
 
     scene.BuildRendererScene();
@@ -148,14 +150,6 @@ int main(int argc, char *argv[])
 
     // Set up the time tracker
     uint64_t last_time = SDL_GetTicksNS();
-
-    auto& ecs = scene.GetECS();
-for (EntityID id : ecs.GetAllEntities()) {
-    bool hasTransform = ecs.Has<C_Transform>(id);
-    bool hasAnim = ecs.Has<C_AnimatedMesh>(id);
-    bool hasInput = ecs.Has<C_PlayerInput>(id);
-    printf("Entity %u: Transform=%d, AnimatedMesh=%d, PlayerInput=%d\n", id, hasTransform, hasAnim, hasInput);
-}
 
     while (running)
     {
@@ -175,11 +169,14 @@ for (EntityID id : ecs.GetAllEntities()) {
 
         const bool* state = SDL_GetKeyboardState(NULL);
 
-        scene.GetECS().GetView<C_Transform, C_AnimatedMesh, C_PlayerInput>().ForEach([&](C_Transform& t, C_AnimatedMesh& animMesh, C_PlayerInput& input)
-            {
-                //SDL_Log("Moving entity with PlayerInput\n");
-                t.matrix = glm::translate(t.matrix, glm::vec3(0.0f, 0.0f, 1.0f * dt));
-            });
+        scene.GetECS().GetView<C_AnimatedMesh, C_PlayerInput>().ForEach([&](EntityID e, C_AnimatedMesh&, C_PlayerInput& input) {
+                input.move_forward = state[SDL_SCANCODE_I];
+                input.move_backward = state[SDL_SCANCODE_K];
+                input.move_left = state[SDL_SCANCODE_J];
+                input.move_right = state[SDL_SCANCODE_L];
+                input.jump = state[SDL_SCANCODE_SPACE];
+            }
+        );
 
         // Game ticks
         scene.Update(dt);

@@ -47,7 +47,7 @@ struct C_Collider
 struct C_CharacterController
 {
 	glm::vec3 velocity{ 0.0f };
-	float move_speed = 5.0f;
+	float move_speed = 1.0f;
 
 	glm::vec3 target_position{ 0.0f };
 	bool jumping = false;
@@ -57,6 +57,11 @@ struct C_CharacterController
 
 struct C_PlayerInput
 {
+	bool move_forward = false;
+	bool move_backward = false;
+	bool move_left = false;
+	bool move_right = false;
+	bool jump = false;
 };
 
 struct C_AIInput

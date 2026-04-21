@@ -4,6 +4,7 @@
 
 // animation update
 #include "core/animation.h"
+#include "game/foundations/PlayerMovementSystem.h"
 // RapidJSON 
 #include "rapidjson/document.h"
 // Imported components for automated de-serialization
@@ -120,6 +121,7 @@ EntityID Scene::InstantiatePrefab(Asset* prefab, glm::vec3 spawnPosition)
             if (components.HasMember("PlayerInput"))
             {
                 m_ecs.AddComponent<C_PlayerInput>(eID, {});
+                m_ecs.AddComponent<C_CharacterController>(eID, {});
             }
         }
             // ---------------
@@ -230,6 +232,7 @@ void Scene::BuildRendererScene()
 
 void Scene::Update(float dt)
 {
+    PlayerMovement_Update(&m_ecs, dt);
     Animation_Update(&m_ecs, dt);
 }
 
