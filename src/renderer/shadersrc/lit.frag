@@ -5,6 +5,8 @@
 
 layout (location = 0) in vec2 uv;
 layout (location = 1) in vec3 color;
+layout (location = 2) in vec3 world_pos;
+layout (location = 3) in vec3 world_normal;
 
 layout (location = 0) out vec4 out_color;
 
@@ -16,6 +18,8 @@ layout (location = 0) out vec4 out_color;
 
 void main()
 {
+    vec3 N = normalize(world_normal);
+
     MaterialData mat;
     vec4 base_color;
 
@@ -27,4 +31,6 @@ void main()
         final_color.rgb,
         process_alpha(final_color.a, mat.alpha_cutoff)
     );
+
+    out_color = vec4(N, 1.0);
 }

@@ -166,7 +166,7 @@ typedef struct RenderPassDesc
 
     // A function pointer to what executes the draw calls
     void (*execute_callback)(VkCommandBuffer cmd, uint32_t pass_id);
-    void* user_data;
+    void* user_data;  // <- NOTE: This is useful when the same renderpass type is used multiple times e.g. different camera perspectives per shader map
 }
 RenderPassDesc;
 

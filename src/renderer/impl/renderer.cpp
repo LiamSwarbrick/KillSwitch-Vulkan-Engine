@@ -834,7 +834,7 @@ void Renderer_PushRenderable(Renderable renderable)
     renderstate.renderables_arena.items[renderstate.renderables_arena.num_renderables++] = renderable;
 }
 
-void Renderer_DrawFrame(glm::mat4 primary_camera_view)
+void Renderer_DrawFrame(CameraInfo main_camera)
 {
     /*  Get current swapchain image, and wait on sync structures
 
@@ -943,12 +943,8 @@ void Renderer_DrawFrame(glm::mat4 primary_camera_view)
     // Reset renderables arena head for next frame
     renderstate.renderables_arena.num_renderables = 0;
 
-    // Set player camera
-    renderstate.camera_view = primary_camera_view;
-    float aspect = (float)renderstate.swapchain_extent.width / (float)renderstate.swapchain_extent.height;
-    renderstate.fullscreen_proj =  MakeProjectionMatrix(renderstate.settings.fov_y, aspect, 0.1f, 100.0f);
-
-
+    // Set main camera
+    renderstate.main_camera = main_camera;
 
 
     /*  Build FrameGraph

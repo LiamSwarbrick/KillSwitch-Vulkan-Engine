@@ -41,7 +41,7 @@ void main()
     // TEMP: Testing fun stuff (maybe use scene.resolution)
     SceneData scene  = SceneBuffer(push.dc.scene_ptr).scene;
 
-    vec2 fun_uv = lens_distortion(frag_uv, +0.2, scene.aspect);  // Negative = wide-angle feel
+    vec2 fun_uv = lens_distortion(frag_uv, 0.05, scene.aspect);  // Negative = wide-angle feel
 
 
     // NOTE: Blit pass puts the texture it blit's in pass.texture_indices[0]

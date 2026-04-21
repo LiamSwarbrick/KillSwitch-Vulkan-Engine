@@ -9,23 +9,8 @@ void SwapchainPass_Execute(VkCommandBuffer cmd, uint32_t pass_idx)
 
     uint64_t scene_ptr = 0;
     {
-        SceneData scene_data = {};
-
-        // Unused matrices
-        glm::mat4 view, proj, view_proj;
-        view = glm::mat4(1.0f);
-        proj = glm::mat4(1.0f);
-        view_proj = proj * view;
-
-        VkExtent2D extents = renderstate.swapchain_extent;
-        glm::uvec2 extents_uvec2 = glm::uvec2(extents.width, extents.height);
-
-        memcpy(scene_data.view, glm::value_ptr(view), sizeof(glm::mat4));
-        memcpy(scene_data.proj, glm::value_ptr(proj), sizeof(glm::mat4));
-        memcpy(scene_data.view_proj, glm::value_ptr(view_proj), sizeof(glm::mat4));
-        memcpy(scene_data.rendertarget_size, glm::value_ptr(extents_uvec2), sizeof(glm::uvec2));
-
-        scene_data.aspect = (float)extents.width / (float)extents.height;
+        // NOTE: Empty camera info, so don't use it bcuz view matrix is all zeroes
+        SceneData scene_data = MakeSceneData((CameraInfo){}, renderstate.swapchain_extent);
         scene_ptr = PushToMappedArena(&renderstate.scenes_arena, &scene_data, sizeof(SceneData));
     }
 

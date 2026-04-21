@@ -28,6 +28,7 @@ void PlayerInput(ECS& ecs, const bool* keyboardState, float dt)
 }
 
 glm::mat4 temp_camera_view_matrix()
+CameraInfo temp_camera()
 {
     static glm::vec3 pos = glm::vec3(0.0f, 0.0f, 3.0f);
 
@@ -73,7 +74,11 @@ glm::mat4 temp_camera_view_matrix()
     // --- VIEW MATRIX ---
     glm::mat4 view = glm::lookAt(pos, pos + forward, up);
 
-    return view;
+    return {
+        .view = view,
+        .position = pos,
+        .lense_distortion = 0.0f
+    };
 }
 
 int main(int argc, char *argv[])
@@ -218,8 +223,8 @@ int main(int argc, char *argv[])
         if (!(flags & SDL_WINDOW_MINIMIZED))
         {
             scene.Render();
-            
-            Renderer_DrawFrame(temp_camera_view_matrix());
+
+            Renderer_DrawFrame(temp_camera());
         }
     }
 
