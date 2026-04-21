@@ -4,9 +4,10 @@
 #include "foundations/scene.h"
 #include "core/components.h"
 #include "core/animation.h"
-
 #include "SDL3/SDL.h"
 #include "SDL3/SDL_main.h"
+#include "foundations/level/LevelGeneration.h"
+
 
 glm::mat4 temp_camera_view_matrix()
 {
@@ -131,11 +132,25 @@ int main(int argc, char *argv[])
     Asset* catPrefab = scene.LoadPrefab("assets/animations/scene.gltf");
     Asset* animationPrefab = scene.LoadPrefab("assets/animations/sceneglb.glb");
 
-    scene.InstantiatePrefab(room_prefab, glm::vec3(0,0,0));
-    scene.InstantiatePrefab(catPrefab, glm::vec3(0, 0, 0));
-    scene.InstantiatePrefab(animationPrefab, glm::vec3(5, 20, 0));
+    //scene.InstantiatePrefab(room_prefab, glm::vec3(0,0,0));
+    scene.InstantiatePrefab(catPrefab, glm::vec3(0, 0, 0), glm::identity<glm::quat>());
+    scene.InstantiatePrefab(animationPrefab, glm::vec3(5, 20, 0), glm::identity<glm::quat>());
     // render a second cat
-    EntityID playerEntity = scene.InstantiatePrefab(catPrefab, glm::vec3(10, 0, 10));
+    EntityID playerEntity = scene.InstantiatePrefab(catPrefab, glm::vec3(10, 0, 10), glm::identity<glm::quat>());
+
+
+    LevelGeneration generator;
+    std::vector<Asset*> roomAssets;
+    roomAssets.push_back(scene.LoadPrefab("assets/levels/4-Door_Room.gltf"));
+    roomAssets.push_back(scene.LoadPrefab("assets/levels/3-Door_Room.gltf"));
+    roomAssets.push_back(scene.LoadPrefab("assets/levels/2-OP-Door_Room.gltf"));
+    roomAssets.push_back(scene.LoadPrefab("assets/levels/2 -AD-Door_Room.gltf"));
+    roomAssets.push_back(scene.LoadPrefab("assets/levels/1-Door_Room.gltf"));
+    roomAssets.push_back(scene.LoadPrefab("assets/levels/Solid_Room.gltf"));
+    generator.BuildPalette(roomAssets);
+    generator.GenerateGrid(5, 5);
+    generator.InstantiateLevel(&scene);
+
 
     scene.BuildRendererScene();
 

@@ -49,9 +49,12 @@ Asset* Scene::LoadPrefab(const char* fileName)
     return asset;
 }
 
-EntityID Scene::InstantiatePrefab(Asset* prefab, glm::vec3 spawnPosition)
+EntityID Scene::InstantiatePrefab(Asset* prefab, glm::vec3 spawnPosition, glm::quat spawnRotation)
 {
     if (!prefab) return MAX_ENTITIES; // or any other invalid ID
+
+    // Root transform for the whole asset
+    glm::mat4 rootMatrix = glm::translate(glm::mat4(1.0f), spawnPosition) * glm::mat4_cast(spawnRotation);
 
     uint64_t start_time = SDL_GetTicksNS();
 
@@ -118,11 +121,14 @@ EntityID Scene::InstantiatePrefab(Asset* prefab, glm::vec3 spawnPosition)
             // ---------------
             // -- TRANSFORM --
             // ---------------
+            
+            // Finding local positions/rotations and combining with root transforms
             C_Transform t;
-            glm::vec3 position = glm::vec3(node->translation[0], node->translation[1], node->translation[2]) + spawnPosition;
-            glm::quat rotation = glm::quat(node->rotation[3], node->rotation[0], node->rotation[1], node->rotation[2]);
-            t.matrix = glm::mat4_cast(rotation);
-            t.matrix = glm::translate(t.matrix, position);
+            glm::vec3 localPosition = glm::vec3(node->translation[0], node->translation[1], node->translation[2]);
+            glm::quat localRotation = glm::quat(node->rotation[3], node->rotation[0], node->rotation[1], node->rotation[2]);
+            glm::mat4 localTransform = glm::translate(glm::mat4(1.0f), localPosition) * glm::mat4_cast(localRotation);
+            t.matrix = rootMatrix * localTransform;
+
             m_ecs.AddComponent<C_Transform>(eID, { t.matrix });
 
         // -- MESH
