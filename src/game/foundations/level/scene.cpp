@@ -18,6 +18,8 @@ void Scene::StartUp()
     m_ecs.RegisterComponent<C_Transform>();
     m_ecs.RegisterComponent<C_StaticMesh>();
     m_ecs.RegisterComponent<C_AnimatedMesh>();
+    m_ecs.RegisterComponent<C_PlayerInput>();
+    m_ecs.RegisterComponent<C_CharacterController>();
 
     m_prefabs.clear();
 }
@@ -113,6 +115,11 @@ EntityID Scene::InstantiatePrefab(Asset* prefab, glm::vec3 spawnPosition)
 
                 // 3.4 Finally add the component to the ECS!!!
                 m_ecs.AddComponent<C_Collider>(eID, std::move(colliderComponent));
+            }
+
+            if (components.HasMember("PlayerInput"))
+            {
+                m_ecs.AddComponent<C_PlayerInput>(eID, {});
             }
         }
             // ---------------

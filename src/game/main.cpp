@@ -9,25 +9,6 @@
 #include "SDL3/SDL.h"
 #include "SDL3/SDL_main.h"
 
-void PlayerInput(ECS& ecs, const bool* keyboardState, float dt)
-{
-    ecs.GetView<C_PlayerInput, C_CharacterController>().ForEach([&](EntityID id, C_PlayerInput& input, C_CharacterController& controller)
-    {
-        glm::vec3 input_dir(0.0f);
-        if (keyboardState[SDL_SCANCODE_W]) input_dir.z -= 1.0f;
-        if (keyboardState[SDL_SCANCODE_S]) input_dir.z += 1.0f;
-        if (keyboardState[SDL_SCANCODE_A]) input_dir.x -= 1.0f;
-        if (keyboardState[SDL_SCANCODE_D]) input_dir.x += 1.0f;
-
-        if (glm::length(input_dir) > 0.0f)
-            input_dir = glm::normalize(input_dir);
-
-        controller.target_position = input_dir;
-        controller.jumping = keyboardState[SDL_SCANCODE_SPACE];
-    });
-}
-
-glm::mat4 temp_camera_view_matrix()
 CameraInfo temp_camera()
 {
     static glm::vec3 pos = glm::vec3(0.0f, 0.0f, 3.0f);
@@ -153,25 +134,28 @@ int main(int argc, char *argv[])
 
     Asset* room_prefab = scene.LoadPrefab("assets/levels/testroom.gltf");
     Asset* catPrefab = scene.LoadPrefab("assets/animations/scene.gltf");
-    Asset* animationPrefab = scene.LoadPrefab("assets/animations/sceneglb.glb");
 
     scene.InstantiatePrefab(room_prefab, glm::vec3(0,0,0));
-    scene.InstantiatePrefab(catPrefab, glm::vec3(0, 0, 0));
-    scene.InstantiatePrefab(animationPrefab, glm::vec3(5, 20, 0));
-    // render a second cat
-    EntityID playerEntity = scene.InstantiatePrefab(catPrefab, glm::vec3(10, 0, 10));
+    EntityID playerEntity = scene.InstantiatePrefab(catPrefab, glm::vec3(0, 0, 0));
 
     scene.BuildRendererScene();
 
     // TODO: Debug UI is built around the idea of 1 asset at the moment.
     //       This must change with the new scene system that can load many asset prefabs.
     DebugUI_SetECS(&scene.GetECS());
-    DebugUI_SetAsset(animationPrefab);
 
     bool running = true;
 
     // Set up the time tracker
     uint64_t last_time = SDL_GetTicksNS();
+
+    auto& ecs = scene.GetECS();
+for (EntityID id : ecs.GetAllEntities()) {
+    bool hasTransform = ecs.Has<C_Transform>(id);
+    bool hasAnim = ecs.Has<C_AnimatedMesh>(id);
+    bool hasInput = ecs.Has<C_PlayerInput>(id);
+    printf("Entity %u: Transform=%d, AnimatedMesh=%d, PlayerInput=%d\n", id, hasTransform, hasAnim, hasInput);
+}
 
     while (running)
     {
@@ -189,31 +173,13 @@ int main(int argc, char *argv[])
             Renderer_ListenToWindowEvent(event);
         }
 
-        // controller test not ideal at all
         const bool* state = SDL_GetKeyboardState(NULL);
-        float speed = 5.0f * dt;
-        glm::vec3 movement(0.0f);
 
-        if (state[SDL_SCANCODE_I]) movement.z -= speed;
-        if (state[SDL_SCANCODE_K]) movement.z += speed;
-
-        if (state[SDL_SCANCODE_J]) movement.x -= speed;
-        if (state[SDL_SCANCODE_L]) movement.x += speed;
-
-        if (glm::length(movement) > 0.0f)
-        {
-            for (uint32_t i = 0; i < catPrefab->node_count; i++)
+        scene.GetECS().GetView<C_Transform, C_AnimatedMesh, C_PlayerInput>().ForEach([&](C_Transform& t, C_AnimatedMesh& animMesh, C_PlayerInput& input)
             {
-                C_Transform* tf = scene.GetECS().GetComponentPtr<C_Transform>(playerEntity + i);
-                if (tf)
-                {
-                    // Apply movement directly to the world translation (column 3 of the matrix)
-                    tf->matrix[3][0] += movement.x;
-                    tf->matrix[3][1] += movement.y;
-                    tf->matrix[3][2] += movement.z;
-                }
-            }
-        }
+                //SDL_Log("Moving entity with PlayerInput\n");
+                t.matrix = glm::translate(t.matrix, glm::vec3(0.0f, 0.0f, 1.0f * dt));
+            });
 
         // Game ticks
         scene.Update(dt);
