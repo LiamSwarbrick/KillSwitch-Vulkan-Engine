@@ -197,8 +197,7 @@ void create_startup_resources()
     );
     
 
-    /////// MOVE BELOW TO create_scene_resources(scene resource list?) /////////////
-
+#if 0  // NOTE: Keeping in case it's useful for game ui to have quad code lying around
     // TEST QUAD
     uint32_t quad_indices[6] = { 0, 1, 2, 0, 3, 1 };
     glm::vec3 quad_positions[4] = {
@@ -227,7 +226,7 @@ void create_startup_resources()
     };
     renderstate.rids.dummy_mesh = {
         .vertex_type = VERTEX_TYPE_STATIC,
-        .mat_type    = MAT_UNLIT_OPAQUE,
+        .mat_type    = MAT_UNLIT,
         .mesh_rids = {
             .primitive_count = 1,
             .primitives = {
@@ -242,6 +241,7 @@ void create_startup_resources()
             }
         }
     };
+#endif
 }
 
 
@@ -419,7 +419,8 @@ void create_scene_resources()
             .blend_mode = BLEND_MODE_MASKED,
             .alpha_cutoff = 0.5f,
             .sampler_idx = FG_SAMPLER_ANISOTROPIC_REPEAT,
-            .texture_idx_basecolor = renderstate.registry.resources[default_texture_rid].bindless_texture_idx
+            .texture_idx_basecolor = renderstate.registry.resources[default_texture_rid].bindless_texture_idx,
+            .texture_idx_emissive = UINT32_MAX
         };
         loaded_materials[num_loaded_materials++] = default_mat;
     }
@@ -446,6 +447,7 @@ void create_scene_resources()
             // (maybe I'd want to check the base colour texture's min/mag filter and s/t wrap to choose a better one if we need)
             gpu_mat.sampler_idx = FG_SAMPLER_ANISOTROPIC_REPEAT;
             
+            // BASECOLOR TEXTURE
             if (mat->base_color_texture_index >= 0)
             {
                 Texture* base_color_texture = &asset->textures[mat->base_color_texture_index];
@@ -462,6 +464,25 @@ void create_scene_resources()
             else
             {
                 gpu_mat.texture_idx_basecolor = UINT32_MAX;
+            }
+
+            // EMISSIVE TEXTURE
+            if (mat->emissive_texture_index >= 0)
+            {
+                Texture* emissive_texture = &asset->textures[mat->emissive_texture_index];
+                Image*   emissive_image   = &asset->images[emissive_texture->image_index];
+
+                // Create texture resource
+                uint32_t new_texture_rid = create_mipmapped_texture2d_resource(
+                    emissive_image->uri, flags, emissive_image->data, emissive_image->data_size,
+                    emissive_image->width, emissive_image->height,
+                    VK_FORMAT_R8G8B8A8_SRGB  // <- is a colour texture
+                );
+                gpu_mat.texture_idx_emissive = renderstate.registry.resources[new_texture_rid].bindless_texture_idx;
+            }
+            else
+            {
+                gpu_mat.texture_idx_emissive = UINT32_MAX;
             }
 
             loaded_materials[num_loaded_materials++] = gpu_mat;

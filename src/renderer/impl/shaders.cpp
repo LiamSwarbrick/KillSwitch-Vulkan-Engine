@@ -50,6 +50,7 @@ void ShaderRegistry_Init()
     LOAD_GRAPHICS(SHADER_BLIT,    "blit");
     LOAD_GRAPHICS(SHADER_LIT,     "lit");
     LOAD_GRAPHICS(SHADER_TONEMAP, "tonemap");
+    LOAD_GRAPHICS(SHADER_OUTLINE, "outline");
     
     #undef LOAD_GRAPHICS
 

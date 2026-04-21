@@ -14,7 +14,7 @@ void ForwardOpaque_Execute(VkCommandBuffer cmd, uint32_t pass_idx)
         scene_ptr = PushToMappedArena(&renderstate.scenes_arena, &scene_data, sizeof(SceneData));
     }
 
-    uint32_t forward_shaders[] = { SHADER_UNLIT, SHADER_LIT };
+    uint32_t forward_shaders[] = { SHADER_UNLIT, SHADER_LIT, SHADER_OUTLINE };
     PushConstant_PassHeader push_pass = {};  // Unused
 
     ResetDrawArena();
@@ -48,6 +48,11 @@ void ForwardOpaque_Execute(VkCommandBuffer cmd, uint32_t pass_idx)
                     .front_face     = VK_FRONT_FACE_COUNTER_CLOCKWISE,
                     .msaa_samples   = (uint64_t)PK_MultisamplingFlag(renderstate.multisampling_count_flag)
                 };
+
+                if (shader_id == SHADER_OUTLINE)
+                {
+                    key.cull_mode = VK_CULL_MODE_FRONT_BIT;
+                }
 
                 // TODO: Use sort key
                 PushDrawPrimitive(drawcall, key, p, 0);

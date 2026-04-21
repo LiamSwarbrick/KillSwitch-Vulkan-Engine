@@ -27,18 +27,6 @@ typedef struct ResourceIDs
     uint32_t hdr_color_target_rid;
     // uint32_t hdr_color_target_pingpong_rid;
     uint32_t ldr_color_target_rid;
-
-    // Scene Dependant (NOTE: These are kept track by the ECS/scene, so possibly I don't actually need these)
-    // uint32_t num_scene_meshes;
-    // MeshPrefab   scene_meshes[MAX_SCENE_MESHES];
-    // uint32_t num_scene_materials;
-    // MaterialData scene_materials[MAX_SCENE_MATERIALS];
-
-
-    // Dummy stuff TODO REMOVE
-    MeshPrefab dummy_mesh;
-    MeshPrefab temp_test_mesh;
-    MaterialData temp_test_mat;
 }
 ResourceIDs;
 

@@ -12,7 +12,8 @@
     X(SHADER_DEPTH) \
     X(SHADER_BLIT)  \
     X(SHADER_LIT)   \
-    X(SHADER_TONEMAP)
+    X(SHADER_TONEMAP) \
+    X(SHADER_OUTLINE)
 
 typedef enum
 {

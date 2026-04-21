@@ -914,24 +914,6 @@ void Renderer_DrawFrame(CameraInfo main_camera)
 
     BeginDrawCalls();
 
-    #if 1  // TEMP:  <- Temporary push renderables here, the actual renderables are pushed from the game module
-    // NOTE: Renderables need to be alive the whole time, (drawcalls point to renderables when they are pushed, instead of copied)
-        Renderable r = {
-            .transform    = glm::mat4(1.0f),
-            .mesh_prefab  = renderstate.rids.dummy_mesh,
-            .joint_count  = 0,
-            .joints       = NULL
-        };
-        Renderable r2 = r;
-        r2.transform[3][0] -= 0.5;
-        r2.transform[3][1] -= 0.5;
-        r2.transform[3][2] -= 0.5;
-        {
-            Renderer_PushRenderable(r);
-            Renderer_PushRenderable(r2);
-        }
-    #endif  // ENDTEMP
-
     for (uint32_t i = 0; i < renderstate.renderables_arena.num_renderables; ++i)
     {
         AddDrawCall(&renderstate.renderables_arena.items[i]);
