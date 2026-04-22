@@ -170,10 +170,10 @@ int main(int argc, char *argv[])
         const bool* state = SDL_GetKeyboardState(NULL);
 
         scene.GetECS().GetView<C_AnimatedMesh, C_PlayerInput>().ForEach([&](EntityID e, C_AnimatedMesh&, C_PlayerInput& input) {
-                input.move_forward = state[SDL_SCANCODE_I];
-                input.move_backward = state[SDL_SCANCODE_K];
-                input.move_left = state[SDL_SCANCODE_J];
-                input.move_right = state[SDL_SCANCODE_L];
+                input.move_forward = state[SDL_SCANCODE_K];
+                input.move_backward = state[SDL_SCANCODE_I];
+                input.move_left = state[SDL_SCANCODE_L];
+                input.move_right = state[SDL_SCANCODE_J];
                 input.jump = state[SDL_SCANCODE_SPACE];
             }
         );

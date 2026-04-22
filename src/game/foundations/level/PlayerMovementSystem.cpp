@@ -26,12 +26,12 @@ void PlayerMovement_Update(ECS* ecs, float dt)
             transform.matrix = glm::translate(transform.matrix, controller.velocity * dt);
 
             // Animation logic
-            int runAnimId = GetAnimationIdFromName(animatedMesh, "Run");
+            int runAnimId = GetAnimationIdFromName(animatedMesh, "RUN");
             int idleAnimId = GetAnimationIdFromName(animatedMesh, animatedMesh.idleAnimationName);
 
             if (isMoving) {
                 if (animatedMesh.lowerBodyLayer.currentAnimation != runAnimId) {
-                    PlayAnim(animatedMesh, "Run", 0.2f);
+                    PlayAnim(animatedMesh, "RUN", 0.2f);
                 }
             }
             else {
