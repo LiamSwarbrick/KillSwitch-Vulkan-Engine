@@ -12,9 +12,6 @@ layout (location = 0) out vec4 out_color;
 
 #define IS_CHARACTER (CURRENT_VERTEX_TYPE == VERTEX_TYPE_SKINNED)
 
-// Fun experiment
-#define SHINY_CHARS 1
-
 vec3 spectral_rainbow(float t)
 {
     vec3 c = 0.5 + 0.5 * cos(6.28318 * (t + vec3(0.0, 0.33, 0.67)));
@@ -131,6 +128,26 @@ float dither_threshold(vec2 screen_pos)
     return float(bayer[x + y * 4]) / 16.0;
 }
 
+vec3 apply_dithered_fog(vec3 color, float depth, float near, float far, float dither)
+{
+    float z_linear = (near * far) / (far - depth * (far - near));
+    float dist_fade = clamp(z_linear / far, 0.0, 1.0);
+
+    // Fake ground mist from Height-based density
+    float height_start = -1.0;  // Where fog is thickest
+    float height_end   = 2.0;   // Where fog disappears
+    float height_fade  = 1.0 - clamp((world_pos.y - height_start) / (height_end - height_start), 0.0, 1.0);
+
+    float fog_factor = max(dist_fade, height_fade * 0.7); // Tweak the 0.7 to balance ground vs distance
+    
+    // Dithered
+    float stepped_fog = fog_factor > dither ? 1.0 : 0.0;
+    // float stepped_fog = smoothstep(dither - 0.1, dither + 0.1, fog_factor);
+
+    vec3 fog_color = vec3(0.02, 0.02, 0.05); // Dark, oppressive blue/black
+    return mix(color, fog_color, stepped_fog * 0.5);
+}
+
 void main()
 {
     SceneData scene  = SceneBuffer(push.dc.scene_ptr).scene;
@@ -138,15 +155,12 @@ void main()
     MaterialBuffer mb = MaterialBuffer(push.dc.material_ptr);
     MaterialData mat = mb.materials[push.dc.material_idx];
 
+    // Dithering (not a postprocess pass bcuz it's not about pixely rendering)
     vec2 st = uv;
-    float dith_threshold;
-    // if (!IS_CHARACTER)
-    {
-        // Dithered
-        dith_threshold = dither_threshold(gl_FragCoord.xy / 4.0);
-        vec2 dither_uv_offset = (vec2(dith_threshold) - 0.5) * (1.0 / texture2d_size(mat.texture_idx_basecolor));
-        st += dither_uv_offset;
-    }
+    float dith_threshold = dither_threshold(gl_FragCoord.xy / 4.0);
+    vec2 dither_uv_offset = (vec2(dith_threshold) - 0.5) * (1.0 / texture2d_size(mat.texture_idx_basecolor));
+    st += dither_uv_offset;
+
     vec4 base_color     = sample_texture2d_with_fallback(st, mat.texture_idx_basecolor, mat.sampler_idx, mat.base_color);
     vec4 emissive_color = sample_texture2d_with_fallback(st, mat.texture_idx_emissive,  mat.sampler_idx, vec4(mat.emissive_factor, 1.0));
     // base_color = vec4(1.0);
@@ -157,23 +171,24 @@ void main()
     // vec3 ambient = compute_ambient_light(N);
     vec3 lit_rgb = (direct_light + ambient) * base_color.rgb + emissive_color.rgb;
 
-    // if (!IS_CHARACTER)
-    {
-        const float color_levels = 4.0; // How many "shades" the texture can have
-        vec3 tex_quantized = floor(base_color.rgb * color_levels) / color_levels;
-        vec3 tex_remainder = fract(base_color.rgb * color_levels);
-        
-        vec3 dithered_tex;
-        dithered_tex.r = tex_quantized.r + (tex_remainder.r > dith_threshold ? (1.0 / color_levels) : 0.0);
-        dithered_tex.g = tex_quantized.g + (tex_remainder.g > dith_threshold ? (1.0 / color_levels) : 0.0);
-        dithered_tex.b = tex_quantized.b + (tex_remainder.b > dith_threshold ? (1.0 / color_levels) : 0.0);
+    const float color_levels = 4.0; // How many "shades" the texture can have
+    vec3 tex_quantized = floor(base_color.rgb * color_levels) / color_levels;
+    vec3 tex_remainder = fract(base_color.rgb * color_levels);
+    
+    // Fog (experimental, needs tuning)
+    // lit_rgb = apply_dithered_fog(
+    //     lit_rgb,
+    //     gl_FragCoord.z,
+    //     scene.near_plane,
+    //     scene.far_plane,
+    //     dith_threshold
+    // );
 
-        lit_rgb *= dithered_tex;
-    }
-    // else
-    // {
-    //     lit_rgb *= base_color.rgb;
-    // }
+    vec3 dithered_tex;
+    dithered_tex.r = tex_quantized.r + (tex_remainder.r > dith_threshold ? (1.0 / color_levels) : 0.0);
+    dithered_tex.g = tex_quantized.g + (tex_remainder.g > dith_threshold ? (1.0 / color_levels) : 0.0);
+    dithered_tex.b = tex_quantized.b + (tex_remainder.b > dith_threshold ? (1.0 / color_levels) : 0.0);
+    lit_rgb *= dithered_tex;
 
     vec4 final_color = vec4(lit_rgb, 1.0);
     out_color = vec4(
