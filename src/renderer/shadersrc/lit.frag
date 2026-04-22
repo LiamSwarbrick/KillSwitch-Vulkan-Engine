@@ -71,6 +71,7 @@ vec3 compute_direct_light(vec3 N, vec3 eye)
     vec3 light = vec3(0.0);
 
     // For each light
+    // TODO: When adding lights in, also change the phase function in fog
     {
         vec3 V = normalize(eye - world_pos);
 
@@ -128,24 +129,30 @@ float dither_threshold(vec2 screen_pos)
     return float(bayer[x + y * 4]) / 16.0;
 }
 
-vec3 apply_dithered_fog(vec3 color, float depth, float near, float far, float dither)
+vec3 apply_dithered_fog(
+    vec3 color,
+    float depth,
+    float near,
+    float far,
+    float dither
+)
 {
     float z_linear = (near * far) / (far - depth * (far - near));
-    float dist_fade = clamp(z_linear / far, 0.0, 1.0);
+    float fog = clamp((z_linear - 2.0) / 25.0, 0.0, 1.0);
+    // float fog_step = fog > dither ? 1.0 : 0.0;
+    // float fog_step = fog;
 
-    // Fake ground mist from Height-based density
-    float height_start = -1.0;  // Where fog is thickest
-    float height_end   = 2.0;   // Where fog disappears
-    float height_fade  = 1.0 - clamp((world_pos.y - height_start) / (height_end - height_start), 0.0, 1.0);
+    // NOTE: I want colors to stay bright so that bright lights
+    //       look good in the foggy distance (works better for HDR and bloom)
 
-    float fog_factor = max(dist_fade, height_fade * 0.7); // Tweak the 0.7 to balance ground vs distance
-    
-    // Dithered
-    float stepped_fog = fog_factor > dither ? 1.0 : 0.0;
-    // float stepped_fog = smoothstep(dither - 0.1, dither + 0.1, fog_factor);
+    // float fog = mix(0.0, 1.0, max((z_linear - 6.)/50.0, 0.0));
+    // float fog = mix(0.0, 1.0, max((z_linear - 2.)/20.0, 0.0));
+    float fog_step = fog > dither ? 1.0 : 0.0;
 
-    vec3 fog_color = vec3(0.02, 0.02, 0.05); // Dark, oppressive blue/black
-    return mix(color, fog_color, stepped_fog * 0.5);
+    vec3 fog_tint = vec3(0.005, 0.005, 0.02);
+    vec3 fogged_color = fog_tint * fog_step;
+
+    return mix(color, fogged_color, fog);
 }
 
 void main()
@@ -166,7 +173,7 @@ void main()
     // base_color = vec4(1.0);
 
     vec3 N = normalize(world_normal);
-    vec3 direct_light = compute_direct_light(N, scene.cam_position);
+    const vec3 direct_light = compute_direct_light(N, scene.cam_position);
     vec3 ambient = vec3(0.);
     // vec3 ambient = compute_ambient_light(N);
     vec3 lit_rgb = (direct_light + ambient) * base_color.rgb + emissive_color.rgb;
@@ -174,21 +181,21 @@ void main()
     const float color_levels = 4.0; // How many "shades" the texture can have
     vec3 tex_quantized = floor(base_color.rgb * color_levels) / color_levels;
     vec3 tex_remainder = fract(base_color.rgb * color_levels);
-    
-    // Fog (experimental, needs tuning)
-    // lit_rgb = apply_dithered_fog(
-    //     lit_rgb,
-    //     gl_FragCoord.z,
-    //     scene.near_plane,
-    //     scene.far_plane,
-    //     dith_threshold
-    // );
 
     vec3 dithered_tex;
     dithered_tex.r = tex_quantized.r + (tex_remainder.r > dith_threshold ? (1.0 / color_levels) : 0.0);
     dithered_tex.g = tex_quantized.g + (tex_remainder.g > dith_threshold ? (1.0 / color_levels) : 0.0);
     dithered_tex.b = tex_quantized.b + (tex_remainder.b > dith_threshold ? (1.0 / color_levels) : 0.0);
     lit_rgb *= dithered_tex;
+
+    // Fog
+    lit_rgb = apply_dithered_fog(
+        lit_rgb,
+        gl_FragCoord.z,
+        scene.near_plane,
+        scene.far_plane,
+        dith_threshold
+    );
 
     vec4 final_color = vec4(lit_rgb, 1.0);
     out_color = vec4(

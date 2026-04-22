@@ -24,16 +24,15 @@ void main()
         global_samplers[FG_SAMPLER_LINEAR_BLACK_BORDER]),
         frag_uv
     ).rgb;
-
+    
     // float exposure = 2.0;  // Thinking between 1.2–2.2
     float exposure = 2.2;
     vec3 color = hdr * exposure;
     color = tonemap_reinhard(color);
 
-    // Slight contrast shaping
-    const float mids_factor = 0.9;
+    // Slight contrast curvyness
+    const float mids_factor = 0.8;
     color = pow(color, vec3(mids_factor));  // <1 apparently brightens mids a bit
-    // (dunno if to prefer suped up bright spots and dark blacks?, but we squinting before to see shit)
 
     // DO NOT GAMMA CORRECT: That is done automatically
     out_color = vec4(color, 1.0);
