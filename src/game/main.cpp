@@ -148,7 +148,7 @@ int main(int argc, char *argv[])
     roomAssets.push_back(scene.LoadPrefab("assets/levels/1-Door_Room.gltf"));
     roomAssets.push_back(scene.LoadPrefab("assets/levels/Solid_Room.gltf"));
     generator.BuildPalette(roomAssets);
-    generator.GenerateGrid(5, 5);
+    generator.GenerateGrid(7, 7, 3, 3, NORTH + EAST + SOUTH + WEST);
     generator.InstantiateLevel(&scene);
 
 

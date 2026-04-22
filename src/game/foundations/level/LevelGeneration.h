@@ -18,6 +18,7 @@ struct Room {
     Asset* asset;
     uint8_t doorwayMask;
     float rotation;
+    float weight;
 };
 
 // Stores current state of a cell in the level grid
@@ -34,8 +35,11 @@ public:
     // Builds all possibilities from given assets
     void BuildPalette(const std::vector<Asset*>& roomAssets);
 
+    // Updates the list of valid rooms for each room
+    void UpdatePossibilities(std::vector<glm::ivec2> updateRooms);
+
     // Fills a grid with rooms that connect properly
-    void GenerateGrid(int width, int height);
+    void GenerateGrid(int width, int height, int startX, int startY, uint8_t startDoorwayMask);
 
     // Should place the entities into the Scene, need scene for instantiate prefab
     void InstantiateLevel(class Scene* scene);
