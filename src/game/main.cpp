@@ -5,6 +5,7 @@
 #include "foundations/scene.h"
 #include "core/components.h"
 #include "core/animation.h"
+#include "game_ui.h"
 
 #include "SDL3/SDL.h"
 #include "SDL3/SDL_main.h"
@@ -92,6 +93,8 @@ int main(int argc, char *argv[])
     Renderer_Init(&renderer_info);
 
     Input_Init("assets/keybindings.json");
+    GameUI_Init();
+    DebugUI_SetImGuiCallback([](void*){ GameUI_BuildImGui(); }, nullptr);
 
     // Dunno whether this resource manager will end up in the final build, if no one is integrating it due to more important tasks
 
@@ -188,9 +191,14 @@ int main(int argc, char *argv[])
             Input_ProcessEvent(event);
         }
         Input_Update();
+        GameUI_Update();
 
-        // Capture mouse for free-camera rotation
-        SDL_SetWindowRelativeMouseMode(window, true);
+        // Quit if requested from any menu
+        if (GameUI_GetState() == GameState::Quitting) running = false;
+
+        // Only capture mouse while playing (release it on menus)
+        bool is_playing = GameUI_GetState() == GameState::Playing;
+        SDL_SetWindowRelativeMouseMode(window, is_playing);
 
         // controller test not ideal at all
         const bool* state = SDL_GetKeyboardState(NULL);
