@@ -91,6 +91,8 @@ Notably: The motivation section predates the implementation.
 #ifndef RENDERER_FRAMEGRAPH_H
 #define RENDERER_FRAMEGRAPH_H
 
+// #define VERBOSE_FRAMEGRAPH_LOGGING
+
 // Arbitrary predefined array sizes for simplicity
 #define MAX_PASS_RESOURCE_BANDWIDTH  8
 #define MAX_PASSES          256
