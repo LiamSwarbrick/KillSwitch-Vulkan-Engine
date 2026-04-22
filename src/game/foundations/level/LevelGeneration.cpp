@@ -89,13 +89,13 @@ void LevelGeneration::BuildPalette(const std::vector<Asset*>& roomAssets)
 				switch (doorCount) 
 				{
 				case 4:
-					weight = 2.0f;
+					weight = 0.5f;
 					break;
 				case 3:
-					weight = 10.0f;
+					weight = 1.0f;
 					break;
 				case 2:
-					weight = 10.0f;
+					weight = 1.0f;
 					break;
 				case 1:
 					weight = 0.5f;
@@ -167,70 +167,69 @@ void LevelGeneration::UpdatePossibilities(std::vector<glm::ivec2> updateRooms)
 	}
 }
 
-// Generates and instantiates a level
-void LevelGeneration::GenerateGrid(int width, int height, int startX, int startY, uint8_t startDoorwayMask)
+std::vector<glm::ivec2> LevelGeneration::GetTraversableRooms(glm::ivec2 startRoom)
 {
-	gridWidth = width;
-	gridHeight = height;
-	grid.assign(width * height, GridCell());
+	// Create vectors and push the starting room onto the stack
+	std::vector<glm::ivec2> traversableRooms;
+	std::vector<bool> visited(gridWidth * gridHeight, false);
+	std::vector<glm::ivec2> roomStack;
 
-	// Give every grid cell every room as possible neighbours
-	std::vector<int> allRooms;
-	for (int i = 0; i < palette.size(); ++i)
-		allRooms.push_back(i);
+	roomStack.push_back(startRoom);
+	int gridIndex = startRoom.y * gridWidth + startRoom.x;
+	visited[gridIndex] = true;
 
-	for (int y = 0; y < height; ++y)
+	// Visit all rooms connected to the start room, and return their coords
+	while (!roomStack.empty())
 	{
-		for (int x = 0; x < width; ++x)
-		{
-			int gridIndex = y * width + x;
-			GridCell& cell = grid[gridIndex];
-			cell.validRooms = allRooms;
+		glm::ivec2 currentRoom = roomStack.back();
+		roomStack.pop_back();
+		traversableRooms.push_back(currentRoom);
 
-			// For rooms on the edge, remove possibility for doorway into the edge
-			auto& p = cell.validRooms;
-			p.erase(std::remove_if(p.begin(), p.end(), [&](int index)
-				{
-					uint8_t mask = palette[index].doorwayMask;
-					if (y == height - 1 && (mask & NORTH))
-						return true;
-					if (y == 0 && (mask & SOUTH))
-						return true;
-					if (x == width - 1 && (mask & EAST))
-						return true;
-					if (x == 0 && (mask & WEST))
-						return true;
-					return false;
-				}
-			), p.end());
+		// For easy neighbour querying
+		DoorDirection directions[4] = { NORTH, EAST, SOUTH, WEST };
+		DoorDirection opposites[4] = { SOUTH, WEST, NORTH, EAST };
+		glm::ivec2 neighbourDirections[4] = { {0, 1}, {1, 0}, {0, -1}, {-1, 0} };
+
+		// Go through each non-visited valid neighbouring room
+		for (int i = 0; i < 4; ++i)
+		{
+			glm::ivec2 neighbourRoom = { currentRoom.x + neighbourDirections[i].x, currentRoom.y + neighbourDirections[i].y };
+			if (neighbourRoom.x < 0 || neighbourRoom.x >= gridWidth || neighbourRoom.y < 0 || neighbourRoom.y >= gridHeight)
+				continue;
+
+			int currentIndex = currentRoom.y * gridWidth + currentRoom.x;
+			int neighbourIndex = neighbourRoom.y * gridWidth + neighbourRoom.x;
+
+			if (visited[neighbourIndex])
+				continue;
+
+			// If there is a doorway between the rooms, push the neighbour to the stack and specify it as visited
+			uint8_t currentMask = palette[grid[currentIndex].validRooms[0]].doorwayMask;
+			uint8_t neighbourMask = palette[grid[neighbourIndex].validRooms[0]].doorwayMask;
+
+			if ((currentMask & directions[i]) && (neighbourMask & opposites[i]))
+			{
+				visited[neighbourIndex] = true;
+				roomStack.push_back(neighbourRoom);
+			}
 		}
 	}
+	return traversableRooms;
+}
 
-	// Assign starting cell its room and update collapsed state
-	int gridIndex = startY * width + startX;
-	GridCell& startingCell = grid[gridIndex];
-	int roomChoice = -1;
-
-	for (int i = 0; i < palette.size(); ++i)
-		if (palette[i].doorwayMask == startDoorwayMask)
-			roomChoice = i;
-
-	startingCell.validRooms = { roomChoice };
-	startingCell.isCollapsed = true;
-
-	// Create vector of room coordinates to update their neighbours list of valid rooms after the collapse
-	std::vector<glm::ivec2> updateRooms;
-	updateRooms.push_back({ startX, startY });
-
-	UpdatePossibilities(updateRooms);
-
-	// Find room with lowest entropy, pick a room for it, update list of valid rooms for others
+// Generates and instantiates a level
+void LevelGeneration::GenerateGrid(int width, int height, glm::ivec2 start, glm::ivec2 goal, uint8_t startDoorwayMask)
+{
 	while (true)
 	{
-		// Go through every grid cell and check how many rooms it could be (entropy)
-		int nextX = -1;
-		int nextY = -1;
-		int lowestEntropy = INT_MAX;
+		gridWidth = width;
+		gridHeight = height;
+		grid.assign(width * height, GridCell());
+
+		// Give every grid cell every room as possible neighbours
+		std::vector<int> allRooms;
+		for (int i = 0; i < palette.size(); ++i)
+			allRooms.push_back(i);
 
 		for (int y = 0; y < height; ++y)
 		{
@@ -238,43 +237,115 @@ void LevelGeneration::GenerateGrid(int width, int height, int startX, int startY
 			{
 				int gridIndex = y * width + x;
 				GridCell& cell = grid[gridIndex];
+				cell.validRooms = allRooms;
 
-				if (cell.isCollapsed)
-					continue;
-
-				int entropy = (int)cell.validRooms.size();
-				if (entropy < lowestEntropy)
-				{
-					lowestEntropy = entropy;
-					nextX = x;
-					nextY = y;
-				}
+				// For rooms on the edge, remove possibility for doorway into the edge
+				auto& p = cell.validRooms;
+				p.erase(std::remove_if(p.begin(), p.end(), [&](int index)
+					{
+						uint8_t mask = palette[index].doorwayMask;
+						if (y == height - 1 && (mask & NORTH))
+							return true;
+						if (y == 0 && (mask & SOUTH))
+							return true;
+						if (x == width - 1 && (mask & EAST))
+							return true;
+						if (x == 0 && (mask & WEST))
+							return true;
+						return false;
+					}
+				), p.end());
 			}
 		}
 
-		// All rooms collapsed, level fully generated
-		if (nextX == -1 || nextY == -1)
-			break;
+		// Assign starting cell its room and update collapsed state
+		int gridIndex = start.y * width + start.x;
+		GridCell& startingCell = grid[gridIndex];
+		int roomChoice = -1;
 
-		// Randomly pick the room from the list of the cells valid rooms and update collapsed state
-		gridIndex = nextY * width + nextX;
-		GridCell& cell = grid[gridIndex];
+		for (int i = 0; i < palette.size(); ++i)
+			if (palette[i].doorwayMask == startDoorwayMask)
+				roomChoice = i;
 
-		std::vector<float> weights;
-		for (int roomIndex : cell.validRooms)
-			weights.push_back(palette[roomIndex].weight);
+		startingCell.validRooms = { roomChoice };
+		startingCell.isCollapsed = true;
 
-		static std::mt19937 rng(std::random_device{}());
-		std::discrete_distribution<> dist(weights.begin(), weights.end());
-		int chosenIndex = dist(rng);
-		int roomChoice = cell.validRooms[chosenIndex];
+		// Create vector of room coordinates to update their neighbours list of valid rooms after the collapse
+		std::vector<glm::ivec2> updateRooms;
+		updateRooms.push_back(start);
 
-		cell.validRooms = { roomChoice };
-		cell.isCollapsed = true;
-
-		// Update their neighbours list of valid rooms after the collapse
-		updateRooms.push_back({ nextX, nextY });
 		UpdatePossibilities(updateRooms);
+
+		// Find room with lowest entropy, pick a room for it, update list of valid rooms for others
+		while (true)
+		{
+			// Go through every grid cell and check how many rooms it could be (entropy)
+			int nextX = -1;
+			int nextY = -1;
+			int lowestEntropy = INT_MAX;
+
+			for (int y = 0; y < height; ++y)
+			{
+				for (int x = 0; x < width; ++x)
+				{
+					int gridIndex = y * width + x;
+					GridCell& cell = grid[gridIndex];
+
+					if (cell.isCollapsed)
+						continue;
+
+					int entropy = (int)cell.validRooms.size();
+					if (entropy < lowestEntropy)
+					{
+						lowestEntropy = entropy;
+						nextX = x;
+						nextY = y;
+					}
+				}
+			}
+
+			// All rooms collapsed, level fully generated
+			if (nextX == -1 || nextY == -1)
+				break;
+
+			// Randomly pick the room from the list of the cells valid rooms and update collapsed state
+			gridIndex = nextY * width + nextX;
+			GridCell& cell = grid[gridIndex];
+
+			std::vector<float> weights;
+			for (int roomIndex : cell.validRooms)
+				weights.push_back(palette[roomIndex].weight);
+
+			static std::mt19937 rng(std::random_device{}());
+			std::discrete_distribution<> dist(weights.begin(), weights.end());
+			int chosenIndex = dist(rng);
+			int roomChoice = cell.validRooms[chosenIndex];
+
+			cell.validRooms = { roomChoice };
+			cell.isCollapsed = true;
+
+			// Update their neighbours list of valid rooms after the collapse
+			updateRooms.push_back({ nextX, nextY });
+			UpdatePossibilities(updateRooms);
+		}
+
+		// Find the coords of all rooms reachable from the starting room
+		std::vector<glm::ivec2> traversableRooms = GetTraversableRooms(start);
+		bool goalPath = false;
+		for (glm::ivec2& room : traversableRooms)
+		{
+			// Check all rooms to see if they are the goal room
+			if (room.x == goal.x && room.y == goal.y)
+			{
+				goalPath = true;
+				break;
+			}
+		}
+
+		// Only create a valid level if it reaches the goal and is traversable enough
+		float amountTraversable = (float)traversableRooms.size() / (width * height);
+		if (goalPath && amountTraversable > 0.70f)
+			break;
 	}
 }
 
