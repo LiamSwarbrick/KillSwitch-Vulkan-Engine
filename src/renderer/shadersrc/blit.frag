@@ -24,7 +24,8 @@ vec2 lens_distortion(vec2 uv, float k, float aspect)
 void main()
 {
     SceneData scene  = SceneBuffer(push.dc.scene_ptr).scene;
-    vec2 uv = lens_distortion(frag_uv, -0.03, scene.aspect);  // Negative = wide-angle / fish-eye lens
+    const float distortion_amount = -0.03;  // Negative = wide-angle / fish-eye lens
+    vec2 uv = lens_distortion(frag_uv, distortion_amount, scene.aspect);
 
     // NOTE: Blit pass puts the texture it blit's in pass.texture_indices[0]
     //       and samples with the linear sampler
