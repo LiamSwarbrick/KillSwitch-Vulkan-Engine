@@ -25,8 +25,7 @@ void main()
         frag_uv
     ).rgb;
     
-    // float exposure = 2.0;  // Thinking between 1.2–2.2
-    float exposure = 2.2;
+    float exposure = 2.4;
     vec3 color = hdr * exposure;
     color = tonemap_reinhard(color);
 
