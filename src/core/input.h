@@ -2,40 +2,7 @@
 #define CORE_INPUT_H
 
 #include "SDL3/SDL.h"
-#include <stdint.h>
-
-
-
-
-// Action enums for button mapping
-enum InputAction : uint32_t
-{
-    // Movement
-    ACTION_MOVE_FORWARD,
-    ACTION_MOVE_BACKWARD,
-    ACTION_MOVE_LEFT,
-    ACTION_MOVE_RIGHT,
-    ACTION_MOVE_UP,
-    ACTION_MOVE_DOWN,
-    ACTION_SPRINT,
-    ACTION_JUMP,
-
-    // Camera
-    ACTION_CAMERA_UP,
-    ACTION_CAMERA_DOWN,
-    ACTION_CAMERA_LEFT,
-    ACTION_CAMERA_RIGHT,
-
-    // Gameplay
-    ACTION_INTERACT,
-    ACTION_ATTACK,
-
-    // UI / System
-    ACTION_PAUSE,
-    ACTION_DEBUG_TOGGLE,
-
-    ACTION_COUNT  // must be last
-};
+#include "core/input_actions.h"
 
 // Binding types
 enum BindingSource : uint8_t

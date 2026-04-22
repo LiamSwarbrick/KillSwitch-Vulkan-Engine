@@ -46,24 +46,12 @@ static SDL_JoystickID  s_gamepad_id = 0;
 // Axis default deadzone, for now just keeped hardcoded here, can be made configurable if needed
 static constexpr float AXIS_DEADZONE = 0.20f;
 
-// Action name table, these are the actions I assume we need, feel free to change or add
-static const char* s_action_names[ACTION_COUNT] = {
-    "move_forward",
-    "move_backward",
-    "move_left",
-    "move_right",
-    "move_up",
-    "move_down",
-    "sprint",
-    "jump",
-    "camera_up",
-    "camera_down",
-    "camera_left",
-    "camera_right",
-    "interact",
-    "attack",
-    "pause",
-    "debug_toggle",
+// Action name table — generated directly from INPUT_ACTIONS_LIST in input_actions.h.
+// Always in sync with the enum; no manual maintenance needed.
+static const char* s_action_names[] = {
+#define X(suffix, name) name,
+    INPUT_ACTIONS_LIST
+#undef X
 };
 
 //  Default bindings
@@ -96,7 +84,7 @@ static void set_default_bindings()
     add_binding(ACTION_MOVE_RIGHT,    BIND_KEYBOARD, SDL_SCANCODE_D);
     add_binding(ACTION_MOVE_UP,       BIND_KEYBOARD, SDL_SCANCODE_E);
     add_binding(ACTION_MOVE_DOWN,     BIND_KEYBOARD, SDL_SCANCODE_Q);
-    add_binding(ACTION_SPRINT,        BIND_KEYBOARD, SDL_SCANCODE_LCTRL);
+    add_binding(ACTION_SPRINT,        BIND_KEYBOARD, SDL_SCANCODE_LSHIFT);
     add_binding(ACTION_JUMP,          BIND_KEYBOARD, SDL_SCANCODE_SPACE);
 
     // Movement – gamepad
