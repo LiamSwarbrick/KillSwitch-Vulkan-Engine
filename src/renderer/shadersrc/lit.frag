@@ -139,14 +139,6 @@ vec3 apply_dithered_fog(
 {
     float z_linear = (near * far) / (far - depth * (far - near));
     float fog = clamp((z_linear - 2.0) / 25.0, 0.0, 1.0);
-    // float fog_step = fog > dither ? 1.0 : 0.0;
-    // float fog_step = fog;
-
-    // NOTE: I want colors to stay bright so that bright lights
-    //       look good in the foggy distance (works better for HDR and bloom)
-
-    // float fog = mix(0.0, 1.0, max((z_linear - 6.)/50.0, 0.0));
-    // float fog = mix(0.0, 1.0, max((z_linear - 2.)/20.0, 0.0));
     float fog_step = fog > dither ? 1.0 : 0.0;
 
     vec3 fog_tint = vec3(0.005, 0.005, 0.02);
@@ -163,8 +155,9 @@ void main()
     MaterialData mat = mb.materials[push.dc.material_idx];
 
     // Dithering (not a postprocess pass bcuz it's not about pixely rendering)
+    float dither_scale = float(scene.rendertarget_size.y) / 270.0;  // <- Basically, dither as if 270p
+    float dith_threshold = dither_threshold(gl_FragCoord.xy / dither_scale);
     vec2 st = uv;
-    float dith_threshold = dither_threshold(gl_FragCoord.xy / 4.0);
     vec2 dither_uv_offset = (vec2(dith_threshold) - 0.5) * (1.0 / texture2d_size(mat.texture_idx_basecolor));
     st += dither_uv_offset;
 
