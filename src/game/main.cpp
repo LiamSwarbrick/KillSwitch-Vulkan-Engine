@@ -1,4 +1,5 @@
 #include "core/core.h"
+#include "core/input.h"
 #include "renderer/renderer.h"
 #include "renderer/debug_ui_api.h"
 #include "foundations/scene.h"
@@ -9,7 +10,7 @@
 #include "SDL3/SDL.h"
 #include "SDL3/SDL_main.h"
 
-CameraInfo temp_camera()
+CameraInfo temp_camera(float dt)
 {
     static glm::vec3 pos = glm::vec3(0.0f, 0.0f, 3.0f);
 
@@ -17,21 +18,22 @@ CameraInfo temp_camera()
     static float yaw   = -90.0f;  // Looking down -Z initially
     static float pitch =  0.0f;
 
-    const bool* state = SDL_GetKeyboardState(NULL);
+    static constexpr float MOUSE_SENSITIVITY  = 0.10f;   // degrees per pixel
+    static constexpr float GAMEPAD_LOOK_SPEED = 120.0f;  // degrees per second at full deflection
+    static constexpr float MOVE_SPEED         = 5.0f;    // units per second
+    static constexpr float SPRINT_MULTIPLIER  = 4.0f;
 
-    float move_speed = 0.05f;
-    float rot_speed  = 1.5f;  // Degrees per frame
+    // --- ROTATION: mouse delta + right stick ---
+    float mouse_dx, mouse_dy;
+    Input_GetMouseDelta(&mouse_dx, &mouse_dy);
 
-    if (state[SDL_SCANCODE_LCTRL]) move_speed *= 20.0f;
+    yaw   +=  mouse_dx * MOUSE_SENSITIVITY;
+    pitch -=  mouse_dy * MOUSE_SENSITIVITY;  // inverted: mouse up = look up
 
-    // --- ROTATION (arrow keys) ---
-    if (state[SDL_SCANCODE_LEFT])  yaw   -= rot_speed;
-    if (state[SDL_SCANCODE_RIGHT]) yaw   += rot_speed;
-    if (state[SDL_SCANCODE_UP])    pitch += rot_speed;
-    if (state[SDL_SCANCODE_DOWN])  pitch -= rot_speed;
+    yaw   += (Input_GetActionValue(ACTION_CAMERA_RIGHT) - Input_GetActionValue(ACTION_CAMERA_LEFT)) * GAMEPAD_LOOK_SPEED * dt;
+    pitch += (Input_GetActionValue(ACTION_CAMERA_UP)    - Input_GetActionValue(ACTION_CAMERA_DOWN)) * GAMEPAD_LOOK_SPEED * dt;
 
-    // Clamp pitch to avoid flipping
-    if (pitch > 89.0f)  pitch = 89.0f;
+    if (pitch >  89.0f) pitch =  89.0f;
     if (pitch < -89.0f) pitch = -89.0f;
 
     // --- DIRECTION VECTOR ---
@@ -44,13 +46,16 @@ CameraInfo temp_camera()
     glm::vec3 right = glm::normalize(glm::cross(forward, glm::vec3(0.0f, 1.0f, 0.0f)));
     glm::vec3 up = glm::vec3(0.0f, 1.0f, 0.0f);
 
-    // --- MOVEMENT (WASD relative to camera) ---
-    if (state[SDL_SCANCODE_W]) pos += forward * move_speed;
-    if (state[SDL_SCANCODE_S]) pos -= forward * move_speed;
-    if (state[SDL_SCANCODE_A]) pos -= right   * move_speed;
-    if (state[SDL_SCANCODE_D]) pos += right   * move_speed;
-    if (state[SDL_SCANCODE_E]) pos += up  * move_speed;
-    if (state[SDL_SCANCODE_Q]) pos -= up  * move_speed;
+    // --- MOVEMENT: free-cam, WASD + E/Q, full forward including pitch ---
+    float speed = MOVE_SPEED * dt;
+    if (Input_IsActionPressed(ACTION_SPRINT)) speed *= SPRINT_MULTIPLIER;
+
+    pos += forward * (Input_GetActionValue(ACTION_MOVE_FORWARD)  * speed);
+    pos -= forward * (Input_GetActionValue(ACTION_MOVE_BACKWARD) * speed);
+    pos -= right   * (Input_GetActionValue(ACTION_MOVE_LEFT)     * speed);
+    pos += right   * (Input_GetActionValue(ACTION_MOVE_RIGHT)    * speed);
+    pos += up      * (Input_GetActionValue(ACTION_MOVE_UP)       * speed);
+    pos -= up      * (Input_GetActionValue(ACTION_MOVE_DOWN)     * speed);
 
     // --- VIEW MATRIX ---
     glm::mat4 view = glm::lookAt(pos, pos + forward, up);
@@ -133,6 +138,8 @@ int main(int argc, char *argv[])
     {
         SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "AudioSystem: failed to load startup test SFX.");
     }
+
+    Input_Init("assets/keybindings.json");
 
     // Dunno whether this resource manager will end up in the final build, if no one is integrating it due to more important tasks
 
@@ -227,7 +234,12 @@ int main(int argc, char *argv[])
         {
             if (event.type == SDL_EVENT_QUIT) running = false;
             Renderer_ListenToWindowEvent(event);
+            Input_ProcessEvent(event);
         }
+        Input_Update();
+
+        // Capture mouse for free-camera rotation
+        SDL_SetWindowRelativeMouseMode(window, true);
 
         // Game ticks
         scene.Update(dt);
@@ -238,13 +250,13 @@ int main(int argc, char *argv[])
         if (!(flags & SDL_WINDOW_MINIMIZED))
         {
             scene.Render();
-            
-            Renderer_DrawFrame(temp_camera());
+
+            Renderer_DrawFrame(temp_camera(dt));
         }
     }
 
     scene.Shutdown();
-    //AudioSystem_Destroy(&audio_system);
+    Input_Shutdown();
     Renderer_Shutdown();
     Core_Shutdown(window);
 
