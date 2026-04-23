@@ -12,4 +12,6 @@ void DebugUI_SetAsset(Asset* asset);
 typedef void (*DebugUI_ImGuiBuildCallback)(void* user_data);
 void DebugUI_SetImGuiCallback(DebugUI_ImGuiBuildCallback callback, void* user_data);
 
+bool DebugUI_IsOpen();
+
 #endif  // DEBUG_UI_API_H

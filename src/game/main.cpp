@@ -23,12 +23,14 @@ CameraInfo temp_camera(float dt)
     static constexpr float MOVE_SPEED         = 5.0f;    // units per second
     static constexpr float SPRINT_MULTIPLIER  = 4.0f;
 
-    // --- ROTATION: mouse delta + right stick ---
-    float mouse_dx, mouse_dy;
-    Input_GetMouseDelta(&mouse_dx, &mouse_dy);
-
-    yaw   +=  mouse_dx * MOUSE_SENSITIVITY;
-    pitch -=  mouse_dy * MOUSE_SENSITIVITY;  // inverted: mouse up = look up
+    // --- ROTATION: mouse delta (disabled when debug UI is open) + right stick ---
+    if (!DebugUI_IsOpen())
+    {
+        float mouse_dx, mouse_dy;
+        Input_GetMouseDelta(&mouse_dx, &mouse_dy);
+        yaw   +=  mouse_dx * MOUSE_SENSITIVITY;
+        pitch -=  mouse_dy * MOUSE_SENSITIVITY;  // inverted: mouse up = look up
+    }
 
     yaw   += (Input_GetActionValue(ACTION_CAMERA_RIGHT) - Input_GetActionValue(ACTION_CAMERA_LEFT)) * GAMEPAD_LOOK_SPEED * dt;
     pitch += (Input_GetActionValue(ACTION_CAMERA_UP)    - Input_GetActionValue(ACTION_CAMERA_DOWN)) * GAMEPAD_LOOK_SPEED * dt;
@@ -198,7 +200,7 @@ int main(int argc, char *argv[])
 
         // Only capture mouse while playing (release it on menus)
         bool is_playing = GameUI_GetState() == GameState::Playing;
-        SDL_SetWindowRelativeMouseMode(window, is_playing);
+        SDL_SetWindowRelativeMouseMode(window, is_playing && !DebugUI_IsOpen());
 
         // controller test not ideal at all
         const bool* state = SDL_GetKeyboardState(NULL);

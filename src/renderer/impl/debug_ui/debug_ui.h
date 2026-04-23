@@ -23,6 +23,10 @@ namespace DebugUI
         FrameGraphVisualizer fg_viz;
         AssetBrowser         asset_browser;
         Asset*               debug_asset = nullptr;
+
+        // Viewport texture for displaying the 3D scene inside ImGui
+        ImTextureID viewport_imgui_tex    = 0;
+        VkImageView viewport_view_cached  = VK_NULL_HANDLE;
     };
 }
 
@@ -52,6 +56,12 @@ namespace DebugUI
     {
         if (!state.show_debug_ui) return;
 
+        // Cover the live 3D scene with an opaque background so only the Viewport panel shows it
+        ImVec2 display_size = ImGui::GetMainViewport()->Size;
+        ImGui::GetBackgroundDrawList()->AddRectFilled(
+            ImVec2(0.0f, 0.0f), display_size, IM_COL32(30, 30, 30, 255)
+        );
+
         ImGuiDockNodeFlags dockspace_flags = ImGuiDockNodeFlags_PassthruCentralNode;
         ImGuiID dockspace_id = ImGui::DockSpaceOverViewport(0, ImGui::GetMainViewport(), dockspace_flags);
 
@@ -79,7 +89,7 @@ namespace DebugUI
             ImGui::DockBuilderDockWindow("ECS Inspector", top_left);
             ImGui::DockBuilderDockWindow("Asset Browser", bottom_left);
             ImGui::DockBuilderDockWindow("Framegraph", bottom_right);
-            ImGui::DockBuilderDockWindow("##EmptySpace", top_right);
+            ImGui::DockBuilderDockWindow("Viewport", top_right);
 
             ImGui::DockBuilderFinish(dockspace_id);
         }
@@ -129,17 +139,37 @@ namespace DebugUI
         HandleInput(state);
         DrawDockSpace(state);
 
-        // Empty viewport
-        if (ImGui::Begin("##EmptySpace",
-            nullptr,
-            ImGuiWindowFlags_NoNav |
-            ImGuiWindowFlags_NoDecoration |
-            ImGuiWindowFlags_NoInputs |
-            ImGuiWindowFlags_NoBackground))
+        // Viewport: shows the 3D scene as a texture when the debug UI is open
+        if (state.show_debug_ui)
         {
-            // Intentionally empty
+            // Sync ImTextureID with the current HDR image view.
+            // The view handle changes after a window resize, so we re-register in that case.
+            FG_Resource& hdr_res = renderstate.registry.resources[renderstate.rids.hdr_color_target_rid];
+            VkImageView cur_view = hdr_res.image.view;
+            if (cur_view != state.viewport_view_cached)
+            {
+                if (state.viewport_imgui_tex)
+                    ImGui_ImplVulkan_RemoveTexture((VkDescriptorSet)state.viewport_imgui_tex);
+                state.viewport_imgui_tex = (ImTextureID)ImGui_ImplVulkan_AddTexture(
+                    renderstate.heap.samplers[FG_SAMPLER_LINEAR_REPEAT],
+                    cur_view,
+                    VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
+                );
+                state.viewport_view_cached = cur_view;
+            }
+
+            ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 0));
+            bool vp_open = ImGui::Begin("Viewport", nullptr,
+                ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
+            ImGui::PopStyleVar();
+            if (vp_open && state.viewport_imgui_tex)
+            {
+                ImVec2 avail = ImGui::GetContentRegionAvail();
+                if (avail.x > 0 && avail.y > 0)
+                    ImGui::Image(state.viewport_imgui_tex, avail);
+            }
+            ImGui::End();
         }
-        ImGui::End();
 
         DrawECSInspector(state, ecs);
         DrawFramegraph(state);

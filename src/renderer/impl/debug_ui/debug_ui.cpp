@@ -21,3 +21,8 @@ void DebugUI_SetImGuiCallback(DebugUI_ImGuiBuildCallback callback, void* user_da
     renderstate.imgui_callback      = callback;
     renderstate.imgui_callback_data = user_data;
 }
+
+bool DebugUI_IsOpen()
+{
+    return debug_ui_state.show_debug_ui;
+}
