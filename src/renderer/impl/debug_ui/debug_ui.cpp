@@ -5,6 +5,18 @@ DebugUI::DebugUIState debug_ui_state;
 ECS*                  debug_ecs_ptr   = nullptr;
 Asset*                debug_asset_ptr = nullptr;
 
+static FreeCamState s_free_cam_snapshot = {};
+
+void DebugUI_SetFreeCamState(const FreeCamState* state)
+{
+    if (state) s_free_cam_snapshot = *state;
+}
+
+const FreeCamState* DebugUI_GetFreeCamState()
+{
+    return &s_free_cam_snapshot;
+}
+
 void DebugUI_SetECS(ECS* ecs)
 {
     debug_ecs_ptr = ecs;

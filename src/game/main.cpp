@@ -10,13 +10,14 @@
 #include "SDL3/SDL.h"
 #include "SDL3/SDL_main.h"
 
+static FreeCamState g_free_cam;
+
 CameraInfo temp_camera(float dt)
 {
-    static glm::vec3 pos = glm::vec3(0.0f, 0.0f, 3.0f);
-
-    // Rotation state
-    static float yaw   = -90.0f;  // Looking down -Z initially
-    static float pitch =  0.0f;
+    FreeCamState& cam = g_free_cam;
+    glm::vec3& pos    = cam.pos;
+    float&     yaw    = cam.yaw;
+    float&     pitch  = cam.pitch;
 
     static constexpr float MOUSE_SENSITIVITY  = 0.10f;   // degrees per pixel
     static constexpr float GAMEPAD_LOOK_SPEED = 120.0f;  // degrees per second at full deflection
@@ -60,13 +61,16 @@ CameraInfo temp_camera(float dt)
     pos -= up      * (Input_GetActionValue(ACTION_MOVE_DOWN)     * speed);
 
     // --- VIEW MATRIX ---
+    cam.forward = forward;
     glm::mat4 view = glm::lookAt(pos, pos + forward, up);
 
-    return {
+    CameraInfo result = {
         .view = view,
         .position = pos,
         .lense_distortion = 0.0f
     };
+    DebugUI_SetFreeCamState(&g_free_cam);
+    return result;
 }
 
 int main(int argc, char *argv[])

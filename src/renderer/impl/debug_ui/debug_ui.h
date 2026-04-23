@@ -16,6 +16,11 @@ namespace DebugUI
         bool show_ecs_inspector = false;
         bool show_framegraph    = false;
         bool show_asset_browser = false;
+        bool show_camera        = false;
+
+        // Camera mode selector (add entries here when more cameras are added)
+        enum class CameraMode { FreeCam } camera_mode = CameraMode::FreeCam;
+        static constexpr const char* camera_mode_names[] = { "Free Cam" };
 
         // Entity ID 
         uint32_t selected_entity_id = UINT32_MAX;
@@ -47,6 +52,7 @@ namespace DebugUI
                 state.show_ecs_inspector = true;
                 state.show_framegraph    = true;
                 state.show_asset_browser = true;
+                state.show_camera        = true;
             }
         }
     }
@@ -133,6 +139,48 @@ namespace DebugUI
         ImGui::End();
     }
 
+    inline void DrawCameraPanel(DebugUIState& state)
+    {
+        if (!state.show_debug_ui || !state.show_camera) return;
+
+        // Float in the bottom-right area of the viewport (roughly 75% across, 60% down).
+        // Uses FirstUseEver so the user can move/dock it freely afterwards.
+        ImVec2 screen = ImGui::GetMainViewport()->Size;
+        constexpr ImVec2 panel_size(300.0f, 200.0f);
+        ImGui::SetNextWindowPos(
+            ImVec2(screen.x - panel_size.x - 16.0f, screen.y * 0.62f),
+            ImGuiCond_FirstUseEver
+        );
+        ImGui::SetNextWindowSize(panel_size, ImGuiCond_FirstUseEver);
+        ImGui::SetNextWindowDockID(0, ImGuiCond_FirstUseEver);  // undocked by default
+        if (!ImGui::Begin("Camera", &state.show_camera, ImGuiWindowFlags_NoDocking))
+        {
+            ImGui::End();
+            return;
+        }
+
+        // --- Mode selector ---
+        ImGui::SeparatorText("Mode");
+        int mode = (int)state.camera_mode;
+        constexpr int mode_count = (int)(sizeof(DebugUIState::camera_mode_names) / sizeof(DebugUIState::camera_mode_names[0]));
+        for (int i = 0; i < mode_count; ++i)
+        {
+            if (ImGui::RadioButton(DebugUIState::camera_mode_names[i], mode == i))
+                state.camera_mode = (DebugUIState::CameraMode)i;
+            if (i < mode_count - 1) ImGui::SameLine();
+        }
+
+        // --- Live state ---
+        ImGui::SeparatorText("State");
+        const FreeCamState* cam = DebugUI_GetFreeCamState();
+        ImGui::Text("Position  %.2f  %.2f  %.2f", cam->pos.x,     cam->pos.y,     cam->pos.z);
+        ImGui::Text("Forward   %.2f  %.2f  %.2f", cam->forward.x, cam->forward.y, cam->forward.z);
+        ImGui::Text("Yaw       %.1f deg",  cam->yaw);
+        ImGui::Text("Pitch     %.1f deg",  cam->pitch);
+
+        ImGui::End();
+    }
+
     // Called after ImGui::NewFrame()
     inline void Draw(DebugUIState& state, ECS& ecs)
     {
@@ -174,5 +222,6 @@ namespace DebugUI
         DrawECSInspector(state, ecs);
         DrawFramegraph(state);
         DrawAssetBrowser(state);
+        DrawCameraPanel(state);
     }
 }
