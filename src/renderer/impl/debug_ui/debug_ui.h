@@ -11,11 +11,11 @@ namespace DebugUI
     // State of windows in the debug UI
     struct DebugUIState
     {
-        bool show_debug_ui      = false;  // F3 to toggle
+        bool show_debug_ui      = true;   // F3 to toggle
 
-        bool show_ecs_inspector = false;
-        bool show_framegraph    = false;
-        bool show_asset_browser = false;
+        bool show_ecs_inspector = true;
+        bool show_framegraph    = true;
+        bool show_asset_browser = true;
         bool show_camera        = false;
 
         // Camera mode selector (add entries here when more cameras are added)
