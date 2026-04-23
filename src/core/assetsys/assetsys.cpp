@@ -286,6 +286,8 @@ Asset* load_asset(const char* filename) {
 		memcpy(light->color, gltf_light->color, sizeof(float) * 3);
 		light->intensity = gltf_light->intensity;
 		light->range = gltf_light->range;
+		light->spot_inner_cone_angle = gltf_light->spot_inner_cone_angle;
+		light->spot_outer_cone_angle = gltf_light->spot_outer_cone_angle;
 	}
 
 	// Copy Nodes
