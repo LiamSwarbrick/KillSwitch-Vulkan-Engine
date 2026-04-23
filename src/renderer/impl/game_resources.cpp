@@ -61,7 +61,9 @@ void CreateOrRecreateResources(FG_ResourceFlags types_to_create)
             FG_Resource* res = &renderstate.registry.resources[rid];
             if ((res->flags & types_to_create) == types_to_create)
             {
+                #ifdef VERBOSE_FRAMEGRAPH_LOGGING
                 printf("Deallocating resource: %s\n", res->debug_name);
+                #endif
                 FG_DeallocateResource(res);
             }
         }
@@ -192,10 +194,26 @@ void create_startup_resources()
         },
         .is_buffer_cpu_accessible = 1  // <- Material stuff like blend mode is important to be CPU accessable, and we may want to dynamically change materials.
     };
-    renderstate.rids.material_ssbo_rid = FG_CreateResource(
-        "MaterialSSBO", FG_RESOURCE_TYPE_BUFFER, flags, &mat_info
+    renderstate.rids.materials_buffer_rid = FG_CreateResource(
+        "MaterialBuffer", FG_RESOURCE_TYPE_BUFFER, flags, &mat_info
     );
     
+
+    // Lights Buffer (Uploaded once per frame all at once) (packed array)
+    ResourceCreateInfo lights_info = {
+        .buffer_create_info = {
+            .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
+            .size  = sizeof(PointLight) * MAX_POINTLIGHTS + sizeof(SpotLight) * MAX_SPOTLIGHTS,
+            .usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT
+                   | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT
+                   | VK_BUFFER_USAGE_TRANSFER_DST_BIT
+        },
+        is_buffer_cpu_accessible = 1
+    };
+    renderstate.rids.lights_buffer_rid = FG_CreateResource(
+        "LightsBuffer", FG_RESOURCE_TYPE_BUFFER, flags, &lights_info
+    );
+
 
 #if 0  // NOTE: Keeping in case it's useful for game ui to have quad code lying around
     // TEST QUAD
@@ -490,7 +508,7 @@ void create_scene_resources()
     }
 
     // Upload materials to global material buffer (all at once)
-    FG_Resource* materials_res = &renderstate.registry.resources[renderstate.rids.material_ssbo_rid];
+    FG_Resource* materials_res = &renderstate.registry.resources[renderstate.rids.materials_buffer_rid];
     vmaCopyMemoryToAllocation(renderstate.vma_allocator, loaded_materials, materials_res->allocation, 0, num_loaded_materials * sizeof(MaterialData));
     // memcpy(materials_res->buffer.mapped_data, loaded_materials, mat_upload_size);
     // vmaFlushAllocation(renderstate.vma_allocator, materials_res->allocation, 0, mat_upload_size);

@@ -43,6 +43,22 @@ struct MaterialData
     // uint32_t texture_idx_normalmap;
 };
 
+#define MAX_POINTLIGHTS 500
+#define MAX_SPOTLIGHTS  500
+struct PointLight
+{
+    vec4 pos_and_radius;
+    vec4 color_and_intensity;
+};
+
+struct SpotLight
+{
+    vec4 pos_and_radius;
+    vec4 color_and_intensity;
+    vec4 direction_and_cone_cutoff;
+    // TODO: For future shadow map cache, add a dirty bit for if it has moved
+};
+
 #ifndef IS_GLSL
     
     typedef struct PushConstant_DrawCall PushConstant_DrawCall;
@@ -50,6 +66,8 @@ struct MaterialData
     typedef struct ObjectData            ObjectData;
     typedef struct Vertex                Vertex;
     typedef struct MaterialData          MaterialData;
+    typedef struct PointLight            PointLight;
+    typedef struct SpotLight             SpotLight;
 
 #else
 
@@ -65,6 +83,11 @@ struct MaterialData
     layout (buffer_reference, scalar) readonly buffer MaterialBuffer
     {
         MaterialData materials[];
+    };
+    layout (buffer_reference, scalar) readonly bfufer LightsBuffer
+    {
+        PointLight pointlights[];
+        SpotLight  spotlights[];
     };
 
     // Pointer types for current mesh:

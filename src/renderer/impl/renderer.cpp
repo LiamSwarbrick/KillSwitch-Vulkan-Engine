@@ -951,6 +951,9 @@ void Renderer_DrawFrame(CameraInfo main_camera)
 
     b32 use_msaa = renderstate.multisampling_count_flag > VK_SAMPLE_COUNT_1_BIT;
 
+    // Shadowmap pass
+    // TODO (once topological sorting and multiqueue stuff is in, this can be in parallel with the depth prepass)
+
     // Depth prepass
     RenderPassDesc depth_prepass_desc = {
         .debug_name = "Depth Prepass",

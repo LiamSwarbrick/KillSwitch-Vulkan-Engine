@@ -18,7 +18,8 @@ typedef struct ResourceIDs
     uint32_t scenes_buffer_rid;
     uint32_t objects_buffer_rid;
     uint32_t joints_buffer_rid;
-    uint32_t material_ssbo_rid;
+    uint32_t materials_buffer_rid;
+    uint32_t lights_buffer_rid;
 
     // Window Dependent
     uint32_t swapchain_image_rids[MAX_SWAPCHAIN_IMAGE_COUNT];
