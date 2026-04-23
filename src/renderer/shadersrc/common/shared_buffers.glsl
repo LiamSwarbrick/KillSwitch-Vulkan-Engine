@@ -84,7 +84,7 @@ struct SpotLight
     {
         MaterialData materials[];
     };
-    layout (buffer_reference, scalar) readonly bfufer LightsBuffer
+    layout (buffer_reference, scalar) readonly buffer LightsBuffer
     {
         PointLight pointlights[];
         SpotLight  spotlights[];

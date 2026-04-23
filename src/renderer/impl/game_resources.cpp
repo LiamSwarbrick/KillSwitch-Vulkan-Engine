@@ -208,7 +208,7 @@ void create_startup_resources()
                    | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT
                    | VK_BUFFER_USAGE_TRANSFER_DST_BIT
         },
-        is_buffer_cpu_accessible = 1
+        .is_buffer_cpu_accessible = 1
     };
     renderstate.rids.lights_buffer_rid = FG_CreateResource(
         "LightsBuffer", FG_RESOURCE_TYPE_BUFFER, flags, &lights_info
