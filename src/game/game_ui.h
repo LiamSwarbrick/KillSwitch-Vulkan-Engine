@@ -1,15 +1,11 @@
 #pragma once
 
-// ============================================================
-//  Game UI — state machine + ImGui menus
-//
 //  Usage (in main loop):
 //    GameUI_Init();
 //    // per-frame:
 //    GameUI_Update();           // handle input shortcuts (ESC to pause etc.)
 //    GameUI_BuildImGui();       // call inside DebugUI_SetImGuiCallback
 //    GameState s = GameUI_GetState();
-// ============================================================
 
 enum class GameState
 {

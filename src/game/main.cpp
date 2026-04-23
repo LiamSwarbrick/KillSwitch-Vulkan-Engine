@@ -10,69 +10,6 @@
 #include "SDL3/SDL.h"
 #include "SDL3/SDL_main.h"
 
-static FreeCamState g_free_cam;
-
-CameraInfo temp_camera(float dt)
-{
-    FreeCamState& cam = g_free_cam;
-    glm::vec3& pos    = cam.pos;
-    float&     yaw    = cam.yaw;
-    float&     pitch  = cam.pitch;
-
-    static constexpr float MOUSE_SENSITIVITY  = 0.10f;   // degrees per pixel
-    static constexpr float GAMEPAD_LOOK_SPEED = 120.0f;  // degrees per second at full deflection
-    static constexpr float MOVE_SPEED         = 5.0f;    // units per second
-    static constexpr float SPRINT_MULTIPLIER  = 4.0f;
-
-    // --- ROTATION: mouse delta (disabled when debug UI is open) + right stick ---
-    if (!DebugUI_IsOpen())
-    {
-        float mouse_dx, mouse_dy;
-        Input_GetMouseDelta(&mouse_dx, &mouse_dy);
-        yaw   +=  mouse_dx * MOUSE_SENSITIVITY;
-        pitch -=  mouse_dy * MOUSE_SENSITIVITY;  // inverted: mouse up = look up
-    }
-
-    yaw   += (Input_GetActionValue(ACTION_CAMERA_RIGHT) - Input_GetActionValue(ACTION_CAMERA_LEFT)) * GAMEPAD_LOOK_SPEED * dt;
-    pitch += (Input_GetActionValue(ACTION_CAMERA_UP)    - Input_GetActionValue(ACTION_CAMERA_DOWN)) * GAMEPAD_LOOK_SPEED * dt;
-
-    if (pitch >  89.0f) pitch =  89.0f;
-    if (pitch < -89.0f) pitch = -89.0f;
-
-    // --- DIRECTION VECTOR ---
-    glm::vec3 forward;
-    forward.x = cos(glm::radians(yaw)) * cos(glm::radians(pitch));
-    forward.y = sin(glm::radians(pitch));
-    forward.z = sin(glm::radians(yaw)) * cos(glm::radians(pitch));
-    forward = glm::normalize(forward);
-
-    glm::vec3 right = glm::normalize(glm::cross(forward, glm::vec3(0.0f, 1.0f, 0.0f)));
-    glm::vec3 up = glm::vec3(0.0f, 1.0f, 0.0f);
-
-    // --- MOVEMENT: free-cam, WASD + E/Q, full forward including pitch ---
-    float speed = MOVE_SPEED * dt;
-    if (Input_IsActionPressed(ACTION_SPRINT)) speed *= SPRINT_MULTIPLIER;
-
-    pos += forward * (Input_GetActionValue(ACTION_MOVE_FORWARD)  * speed);
-    pos -= forward * (Input_GetActionValue(ACTION_MOVE_BACKWARD) * speed);
-    pos -= right   * (Input_GetActionValue(ACTION_MOVE_LEFT)     * speed);
-    pos += right   * (Input_GetActionValue(ACTION_MOVE_RIGHT)    * speed);
-    pos += up      * (Input_GetActionValue(ACTION_MOVE_UP)       * speed);
-    pos -= up      * (Input_GetActionValue(ACTION_MOVE_DOWN)     * speed);
-
-    // --- VIEW MATRIX ---
-    cam.forward = forward;
-    glm::mat4 view = glm::lookAt(pos, pos + forward, up);
-
-    CameraInfo result = {
-        .view = view,
-        .position = pos,
-        .lense_distortion = 0.0f
-    };
-    DebugUI_SetFreeCamState(&g_free_cam);
-    return result;
-}
-
 int main(int argc, char *argv[])
 {
     bool enabled_validation_layers = true;
@@ -241,7 +178,7 @@ int main(int argc, char *argv[])
         {
             scene.Render();
 
-            Renderer_DrawFrame(temp_camera(dt));
+            Renderer_DrawFrame(DebugUI_GetCameraInfo(dt));
         }
     }
 

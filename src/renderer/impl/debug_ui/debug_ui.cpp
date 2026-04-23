@@ -5,18 +5,6 @@ DebugUI::DebugUIState debug_ui_state;
 ECS*                  debug_ecs_ptr   = nullptr;
 Asset*                debug_asset_ptr = nullptr;
 
-static FreeCamState s_free_cam_snapshot = {};
-
-void DebugUI_SetFreeCamState(const FreeCamState* state)
-{
-    if (state) s_free_cam_snapshot = *state;
-}
-
-const FreeCamState* DebugUI_GetFreeCamState()
-{
-    return &s_free_cam_snapshot;
-}
-
 void DebugUI_SetECS(ECS* ecs)
 {
     debug_ecs_ptr = ecs;
@@ -37,4 +25,9 @@ void DebugUI_SetImGuiCallback(DebugUI_ImGuiBuildCallback callback, void* user_da
 bool DebugUI_IsOpen()
 {
     return debug_ui_state.show_debug_ui;
+}
+
+CameraInfo DebugUI_GetCameraInfo(float dt)
+{
+    return DebugUI::FreeCam_Update(debug_ui_state.free_cam, dt);
 }
