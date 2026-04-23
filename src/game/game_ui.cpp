@@ -1,5 +1,6 @@
 #include "game_ui.h"
 #include "core/input.h"
+#include "renderer/debug_ui_api.h"
 
 #include "imgui.h"
 
@@ -203,6 +204,10 @@ void GameUI_Update()
 
 void GameUI_BuildImGui()
 {
+    // When the debug UI is open the game viewport is a sub-window;
+    // skip fullscreen overlays so the 3D scene stays visible there.
+    if (DebugUI_IsOpen()) return;
+
     switch (s_state)
     {
     case GameState::MainMenu: DrawMainMenu(); break;
