@@ -552,7 +552,12 @@ void Renderer_Init(const Renderer_InitInfo* info)
     // Init renderables arena (per frame lifetime)
     renderstate.renderables_arena = (RenderView){
         .num_renderables = 0,
-        .items = (Renderable*)L_calloc(MAX_RENDERED_OBJECTS, sizeof(Renderable), &renderstate.main.tt)
+        .items = (Renderable*)L_calloc(MAX_RENDERED_OBJECTS, sizeof(Renderable), &renderstate.main.tt),
+
+        .num_point_lights = 0,
+        .num_spot_lights = 0,
+        .point_lights = (PointLight*)L_calloc(MAX_POINTLIGHTS, sizeof(PointLight), &renderstate.main.tt),
+        .spot_lights  =  (SpotLight*)L_calloc(MAX_SPOTLIGHTS, sizeof(SpotLight), &renderstate.main.tt)
     };
 
     // Init per frame structures (except for swapchain_image_acquired_semaphore, which is handled by create_or_recreate_swapchain)
@@ -666,6 +671,8 @@ void Renderer_Shutdown()
     }
 
     L_free(renderstate.renderables_arena.items, &renderstate.main.tt);
+    L_free(renderstate.renderables_arena.point_lights, &renderstate.main.tt);
+    L_free(renderstate.renderables_arena.spot_lights, &renderstate.main.tt);
     DestroyDrawCallCollections();
 
     // Shutdown Pipeline Keying and Frame Graph subsystems
@@ -834,6 +841,47 @@ void Renderer_PushRenderable(Renderable renderable)
     renderstate.renderables_arena.items[renderstate.renderables_arena.num_renderables++] = renderable;
 }
 
+void Renderer_PushLight(C_Light light, glm::vec3 position, glm::vec3 direction)
+{
+    switch (light.type)
+    {
+    case LIGHT_COMPONENT_POINTLIGHT:
+        {
+            SDL_assert(renderstate.renderables_arena.num_point_lights + 1 < MAX_POINTLIGHTS);
+
+            glm::vec4 pos_and_radius = glm::vec4(position.x, position.y, position.z, get_light_radius(light.color, light.intensity));
+            glm::vec4 color_and_intensity = glm::vec4(light.color.x, light.color.y, light.color.z, light.intensity);
+
+            PointLight pl = {};
+            memcpy(&pl.pos_and_radius, glm::value_ptr(pos_and_radius), sizeof(glm::vec4));
+            memcpy(&pl.color_and_intensity, glm::value_ptr(color_and_intensity), sizeof(glm::vec4));
+
+            renderstate.renderables_arena.point_lights[renderstate.renderables_arena.num_point_lights++] = pl;
+        }
+        break;
+        
+    case LIGHT_COMPONENT_SPOTLIGHT:
+        {
+            SDL_assert(renderstate.renderables_arena.num_spot_lights + 1 < MAX_SPOTLIGHTS);
+
+            glm::vec4 pos_and_radius = glm::vec4(position.x, position.y, position.z, get_light_radius(light.color, light.intensity));
+            glm::vec4 color_and_intensity = glm::vec4(light.color.x, light.color.y, light.color.z, light.intensity);
+
+            SpotLight sl = {};
+            memcpy(&sl.pos_and_radius, glm::value_ptr(pos_and_radius), sizeof(glm::vec4));
+            memcpy(&sl.color_and_intensity, glm::value_ptr(color_and_intensity), sizeof(glm::vec4));
+            memcpy(&sl.direction, glm::value_ptr(direction), sizeof(glm::vec3));
+            sl.inner_cone_angle = light.spot_inner_cone_angle;
+            sl.outer_cone_angle = light.spot_outer_cone_angle;
+
+            renderstate.renderables_arena.spot_lights[renderstate.renderables_arena.num_spot_lights++] = sl;
+        }
+        break;
+        
+        default: SDL_assert(0 && "Invalid light type"); abort();
+    }
+}
+
 void Renderer_DrawFrame(CameraInfo main_camera)
 {
     /*  Get current swapchain image, and wait on sync structures
@@ -924,6 +972,8 @@ void Renderer_DrawFrame(CameraInfo main_camera)
     
     // Reset renderables arena head for next frame
     renderstate.renderables_arena.num_renderables = 0;
+    renderstate.renderables_arena.num_point_lights = 0;
+    renderstate.renderables_arena.num_spot_lights = 0;
 
     // Set main camera
     renderstate.main_camera = main_camera;

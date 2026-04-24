@@ -4,6 +4,7 @@
 // NOTE: Must not include internal_state.h
 #include "core/core.h"
 #include "vulkan_wrapper.h"
+#include "renderer/shadersrc/common/shared.glsl"
 
 #define MAX_SWAPCHAIN_IMAGE_COUNT 10
 #define NUM_FRAMES_IN_FLIGHT 2
@@ -73,6 +74,11 @@ typedef struct RenderView
 {
     uint32_t num_renderables;
     Renderable* items;
+
+    uint32_t num_point_lights;
+    uint32_t num_spot_lights;
+    PointLight* point_lights;
+    SpotLight* spot_lights;
 }
 RenderView;
 

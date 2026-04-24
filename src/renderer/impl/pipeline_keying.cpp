@@ -296,8 +296,7 @@ VkPipeline create_graphics_pipeline(PipelineKey key)
     pipe_info.pDynamicState       = &dyn_info;
     pipe_info.layout              = renderstate.global_pipeline_layout;
     
-
-    
+    printf("ASHFIAEHFGOHWAEG\n");
 
     VkPipeline new_pipeline;
     VK_CHECK(vkCreateGraphicsPipelines(renderstate.device, VK_NULL_HANDLE, 1, &pipe_info, nullptr, &new_pipeline));

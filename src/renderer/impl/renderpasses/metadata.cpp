@@ -28,11 +28,15 @@ SceneData MakeSceneData(CameraInfo cam, VkExtent2D extents)
     memcpy(data.view, glm::value_ptr(cam.view), sizeof(glm::mat4));
     memcpy(data.proj, glm::value_ptr(proj), sizeof(glm::mat4));
     memcpy(data.view_proj, glm::value_ptr(view_proj), sizeof(glm::mat4));
+
     memcpy(data.cam_position, glm::value_ptr(cam.position), sizeof(glm::vec3));
     data.time = (float)((double)SDL_GetTicks() / 1000.0);
+
     data.near_plane = near_plane;
     data.far_plane = far_plane;
     data.aspect = aspect;
+    data.lens_distortion = cam.lens_distortion;
+
     memcpy(data.rendertarget_size, glm::value_ptr(extents_uvec2), sizeof(glm::uvec2));
 
     return data;

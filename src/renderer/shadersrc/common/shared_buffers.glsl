@@ -1,6 +1,8 @@
 #ifndef SHADERSRC_SHARED_BUFFERS_GLSL
 #define SHADERSRC_SHARED_BUFFERS_GLSL
 
+#include "shared_lighting.glsl"
+
 /*  NOTE: Scalar block layout,
     but for performance I may throw some padding in anyway :)
 */
@@ -10,11 +12,15 @@ struct SceneData
     mat4 view;
     mat4 proj;
     mat4 view_proj;
+
     vec3 cam_position;
     float time;
+
     float near_plane;
     float far_plane;
     float aspect;
+    float lens_distortion;  // Negative = wide-angle (none=0.0, subtle fish-eye=-0.03)
+
     uvec2 rendertarget_size;
 };
 
@@ -43,24 +49,8 @@ struct MaterialData
     // uint32_t texture_idx_normalmap;
 };
 
-#define MAX_POINTLIGHTS 500
-#define MAX_SPOTLIGHTS  500
-struct PointLight
-{
-    vec4 pos_and_radius;
-    vec4 color_and_intensity;
-};
-
-struct SpotLight
-{
-    vec4 pos_and_radius;
-    vec4 color_and_intensity;
-    vec4 direction_and_cone_cutoff;
-    // TODO: For future shadow map cache, add a dirty bit for if it has moved
-};
-
 #ifndef IS_GLSL
-    
+
     typedef struct PushConstant_DrawCall PushConstant_DrawCall;
     typedef struct SceneData             SceneData;
     typedef struct ObjectData            ObjectData;
@@ -86,8 +76,7 @@ struct SpotLight
     };
     layout (buffer_reference, scalar) readonly buffer LightsBuffer
     {
-        PointLight pointlights[];
-        SpotLight  spotlights[];
+        LightsData lights_data;
     };
 
     // Pointer types for current mesh:

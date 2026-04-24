@@ -18,6 +18,24 @@ struct C_StaticMesh
     MeshPrefab renderer_prefab;  // Loaded by renderer (empty before that)
 };
 
+typedef enum LightComponentType
+{
+	LIGHT_COMPONENT_POINTLIGHT,
+	LIGHT_COMPONENT_SPOTLIGHT
+}
+LightComponentType;
+
+// NOTE:
+// The direction of the spotlight is along the local Z axis
+// The light component's parent entity defines it transform.
+struct C_Light
+{
+	LightComponentType type;
+	glm::vec3 color;
+	float intensity;
+	float spot_inner_cone_angle;  // <- Spotlights only
+	float spot_outer_cone_angle;
+};
 
 // stores layer animation state
 struct AnimationLayer {

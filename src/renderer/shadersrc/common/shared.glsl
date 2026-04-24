@@ -23,6 +23,7 @@
 #include "shared_constants.glsl"
 #include "shared_buffers.glsl"
 #include "shared_push_constants.glsl"
+#include "shared_lighting.glsl"
 #include "sampler_indices.glsl"
 
 // Include vertex fetch for vertex shaders and material read for frag shader

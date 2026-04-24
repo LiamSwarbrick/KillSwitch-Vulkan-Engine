@@ -57,7 +57,7 @@ CameraInfo temp_camera()
     return {
         .view = view,
         .position = pos,
-        .lense_distortion = 0.0f
+        .lens_distortion = -0.03f  // <- Subtle fish eye lens
     };
 }
 
@@ -204,7 +204,7 @@ int main(int argc, char *argv[])
         if (!(flags & SDL_WINDOW_MINIMIZED))
         {
             scene.Render();
-
+            
             Renderer_DrawFrame(temp_camera());
         }
     }

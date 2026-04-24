@@ -167,9 +167,10 @@ void create_startup_resources()
     ResourceCreateInfo joints_info = {
         .buffer_create_info = {
             .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
-            // Alignment: mat4 is obviously 64 byte aligned, so each object's joint transforms have no padding between them.
-            //      But just to be clear I've included the differences between different object's joint arrays 
-            //      (but Padded(mat4)-mat4 = 0 so it cancel out due to 64 byte alignment and 64 byte size of mat4)
+            // NOTE: Each objects joint transforms are contiguous. But subsequent objects are pushed with seperate PushToMappedArena calls.
+            // Obviously mat4 is 64 byte aligned so there is technically no padding between adjacent object's joint arrays.
+            // But just to be clear I've included the differences between different object's joint arrays 
+            // (but Padded(mat4)-mat4 = 0 so it cancel out due to 64 byte alignment and 64 byte size of mat4)
             .size = MAX_JOINTS_FOR_ALL_OBJECTS * sizeof(glm::mat4) + MAX_RENDERED_OBJECTS*(PaddedSizeForMappedArena(sizeof(glm::mat4))-sizeof(glm::mat4)),
             .usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT
                 | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT
@@ -197,13 +198,12 @@ void create_startup_resources()
     renderstate.rids.materials_buffer_rid = FG_CreateResource(
         "MaterialBuffer", FG_RESOURCE_TYPE_BUFFER, flags, &mat_info
     );
-    
 
     // Lights Buffer (Uploaded once per frame all at once) (packed array)
     ResourceCreateInfo lights_info = {
         .buffer_create_info = {
             .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
-            .size  = sizeof(PointLight) * MAX_POINTLIGHTS + sizeof(SpotLight) * MAX_SPOTLIGHTS,
+            .size  = sizeof(LightsData),
             .usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT
                    | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT
                    | VK_BUFFER_USAGE_TRANSFER_DST_BIT

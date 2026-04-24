@@ -5,7 +5,6 @@
 #include "internal_structs.h"
 #include "framegraph.h"
 
-#define PIPELINE_HASING_IMPLEMENTATION
 #include "pipeline_keying.h"
 
 #include "shaders.h"

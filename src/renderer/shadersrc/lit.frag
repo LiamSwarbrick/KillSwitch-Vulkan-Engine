@@ -12,34 +12,32 @@ layout (location = 0) out vec4 out_color;
 
 #define IS_CHARACTER (CURRENT_VERTEX_TYPE == VERTEX_TYPE_SKINNED)
 
-vec3 spectral_rainbow(float t)  // TODO: <- Use this for metal materials to create an rainbow shine
+// TODO: Use a spectral specular highlight for metal materials to create an rainbow shine
+vec3 spectral_rainbow(float t)
 {
     vec3 c = 0.5 + 0.5 * cos(6.28318 * (t + vec3(0.0, 0.33, 0.67)));
     return c;
 }
 
-vec3 ground_brdf(vec3 N, vec3 V, vec3 light_pos)
-{
-    vec3 L = normalize(light_pos - world_pos);
-    float half_lambert = max(dot(N, L), 0.0);// * 0.5 + 0.5;
-    float rim = 1.0 - max(dot(V, N), 0.0);
-    rim = pow(rim, 4.0);
-
-    return vec3(half_lambert);// + rim * spectral_rainbow(half_lambert);
-}
-
-vec3 toon_brdf(vec3 N, vec3 V, vec3 light_pos)
+vec3 ground_brdf(vec3 N, vec3 V, vec3 L)
 {
     // Half-Lambert: https://developer.valvesoftware.com/wiki/Half_Lambert
-    // NOTE: Not using half lambert anymore because it's better for that horror aestetic.
-    // float half_lambert = max(dot(N, L), 0.0);  // * 0.5 + 0.5
-    // float lambert = max(dot(N, L), 0.0);
+    // NOTE: Not using half lambert anymore because it's too bright for that horror aestetic.
+    //   half_lambert = dot(N, L) * 0.5 + 0.5
+    //   lambert      = max(dot(N, L), 0.0)
 
-    vec3 L = normalize(light_pos - world_pos);
-    
+    float brdf = dot(N, L) * 0.5 + 0.5;   // Half lambert
+    return vec3(brdf);
+
+    // float rim = pow(1.0 - half_lambert, 4.0);
+    // brdf += rim;  // rim * spectral_rainbow(half_lambert);
+}
+
+vec3 toon_brdf(vec3 N, vec3 V, vec3 L)
+{
     float toon;
-    float x = dot(N, L);
-    if (x < -0.4)         // <- Wraps around a bit more (kinda inspired by half lambert)
+    float x = dot(N, L);  //    Not clamping dot product so we can wrap it around more
+    if (x < -0.4)         // <- (inspired by half lambert)
         toon = 0.05;
     else if (x < 0.25)
         toon = 0.2;
@@ -51,14 +49,19 @@ vec3 toon_brdf(vec3 N, vec3 V, vec3 light_pos)
     return vec3(toon);
 }
 
+#if 0
 vec3 compute_direct_light(vec3 N, vec3 eye)
 {
+    vec3 V = normalize(eye - world_pos);
+
+
     vec3 light = vec3(0.0);
+
 
     // For each light
     // TODO: When adding lights in, also change the phase function in fog
     {
-        vec3 V = normalize(eye - world_pos);
+        
 
         // TEMP: 1 light, with lambert shading (meh) (replace later)
         vec3 light_pos = vec3(4.0, 2.0, 1.0);
@@ -67,16 +70,12 @@ vec3 compute_direct_light(vec3 N, vec3 eye)
         float light_intensity = 10.0;
 
         vec3 brdf;
+        vec3 L = normalize(light_pos - world_pos);
+
         if (IS_CHARACTER)
-        {
-            brdf = toon_brdf(N, V, light_pos);
-            // brdf = ground_brdf(N, V, light_pos);
-        }
+            brdf = toon_brdf(N, V, L);
         else
-        {
-            // brdf = toon_brdf(N, V, light_pos);
-            brdf = ground_brdf(N, V, light_pos);
-        }
+            brdf = ground_brdf(N, V, L);
 
         vec3 point_light = brdf * light_color * light_intensity;
         float dist = length(light_pos - world_pos);
@@ -86,6 +85,7 @@ vec3 compute_direct_light(vec3 N, vec3 eye)
 
     return light;
 }
+#endif
 
 #if 0
 vec3 compute_ambient_light(vec3 N)
@@ -144,20 +144,62 @@ void main()
     // Dithering (not a postprocess pass bcuz it's not about pixely rendering)
     float dither_scale = float(scene.rendertarget_size.y) / 270.0;  // <- Basically, dither as if 270p
     float dith_threshold = dither_threshold(gl_FragCoord.xy / dither_scale);
-    vec2 st = uv;
-    vec2 dither_uv_offset = (vec2(dith_threshold) - 0.5) * (1.0 / texture2d_size(mat.texture_idx_basecolor));
-    st += dither_uv_offset;
-
-    vec4 base_color     = sample_texture2d_with_fallback(st, mat.texture_idx_basecolor, mat.sampler_idx, mat.base_color);
-    vec4 emissive_color = sample_texture2d_with_fallback(st, mat.texture_idx_emissive,  mat.sampler_idx, vec4(mat.emissive_factor, 1.0));
+    vec4 base_color     = sample_texture2d_with_fallback(uv, mat.texture_idx_basecolor, mat.sampler_idx, mat.base_color);
+    vec4 emissive_color = sample_texture2d_with_fallback(uv, mat.texture_idx_emissive,  mat.sampler_idx, vec4(mat.emissive_factor, 1.0));
     // base_color = vec4(1.0);
+    
+    // Shadow maps?
+    // TODO
+
+    // Lighting
+    LightsData lighting = LightsBuffer(push.dc.lights_ptr).lights_data;
 
     vec3 N = normalize(world_normal);
-    const vec3 direct_light = compute_direct_light(N, scene.cam_position);
+    vec3 V = normalize(scene.cam_position - world_pos);
+    
+    vec3 direct_light = vec3(0.);
+#if 1
+    // NOTE: Only computing brdf for close enough lights
+    //       But looping over all of them is not scalable (but no time for clusters at the mo)
+    for (uint i = 0; i < lighting.num_point_lights; ++i)
+    {
+        PointLight pl = lighting.point_lights[i];
+
+        vec3 frag_to_light = pl.pos_and_radius.xyz - world_pos;
+        vec3 L = normalize(frag_to_light);
+
+        if (length(frag_to_light) < pl.pos_and_radius.w)
+        {
+            vec3 brdf;
+            if (IS_CHARACTER)
+            {
+                brdf = toon_brdf(N, V, L);
+            }
+            else
+            {
+                brdf = ground_brdf(N, V, L);
+            }
+
+            vec3 pl_radiance = brdf * pl.color_and_intensity.rgb * pl.color_and_intensity.a;
+            float dist = length(pl.pos_and_radius.xyz - world_pos);
+            pl_radiance *= get_attenuation(dist);//  /= max(dist*dist, 1.0);
+            direct_light += pl_radiance;
+        }
+    }
+
+    for (uint i = 0; i < lighting.num_spot_lights; ++i)
+    {
+        SpotLight pl = lighting.spot_lights[i];
+        
+    }
+#endif
     vec3 ambient = vec3(0.);
     // vec3 ambient = compute_ambient_light(N);
     vec3 lit_rgb = (direct_light + ambient) * base_color.rgb + emissive_color.rgb;
 
+    // Already sampled the textured with a differed offset
+    // But need to slightly quantize the high frequency textures we are using
+    // so that toon shading looks better
     const float color_levels = 4.0;  // How many "shades" the texture can have
     vec3 tex_quantized = floor(base_color.rgb * color_levels) / color_levels;
     vec3 tex_remainder = fract(base_color.rgb * color_levels);

@@ -231,6 +231,7 @@ void ExecuteDraws(VkCommandBuffer cmd, PushConstant_PassHeader push_pass, uint64
         // Prepare the draw call part of Push Constants 
         push.dc.scene_ptr    = scene_ptr;
         push.dc.material_ptr = renderstate.registry.resources[renderstate.rids.materials_buffer_rid].buffer_gpu_address;
+        push.dc.lights_ptr   = renderstate.registry.resources[renderstate.rids.lights_buffer_rid].buffer_gpu_address;
         push.dc.object_ptr   = draw->dc.object_ptr;
         push.dc.joints_ptr = draw->dc.joints_ptr;
 
