@@ -404,7 +404,7 @@ Asset* load_asset(const char* filename) {
 
 		// Default to UNLIT, the component system will set the actual value based on the extras json
 		// mesh->mat_type = MAT_UNLIT;
-		#warning WHILE TESTING, DEFAULT TO LIT UNTIL WE SORT OUT LEVEL EDITOR
+		#warning remember to make material type selectable in level editor
 		mesh->mat_type = MAT_LIT;  // WARNING: ALSO REMEMBER BELOW I SET MAT_LIT_OUTLINE
 
 		for (size_t p = 0; p < mesh->primitive_count; p++) {

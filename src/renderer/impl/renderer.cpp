@@ -901,7 +901,8 @@ void Renderer_DrawFrame(CameraInfo main_camera)
 #ifdef NDEBUG
     sync_timeout_nanoseconds = UINT64_MAX;  // Wait forever in release mode
 #else
-    sync_timeout_nanoseconds = 1000000000UL;  // Only wait one second in debug mdoe to detect deadlocks/hangs
+    // sync_timeout_nanoseconds = 1000000000UL;  // Only wait one second in debug mdoe to detect deadlocks/hangs
+    sync_timeout_nanoseconds = 1000000000UL * 120;  // <- 2 mins in case some pipelines take rediculous amounts of time to build
 #endif
     VK_CHECK(vkWaitForFences(renderstate.device, 1, &renderstate.frames[frame_in_flight].rendering_complete_fence, VK_TRUE, sync_timeout_nanoseconds));
 

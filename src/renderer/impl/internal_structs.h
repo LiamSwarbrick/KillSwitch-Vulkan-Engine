@@ -74,7 +74,7 @@ typedef struct RenderView
 {
     uint32_t num_renderables;
     Renderable* items;
-
+    
     uint32_t num_point_lights;
     uint32_t num_spot_lights;
     PointLight* point_lights;

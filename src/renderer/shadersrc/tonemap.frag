@@ -1,7 +1,8 @@
 #version 460
 #extension GL_GOOGLE_include_directive : require
 #include "common/shared.glsl"
-#include "common/shared_material_read.glsl"
+
+#extension GL_EXT_samplerless_texture_functions : require
 
 layout (location = 0) in vec2 frag_uv;
 

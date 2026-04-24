@@ -5,7 +5,9 @@ struct PushConstant_DrawCall
 {
     uint64_t scene_ptr;     // Scene data (View/Proj)
     uint64_t material_ptr;  // Material SSBO address
-    uint64_t lights_ptr;    // LightsBuffer reference
+    uint64_t lights_header_ptr;
+    uint64_t point_lights_ptr;
+    uint64_t spot_lights_ptr;
 
     // Per mesh
     uint64_t object_ptr;    // Per-instance data (Model matrix)

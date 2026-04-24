@@ -51,6 +51,23 @@ void BeginDrawCalls()
 void EndDrawCalls()
 {
     renderstate.drawcalls_collection.is_currently_adding_drawcalls = 0;
+
+    // Upload lights
+    FG_Resource* lights_header_buf = &renderstate.registry.resources[renderstate.rids.lights_header_buffer_rid];
+    FG_Resource* pl_buf = &renderstate.registry.resources[renderstate.rids.point_lights_buffer_rid];
+    FG_Resource* sl_buf = &renderstate.registry.resources[renderstate.rids.spot_lights_buffer_rid];
+
+    LightsHeader header = {
+        .num_point_lights  = renderstate.renderables_arena.num_point_lights,
+        .num_spot_lights   = renderstate.renderables_arena.num_spot_lights
+    };
+    vmaCopyMemoryToAllocation(renderstate.vma_allocator, &header, lights_header_buf->allocation, 0, sizeof(LightsHeader));
+    vmaCopyMemoryToAllocation(renderstate.vma_allocator,
+        renderstate.renderables_arena.point_lights, pl_buf->allocation, 0, sizeof(PointLight) * header.num_point_lights
+    );
+    vmaCopyMemoryToAllocation(renderstate.vma_allocator,
+        renderstate.renderables_arena.spot_lights, sl_buf->allocation, 0, sizeof(SpotLight) * header.num_spot_lights
+    );
 }
 
 void AddDrawCall(Renderable* r)
@@ -231,9 +248,11 @@ void ExecuteDraws(VkCommandBuffer cmd, PushConstant_PassHeader push_pass, uint64
         // Prepare the draw call part of Push Constants 
         push.dc.scene_ptr    = scene_ptr;
         push.dc.material_ptr = renderstate.registry.resources[renderstate.rids.materials_buffer_rid].buffer_gpu_address;
-        push.dc.lights_ptr   = renderstate.registry.resources[renderstate.rids.lights_buffer_rid].buffer_gpu_address;
+        push.dc.lights_header_ptr  = renderstate.registry.resources[renderstate.rids.lights_header_buffer_rid].buffer_gpu_address;
+        push.dc.point_lights_ptr   = renderstate.registry.resources[renderstate.rids.point_lights_buffer_rid].buffer_gpu_address;
+        push.dc.spot_lights_ptr    = renderstate.registry.resources[renderstate.rids.spot_lights_buffer_rid].buffer_gpu_address;
         push.dc.object_ptr   = draw->dc.object_ptr;
-        push.dc.joints_ptr = draw->dc.joints_ptr;
+        push.dc.joints_ptr   = draw->dc.joints_ptr;
 
         // Prepare push constants draw call section
         push.dc.material_idx     = prim_rids->material_index;

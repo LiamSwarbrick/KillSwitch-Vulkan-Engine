@@ -199,19 +199,47 @@ void create_startup_resources()
         "MaterialBuffer", FG_RESOURCE_TYPE_BUFFER, flags, &mat_info
     );
 
-    // Lights Buffer (Uploaded once per frame all at once) (packed array)
-    ResourceCreateInfo lights_info = {
+    // Light Buffers (Uploaded once per frame all at once) (packed arrays)
+    ResourceCreateInfo lights_header_info = {
         .buffer_create_info = {
             .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
-            .size  = sizeof(LightsData),
+            .size  = sizeof(LightsHeader),
             .usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT
                    | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT
                    | VK_BUFFER_USAGE_TRANSFER_DST_BIT
         },
         .is_buffer_cpu_accessible = 1
     };
-    renderstate.rids.lights_buffer_rid = FG_CreateResource(
-        "LightsBuffer", FG_RESOURCE_TYPE_BUFFER, flags, &lights_info
+    renderstate.rids.lights_header_buffer_rid = FG_CreateResource(
+        "LightsHeaderBuffer", FG_RESOURCE_TYPE_BUFFER, flags, &lights_header_info
+    );
+
+    ResourceCreateInfo point_lights_info = {
+        .buffer_create_info = {
+            .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
+            .size  = sizeof(PointLight) * MAX_POINTLIGHTS,
+            .usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT
+                   | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT
+                   | VK_BUFFER_USAGE_TRANSFER_DST_BIT
+        },
+        .is_buffer_cpu_accessible = 1
+    };
+    renderstate.rids.point_lights_buffer_rid = FG_CreateResource(
+        "PointLightsBuffer", FG_RESOURCE_TYPE_BUFFER, flags, &point_lights_info
+    );
+
+    ResourceCreateInfo spot_lights_info = {
+        .buffer_create_info = {
+            .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
+            .size  = sizeof(SpotLight) * MAX_SPOTLIGHTS,
+            .usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT
+                   | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT
+                   | VK_BUFFER_USAGE_TRANSFER_DST_BIT
+        },
+        .is_buffer_cpu_accessible = 1
+    };
+    renderstate.rids.spot_lights_buffer_rid = FG_CreateResource(
+        "SpotLightsBuffer", FG_RESOURCE_TYPE_BUFFER, flags, &spot_lights_info
     );
 
 

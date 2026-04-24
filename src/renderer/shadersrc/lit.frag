@@ -136,6 +136,7 @@ vec3 apply_dithered_fog(
 
 void main()
 {
+#if 1
     SceneData scene  = SceneBuffer(push.dc.scene_ptr).scene;
 
     MaterialBuffer mb = MaterialBuffer(push.dc.material_ptr);
@@ -152,47 +153,49 @@ void main()
     // TODO
 
     // Lighting
-    LightsData lighting = LightsBuffer(push.dc.lights_ptr).lights_data;
-
     vec3 N = normalize(world_normal);
     vec3 V = normalize(scene.cam_position - world_pos);
-    
+
     vec3 direct_light = vec3(0.);
-#if 1
-    // NOTE: Only computing brdf for close enough lights
-    //       But looping over all of them is not scalable (but no time for clusters at the mo)
-    for (uint i = 0; i < lighting.num_point_lights; ++i)
-    {
-        PointLight pl = lighting.point_lights[i];
 
+    LightsHeader header = LightsHeaderBuffer(push.dc.lights_header_ptr).header;
+    PointLightBuffer pl_buf = PointLightBuffer(push.dc.point_lights_ptr);
+    SpotLightBuffer sl_buf  = SpotLightBuffer(push.dc.spot_lights_ptr);
+
+    // TODO: Tile/Clustered Shading
+    uint light_count = min(header.num_point_lights, 64u);
+    for (uint i = 0; i < light_count; ++i)
+    {
+        PointLight pl = pl_buf.point_lights[i];
         vec3 frag_to_light = pl.pos_and_radius.xyz - world_pos;
-        vec3 L = normalize(frag_to_light);
 
-        if (length(frag_to_light) < pl.pos_and_radius.w)
-        {
-            vec3 brdf;
-            if (IS_CHARACTER)
-            {
-                brdf = toon_brdf(N, V, L);
-            }
-            else
-            {
-                brdf = ground_brdf(N, V, L);
-            }
-
-            vec3 pl_radiance = brdf * pl.color_and_intensity.rgb * pl.color_and_intensity.a;
-            float dist = length(pl.pos_and_radius.xyz - world_pos);
-            pl_radiance *= get_attenuation(dist);//  /= max(dist*dist, 1.0);
-            direct_light += pl_radiance;
-        }
-    }
-
-    for (uint i = 0; i < lighting.num_spot_lights; ++i)
-    {
-        SpotLight pl = lighting.spot_lights[i];
+        if (length(frag_to_light) > pl.pos_and_radius.w)
+            continue;
         
+        vec3 L = normalize(frag_to_light);
+        vec3 brdf;
+        if (IS_CHARACTER)
+        {
+            brdf = toon_brdf(N, V, L);
+        }
+        else
+        {
+            brdf = ground_brdf(N, V, L);
+        }
+
+        vec3 pl_radiance = brdf * pl.color_and_intensity.rgb * pl.color_and_intensity.a;
+        float dist = length(pl.pos_and_radius.xyz - world_pos);
+        pl_radiance *= get_attenuation(dist);//  /= max(dist*dist, 1.0);
+        direct_light += pl_radiance;
     }
-#endif
+    
+    // TODO: Spotlights
+    // for (uint i = 0; i < lights_buf.data.num_spot_lights; ++i)
+    // {
+    //     SpotLight pl = lights_buf.data.spot_lights[i];
+        
+    // }
+
     vec3 ambient = vec3(0.);
     // vec3 ambient = compute_ambient_light(N);
     vec3 lit_rgb = (direct_light + ambient) * base_color.rgb + emissive_color.rgb;
@@ -225,6 +228,8 @@ void main()
         process_alpha(final_color.a, mat.alpha_cutoff)
     );
 
+#else
     // Normal shading
-    // out_color = vec4((N + 1.)/2., 1.0);
+    out_color = vec4((normalize(world_normal) + 1.)/2., 1.0);
+#endif
 }
