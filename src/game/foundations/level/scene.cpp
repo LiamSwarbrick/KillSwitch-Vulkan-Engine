@@ -115,6 +115,14 @@ EntityID Scene::InstantiatePrefab(Asset* prefab, glm::vec3 spawnPosition)
                 // 3.4 Finally add the component to the ECS!!!
                 m_ecs.AddComponent<C_Collider>(eID, std::move(colliderComponent));
             }
+
+            // TEMP LIGHTS:
+            m_ecs.AddComponent<C_Light>(eID, {
+                .type = LIGHT_COMPONENT_POINTLIGHT,
+                .color = glm::vec3(0.7f, 0.7f, 1.0f),
+                .intensity = 1.0f
+            });
+            /////////
         }
             // ---------------
             // -- TRANSFORM --
@@ -126,14 +134,6 @@ EntityID Scene::InstantiatePrefab(Asset* prefab, glm::vec3 spawnPosition)
             t.matrix = glm::translate(t.matrix, position);
             m_ecs.AddComponent<C_Transform>(eID, { t.matrix });
 
-
-            // TEMP LIGHTS:
-            m_ecs.AddComponent<C_Light>(eID, {
-                .type = LIGHT_COMPONENT_POINTLIGHT,
-                .color = glm::vec3(0.7f, 0.7f, 1.0f),
-                .intensity = 10.0f
-            });
-            /////////
 
         // -- MESH
         if (node->mesh_index >= 0)
