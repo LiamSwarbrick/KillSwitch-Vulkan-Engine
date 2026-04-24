@@ -33,22 +33,35 @@
 // Notice you have to add the type of the enum on every value,
 // For an alternative, read option 1 on core/utils/enum_reflection.h
 #define COLLIDER_TYPE_VALUES(X) \
+    X(COL_TYPE_NONE)               \
     X(COL_TYPE_BOX)                \
     X(COL_TYPE_SPHERE)             \
-    X(COL_TYPE_CAPSULE)            
+    X(COL_TYPE_CAPSULE)            \
+    X(COL_TYPE_CONVEX_HULL)                
 
 DECLARE_ENUM(ImportedColliderType, COLLIDER_TYPE_VALUES)
 
-#define COLLIDER_FIELDS(F)    \
+#define RIGIDBODY_FIELDS(F)    \
+    F(float, mass)   \
+    F(float, gravity_scale)   \
+    F(float, damping)   \
+    F(int, force_layers)   \
+    F(glm::vec3, collider_position_offset)   \
+    F(glm::quat, collider_rotation_offset)   \
     F(ImportedColliderType, collider_type)   \
     F(float, radius)  \
     F(glm::vec3, half_widths) \
-    F(float, height)
+    F(float, height) \
+    F(bool, is_static) \
+    F(bool, is_kinematic) \
+    F(bool, is_character) \
+    F(bool, is_trigger)
 
-DECLARE_COMPONENT_STRUCT(ImportedCollider, COLLIDER_FIELDS)
+DECLARE_COMPONENT_STRUCT(ImportedRigidbody, RIGIDBODY_FIELDS)
 
 #undef COLLIDER_TYPE_VALUES
-#undef COLLIDER_FIELDS
+#undef RIGIDBODY_FIELDS
+
 
 
 #endif // !FOUNDATIONS_BLENDER_COMPONENTS_H

@@ -3,8 +3,8 @@
 SDL_Window* Core_Init(Core_InitInfo init_info)
 {
     bool success = SDL_Init(
-        SDL_INIT_VIDEO
-        // | SDL_INIT_AUDIO | SDL_INIT_GAMEPAD
+        SDL_INIT_VIDEO | SDL_INIT_GAMEPAD
+        // | SDL_INIT_AUDIO 
     );
     if (!success)
     {
