@@ -12,12 +12,11 @@ layout (location = 0) out vec4 out_color;
 
 #define IS_CHARACTER (CURRENT_VERTEX_TYPE == VERTEX_TYPE_SKINNED)
 
-vec3 spectral_rainbow(float t)
+vec3 spectral_rainbow(float t)  // TODO: <- Use this for metal materials to create an rainbow shine
 {
     vec3 c = 0.5 + 0.5 * cos(6.28318 * (t + vec3(0.0, 0.33, 0.67)));
     return c;
 }
-
 
 vec3 ground_brdf(vec3 N, vec3 V, vec3 light_pos)
 {
@@ -26,24 +25,21 @@ vec3 ground_brdf(vec3 N, vec3 V, vec3 light_pos)
     float rim = 1.0 - max(dot(V, N), 0.0);
     rim = pow(rim, 4.0);
 
-    return vec3(half_lambert) + rim * spectral_rainbow(half_lambert);
+    return vec3(half_lambert);// + rim * spectral_rainbow(half_lambert);
 }
 
 vec3 toon_brdf(vec3 N, vec3 V, vec3 light_pos)
 {
     // Half-Lambert: https://developer.valvesoftware.com/wiki/Half_Lambert
     // NOTE: Not using half lambert anymore because it's better for that horror aestetic.
+    // float half_lambert = max(dot(N, L), 0.0);  // * 0.5 + 0.5
+    // float lambert = max(dot(N, L), 0.0);
 
     vec3 L = normalize(light_pos - world_pos);
-    // float half_lambert = max(dot(N, L), 0.0);  // * 0.5 + 0.5
-
+    
     float toon;
     float x = dot(N, L);
-    // if (x < -0.4)
-    //     toon = 0.0;
-    // else if (x < 0.05)
-    //     toon = 0.05;
-    if (x < -0.4)
+    if (x < -0.4)         // <- Wraps around a bit more (kinda inspired by half lambert)
         toon = 0.05;
     else if (x < 0.25)
         toon = 0.2;
@@ -52,18 +48,7 @@ vec3 toon_brdf(vec3 N, vec3 V, vec3 light_pos)
     else
         toon = 1.0;
 
-    
     return vec3(toon);
-
-    // // Add a tiny bit of rim light
-    // float rim = 1.0 - max(dot(V, N), 0.0);
-    // rim = pow(rim, 4.0);
-
-    // rim = 0.0;
-    // return vec3(toon + rim * 0.5);
-    // return abs(vec3(toon) - rim * (1.0 - toon) * spectral_rainbow(1.0 - rim));
-    // return vec3(toon) * mix(vec3(1.0), mix(spectral_rainbow(toon), spectral_rainbow(rim), toon), 1.0 * rim);
-    // return vec3(toon) * mix(vec3(1.0), 0.5 + 0.5 * spectral_rainbow(rim), 1.0 * rim);
 }
 
 vec3 compute_direct_light(vec3 N, vec3 eye)
@@ -102,15 +87,18 @@ vec3 compute_direct_light(vec3 N, vec3 eye)
     return light;
 }
 
+#if 0
 vec3 compute_ambient_light(vec3 N)
 // {return vec3(0.0);
 {
-    // Simple SH approximation: Sky color from top, Ground color from bottom
+    // NOTE: Not using ambient term anymore, it's too bright.
+    // SH approximation: Sky color from top, Ground color from bottom
     vec3 sky_color = vec3(0.1, 0.1, 0.15);
     vec3 ground_color = vec3(0.05, 0.04, 0.03);
     float hemisphere = dot(N, vec3(0, 1, 0)) * 0.5 + 0.5;
     return mix(ground_color, sky_color, hemisphere);
 }
+#endif
 
 float dither_threshold(vec2 screen_pos)
 {
@@ -122,7 +110,6 @@ float dither_threshold(vec2 screen_pos)
         15, 7,  13, 5
     );
     
-    // Map screen coordinates to 0-3 range
     int x = int(mod(screen_pos.x, 4.0));
     int y = int(mod(screen_pos.y, 4.0));
     
@@ -171,7 +158,7 @@ void main()
     // vec3 ambient = compute_ambient_light(N);
     vec3 lit_rgb = (direct_light + ambient) * base_color.rgb + emissive_color.rgb;
 
-    const float color_levels = 4.0; // How many "shades" the texture can have
+    const float color_levels = 4.0;  // How many "shades" the texture can have
     vec3 tex_quantized = floor(base_color.rgb * color_levels) / color_levels;
     vec3 tex_remainder = fract(base_color.rgb * color_levels);
 

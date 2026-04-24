@@ -1044,7 +1044,6 @@ void Renderer_DrawFrame(CameraInfo main_camera)
     // Bloom
     #warning TODO: Add in bloom passes
 
-
     // PostProcess Tone-mapping and Lens Effect
     FullscreenPass_UserData tonemap_pass_user_data = {
         .shader_id = SHADER_TONEMAP 
