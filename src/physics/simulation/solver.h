@@ -11,7 +11,7 @@ public:
 
 private:
 	inline void resolveInterpenetration(const Contact& contact, float dt);
-
+	inline void resolveVelocities(const Contact& contact, float dt);
 };
 
 #endif // !PHYSICS_SIMULATION_SOLVER_H
