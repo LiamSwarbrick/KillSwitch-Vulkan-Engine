@@ -90,7 +90,7 @@ int main(int argc, char *argv[])
     };
     Renderer_Init(&renderer_info);
 
-    AudioSystem audio_system = AudioSystem_Create((AudioSystemCreateInfo){
+    /*AudioSystem audio_system = AudioSystem_Create((AudioSystemCreateInfo){
         .debug_name = "GameAudio",
         .initial_capacity = 8,
         .master_volume = 1.0f
@@ -132,7 +132,7 @@ int main(int argc, char *argv[])
     else
     {
         SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "AudioSystem: failed to load startup test SFX.");
-    }
+    }*/
 
     // Dunno whether this resource manager will end up in the final build, if no one is integrating it due to more important tasks
 
@@ -257,7 +257,7 @@ int main(int argc, char *argv[])
 
         // Game ticks
         scene.Update(dt);
-        AudioSystem_Update(&audio_system, dt);
+        //AudioSystem_Update(&audio_system, dt);
 
         // Rendering
         uint32_t flags = SDL_GetWindowFlags(window);
@@ -270,7 +270,7 @@ int main(int argc, char *argv[])
     }
 
     scene.Shutdown();
-    AudioSystem_Destroy(&audio_system);
+    //AudioSystem_Destroy(&audio_system);
     Renderer_Shutdown();
     Core_Shutdown(window);
 
