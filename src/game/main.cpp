@@ -269,19 +269,24 @@ int main(int argc, char *argv[])
             game_tp_cam = *debug_tp_cam;
 
         DebugUICameraMode gameplay_camera_mode = DebugUI_GetGameplayCameraMode();
+        DebugUICameraMode debug_camera_mode = DebugUI_GetCameraMode();
+        DebugUICameraMode active_fp_tp_mode = debug_ui_open ? debug_camera_mode : gameplay_camera_mode;
 
         // In debug mode, RMB drag still drives look even outside normal playing state.
         bool allow_mouse_look = (is_playing && !debug_ui_open) || (debug_ui_open && right_mouse_down);
 
-        // Only the active gameplay camera consumes look input each frame.
-        bool fp_allow_mouse_look = allow_mouse_look && gameplay_camera_mode == DebugUICameraMode::FPCam;
-        bool tp_allow_mouse_look = allow_mouse_look && gameplay_camera_mode == DebugUICameraMode::TPCam;
+        // The active FP/TP mode depends on context: debug camera mode when UI is open, gameplay mode otherwise.
+        bool fp_active = active_fp_tp_mode == DebugUICameraMode::FPCam;
+        bool tp_active = active_fp_tp_mode == DebugUICameraMode::TPCam;
+
+        bool fp_allow_mouse_look = allow_mouse_look && fp_active;
+        bool tp_allow_mouse_look = allow_mouse_look && tp_active;
 
         // Freeze non-input simulation drift while paused/menu.
-        float fp_cam_dt = (is_playing && gameplay_camera_mode == DebugUICameraMode::FPCam) ? dt : 0.0f;
-        float tp_cam_dt = (is_playing && gameplay_camera_mode == DebugUICameraMode::TPCam) ? dt : 0.0f;
-        bool fp_apply_fov = gameplay_camera_mode == DebugUICameraMode::FPCam;
-        bool tp_apply_fov = gameplay_camera_mode == DebugUICameraMode::TPCam;
+        float fp_cam_dt = (is_playing && fp_active) ? dt : 0.0f;
+        float tp_cam_dt = (is_playing && tp_active) ? dt : 0.0f;
+        bool fp_apply_fov = fp_active;
+        bool tp_apply_fov = tp_active;
 
         CameraInfo game_fp_camera = Game::FPCam_Update(game_fp_cam, &scene.GetECS(), fp_cam_dt, fp_allow_mouse_look, fp_apply_fov);
         CameraInfo game_tp_camera = Game::TPCam_Update(game_tp_cam, &scene.GetECS(), tp_cam_dt, tp_allow_mouse_look, tp_apply_fov);
