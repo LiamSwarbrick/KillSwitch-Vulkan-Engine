@@ -32,6 +32,8 @@ public:
     // Checks if a room is a valid neighbour in a specific direction
     bool CanNeighbour(int roomAIndex, int roomBIndex, DoorDirection direction);
 
+    uint8_t LevelGeneration::RequiredMask(int x, int y);
+
     // Builds all possibilities from given assets
     void BuildPalette(const std::vector<Asset*>& roomAssets);
 
@@ -42,7 +44,7 @@ public:
     std::vector<glm::ivec2> GetTraversableRooms(glm::ivec2 startRoom);
 
     // Fills a grid with rooms that connect properly
-    void GenerateGrid(int width, int height, glm::ivec2 start, glm::ivec2 goal, uint8_t startDoorwayMask);
+    void GenerateGrid(int width, int height, glm::ivec2 start, glm::ivec2 goal, uint8_t startDoorwayMask, int maxRooms);
 
     // Should place the entities into the Scene, need scene for instantiate prefab
     void InstantiateLevel(class Scene* scene);

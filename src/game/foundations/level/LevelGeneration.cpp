@@ -15,6 +15,7 @@ TO ENSURE THIS WORKS CORRECTLY, EMPTY DOORWAY NODES SHOULD PLACED AND NAMED AS F
 	WEST DOORWAY: "Doorway_W"
 */
 
+static std::mt19937 rng(std::random_device{}());
 
 // Just literally checks if each room has the necessary door to connect in the direction specified
 bool LevelGeneration::CanNeighbour(int roomAIndex, int roomBIndex, DoorDirection direction)
@@ -46,6 +47,21 @@ bool LevelGeneration::CanNeighbour(int roomAIndex, int roomBIndex, DoorDirection
 		return roomAWest == roomBEast;
 	}
 	return false;
+}
+
+uint8_t LevelGeneration::RequiredMask(int x, int y)
+{
+	// Check the neighbouring rooms and generate a required mask for the current room
+	uint8_t mask = 0;
+	if (y + 1 < gridHeight && grid[(y + 1) * gridWidth + x].isCollapsed && palette[grid[(y + 1) * gridWidth + x].validRooms[0]].doorwayMask & SOUTH)
+		mask |= NORTH;
+	else if (y - 1 >= 0 && grid[(y - 1) * gridWidth + x].isCollapsed && palette[grid[(y - 1) * gridWidth + x].validRooms[0]].doorwayMask & NORTH)
+		mask |= SOUTH;
+	else if (x + 1 < gridWidth && grid[y * gridWidth + (x + 1)].isCollapsed && palette[grid[y * gridWidth + (x + 1)].validRooms[0]].doorwayMask & WEST)
+		mask |= EAST;
+	else if (x - 1 >= 0 && grid[y * gridWidth + (x - 1)].isCollapsed && palette[grid[y * gridWidth + (x - 1)].validRooms[0]].doorwayMask & EAST)
+		mask |= WEST;
+	return mask;
 }
 
 // Scans vector of room assets to fill a palette of room variations
@@ -84,6 +100,7 @@ void LevelGeneration::BuildPalette(const std::vector<Asset*>& roomAssets)
 					doors &= doors - 1;
 					doorCount++;
 				}
+
 				//						CHANGE ROOM LAYOUT WEIGHTING HERE
 				float weight = 0.0f;
 				switch (doorCount) 
@@ -218,7 +235,7 @@ std::vector<glm::ivec2> LevelGeneration::GetTraversableRooms(glm::ivec2 startRoo
 }
 
 // Generates and instantiates a level
-void LevelGeneration::GenerateGrid(int width, int height, glm::ivec2 start, glm::ivec2 goal, uint8_t startDoorwayMask)
+void LevelGeneration::GenerateGrid(int width, int height, glm::ivec2 start, glm::ivec2 goal, uint8_t startDoorwayMask, int maxRooms)
 {
 	while (true)
 	{
@@ -276,76 +293,112 @@ void LevelGeneration::GenerateGrid(int width, int height, glm::ivec2 start, glm:
 
 		UpdatePossibilities(updateRooms);
 
-		// Find room with lowest entropy, pick a room for it, update list of valid rooms for others
-		while (true)
+		// Place rooms connected by doors until the room limit is reached
+		int roomsPlaced = 1;
+		while (roomsPlaced < maxRooms)
 		{
-			// Go through every grid cell and check how many rooms it could be (entropy)
-			int nextX = -1;
-			int nextY = -1;
-			int lowestEntropy = INT_MAX;
+			std::vector<glm::ivec2> leafRooms;
 
+			// For each cell, if its neighbour has an unconnected door facing it, add to possible placements
 			for (int y = 0; y < height; ++y)
 			{
 				for (int x = 0; x < width; ++x)
 				{
-					int gridIndex = y * width + x;
-					GridCell& cell = grid[gridIndex];
-
-					if (cell.isCollapsed)
+					if (grid[y * width + x].isCollapsed)
 						continue;
 
-					int entropy = (int)cell.validRooms.size();
-					if (entropy < lowestEntropy)
-					{
-						lowestEntropy = entropy;
-						nextX = x;
-						nextY = y;
-					}
+					if (RequiredMask(x, y) != 0)
+						leafRooms.push_back({ x, y });
 				}
 			}
 
-			// All rooms collapsed, level fully generated
-			if (nextX == -1 || nextY == -1)
+			// If no more rooms can be placed connected to doors, all edges sealed therefore completed level
+			if (leafRooms.empty())
 				break;
 
-			// Randomly pick the room from the list of the cells valid rooms and update collapsed state
-			gridIndex = nextY * width + nextX;
+			// Pick a random room from the list of placeable rooms to place
+			glm::ivec2 nextRoomCoords = { -1, -1 };
+			std::uniform_int_distribution<size_t> pick(0, leafRooms.size() - 1);
+			nextRoomCoords = leafRooms[pick(rng)];
+
+			if (nextRoomCoords.x < 0 || nextRoomCoords.x >= width || nextRoomCoords.y < 0 || nextRoomCoords.y >= height)
+				break;
+
+			// Randomly pick the room layout from the list of the cells valid rooms and update collapsed state
+			gridIndex = nextRoomCoords.y * width + nextRoomCoords.x;
 			GridCell& cell = grid[gridIndex];
 
 			std::vector<float> weights;
 			for (int roomIndex : cell.validRooms)
 				weights.push_back(palette[roomIndex].weight);
 
-			static std::mt19937 rng(std::random_device{}());
 			std::discrete_distribution<> dist(weights.begin(), weights.end());
 			int chosenIndex = dist(rng);
 			int roomChoice = cell.validRooms[chosenIndex];
 
 			cell.validRooms = { roomChoice };
 			cell.isCollapsed = true;
+			roomsPlaced++;
 
 			// Update their neighbours list of valid rooms after the collapse
-			updateRooms.push_back({ nextX, nextY });
+			updateRooms.push_back({ nextRoomCoords.x, nextRoomCoords.y });
 			UpdatePossibilities(updateRooms);
 		}
 
-		// Find the coords of all rooms reachable from the starting room
-		std::vector<glm::ivec2> traversableRooms = GetTraversableRooms(start);
-		bool goalPath = false;
-		for (glm::ivec2& room : traversableRooms)
+		// After max rooms placed, check for any doors leading into abyss and seal them
+		while (true)
 		{
-			// Check all rooms to see if they are the goal room
-			if (room.x == goal.x && room.y == goal.y)
+			std::vector<glm::ivec2> nonTerminatingRooms;
+
+			// For each cell, if its neighbour has an unconnected door facing it, add to necessary placements
+			for (int y = 0; y < height; ++y)
 			{
-				goalPath = true;
+				for (int x = 0; x < width; ++x)
+				{
+					if (grid[y * width + x].isCollapsed)
+						continue;
+
+					if (RequiredMask(x, y) != 0)
+						nonTerminatingRooms.push_back({ x, y });
+				}
+			}
+
+			// Once no more door holes, level is finished
+			if (nonTerminatingRooms.empty())
 				break;
+
+			// For every unsealed doorway, place a sealing room
+			for (glm::ivec2& room : nonTerminatingRooms)
+			{
+				// Find the mask that only seals the open doors
+				GridCell& cell = grid[room.y * width + room.x];
+				uint8_t requiredMask = RequiredMask(room.x, room.y);
+
+				// Add all possible terminating room layouts to a vector
+				std::vector<int> terminatingLayouts;
+				for (int i = 0; i < palette.size(); ++i)
+					if (palette[i].doorwayMask == requiredMask)
+						terminatingLayouts.push_back(i);
+
+				// Pick and place a terminating room to seal the level
+				if (!terminatingLayouts.empty())
+				{
+					std::uniform_int_distribution<int> pick(0, terminatingLayouts.size() - 1);
+					cell.validRooms = { terminatingLayouts[pick(rng)] };
+					cell.isCollapsed = true;
+				}
+				else
+				{
+					SDL_Log("No terminating room type found for grid cell x:%d, y:%d", room.x, room.y);
+					cell.isCollapsed = true;
+				}
 			}
 		}
 
-		// Only create a valid level if it reaches the goal and is traversable enough
-		float amountTraversable = (float)traversableRooms.size() / (width * height);
-		if (goalPath && amountTraversable > 0.70f)
+		// Only create a valid level if the goal is reached and level reached correct size
+		if (grid[goal.y * width + goal.x].isCollapsed && roomsPlaced >= maxRooms)
 			break;
+
 	}
 }
 
