@@ -6,6 +6,7 @@
 #include "core/components.h"
 #include "core/animation.h"
 #include "game_ui.h"
+#include "fp_cam.h"
 #include "audio_system.h"
 
 #include "SDL3/SDL.h"
@@ -161,6 +162,14 @@ int main(int argc, char *argv[])
     DebugUI_SetECS(&scene.GetECS());
     DebugUI_SetAsset(animationPrefab);
 
+    FPCamState game_fp_cam = {};
+    if (const FPCamState* initial_fp_cam = DebugUI_GetFPCamState())
+        game_fp_cam = *initial_fp_cam;
+
+    CameraInfo initial_fp_camera = Game::FPCam_Update(game_fp_cam, &scene.GetECS(), 0.0f, false);
+    DebugUI_SetFPCamState(&game_fp_cam);
+    DebugUI_SetFPCamCameraInfo(&initial_fp_camera);
+
     bool running = true;
 
     // Set up the time tracker
@@ -190,7 +199,11 @@ int main(int argc, char *argv[])
 
         // Only capture mouse while playing (release it on menus)
         bool is_playing = GameUI_GetState() == GameState::Playing;
-        SDL_SetWindowRelativeMouseMode(window, is_playing && !DebugUI_IsOpen());
+        bool debug_ui_open = DebugUI_IsOpen();
+        Uint32 mouse_buttons = SDL_GetMouseState(nullptr, nullptr);
+        bool right_mouse_down = (mouse_buttons & SDL_BUTTON_MASK(SDL_BUTTON_RIGHT)) != 0;
+        bool use_relative_mouse = (is_playing && !debug_ui_open) || (debug_ui_open && right_mouse_down);
+        SDL_SetWindowRelativeMouseMode(window, use_relative_mouse);
 
         // controller test not ideal at all
         const bool* state = SDL_GetKeyboardState(NULL);
@@ -221,6 +234,16 @@ int main(int argc, char *argv[])
         // Game ticks
         scene.Update(dt);
         //AudioSystem_Update(&audio_system, dt);
+
+        if (const FPCamState* debug_fp_cam = DebugUI_GetFPCamState())
+            game_fp_cam = *debug_fp_cam;
+
+        bool allow_mouse_look = (is_playing && !debug_ui_open) || (debug_ui_open && right_mouse_down);
+
+        float fp_cam_dt = is_playing ? dt : 0.0f;
+        CameraInfo game_fp_camera = Game::FPCam_Update(game_fp_cam, &scene.GetECS(), fp_cam_dt, allow_mouse_look);
+        DebugUI_SetFPCamState(&game_fp_cam);
+        DebugUI_SetFPCamCameraInfo(&game_fp_camera);
 
         // Rendering
         uint32_t flags = SDL_GetWindowFlags(window);

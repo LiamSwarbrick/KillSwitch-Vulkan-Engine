@@ -7,6 +7,10 @@
 #include "asset_browser.h"
 #include "camera_panel.h"
 #include "free_cam.h"
+#include "renderer/debug_ui_api.h"
+#include "core/components.h"
+
+#include <array>
 
 namespace DebugUI
 {
@@ -18,10 +22,13 @@ namespace DebugUI
         bool show_ecs_inspector = true;
         bool show_framegraph    = true;
         bool show_asset_browser = true;
-        bool show_camera        = false;
+        bool show_camera        = true;
 
         CameraMode camera_mode  = CameraMode::FreeCam;
         FreeCamState free_cam   = {};   // owned here; updated by FreeCam_Update each frame
+        FPCamState fp_cam       = {};   // synced with game-owned FP cam state
+        CameraInfo fp_camera    = {};   // synced with game-owned FP camera output
+        bool has_fp_camera      = false;
 
         // Entity ID 
         uint32_t selected_entity_id = UINT32_MAX;
@@ -140,10 +147,28 @@ namespace DebugUI
         ImGui::End();
     }
 
-    inline void DrawCameraPanel(DebugUIState& state)
+    inline void DrawCameraPanel(DebugUIState& state, ECS& ecs)
     {
         if (!state.show_debug_ui) return;
-        DebugUI::DrawCameraPanel(state.show_camera, state.camera_mode, state.free_cam);
+
+        constexpr int k_max_players = 256;
+        std::array<EntityID, k_max_players> player_candidates = {};
+        int player_count = 0;
+
+        ecs.GetView<C_Transform, C_AnimatedMesh>().ForEach([&](EntityID id, C_Transform&, C_AnimatedMesh&)
+        {
+            if (player_count < k_max_players)
+                player_candidates[player_count++] = id;
+        });
+
+        DebugUI::DrawCameraPanel(
+            state.show_camera,
+            state.camera_mode,
+            state.free_cam,
+            state.fp_cam,
+            player_candidates.data(),
+            player_count
+        );
     }
 
     // Called after ImGui::NewFrame()
@@ -187,6 +212,6 @@ namespace DebugUI
         DrawECSInspector(state, ecs);
         DrawFramegraph(state);
         DrawAssetBrowser(state);
-        DrawCameraPanel(state);
+        DrawCameraPanel(state, ecs);
     }
 }
