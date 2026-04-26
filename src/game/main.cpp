@@ -179,7 +179,7 @@ int main(int argc, char *argv[])
     Scene scene{};
     scene.StartUp();
 
-    Asset* room_prefab = scene.LoadPrefab("assets/levels/testroom_new.gltf");
+    Asset* room_prefab = scene.LoadPrefab("assets/levels/lightstest.gltf");
     Asset* cube_prefab = scene.LoadPrefab("assets/props/simple_cube.gltf");
     Asset* sphere_prefab = scene.LoadPrefab("assets/props/simple_sphere.gltf");
     Asset* capsule_prefab = scene.LoadPrefab("assets/props/simple_capsule.gltf");

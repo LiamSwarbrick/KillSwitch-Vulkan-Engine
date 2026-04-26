@@ -737,7 +737,8 @@ void FG_UploadBufferData(ThreadStagingObjects* stg, uint32_t rid, const void* da
     VK_CHECK(vmaCreateBuffer(renderstate.vma_allocator, &staging_buffer_create_info, &alloc_create_info, &staging_buf, &staging_alloc, &mapped_info));
 
     // Copy data to the mapped memory region
-    memcpy(mapped_info.pMappedData, data, size);
+    // memcpy(mapped_info.pMappedData, data, size);
+    vmaCopyMemoryToAllocation(renderstate.vma_allocator, data, staging_alloc, 0, size);
 
     // Record the copy command from mapped staging region to device local memory of the resource
     vkResetCommandBuffer(stg->upload_command_buffer, 0);
@@ -796,7 +797,8 @@ void FG_UploadImageData(ThreadStagingObjects* stg, uint32_t rid, const void* dat
     VK_CHECK(vmaCreateBuffer(renderstate.vma_allocator, &staging_info, &alloc_info, &staging_buf, &staging_alloc, &mapped_info));
 
     // Copy data to the mapped memory region
-    memcpy(mapped_info.pMappedData, data, size);
+    // memcpy(mapped_info.pMappedData, data, size);
+    vmaCopyMemoryToAllocation(renderstate.vma_allocator, data, staging_alloc, 0, size);
 
     // Record command to transfer staged data to image buffer
     vkResetCommandBuffer(stg->upload_command_buffer, 0);

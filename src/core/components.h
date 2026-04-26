@@ -35,6 +35,7 @@ struct C_Light
 	LightComponentType type;
 	glm::vec3 color;
 	float intensity;
+	float radius;
 	float spot_inner_cone_angle;  // <- Spotlights only
 	float spot_outer_cone_angle;
 };

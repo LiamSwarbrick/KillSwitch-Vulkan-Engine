@@ -168,8 +168,8 @@ void main()
     {
         PointLight pl = pl_buf.point_lights[i];
         vec3 frag_to_light = pl.pos_and_radius.xyz - world_pos;
-
-        if (length(frag_to_light) > pl.pos_and_radius.w)
+        float dist = length(frag_to_light);
+        if (dist > pl.pos_and_radius.w)
             continue;
         
         vec3 L = normalize(frag_to_light);
@@ -183,9 +183,8 @@ void main()
             brdf = ground_brdf(N, V, L);
         }
 
-        vec3 pl_radiance = brdf * pl.color_and_intensity.rgb * pl.color_and_intensity.a;
-        float dist = length(pl.pos_and_radius.xyz - world_pos);
-        pl_radiance *= get_attenuation(dist);//  /= max(dist*dist, 1.0);
+        float attenuation = get_attenuation(dist, pl.pos_and_radius.w);
+        vec3 pl_radiance = brdf * pl.color_and_intensity.rgb * pl.color_and_intensity.a * attenuation;
         direct_light += pl_radiance;
     }
     
