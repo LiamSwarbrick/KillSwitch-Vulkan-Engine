@@ -3,14 +3,20 @@
 
 #ifndef IS_GLSL
 
-    // Typedef C++ glm types so we can share structs between glsl and C++
-    #include "glm/glm.hpp"
-    typedef glm::mat4 mat4;
-    typedef glm::vec4 vec4;
-    typedef glm::vec3 vec3;
-    typedef glm::vec2 vec2;
-    typedef glm::uvec2 uvec2;
-    typedef glm::uvec4 uvec4;
+    // Glm's padding cannot be trusted for scalar layout btw
+    // #include "glm/glm.hpp"
+    // typedef glm::mat4 mat4;
+    // typedef glm::vec4 vec4;
+    // typedef glm::vec3 vec3;
+    // typedef glm::vec2 vec2;
+    // typedef glm::uvec2 uvec2;
+    // typedef glm::uvec4 uvec4;
+    typedef float mat4[16];
+    typedef float vec4[4];
+    typedef float vec3[3];
+    typedef float vec2[2];
+    typedef uint32_t uvec2[2];
+    typedef uint32_t uvec4[4];
 
     // NOTE: Ensure these enums match the GLSL #defines below them
     typedef enum

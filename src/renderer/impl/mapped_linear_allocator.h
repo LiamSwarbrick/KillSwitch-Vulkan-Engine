@@ -2,6 +2,7 @@
 #define RENDERER_MAPPED_LINEAR_ALLOCATOR_H
 
 #include <stdint.h>
+#include "core/my_c_runtime.h"
 
 // Necessary byte alignment between pushed elements for quite a few BDA operations
 #define MAPPED_ARENA_ALIGNMENT 64
@@ -10,9 +11,11 @@ uint64_t PaddedSizeForMappedArena(uint64_t size);
 typedef struct MappedArena
 {
     uint32_t rid;               // ON_STARTUP flagged resources only for simplicity.
-    uint64_t gpu_base_address;  // Cached info about the resouce
-    uint8_t* mapped_data;       // ..^..
-    uint32_t total_size;        // ..^..
+
+    // Cached info about the resouce
+    uint64_t gpu_base_address;
+    uint8_t* mapped_data;
+    uint32_t total_size;
 
     uint32_t current_offset;    // State of the linear allocator
 }
@@ -34,7 +37,7 @@ For instance, each object we push will never be part of multiple cache lines if 
 Also important for coalesced memory accesses both with the Write-Combining Buffers on the CPU
 and so the warp threads can combine their memory fetches.
 
-FUTURE: If a tightly packed array is necessary, then add another function
+FUTURE TODO: If a tightly packed array is necessary and it's not all uploaded at once, then add another function
 that allows a custom alignment (and I guess, set this alignment in the layout qualifier
 buffer_reference_align in GLSL).
 */

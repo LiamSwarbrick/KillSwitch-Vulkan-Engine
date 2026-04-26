@@ -286,6 +286,8 @@ Asset* load_asset(const char* filename) {
 		memcpy(light->color, gltf_light->color, sizeof(float) * 3);
 		light->intensity = gltf_light->intensity;
 		light->range = gltf_light->range;
+		light->spot_inner_cone_angle = gltf_light->spot_inner_cone_angle;
+		light->spot_outer_cone_angle = gltf_light->spot_outer_cone_angle;
 	}
 
 	// Copy Nodes
@@ -305,6 +307,9 @@ Asset* load_asset(const char* filename) {
 		memcpy(node->scale, gltf_node->scale, sizeof(float) * 3);
 		if (gltf_node->has_matrix) {
 			memcpy(node->matrix, gltf_node->matrix, sizeof(float) * 16);
+		}
+		else {
+			memcpy(node->matrix, glm::value_ptr(glm::mat4(1.0f)), sizeof(float) * 16);
 		}
 
 		if (gltf_node->children_count > 0) {
@@ -398,9 +403,9 @@ Asset* load_asset(const char* filename) {
 		mesh->vertex_type = VERTEX_TYPE_STATIC;
 
 		// Default to UNLIT, the component system will set the actual value based on the extras json
-		// mesh->mat_type = MAT_UNLIT_OPAQUE;
-		#warning WHILE TESTING, DEFAULT TO LIT UNTIL WE SORT OUT LEVEL EDITOR
-		mesh->mat_type = MAT_LIT_OPAQUE;
+		// mesh->mat_type = MAT_UNLIT;
+		#warning remember to make material type selectable in level editor
+		mesh->mat_type = MAT_LIT;  // WARNING: ALSO REMEMBER BELOW I SET MAT_LIT_OUTLINE
 
 		for (size_t p = 0; p < mesh->primitive_count; p++) {
 			cgltf_primitive* gltf_prim = &gltf_mesh->primitives[p];
@@ -462,6 +467,9 @@ Asset* load_asset(const char* filename) {
 			// if it has joint then its a skinned mesh
 			if (prim->joints != NULL) {
 				mesh->vertex_type = VERTEX_TYPE_SKINNED;
+
+				#warning TEMP: SETTING OUTLINE FOR CHARACTERS
+				mesh->mat_type = MAT_LIT_OUTLINE;
 			}
 		}
 	}

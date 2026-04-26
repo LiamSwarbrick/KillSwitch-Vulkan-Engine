@@ -1,7 +1,7 @@
 #ifndef ECS_H
 #define ECS_H
 
-
+#include "ecs/types.h"
 #include "ecs/registry.h"
 #include "ecs/view.h"
 #include "ecs/entity.h"

@@ -552,7 +552,12 @@ void Renderer_Init(const Renderer_InitInfo* info)
     // Init renderables arena (per frame lifetime)
     renderstate.renderables_arena = (RenderView){
         .num_renderables = 0,
-        .items = (Renderable*)L_calloc(MAX_RENDERED_OBJECTS, sizeof(Renderable), &renderstate.main.tt)
+        .items = (Renderable*)L_calloc(MAX_RENDERED_OBJECTS, sizeof(Renderable), &renderstate.main.tt),
+
+        .num_point_lights = 0,
+        .num_spot_lights = 0,
+        .point_lights = (PointLight*)L_calloc(MAX_POINTLIGHTS, sizeof(PointLight), &renderstate.main.tt),
+        .spot_lights  =  (SpotLight*)L_calloc(MAX_SPOTLIGHTS, sizeof(SpotLight), &renderstate.main.tt)
     };
 
     // Init per frame structures (except for swapchain_image_acquired_semaphore, which is handled by create_or_recreate_swapchain)
@@ -666,6 +671,8 @@ void Renderer_Shutdown()
     }
 
     L_free(renderstate.renderables_arena.items, &renderstate.main.tt);
+    L_free(renderstate.renderables_arena.point_lights, &renderstate.main.tt);
+    L_free(renderstate.renderables_arena.spot_lights, &renderstate.main.tt);
     DestroyDrawCallCollections();
 
     // Shutdown Pipeline Keying and Frame Graph subsystems
@@ -716,7 +723,6 @@ void Renderer_Shutdown()
 void Renderer_ListenToWindowEvent(SDL_Event event)
 {
     // event to imgui
-    printf("HIH");
     ImGui_ImplSDL3_ProcessEvent(&event);
     
     switch (event.type)
@@ -835,7 +841,48 @@ void Renderer_PushRenderable(Renderable renderable)
     renderstate.renderables_arena.items[renderstate.renderables_arena.num_renderables++] = renderable;
 }
 
-void Renderer_DrawFrame(glm::mat4 primary_camera_view)
+void Renderer_PushLight(C_Light light, glm::vec3 position, glm::vec3 direction)
+{
+    switch (light.type)
+    {
+    case LIGHT_COMPONENT_POINTLIGHT:
+        {
+            SDL_assert(renderstate.renderables_arena.num_point_lights + 1 < MAX_POINTLIGHTS);
+
+            glm::vec4 pos_and_radius = glm::vec4(position.x, position.y, position.z, get_light_radius(light.color, light.intensity));
+            glm::vec4 color_and_intensity = glm::vec4(light.color.x, light.color.y, light.color.z, light.intensity);
+
+            PointLight pl = {};
+            memcpy(&pl.pos_and_radius, glm::value_ptr(pos_and_radius), sizeof(glm::vec4));
+            memcpy(&pl.color_and_intensity, glm::value_ptr(color_and_intensity), sizeof(glm::vec4));
+
+            renderstate.renderables_arena.point_lights[renderstate.renderables_arena.num_point_lights++] = pl;
+        }
+        break;
+        
+    case LIGHT_COMPONENT_SPOTLIGHT:
+        {
+            SDL_assert(renderstate.renderables_arena.num_spot_lights + 1 < MAX_SPOTLIGHTS);
+
+            glm::vec4 pos_and_radius = glm::vec4(position.x, position.y, position.z, get_light_radius(light.color, light.intensity));
+            glm::vec4 color_and_intensity = glm::vec4(light.color.x, light.color.y, light.color.z, light.intensity);
+
+            SpotLight sl = {};
+            memcpy(&sl.pos_and_radius, glm::value_ptr(pos_and_radius), sizeof(glm::vec4));
+            memcpy(&sl.color_and_intensity, glm::value_ptr(color_and_intensity), sizeof(glm::vec4));
+            memcpy(&sl.direction, glm::value_ptr(direction), sizeof(glm::vec3));
+            sl.inner_cone_angle = light.spot_inner_cone_angle;
+            sl.outer_cone_angle = light.spot_outer_cone_angle;
+
+            renderstate.renderables_arena.spot_lights[renderstate.renderables_arena.num_spot_lights++] = sl;
+        }
+        break;
+        
+        default: SDL_assert(0 && "Invalid light type"); abort();
+    }
+}
+
+void Renderer_DrawFrame(CameraInfo main_camera)
 {
     /*  Get current swapchain image, and wait on sync structures
 
@@ -854,7 +901,8 @@ void Renderer_DrawFrame(glm::mat4 primary_camera_view)
 #ifdef NDEBUG
     sync_timeout_nanoseconds = UINT64_MAX;  // Wait forever in release mode
 #else
-    sync_timeout_nanoseconds = 1000000000UL;  // Only wait one second in debug mdoe to detect deadlocks/hangs
+    // sync_timeout_nanoseconds = 1000000000UL;  // Only wait one second in debug mdoe to detect deadlocks/hangs
+    sync_timeout_nanoseconds = 1000000000ULL * 120ULL;  // <- 2 mins in case some pipelines take rediculous amounts of time to build
 #endif
     VK_CHECK(vkWaitForFences(renderstate.device, 1, &renderstate.frames[frame_in_flight].rendering_complete_fence, VK_TRUE, sync_timeout_nanoseconds));
 
@@ -915,24 +963,6 @@ void Renderer_DrawFrame(glm::mat4 primary_camera_view)
 
     BeginDrawCalls();
 
-    #if 1  // TEMP:  <- Temporary push renderables here, the actual renderables are pushed from the game module
-    // NOTE: Renderables need to be alive the whole time, (drawcalls point to renderables when they are pushed, instead of copied)
-        Renderable r = {
-            .transform    = glm::mat4(1.0f),
-            .mesh_prefab  = renderstate.rids.dummy_mesh,
-            .joint_count  = 0,
-            .joints       = NULL
-        };
-        Renderable r2 = r;
-        r2.transform[3][0] -= 0.5;
-        r2.transform[3][1] -= 0.5;
-        r2.transform[3][2] -= 0.5;
-        {
-            Renderer_PushRenderable(r);
-            Renderer_PushRenderable(r2);
-        }
-    #endif  // ENDTEMP
-
     for (uint32_t i = 0; i < renderstate.renderables_arena.num_renderables; ++i)
     {
         AddDrawCall(&renderstate.renderables_arena.items[i]);
@@ -943,13 +973,11 @@ void Renderer_DrawFrame(glm::mat4 primary_camera_view)
     
     // Reset renderables arena head for next frame
     renderstate.renderables_arena.num_renderables = 0;
+    renderstate.renderables_arena.num_point_lights = 0;
+    renderstate.renderables_arena.num_spot_lights = 0;
 
-    // Set player camera
-    renderstate.camera_view = primary_camera_view;
-    float aspect = (float)renderstate.swapchain_extent.width / (float)renderstate.swapchain_extent.height;
-    renderstate.fullscreen_proj =  MakeProjectionMatrix(renderstate.settings.fov_y, aspect, 0.1f, 100.0f);
-
-
+    // Set main camera
+    renderstate.main_camera = main_camera;
 
 
     /*  Build FrameGraph
@@ -974,10 +1002,12 @@ void Renderer_DrawFrame(glm::mat4 primary_camera_view)
 
     b32 use_msaa = renderstate.multisampling_count_flag > VK_SAMPLE_COUNT_1_BIT;
 
+    // Shadowmap pass
+    // TODO (once topological sorting and multiqueue stuff is in, this can be in parallel with the depth prepass)
+
     // Depth prepass
     RenderPassDesc depth_prepass_desc = {
         .debug_name = "Depth Prepass",
-        .pass_type = PASS_TYPE_DEPTH_PREPASS,
 
         .input_count = {},
         .output_count = 1,
@@ -985,7 +1015,6 @@ void Renderer_DrawFrame(glm::mat4 primary_camera_view)
             {
                 .rid = renderstate.rids.depth_buffer_rid,
                 .usage_flags = FG_USAGE_DEPTH,
-                .sampler_type = FG_SAMPLER_NOT_SAMPLABLE,
 
                 // Make sure you set resolve_rid to UINT32_MAX when not resolving anything (I added an assertion in FG_AddPass to catch this just in case, because it took hours to debug with synchronisation layers on)
                 .resolve_rid  = UINT32_MAX,
@@ -1013,7 +1042,6 @@ void Renderer_DrawFrame(glm::mat4 primary_camera_view)
     // Forward Opaque Pass
     RenderPassDesc forward_opaque_desc = {
         .debug_name = "Forward Opaque Pass",
-        .pass_type = PASS_TYPE_FORWARD_OPAQUE,
 
         .input_count = {},
         .output_count = 2,
@@ -1023,7 +1051,6 @@ void Renderer_DrawFrame(glm::mat4 primary_camera_view)
             {
                 .rid = renderstate.rids.forward_target_rid,
                 .usage_flags = FG_USAGE_COLOR,
-                .sampler_type = FG_SAMPLER_NOT_SAMPLABLE,
                 
                 .resolve_rid  = use_msaa ? renderstate.rids.hdr_color_target_rid : UINT32_MAX,
                 .resolve_mode = VK_RESOLVE_MODE_AVERAGE_BIT,  // Automatically handling the edge case where resolve mode must not be set for 1 sample
@@ -1035,14 +1062,14 @@ void Renderer_DrawFrame(glm::mat4 primary_camera_view)
 
                 .load_op = VK_ATTACHMENT_LOAD_OP_CLEAR,
                 .store_op = use_msaa ? VK_ATTACHMENT_STORE_OP_DONT_CARE : VK_ATTACHMENT_STORE_OP_STORE,  // DO NOT STORE MSAA TARGETS BACK TO MAIN MEMORY (Applies to tiled architectures)
-                .clear_value = { .color = { .float32 = { 0.392f, 0.584f, 0.929f, 0.0f } } }
+                // .clear_value = { .color = { .float32 = { 0.392f, 0.584f, 0.929f, 0.0f } } }  // Cornflower blue
+                .clear_value = { .color = { .float32 = { 0.0f, 0.0f, 0.0f, 0.0f } } }
             },
 
             // Depth attachment (preloading with depth from the prepass)
             {
                 .rid = renderstate.rids.depth_buffer_rid,
                 .usage_flags = FG_USAGE_DEPTH,
-                .sampler_type = FG_SAMPLER_NOT_SAMPLABLE,
 
                 .resolve_rid  = UINT32_MAX,
                 .resolve_mode = VK_RESOLVE_MODE_NONE,
@@ -1065,19 +1092,77 @@ void Renderer_DrawFrame(glm::mat4 primary_camera_view)
     };
     uint32_t forward_opaque_pass = FG_AddPass(forward_opaque_desc);
     
+    // Bloom
+    #warning TODO: Add in bloom passes
+
+    // PostProcess Tone-mapping and Lens Effect
+    FullscreenPass_UserData tonemap_pass_user_data = {
+        .shader_id = SHADER_TONEMAP 
+    };
+    tonemap_pass_user_data.push_pass.texture_indices[0] = renderstate.registry.resources[renderstate.rids.hdr_color_target_rid].bindless_texture_idx;
+
+    RenderPassDesc tonemap_pass_desc = {
+        .debug_name = "Tone Map",
+        
+        .input_count = 1,
+        .inputs = {
+            {
+                // Read from HDR
+                .rid = renderstate.rids.hdr_color_target_rid,
+                .usage_flags = FG_USAGE_SAMPLED,
+
+                .layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                .access = VK_ACCESS_2_SHADER_READ_BIT,
+                .stage  = VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
+                .queue_family_index = renderstate.queue_family_indices.graphics_family
+            }
+        },
+        .output_count = 1,
+        .outputs = {
+            // Output to LDR (Low dynamic range) i.e. the range the display has
+            {
+                .rid = renderstate.rids.ldr_color_target_rid,
+                .usage_flags = FG_USAGE_COLOR,
+
+                .resolve_rid  = UINT32_MAX,
+                .resolve_mode = VK_RESOLVE_MODE_NONE,
+
+                .layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+                .access = VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,
+                .stage  = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
+                .queue_family_index = renderstate.queue_family_indices.graphics_family,
+                
+                .load_op = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
+                .store_op = VK_ATTACHMENT_STORE_OP_STORE,
+                // .clear_value
+            }
+        },
+
+        .is_compute = 0,
+        .render_area = { .offset = { 0, 0 }, .extent = renderstate.swapchain_extent },
+        
+        .execute_callback = FullscreenPass_Execute,
+        .user_data = &tonemap_pass_user_data
+    };
+    uint32_t tonemap_pass = FG_AddPass(tonemap_pass_desc);
+
+
 
     // Swapchain pass
+    FullscreenPass_UserData swapchain_pass_user_data = {
+        .shader_id = SHADER_BLIT
+    };
+    swapchain_pass_user_data.push_pass.texture_indices[0] = renderstate.registry.resources[renderstate.rids.ldr_color_target_rid].bindless_texture_idx;
+
     RenderPassDesc swapchain_pass_desc = {
         .debug_name = "Swapchain Pass",
-        .pass_type = PASS_TYPE_SWAPCHAIN_PASS,
         
         .input_count = 1,
         .inputs = {
             {
                 // Resource aliasing: when not using MSAA, hdr_color_target equals forward_target_rid
-                .rid = renderstate.rids.hdr_color_target_rid,
+                .rid = renderstate.rids.ldr_color_target_rid,
                 .usage_flags = FG_USAGE_SAMPLED,
-                .sampler_type = FG_SAMPLER_LINEAR_REPEAT,
 
                 .layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
                 .access = VK_ACCESS_2_SHADER_READ_BIT,
@@ -1091,7 +1176,6 @@ void Renderer_DrawFrame(glm::mat4 primary_camera_view)
             {
                 .rid = swapchain_image_resource_id,
                 .usage_flags = FG_USAGE_COLOR,
-                .sampler_type = FG_SAMPLER_NOT_SAMPLABLE,  // NOTE: Outputs attachment, can ignore sampler_type
 
                 .resolve_rid  = UINT32_MAX,
                 .resolve_mode = VK_RESOLVE_MODE_NONE,
@@ -1103,15 +1187,15 @@ void Renderer_DrawFrame(glm::mat4 primary_camera_view)
                 
                 .load_op = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
                 .store_op = VK_ATTACHMENT_STORE_OP_STORE,
-                // .clear_value = { .color = { .float32 = { 0.0f, 0.584f, 0.929f, 0.0f } } }
+                // .clear_value
             }
         },
 
         .is_compute = 0,
         .render_area = { .offset = { 0, 0 }, .extent = renderstate.swapchain_extent },
         
-        .execute_callback = SwapchainPass_Execute,
-        .user_data = NULL
+        .execute_callback = FullscreenPass_Execute_With_ImGui,
+        .user_data = &swapchain_pass_user_data
     };
     uint32_t swapchain_pass = FG_AddPass(swapchain_pass_desc);
 
@@ -1210,7 +1294,6 @@ void Renderer_DrawFrame(glm::mat4 primary_camera_view)
     };
     VK_CHECK(vkQueueSubmit2(renderstate.graphics_queue, 1, &submit_info, renderstate.frames[frame_in_flight].rendering_complete_fence));
 
-    
     // Present to screen
     // (after waiting on the rendering complete semaphore so that all drawing is completed first)
     VkPresentInfoKHR present_info = {
@@ -1775,6 +1858,8 @@ void create_or_recreate_swapchain()
         min_image_count = details.capabilities.maxImageCount;
     }
 
+    renderstate.swapchain_usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;  // Transfer for blit/copy operations
+
     // Swapchain Create Info
     VkSwapchainKHR old_swapchain = renderstate.swapchain;
     VkSwapchainCreateInfoKHR swapchain_create_info = {
@@ -1787,7 +1872,7 @@ void create_or_recreate_swapchain()
         .imageColorSpace        = chosen_format.colorSpace,
         .imageExtent            = chosen_swap_extent,
         .imageArrayLayers       = 1,  // One layer since we aren't making a stereoscopic 3D application
-        .imageUsage             = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT,  // Transfer for blit/copy operations
+        .imageUsage             = renderstate.swapchain_usage,
 
         // NOTE: With explicit queue ownership transfers of the swapchain images via pipeline barriers between
         // graphics queue and present queue commands involving the swapchain,

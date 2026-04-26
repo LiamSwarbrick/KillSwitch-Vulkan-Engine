@@ -108,22 +108,22 @@ void Animation_Update(ECS* ecs, float dt)
 		}
 
 
-        // Initialise world joint matrices with identity matrices
-		std::vector<glm::mat4> worldJointMatrices(animatedBoneCount, glm::mat4(1.0f));
+        // Initialise model joint matrices with identity matrices, store root bone and calculate base transformation from parent nodes
+		std::vector<glm::mat4> modelJointMatrices(animatedBoneCount, glm::mat4(1.0f));
         int rootBone = find_bone_index(&asset->skins[0], asset->skins[0].skeleton_root_node_index);
-        auto& transform = ecs->GetComponent<C_Transform>(e);
-        glm::mat4 standUpFix = glm::rotate(glm::mat4(1.0f), glm::radians(90.0f), glm::vec3(1, 0, 0)); // MIGHT WANT TO BE REMOVED/PERMANENT FIX
-		CalculateWorldMatrices(asset, rootBone, transform.matrix * standUpFix, localJointMatrices, worldJointMatrices);
+		glm::mat4 baseTransform = CalculateBaseTransform(asset);
+
+		CalculateModelMatrices(asset, rootBone, baseTransform, localJointMatrices, modelJointMatrices);
 
 		// Make sure joint_matrices is allocated
         if (!animatedMesh.joint_matrices)
 			animatedMesh.joint_matrices = new glm::mat4[animatedBoneCount];
 
-		// Calculate final joint matrices by multiplying world joint matrices with inverse bind matrices
+		// Calculate final joint matrices by multiplying model joint matrices with inverse bind matrices
         for (int i = 0; i < animatedBoneCount; ++i)
         {
             glm::mat4 inverseBindMatrix = glm::make_mat4(asset->skins[0].inverse_bind_matrices + i * 16);
-            animatedMesh.joint_matrices[i] = worldJointMatrices[i] * inverseBindMatrix;
+            animatedMesh.joint_matrices[i] = modelJointMatrices[i] * inverseBindMatrix;
         }
     });
 }
@@ -342,14 +342,14 @@ void CalculateLayerPose(Asset* asset, AnimationLayer& layer, std::vector<BoneTra
 	}
 }
 
-void CalculateWorldMatrices(Asset* asset, int boneIndex, glm::mat4 parentMatrix, const std::vector<glm::mat4>& localJointMatrices, std::vector<glm::mat4>& worldJointMatrices)
+void CalculateModelMatrices(Asset* asset, int boneIndex, glm::mat4 parentMatrix, const std::vector<glm::mat4>& localJointMatrices, std::vector<glm::mat4>& worldJointMatrices)
 {
-    // Calculate world matrix from local matrix and parent world matrix
+    // Calculate model matrix from local matrix and parent matrix
 	worldJointMatrices[boneIndex] = parentMatrix * localJointMatrices[boneIndex];
 
     // Recursively call for all children
     for (size_t i = 0; i < asset->skins[0].bones[boneIndex].child_count; ++i)
-		CalculateWorldMatrices(asset, asset->skins[0].bones[boneIndex].children_indices[i], worldJointMatrices[boneIndex], localJointMatrices, worldJointMatrices);
+        CalculateModelMatrices(asset, asset->skins[0].bones[boneIndex].children_indices[i], worldJointMatrices[boneIndex], localJointMatrices, worldJointMatrices);
 }
 
 void AnimationInterpolation(Asset* asset, Animation& animation, float animationTime, std::vector<BoneTransform>& pose) 
@@ -414,6 +414,51 @@ void BlendPoses(const std::vector<BoneTransform>& poseA, const std::vector<BoneT
         blendedPose[i].rotation = glm::slerp(poseA[i].rotation, poseB[i].rotation, blendFactor);
         blendedPose[i].scale = glm::mix(poseA[i].scale, poseB[i].scale, blendFactor);
     }
+}
+
+bool IsIdentityMatrix(const float* m)
+{
+    static const float identity[16] = {
+        1.0f, 0.0f, 0.0f, 0.0f,
+        0.0f, 1.0f, 0.0f, 0.0f,
+        0.0f, 0.0f, 1.0f, 0.0f,
+        0.0f, 0.0f, 0.0f, 1.0f
+    };
+
+    // returns 0 if they are identical
+    return memcmp(m, identity, sizeof(float) * 16) == 0;
+}
+
+glm::mat4 CalculateBaseTransform(Asset* asset)
+{
+    // Initialise transform with identity, start current node at skeleton root
+	glm::mat4 baseTransform = glm::mat4(1.0f);
+	int rootNodeIndex = asset->skins[0].skeleton_root_node_index;
+	int currentNodeIndex = asset->nodes[rootNodeIndex].parent_index;
+
+    // Traverse up parents until reaching root
+	while (currentNodeIndex != -1)
+    {
+		Node& node = asset->nodes[currentNodeIndex];
+
+        // Calculate transfrom matrix if it exists, if not, use TRS values, if not them, no change i.e. identity
+        if (!IsIdentityMatrix(node.matrix))
+        {
+			glm::mat4 nodeMatrix = glm::make_mat4(node.matrix);
+            baseTransform = nodeMatrix * baseTransform;
+        }
+        else
+        {
+            glm::mat4 translationMatrix = glm::translate(glm::mat4(1.0f), glm::vec3(node.translation[0], node.translation[1], node.translation[2]));
+            glm::mat4 rotationMatrix = glm::mat4_cast(glm::quat(node.rotation[3], node.rotation[0], node.rotation[1], node.rotation[2]));
+            glm::mat4 scaleMatrix = glm::scale(glm::mat4(1.0f), glm::vec3(node.scale[0], node.scale[1], node.scale[2]));
+			baseTransform = translationMatrix * rotationMatrix * scaleMatrix * baseTransform;
+        }
+
+		currentNodeIndex = node.parent_index;
+    }
+
+	return baseTransform;
 }
 
 

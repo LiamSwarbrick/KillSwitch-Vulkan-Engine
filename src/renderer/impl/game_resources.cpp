@@ -61,7 +61,9 @@ void CreateOrRecreateResources(FG_ResourceFlags types_to_create)
             FG_Resource* res = &renderstate.registry.resources[rid];
             if ((res->flags & types_to_create) == types_to_create)
             {
+                #ifdef VERBOSE_FRAMEGRAPH_LOGGING
                 printf("Deallocating resource: %s\n", res->debug_name);
+                #endif
                 FG_DeallocateResource(res);
             }
         }
@@ -131,15 +133,16 @@ void create_startup_resources()
         .buffer_create_info = {
             .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
             .size = MAX_PASSES * PaddedSizeForMappedArena(sizeof(SceneData)),
-            .usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT |
-                VK_BUFFER_USAGE_TRANSFER_DST_BIT
+            .usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT
+                | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT
+                | VK_BUFFER_USAGE_TRANSFER_DST_BIT
         },
         .is_buffer_cpu_accessible = 1  // <- Mapped bcuz small data upload is most efficient this way
     };
-    renderstate.rids.global_scene_buffer_rid = FG_CreateResource(
+    renderstate.rids.scenes_buffer_rid = FG_CreateResource(
         "GlobalSceneBuffer", FG_RESOURCE_TYPE_BUFFER, flags, &scene_info
     );
-    renderstate.scenes_arena = MakeArenaOnBufferResource(renderstate.rids.global_scene_buffer_rid);
+    renderstate.scenes_arena = MakeArenaOnBufferResource(renderstate.rids.scenes_buffer_rid);
 
 
     // Objects Buffer (Mapped so we rapidly upload transforms each frame)
@@ -164,9 +167,10 @@ void create_startup_resources()
     ResourceCreateInfo joints_info = {
         .buffer_create_info = {
             .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
-            // Alignment: mat4 is obviously 64 byte aligned, so each object's joint transforms have no padding between them.
-            //      But just to be clear I've included the differences between different object's joint arrays 
-            //      (but Padded(mat4)-mat4 = 0 so it cancel out due to 64 byte alignment and 64 byte size of mat4)
+            // NOTE: Each objects joint transforms are contiguous. But subsequent objects are pushed with seperate PushToMappedArena calls.
+            // Obviously mat4 is 64 byte aligned so there is technically no padding between adjacent object's joint arrays.
+            // But just to be clear I've included the differences between different object's joint arrays 
+            // (but Padded(mat4)-mat4 = 0 so it cancel out due to 64 byte alignment and 64 byte size of mat4)
             .size = MAX_JOINTS_FOR_ALL_OBJECTS * sizeof(glm::mat4) + MAX_RENDERED_OBJECTS*(PaddedSizeForMappedArena(sizeof(glm::mat4))-sizeof(glm::mat4)),
             .usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT
                 | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT
@@ -191,13 +195,55 @@ void create_startup_resources()
         },
         .is_buffer_cpu_accessible = 1  // <- Material stuff like blend mode is important to be CPU accessable, and we may want to dynamically change materials.
     };
-    renderstate.rids.material_ssbo_rid = FG_CreateResource(
-        "MaterialSSBO", FG_RESOURCE_TYPE_BUFFER, flags, &mat_info
+    renderstate.rids.materials_buffer_rid = FG_CreateResource(
+        "MaterialBuffer", FG_RESOURCE_TYPE_BUFFER, flags, &mat_info
     );
-    
 
-    /////// MOVE BELOW TO create_scene_resources(scene resource list?) /////////////
+    // Light Buffers (Uploaded once per frame all at once) (packed arrays)
+    ResourceCreateInfo lights_header_info = {
+        .buffer_create_info = {
+            .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
+            .size  = sizeof(LightsHeader),
+            .usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT
+                   | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT
+                   | VK_BUFFER_USAGE_TRANSFER_DST_BIT
+        },
+        .is_buffer_cpu_accessible = 1
+    };
+    renderstate.rids.lights_header_buffer_rid = FG_CreateResource(
+        "LightsHeaderBuffer", FG_RESOURCE_TYPE_BUFFER, flags, &lights_header_info
+    );
 
+    ResourceCreateInfo point_lights_info = {
+        .buffer_create_info = {
+            .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
+            .size  = sizeof(PointLight) * MAX_POINTLIGHTS,
+            .usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT
+                   | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT
+                   | VK_BUFFER_USAGE_TRANSFER_DST_BIT
+        },
+        .is_buffer_cpu_accessible = 1
+    };
+    renderstate.rids.point_lights_buffer_rid = FG_CreateResource(
+        "PointLightsBuffer", FG_RESOURCE_TYPE_BUFFER, flags, &point_lights_info
+    );
+
+    ResourceCreateInfo spot_lights_info = {
+        .buffer_create_info = {
+            .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
+            .size  = sizeof(SpotLight) * MAX_SPOTLIGHTS,
+            .usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT
+                   | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT
+                   | VK_BUFFER_USAGE_TRANSFER_DST_BIT
+        },
+        .is_buffer_cpu_accessible = 1
+    };
+    renderstate.rids.spot_lights_buffer_rid = FG_CreateResource(
+        "SpotLightsBuffer", FG_RESOURCE_TYPE_BUFFER, flags, &spot_lights_info
+    );
+
+
+#if 0  // NOTE: Keeping in case it's useful for game ui to have quad code lying around
     // TEST QUAD
     uint32_t quad_indices[6] = { 0, 1, 2, 0, 3, 1 };
     glm::vec3 quad_positions[4] = {
@@ -226,7 +272,7 @@ void create_startup_resources()
     };
     renderstate.rids.dummy_mesh = {
         .vertex_type = VERTEX_TYPE_STATIC,
-        .mat_type    = MAT_UNLIT_OPAQUE,
+        .mat_type    = MAT_UNLIT,
         .mesh_rids = {
             .primitive_count = 1,
             .primitives = {
@@ -241,6 +287,7 @@ void create_startup_resources()
             }
         }
     };
+#endif
 }
 
 
@@ -259,6 +306,8 @@ void create_window_dependent_resources()
                 .handle  = renderstate.swapchain_images[i],
                 .view    = renderstate.swapchain_image_views[i],
                 .format  = renderstate.swapchain_image_format,
+                .extent  = (VkExtent3D){ renderstate.swapchain_extent.width, renderstate.swapchain_extent.height, 1 },
+                .usage   = renderstate.swapchain_usage,
                 .subresource_range = {
                     .aspectMask      = VK_IMAGE_ASPECT_COLOR_BIT,
                     .baseMipLevel    = 0,
@@ -275,6 +324,7 @@ void create_window_dependent_resources()
 
     const uint32_t width = renderstate.swapchain_extent.width;
     const uint32_t height = renderstate.swapchain_extent.height;
+    const VkFormat HDR_COLOR_FORMAT = VK_FORMAT_R16G16B16A16_SFLOAT;
     
     // Depth buffer
     renderstate.rids.depth_buffer_rid = create_rendertarget2d_resource(
@@ -287,7 +337,7 @@ void create_window_dependent_resources()
     // Foward render target
     renderstate.rids.forward_target_rid = create_rendertarget2d_resource(
         "Forward Render Target", flags, width, height,
-        VK_FORMAT_R16G16B16A16_SFLOAT,
+        HDR_COLOR_FORMAT,
         VK_IMAGE_ASPECT_COLOR_BIT,
         1, 1
     );
@@ -296,8 +346,8 @@ void create_window_dependent_resources()
     if (renderstate.multisampling_count_flag > VK_SAMPLE_COUNT_1_BIT)
     {
         renderstate.rids.hdr_color_target_rid = create_rendertarget2d_resource(
-            "Forward Render Target", flags, width, height,
-            VK_FORMAT_R16G16B16A16_SFLOAT,
+            "HDR Color Target", flags, width, height,
+            HDR_COLOR_FORMAT,
             VK_IMAGE_ASPECT_COLOR_BIT,
             0, 0
         );
@@ -308,6 +358,21 @@ void create_window_dependent_resources()
         renderstate.rids.hdr_color_target_rid = renderstate.rids.forward_target_rid;
     }
 
+    // HDR color ping pong buffer for bloom
+    // renderstate.rids.hdr_color_target_pingpong_rid = create_rendertarget2d_resource(
+    //     "Forward Render Target", flags, width, height,
+    //     HDR_COLOR_FORMAT,
+    //     VK_IMAGE_ASPECT_COLOR_BIT,
+    //     0, 0
+    // );
+
+    // LDR color ping pong buffer for bloom
+    renderstate.rids.ldr_color_target_rid = create_rendertarget2d_resource(
+        "LDR Color Target", flags, width, height,
+        renderstate.swapchain_image_format,  // <- TODO: Is matching the swapchain image always best? I.e. sRGB?
+        VK_IMAGE_ASPECT_COLOR_BIT,
+        0, 0
+    );
 }
 
 void create_scene_resources()
@@ -400,7 +465,8 @@ void create_scene_resources()
             .blend_mode = BLEND_MODE_MASKED,
             .alpha_cutoff = 0.5f,
             .sampler_idx = FG_SAMPLER_ANISOTROPIC_REPEAT,
-            .texture_idx_basecolor = renderstate.registry.resources[default_texture_rid].image_bindless_index
+            .texture_idx_basecolor = renderstate.registry.resources[default_texture_rid].bindless_texture_idx,
+            .texture_idx_emissive = UINT32_MAX
         };
         loaded_materials[num_loaded_materials++] = default_mat;
     }
@@ -427,6 +493,7 @@ void create_scene_resources()
             // (maybe I'd want to check the base colour texture's min/mag filter and s/t wrap to choose a better one if we need)
             gpu_mat.sampler_idx = FG_SAMPLER_ANISOTROPIC_REPEAT;
             
+            // BASECOLOR TEXTURE
             if (mat->base_color_texture_index >= 0)
             {
                 Texture* base_color_texture = &asset->textures[mat->base_color_texture_index];
@@ -438,11 +505,30 @@ void create_scene_resources()
                     base_color_image->width, base_color_image->height,
                     VK_FORMAT_R8G8B8A8_SRGB  // <- is a colour texture
                 );
-                gpu_mat.texture_idx_basecolor = renderstate.registry.resources[new_texture_rid].image_bindless_index;
+                gpu_mat.texture_idx_basecolor = renderstate.registry.resources[new_texture_rid].bindless_texture_idx;
             }
             else
             {
                 gpu_mat.texture_idx_basecolor = UINT32_MAX;
+            }
+
+            // EMISSIVE TEXTURE
+            if (mat->emissive_texture_index >= 0)
+            {
+                Texture* emissive_texture = &asset->textures[mat->emissive_texture_index];
+                Image*   emissive_image   = &asset->images[emissive_texture->image_index];
+
+                // Create texture resource
+                uint32_t new_texture_rid = create_mipmapped_texture2d_resource(
+                    emissive_image->uri, flags, emissive_image->data, emissive_image->data_size,
+                    emissive_image->width, emissive_image->height,
+                    VK_FORMAT_R8G8B8A8_SRGB  // <- is a colour texture
+                );
+                gpu_mat.texture_idx_emissive = renderstate.registry.resources[new_texture_rid].bindless_texture_idx;
+            }
+            else
+            {
+                gpu_mat.texture_idx_emissive = UINT32_MAX;
             }
 
             loaded_materials[num_loaded_materials++] = gpu_mat;
@@ -450,8 +536,10 @@ void create_scene_resources()
     }
 
     // Upload materials to global material buffer (all at once)
-    FG_Resource* materials_res = &renderstate.registry.resources[renderstate.rids.material_ssbo_rid];
-    memcpy(materials_res->buffer.mapped_data, loaded_materials, num_loaded_materials * sizeof(MaterialData));
+    FG_Resource* materials_res = &renderstate.registry.resources[renderstate.rids.materials_buffer_rid];
+    vmaCopyMemoryToAllocation(renderstate.vma_allocator, loaded_materials, materials_res->allocation, 0, num_loaded_materials * sizeof(MaterialData));
+    // memcpy(materials_res->buffer.mapped_data, loaded_materials, mat_upload_size);
+    // vmaFlushAllocation(renderstate.vma_allocator, materials_res->allocation, 0, mat_upload_size);
 
     // Load Static meshes
     for (uint32_t i = 0; i < init_info->num_static_meshes; ++i)

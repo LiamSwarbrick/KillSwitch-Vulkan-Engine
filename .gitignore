@@ -9,6 +9,9 @@ imgui.ini
 # Renderdoc settings
 *.cap
 
+# Perf output
+*.data
+
 # --- Build Outputs ---
 bin/
 build-artefacts/

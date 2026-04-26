@@ -2,6 +2,9 @@
 #   NOTE: Slow the first time, because it builds SDL
 #   But after that, all builds are cached, so you can run this script again and see the program immediately
 
+# Latest GCC otherwise it won't build (some people using C++23 features or something)
+module load gcc
+
 # Uni options means it uses the included glslc compiler
 # On our other build targets, we just have glslc installed on our machines.
 ./premake5 gmake --uni

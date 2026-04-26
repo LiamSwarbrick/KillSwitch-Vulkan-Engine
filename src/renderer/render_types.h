@@ -3,6 +3,7 @@
 
 // Way for game to communicate thing sfor the renderer
 #include "glm/glm.hpp"
+#include "glm/gtc/type_ptr.hpp"
 
 #include "shadersrc/common/shared.glsl"
 
@@ -21,8 +22,9 @@ MAT_HUD                // E.g. Minimap, current weapon, ammo. These are ui eleme
 
 // WARNING(Liam): Make sure core/imported_components.h is up to date with this
 #define MATERIAL_LIST(X) \
-    X(MAT_UNLIT_OPAQUE)  \
-    X(MAT_LIT_OPAQUE)
+    X(MAT_UNLIT)         \
+    X(MAT_LIT)           \
+    X(MAT_LIT_OUTLINE)
 
 
 typedef enum
@@ -67,7 +69,7 @@ MeshPrefab;
 
 typedef struct Renderable
 {
-    mat4 transform;
+    glm::mat4 transform;
     MeshPrefab mesh_prefab;  // The GPU resource buffers containing the vertex and index data
     
     // CPU-side joints buffer we memcpy from to GPU joints buffer

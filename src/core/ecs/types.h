@@ -4,6 +4,7 @@
 
 #include <bitset>
 #include <limits>
+#include <cstdint>
 
 
 using EntityID = uint32_t;

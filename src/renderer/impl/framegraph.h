@@ -1,9 +1,37 @@
+/////////////////////////////////////////////////////////////////////////
+//  README: Can skip the page of comments :)                           //
+//  (leaving them here for now in case it's a useful reminder          //
+//   to myself of the original framegraph motivations and todos)       //
+//                                                                     //
+//  The Framegraph API is reasonably self-explanatory,                 //
+//  there are very few functions and it's all plain-old-data.          //
+//  The framegraph handles renderpass execution and synchronisation.   //
+//                                                                     //
+//  All the vulkan pipeline and drawcall stuff is handled in           //
+//  pipeline_keying.h/cpp and drawcall.h/cpp.                          //
+//  game_resources.h/cpp makes the resources, used by a framegraph.    //
+//                                                                     //
+//                                                            - Liam   //
+/////////////////////////////////////////////////////////////////////////
+
 /*
-TODO: Read whatever zee fuck i wrote in these comments at the top 
-and write the up to data description.
+TODO: Read and rework whatever zee fuck i wrote in these heading comments
+and write the most up to data description.
+
+Notably: The motivation section predates the implementation.
 */
 
-// NOTE(Liam): Frame Graph Motivation:
+
+/* Some features from the top of my head:
+- It allows multiple render passes of the same type.
+  Which is common for  shadow mapping multiple lights, split screen games,
+  and also repeated blur passes, as is used in some bloom implementations.
+
+- MSAA is trivial just set the resolve target (which can be an alias to the MSAA target
+  whenever MSAA is disabled, i.e. resolve_rid == msaa_rid).
+*/
+
+// NOTE: Frame Graph Motivation:
 // Because in the past I've wasted too much time implemented features in pure hardcoded vulkan
 // (things like bloom involves many passes and buffers and descriptor sets and layouts and pipeline and shaders and synchronisation).
 // The idea here is to define your frame as a graph, and compile the resource
@@ -12,21 +40,38 @@ and write the up to data description.
 // Questions about the renderer, material system, mesh system, different types of shaders.
 // Oh well, will hopefully figure this out.
 
-// Idea for future:
-// Currently the framegraph, registry and heap are not passed through argument,
-// but instead used from the global renderstate directly.
-// I can change this for a more reusable Vulkan layer to use in my next project.
-// But for now it makes it simpler since less arguments are passed around,
-// specifically, VkDevice, framegraph, registry and heap.
-// Also, multiple framegraphs could allow parts to be reused across frames.
-// And further framegraph analysis could be done like topological sorts,
+// Idea I had that I realised the framegraph was already good for:
+//
+// - Currently the framegraph, registry and heap are not passed through argument,
+//   but instead used from the global renderstate directly.
+//   I can change this for a more reusable Vulkan layer to use in my next project.
+//   Although I do like the simplicity of renderstate being all in one place.
+//   and it also makes it simpler since less arguments are passed around,
+//   specifically, VkDevice, framegraph, registry and heap. So meh, don't change that.
+//
+// - Look into reusing parts across frames (caching shadows from lights that haven't moved).
+//   Although this is currently possible in the current framegraph with simple logic so meh.
+//
+
+// FUTURE:
+// Further framegraph analysis could be done like topological sorts,
 // and multi-queue support for concurrent execution of the graph, which
-// gives improves GPU occupancy and allows higher end GPUs to be pushed much further.
+// gives improved GPU occupancy and allows higher end GPUs to be pushed much further.
+
+// STREAMING TODOs:
+// I believe rendering could happen while models are still loading pretty simply, would just need a callback function.
+// Before the call-back happens, you simply do if (primitive ptr) before vkCmdDraw happens.
+// There is also texture streaming and model streaming, where you simply just render the current amount of vertices that
+// are in the buffer so far. And for textures, maybe you precompute mipmaps and stream in lower mip levels first?
+// All not too hard I don't think. But pointless at the moment.
+// Damn, I need to learn blender enough to actually make things in it for a full game. But also procedural offline shit,
+// such that I can test streaming open world streaming shit with terrain in this style https://www.shadertoy.com/view/wXcfWn
+// REAL TODO: Break from programming to become a 3D modeller so blender is not such a fucking bottleneck lol.
 
 
 // How the code works:
 //
-// To understand whats going on in the code, start with the struct FrameGraph (a bunch of renderpass descriptions).
+// To understand whats going on in the code, start with the struct FrameGraph (an array of renderpass descriptions in order).
 // For the internals, the RenderState contains:
 // - ResourceRegistry registry; Which holds all resources and their current state.
 // - BindlessHeap heap; Which is the descriptor set that holds all textures and samplers.
@@ -46,20 +91,22 @@ and write the up to data description.
 #ifndef RENDERER_FRAMEGRAPH_H
 #define RENDERER_FRAMEGRAPH_H
 
+// #define VERBOSE_FRAMEGRAPH_LOGGING
+
 // Arbitrary predefined array sizes for simplicity
 #define MAX_PASS_RESOURCE_BANDWIDTH  8
 #define MAX_PASSES          256
 #define MAX_RESOURCES       20000
 #define NUM_BINDLESS_TEXTURE_SLOTS 10000   // Ample descriptor slots to never worry about again.
 #define MAX_MATERIALS       5096
-#define PUSHCONSTANTS_SIZE  256  // <- Guarunteed in Vulkan 1.4, and we rely on these a lot.
+#define PUSHCONSTANTS_SIZE  256  // <- 256 guarunteed in Vulkan 1.4, and we rely on these a lot for passing buffer addresses of the data to the shaders.
 
 #include "internal_structs.h"
 #include "vulkan_wrapper.h"
 
 #include "renderer/shadersrc/common/sampler_indices.glsl"
 
-// Called at the start and end.
+// Called within renderer init and shutdown
 void FG_Init();
 void FG_Shutdown();
 
@@ -80,14 +127,13 @@ typedef struct PassResourceUsage
 {
     uint32_t rid;                 // Index into a resource array (the internal registry)
     FG_UsageFlags usage_flags;    // Tells the graph HOW to use this resource in this pass
-    FG_SamplerType sampler_type;  // Only for input image resources. Not using combined image samplers so we can have different samplers for the same image in different passes
 
     // Optional MSAA resolve step for outputs
     uint32_t resolve_rid;  // Set to UINT32_MAX when not used
     VkResolveModeFlagBits resolve_mode;
 
     // Sync state
-    VkImageLayout layout;  // For images only (buffers can leave these 0)
+    VkImageLayout layout;  // For images only (buffers can leave layout 0)
     VkAccessFlags2 access;
     VkPipelineStageFlags2 stage;
     uint32_t queue_family_index;
@@ -102,7 +148,6 @@ PassResourceUsage;
 typedef struct RenderPassDesc
 {
     char debug_name[64];  // TODO: Add to renderdoc with vkDebugMarkerSetObjectNameEXT somehow
-    uint32_t pass_type;
 
     // Resource inputs/outputs (buffers and image attachments)
     // NOTE: Output is just an attachment, so things like input depth buffer from another pass would be an output if used for forward rendering
@@ -121,7 +166,7 @@ typedef struct RenderPassDesc
 
     // A function pointer to what executes the draw calls
     void (*execute_callback)(VkCommandBuffer cmd, uint32_t pass_id);
-    void* user_data;
+    void* user_data;  // <- NOTE: This is useful when the same renderpass type is used multiple times e.g. different camera perspectives per shader map
 }
 RenderPassDesc;
 
@@ -175,7 +220,7 @@ typedef struct ImageResourceData
 
     // Metadata about the image needed for parts of the frame graph
     VkFormat                format;
-    VkExtent3D              extent;  // TODO: Use for checking if render_area matches (also can use custom scissor and viewport if it's oversized?)
+    VkExtent3D              extent;
     VkImageUsageFlags       usage;   // Tells us if we can go into BindlessHeap (when has SAMPLED_BIT)
     VkImageSubresourceRange subresource_range;  // Required for barriers
 }
@@ -220,7 +265,7 @@ typedef struct FG_Resource
     // Shader side access to resources
     union
     {
-        uint32_t image_bindless_index;       // Index into the global texture array, UINT32_MAX for nonsamplable images e.g. the swapchain
+        uint32_t bindless_texture_idx;       // Index into the global texture array, UINT32_MAX for nonsamplable images e.g. the swapchain
         VkDeviceAddress buffer_gpu_address;  // Buffer device address for shader
     };
 

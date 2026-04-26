@@ -10,7 +10,6 @@ typedef struct MaterialPipelineInfo
     uint16_t secondary_shader_id;  // Multi-pass, e.g. OUTLINE.
     // FUTURE: Add tertiary shader etc.. if needed. Set to SHADER_NONE when not used.
 
-    b32 is_opaque;
     b32 is_ui;
 }
 MaterialPipelineInfo;

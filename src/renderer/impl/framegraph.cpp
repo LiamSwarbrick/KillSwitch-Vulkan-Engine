@@ -540,7 +540,9 @@ uint32_t add_resource_to_registry_and_heap(const char* debug_name, FG_ResourceTy
     
     if (type == FG_RESOURCE_TYPE_BUFFER)
     {
+        #ifdef VERBOSE_FRAMEGRAPH_LOGGING
         printf("Adding BUFFER resource to registry. (" ANSI_CYAN "%s" ANSI_RESET ")\n", res->debug_name);
+        #endif
         res->buffer = resource_info.import_info.buffer;
 
         // Immediately grab the BDA pointer
@@ -553,7 +555,9 @@ uint32_t add_resource_to_registry_and_heap(const char* debug_name, FG_ResourceTy
     }
     else
     {
+        #ifdef VERBOSE_FRAMEGRAPH_LOGGING
         printf("Adding IMAGE resource to registry. (" ANSI_CYAN "%s" ANSI_RESET ")\n", res->debug_name);
+        #endif
         res->image = resource_info.import_info.image;
         
         // Only images created with SAMPLED_BIT should go in the BindlessHeap
@@ -562,10 +566,12 @@ uint32_t add_resource_to_registry_and_heap(const char* debug_name, FG_ResourceTy
 
         if (can_be_sampled)
         {
+            #ifdef VERBOSE_FRAMEGRAPH_LOGGING
             printf("Adding " ANSI_CYAN "%s" ANSI_RESET " to heap at index %u (is samplable).\n", res->debug_name, renderstate.heap.texture_count);
-
+            #endif
+            
             // Register in  bindless descriptor array
-            res->image_bindless_index = renderstate.heap.texture_count++;
+            res->bindless_texture_idx = renderstate.heap.texture_count++;
             VkDescriptorImageInfo descriptor_image_info = {
                 .imageView    = res->image.view,
                 .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
@@ -576,7 +582,7 @@ uint32_t add_resource_to_registry_and_heap(const char* debug_name, FG_ResourceTy
                 .pNext             = NULL,
                 .dstSet            = renderstate.heap.global_set,
                 .dstBinding        = 0,  // <- Take note, images array is binding=0
-                .dstArrayElement   = res->image_bindless_index,
+                .dstArrayElement   = res->bindless_texture_idx,
                 .descriptorCount   = 1,
                 .descriptorType    = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
                 .pImageInfo        = &descriptor_image_info,
@@ -588,7 +594,7 @@ uint32_t add_resource_to_registry_and_heap(const char* debug_name, FG_ResourceTy
         else
         {
             // UINT32_MAX to represent nonsamplable images not being part of the bindless heap.
-            res->image_bindless_index = UINT32_MAX;
+            res->bindless_texture_idx = UINT32_MAX;
         }
     }
 
@@ -1170,6 +1176,29 @@ void bindless_heap_create_all_samplers()
                     .addressModeU      = VK_SAMPLER_ADDRESS_MODE_REPEAT,
                     .addressModeV      = VK_SAMPLER_ADDRESS_MODE_REPEAT,
                     .addressModeW      = VK_SAMPLER_ADDRESS_MODE_REPEAT,
+                    .mipLodBias        = 0.0f,
+                    .anisotropyEnable  = VK_FALSE,
+                    .maxAnisotropy     = 0.0f,
+                    .compareEnable     = VK_FALSE,
+                    .compareOp         = VK_COMPARE_OP_NEVER,
+                    .minLod            = 0.0f,
+                    .maxLod            = VK_LOD_CLAMP_NONE,
+                    .borderColor       = VK_BORDER_COLOR_FLOAT_TRANSPARENT_BLACK,
+                    .unnormalizedCoordinates = VK_FALSE
+                };
+                break;
+            
+            case FG_SAMPLER_LINEAR_BLACK_BORDER:
+                sampler_create_info = (VkSamplerCreateInfo){
+                    .sType             = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO,
+                    .pNext             = NULL,
+                    .flags             = 0,
+                    .magFilter         = VK_FILTER_LINEAR,
+                    .minFilter         = VK_FILTER_LINEAR,
+                    .mipmapMode        = VK_SAMPLER_MIPMAP_MODE_LINEAR,
+                    .addressModeU      = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER,
+                    .addressModeV      = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER,
+                    .addressModeW      = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER,
                     .mipLodBias        = 0.0f,
                     .anisotropyEnable  = VK_FALSE,
                     .maxAnisotropy     = 0.0f,

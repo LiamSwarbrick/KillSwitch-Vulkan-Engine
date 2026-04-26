@@ -200,6 +200,38 @@ workspace "AdventureEngine"
             "SDL3"   -- The lib we just built via cmake in prebuildcommands
         }
 
+    -- --------------------------------------------------------------------
+    -- Physics Module
+    -- --------------------------------------------------------------------
+    project "physics"
+        kind "StaticLib"
+        language "C++"
+        cppdialect "C++latest"
+
+        files {
+            SRC .. "physics/**.hpp",
+            SRC .. "physics/**.h",
+            SRC .. "physics/**.cpp"
+        }
+
+        includedirs { 
+            SRC,  -- Exported API headers
+            SRC .. "physics/**",
+            include_paths.glm,
+            include_paths.cgltf, -- because we include core/components.h
+            include_paths.rapidjson,
+            include_paths.SDL3 -- Assertions (in case)
+        }
+
+        libdirs {
+            lib_dirs.SDL3
+        }
+
+        links {
+            "core",
+            "SDL3"   -- The lib we just built via cmake in prebuildcommands
+        }
+
 
     -- Third Party ImGUI Node Editor (do not want external code to produce warnings)
     project "imgui"
@@ -361,6 +393,7 @@ workspace "AdventureEngine"
 
         links {  -- NOTE: Must link from highest level dependency to lowest level.   
             "renderer",
+            "physics",
             "core",
             "SDL3",
             "imgui",

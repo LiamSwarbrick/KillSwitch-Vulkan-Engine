@@ -35,9 +35,11 @@ int GetAnimationIdFromName(const C_AnimatedMesh& animatedMesh, const char* anima
 int find_bone_index(Skin* skin, int target_node_index);
 void UpdateLayerTime(C_AnimatedMesh& animatedMesh, AnimationLayer& layer, float dt, float playbackSpeed);
 void CalculateLayerPose(Asset* asset, AnimationLayer& layer, std::vector<BoneTransform>& currentPose);
-void CalculateWorldMatrices(Asset* asset, int currentNode, glm::mat4 parentMatrix, const std::vector<glm::mat4>& localJointMatrices, std::vector<glm::mat4>& worldJointMatrices);
+void CalculateModelMatrices(Asset* asset, int currentNode, glm::mat4 parentMatrix, const std::vector<glm::mat4>& localJointMatrices, std::vector<glm::mat4>& worldJointMatrices);
 void AnimationInterpolation(Asset* asset, Animation& animation, float animationTime, std::vector<BoneTransform>& pose);
 void BlendPoses(const std::vector<BoneTransform>& poseA, const std::vector<BoneTransform>& poseB, float blendFactor, std::vector<BoneTransform>& blendedPose);
+bool IsIdentityMatrix(const float* m);
+glm::mat4 CalculateBaseTransform(Asset* asset);
 
 // layered animation
 void SetBoneMask(C_AnimatedMesh& animatedMesh, int boneIndex);

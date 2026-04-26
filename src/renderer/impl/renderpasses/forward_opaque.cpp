@@ -9,18 +9,12 @@ void ForwardOpaque_Execute(VkCommandBuffer cmd, uint32_t pass_idx)
 
     uint64_t scene_ptr = 0;
     {
-        SceneData scene_data = {};
-        scene_data.view = renderstate.camera_view;
-        scene_data.proj = renderstate.fullscreen_proj;
-        scene_data.view_proj = scene_data.proj * scene_data.view;
-
         VkExtent3D extents = renderstate.registry.resources[renderstate.rids.hdr_color_target_rid].image.extent;
-        scene_data.rendertarget_size = glm::uvec2(extents.width, extents.height);
+        SceneData scene_data = MakeSceneData(renderstate.main_camera, (VkExtent2D){ extents.width, extents.height });
         scene_ptr = PushToMappedArena(&renderstate.scenes_arena, &scene_data, sizeof(SceneData));
     }
-    
 
-    uint32_t forward_shaders[] = { SHADER_UNLIT, SHADER_LIT };
+    uint32_t forward_shaders[] = { SHADER_UNLIT, SHADER_LIT, SHADER_OUTLINE };
     PushConstant_PassHeader push_pass = {};  // Unused
 
     ResetDrawArena();
@@ -37,7 +31,7 @@ void ForwardOpaque_Execute(VkCommandBuffer cmd, uint32_t pass_idx)
             for (uint32_t p = 0; p < drawcall.renderable->mesh_prefab.mesh_rids.primitive_count; ++p)
             {
                 PrimitiveRIDs* prim = &drawcall.renderable->mesh_prefab.mesh_rids.primitives[p];
-                MaterialData* mat = &((MaterialData*)renderstate.registry.resources[renderstate.rids.material_ssbo_rid].buffer.mapped_data)[prim->material_index];
+                MaterialData* mat = &((MaterialData*)renderstate.registry.resources[renderstate.rids.materials_buffer_rid].buffer.mapped_data)[prim->material_index];
 
                 PipelineKey key = {
                     .pipeline_type  = PK_PIPELINE_TYPE_GRAPHICS,
@@ -54,6 +48,11 @@ void ForwardOpaque_Execute(VkCommandBuffer cmd, uint32_t pass_idx)
                     .front_face     = VK_FRONT_FACE_COUNTER_CLOCKWISE,
                     .msaa_samples   = (uint64_t)PK_MultisamplingFlag(renderstate.multisampling_count_flag)
                 };
+
+                if (shader_id == SHADER_OUTLINE)
+                {
+                    key.cull_mode = VK_CULL_MODE_FRONT_BIT;
+                }
 
                 // TODO: Use sort key
                 PushDrawPrimitive(drawcall, key, p, 0);
