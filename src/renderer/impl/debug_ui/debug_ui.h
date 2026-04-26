@@ -24,11 +24,14 @@ namespace DebugUI
         bool show_asset_browser = true;
         bool show_camera        = true;
 
-        CameraMode camera_mode  = CameraMode::FreeCam;
+        DebugUICameraMode camera_mode  = DebugUICameraMode::TPCam;
         FreeCamState free_cam   = {};   // owned here; updated by FreeCam_Update each frame
         FPCamState fp_cam       = {};   // synced with game-owned FP cam state
+        TPCamState tp_cam       = {};   // synced with game-owned TP cam state
         CameraInfo fp_camera    = {};   // synced with game-owned FP camera output
+        CameraInfo tp_camera    = {};   // synced with game-owned TP camera output
         bool has_fp_camera      = false;
+        bool has_tp_camera      = false;
 
         // Entity ID 
         uint32_t selected_entity_id = UINT32_MAX;
@@ -166,6 +169,7 @@ namespace DebugUI
             state.camera_mode,
             state.free_cam,
             state.fp_cam,
+            state.tp_cam,
             player_candidates.data(),
             player_count
         );

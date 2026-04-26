@@ -7,6 +7,7 @@
 #include "core/animation.h"
 #include "game_ui.h"
 #include "fp_cam.h"
+#include "tp_cam.h"
 #include "audio_system.h"
 
 #include "SDL3/SDL.h"
@@ -162,15 +163,25 @@ int main(int argc, char *argv[])
     DebugUI_SetECS(&scene.GetECS());
     DebugUI_SetAsset(animationPrefab);
 
-    // Game owns FP camera state; seed it from current Debug UI state once at startup.
+    // Game owns FP/TP camera state; seed both from Debug UI state once at startup.
     FPCamState game_fp_cam = {};
     if (const FPCamState* initial_fp_cam = DebugUI_GetFPCamState())
         game_fp_cam = *initial_fp_cam;
 
-    // Publish an initial FP camera snapshot so debug camera switching is valid on frame 0.
-    CameraInfo initial_fp_camera = Game::FPCam_Update(game_fp_cam, &scene.GetECS(), 0.0f, false);
+    TPCamState game_tp_cam = {};
+    if (const TPCamState* initial_tp_cam = DebugUI_GetTPCamState())
+        game_tp_cam = *initial_tp_cam;
+
+    // Gameplay starts in third-person camera mode.
+    DebugUI_SetCameraMode(DebugUICameraMode::TPCam);
+
+    // Publish initial camera snapshots so debug camera switching is valid on frame 0.
+    CameraInfo initial_fp_camera = Game::FPCam_Update(game_fp_cam, &scene.GetECS(), 0.0f, false, false);
+    CameraInfo initial_tp_camera = Game::TPCam_Update(game_tp_cam, &scene.GetECS(), 0.0f, false, true);
     DebugUI_SetFPCamState(&game_fp_cam);
+    DebugUI_SetTPCamState(&game_tp_cam);
     DebugUI_SetFPCamCameraInfo(&initial_fp_camera);
+    DebugUI_SetTPCamCameraInfo(&initial_tp_camera);
 
     bool running = true;
 
@@ -186,15 +197,30 @@ int main(int argc, char *argv[])
         if (dt > 0.1f) dt = 0.1f;   
 
         // Event Loop
+        bool toggle_fp_tp_camera = false;
         SDL_Event event;
         while (SDL_PollEvent(&event))
         {
             if (event.type == SDL_EVENT_QUIT) running = false;
+
+            if (event.type == SDL_EVENT_KEY_DOWN && !event.key.repeat && event.key.scancode == SDL_SCANCODE_V)
+                toggle_fp_tp_camera = true;
+
+            if (event.type == SDL_EVENT_GAMEPAD_BUTTON_DOWN && event.gbutton.button == SDL_GAMEPAD_BUTTON_RIGHT_STICK)
+                toggle_fp_tp_camera = true;
+
             Renderer_ListenToWindowEvent(event);
             Input_ProcessEvent(event);
         }
         Input_Update();
         GameUI_Update();
+
+        if (toggle_fp_tp_camera)
+        {
+            DebugUICameraMode mode = DebugUI_GetCameraMode();
+            mode = (mode == DebugUICameraMode::TPCam) ? DebugUICameraMode::FPCam : DebugUICameraMode::TPCam;
+            DebugUI_SetCameraMode(mode);
+        }
 
         // Quit if requested from any menu
         if (GameUI_GetState() == GameState::Quitting) running = false;
@@ -242,16 +268,32 @@ int main(int argc, char *argv[])
         if (const FPCamState* debug_fp_cam = DebugUI_GetFPCamState())
             game_fp_cam = *debug_fp_cam;
 
+        if (const TPCamState* debug_tp_cam = DebugUI_GetTPCamState())
+            game_tp_cam = *debug_tp_cam;
+
+        DebugUICameraMode active_camera_mode = DebugUI_GetCameraMode();
+
         // In debug mode, RMB drag still drives look even outside normal playing state.
         bool allow_mouse_look = (is_playing && !debug_ui_open) || (debug_ui_open && right_mouse_down);
 
-        // Freeze non-input simulation drift while paused/menu, but keep explicit look controls usable.
-        float fp_cam_dt = is_playing ? dt : 0.0f;
-        CameraInfo game_fp_camera = Game::FPCam_Update(game_fp_cam, &scene.GetECS(), fp_cam_dt, allow_mouse_look);
+        // Only the active gameplay camera consumes look input each frame.
+        bool fp_allow_mouse_look = allow_mouse_look && active_camera_mode == DebugUICameraMode::FPCam;
+        bool tp_allow_mouse_look = allow_mouse_look && active_camera_mode == DebugUICameraMode::TPCam;
+
+        // Freeze non-input simulation drift while paused/menu.
+        float fp_cam_dt = (is_playing && active_camera_mode == DebugUICameraMode::FPCam) ? dt : 0.0f;
+        float tp_cam_dt = (is_playing && active_camera_mode == DebugUICameraMode::TPCam) ? dt : 0.0f;
+        bool fp_apply_fov = active_camera_mode == DebugUICameraMode::FPCam;
+        bool tp_apply_fov = active_camera_mode == DebugUICameraMode::TPCam;
+
+        CameraInfo game_fp_camera = Game::FPCam_Update(game_fp_cam, &scene.GetECS(), fp_cam_dt, fp_allow_mouse_look, fp_apply_fov);
+        CameraInfo game_tp_camera = Game::TPCam_Update(game_tp_cam, &scene.GetECS(), tp_cam_dt, tp_allow_mouse_look, tp_apply_fov);
 
         // Push resolved state/camera back to Debug UI so panels display authoritative game data.
         DebugUI_SetFPCamState(&game_fp_cam);
+        DebugUI_SetTPCamState(&game_tp_cam);
         DebugUI_SetFPCamCameraInfo(&game_fp_camera);
+        DebugUI_SetTPCamCameraInfo(&game_tp_camera);
 
         // Rendering
         uint32_t flags = SDL_GetWindowFlags(window);
