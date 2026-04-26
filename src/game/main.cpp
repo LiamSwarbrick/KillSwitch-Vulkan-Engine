@@ -162,10 +162,12 @@ int main(int argc, char *argv[])
     DebugUI_SetECS(&scene.GetECS());
     DebugUI_SetAsset(animationPrefab);
 
+    // Game owns FP camera state; seed it from current Debug UI state once at startup.
     FPCamState game_fp_cam = {};
     if (const FPCamState* initial_fp_cam = DebugUI_GetFPCamState())
         game_fp_cam = *initial_fp_cam;
 
+    // Publish an initial FP camera snapshot so debug camera switching is valid on frame 0.
     CameraInfo initial_fp_camera = Game::FPCam_Update(game_fp_cam, &scene.GetECS(), 0.0f, false);
     DebugUI_SetFPCamState(&game_fp_cam);
     DebugUI_SetFPCamCameraInfo(&initial_fp_camera);
@@ -202,6 +204,7 @@ int main(int argc, char *argv[])
         bool debug_ui_open = DebugUI_IsOpen();
         Uint32 mouse_buttons = SDL_GetMouseState(nullptr, nullptr);
         bool right_mouse_down = (mouse_buttons & SDL_BUTTON_MASK(SDL_BUTTON_RIGHT)) != 0;
+        // Keep relative mouse while actively controlling camera (gameplay or Debug UI RMB drag).
         bool use_relative_mouse = (is_playing && !debug_ui_open) || (debug_ui_open && right_mouse_down);
         SDL_SetWindowRelativeMouseMode(window, use_relative_mouse);
 
@@ -235,13 +238,18 @@ int main(int argc, char *argv[])
         scene.Update(dt);
         //AudioSystem_Update(&audio_system, dt);
 
+        // Pull latest edits from Debug UI (bind target/FOV/mode-facing state).
         if (const FPCamState* debug_fp_cam = DebugUI_GetFPCamState())
             game_fp_cam = *debug_fp_cam;
 
+        // In debug mode, RMB drag still drives look even outside normal playing state.
         bool allow_mouse_look = (is_playing && !debug_ui_open) || (debug_ui_open && right_mouse_down);
 
+        // Freeze non-input simulation drift while paused/menu, but keep explicit look controls usable.
         float fp_cam_dt = is_playing ? dt : 0.0f;
         CameraInfo game_fp_camera = Game::FPCam_Update(game_fp_cam, &scene.GetECS(), fp_cam_dt, allow_mouse_look);
+
+        // Push resolved state/camera back to Debug UI so panels display authoritative game data.
         DebugUI_SetFPCamState(&game_fp_cam);
         DebugUI_SetFPCamCameraInfo(&game_fp_camera);
 
