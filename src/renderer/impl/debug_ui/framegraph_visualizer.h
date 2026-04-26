@@ -226,8 +226,8 @@ struct FrameGraphVisualizer
             ImGui::Text("Colour = Resource Usage");
 
             ImGui::TextColored(ImVec4(0.20f, 0.85f, 0.30f, 1.0f), "- Color Attachment");
-            ImGui::TextColored(ImVec4(0.30f, 0.55f, 1.00f, 1.0f), "- Depth");
-            ImGui::TextColored(ImVec4(0.60f, 0.30f, 1.00f, 1.0f), "- Stencil");
+            ImGui::TextColored(ImVec4(0.30f, 0.55f, 1.00f, 1.0f), "- Depth Attachment");
+            ImGui::TextColored(ImVec4(0.60f, 0.30f, 1.00f, 1.0f), "- Stencil Attachment");
             ImGui::TextColored(ImVec4(1.00f, 0.60f, 0.20f, 1.0f), "- Storage");
             ImGui::TextColored(ImVec4(1.00f, 0.90f, 0.20f, 1.0f), "- Sampled");
 

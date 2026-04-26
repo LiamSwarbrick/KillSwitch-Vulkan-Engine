@@ -5,11 +5,6 @@
 
 #include "force_generators.h"
 
-struct Entry
-{
-	RigidBody* body;
-	IForceGenerator* generator;
-};
 
 class ForceRegistry
 {
@@ -26,8 +21,15 @@ public:
 	void applyAll(std::vector<RigidBody>& bodies, float dt);
 
 private:
+
+	struct PairedEntry
+	{
+		RigidBody* body;
+		IForceGenerator* generator;
+	};
+
 	std::vector<IForceGenerator*> globalGenerators;
-	std::vector<Entry> pairedGenerators;
+	std::vector<PairedEntry> pairedGenerators;
 };
 
 #endif // !PHYSICS_SIMULATION_FORCE_REGISTRY_H

@@ -6,12 +6,16 @@
 #include "core/components.h"
 #include "core/animation.h"
 #include "game_ui.h"
+#include "audio_system.h"
 
 #include "SDL3/SDL.h"
 #include "SDL3/SDL_main.h"
 
 int main(int argc, char *argv[])
 {
+    (void)argc;
+    (void)argv;
+
     bool enabled_validation_layers = true;
     // NOTE: For non production builds, we still want Vulkan validation layers on in release mode, because release mode can have different bugs
     // To make sure it's obvious when validation layers are used, we'll put it in the window title.
@@ -30,10 +34,54 @@ int main(int argc, char *argv[])
         .preferred_initial_settings = {  // Will fallback if these aren't possible
             .uncapped_fps = 0,
             .msaa_sample_count = 4,
-            .fov_y = 70.0f
+            .fov_y = 50.0f
         }
     };
     Renderer_Init(&renderer_info);
+
+    /*AudioSystem audio_system = AudioSystem_Create((AudioSystemCreateInfo){
+        .debug_name = "GameAudio",
+        .initial_capacity = 8,
+        .master_volume = 1.0f
+    });
+    AudioSystem_LogSummary(&audio_system);
+
+    AudioClipHandle startup_music = AudioSystem_LoadClipEx(
+        &audio_system,
+        "startup_music",
+        "All_Sounds_MP3_UNMASTERED2/Low_Winds.mp3",
+        AUDIO_CLIP_CATEGORY_SOUNDTRACK
+    );
+    AudioClipHandle startup_test_sfx = AudioSystem_LoadClipEx(
+        &audio_system,
+        "startup_test_sfx",
+        "All_Sounds_MP3_UNMASTERED2/TV_Static.mp3",
+        AUDIO_CLIP_CATEGORY_SFX
+    );
+
+    if (startup_music != 0)
+    {
+        if (!AudioSystem_PlaySoundtrackLoop(&audio_system, startup_music, 0.80f))
+        {
+            SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "AudioSystem: soundtrack loaded but failed to start playback.");
+        }
+    }
+    else
+    {
+        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "AudioSystem: failed to load startup soundtrack.");
+    }
+
+    if (startup_test_sfx != 0)
+    {
+        if (!AudioSystem_PlaySFXOneShot(&audio_system, startup_test_sfx, 1.0f))
+        {
+            SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "AudioSystem: startup test SFX loaded but failed to start playback.");
+        }
+    }
+    else
+    {
+        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "AudioSystem: failed to load startup test SFX.");
+    }*/
 
     Input_Init("assets/keybindings.json");
     GameUI_Init();
@@ -90,6 +138,7 @@ int main(int argc, char *argv[])
     Asset* capsule_prefab = scene.LoadPrefab("assets/props/simple_capsule.gltf");
     // TODO: Change the following 2 prefabs so they can be imported (add the boolean "Is ECS Entity" with the new script where it is needed)
     Asset* catPrefab = scene.LoadPrefab("assets/animations/scene.gltf");
+    // Asset* catPrefab = scene.LoadPrefab("assets/animations/flatzombo.gltf");
     Asset* animationPrefab = scene.LoadPrefab("assets/animations/sceneglb.glb");
 
     scene.InstantiatePrefab(room_prefab, glm::vec3(0, 0, 0));
@@ -171,6 +220,7 @@ int main(int argc, char *argv[])
 
         // Game ticks
         scene.Update(dt);
+        //AudioSystem_Update(&audio_system, dt);
 
         // Rendering
         uint32_t flags = SDL_GetWindowFlags(window);
@@ -183,6 +233,7 @@ int main(int argc, char *argv[])
     }
 
     scene.Shutdown();
+    //AudioSystem_Destroy(&audio_system);
     Input_Shutdown();
     Renderer_Shutdown();
     Core_Shutdown(window);

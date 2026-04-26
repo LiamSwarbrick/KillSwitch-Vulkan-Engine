@@ -166,5 +166,6 @@ RaycastHit NarrowPhase::raycastBox(const Ray& ray, const BoxShape& box, const gl
 
 RaycastHit NarrowPhase::raycastCapsule(const Ray& ray, const CapsuleShape& capsule, const glm::vec3& pos, const glm::quat& ori) const
 {
+	// Orientation should be redundant because capsules should be locked in the Y axis
 	return RaycastHit();
 }

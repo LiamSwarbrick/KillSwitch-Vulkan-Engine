@@ -9,6 +9,7 @@
     layout (constant_id = 2) const uint MSAA_SAMPLE_COUNT   = 1;
 
     #define UINT32_MAX 0xFFFFFFFF
+    #define PI 3.14159265358979323846
 
 #else
 

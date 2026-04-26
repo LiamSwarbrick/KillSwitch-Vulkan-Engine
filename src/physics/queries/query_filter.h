@@ -11,6 +11,7 @@ struct QueryFilterInternal
 struct QueryFilter
 {
 	RigidBodyHandle bodyToIgnore;
+	// TODO: add the body layers (broadphase, like jolt) (no need to change the current data from the script)
 	
 };
 

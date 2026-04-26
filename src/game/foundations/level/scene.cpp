@@ -95,6 +95,14 @@ EntityID Scene::InstantiatePrefab(Asset* prefab, glm::vec3 spawnPosition)
             t.matrix = glm::translate(t.matrix, position);
             m_ecs.AddComponent<C_Transform>(eID, { t.matrix });
 
+            // TEMP LIGHTS:
+            m_ecs.AddComponent<C_Light>(eID, {
+                .type = LIGHT_COMPONENT_POINTLIGHT,
+                .color = glm::vec3(0.7f, 0.7f, 1.0f),
+                .intensity = 1.0f
+            });
+            /////////
+
 
 
             // 2. And put the "_ecs" value in the following
@@ -275,9 +283,20 @@ void Scene::Update(float dt)
 
 void Scene::Render()
 {
+    // Push light components (or light entities?) this frame
+    m_ecs.GetView<C_Transform, C_Light>().ForEach([&](C_Transform& transform, C_Light& light)
+    {
+        glm::vec3 position = glm::vec3(transform.matrix[3]);
+        glm::quat rotation = glm::quat_cast(transform.matrix);
+        glm::vec3 direction = rotation * glm::vec3(0.0f, 0.0f, 1.0f);
+
+        Renderer_PushLight(light, position, direction);
+    });
+
     m_ecs.GetView<C_Transform, C_StaticMesh>().ForEach([&](C_Transform& transform, C_StaticMesh& mesh)
     {
         // Skip invalid / not-yet-uploaded meshes
+        // (not that we support streaming yet, and if we did, textures are the actual bottleneck)
         if (mesh.renderer_prefab.mesh_rids.primitive_count == 0)
             return;
 

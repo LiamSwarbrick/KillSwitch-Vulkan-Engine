@@ -1,5 +1,7 @@
 #include "force_registry.h"
 
+#include <xmemory>
+
 
 void ForceRegistry::addGenerator(IForceGenerator* gen)
 {
@@ -20,14 +22,14 @@ void ForceRegistry::removeGenerator(IForceGenerator* gen)
 
 void ForceRegistry::addPair(RigidBody* body, IForceGenerator* gen)
 {
-
+	pairedGenerators.push_back({ body, gen });
 }
 
 void ForceRegistry::removePair(RigidBody* body, IForceGenerator* gen)
 {
 	pairedGenerators.erase(
 		std::remove_if(pairedGenerators.begin(), pairedGenerators.end(),
-			[&](const Entry& entry)
+			[&](const PairedEntry& entry)
 			{
 				return body == entry.body && gen == entry.generator;
 			}),
@@ -39,7 +41,7 @@ void ForceRegistry::removeAll(RigidBody* body)
 {
 	pairedGenerators.erase(
 		std::remove_if(pairedGenerators.begin(), pairedGenerators.end(),
-			[&](const Entry& entry)
+			[&](const PairedEntry& entry)
 			{
 				return body == entry.body;
 			}),
@@ -53,7 +55,7 @@ void ForceRegistry::removeAll(IForceGenerator* gen)
 
 	pairedGenerators.erase(
 		std::remove_if(pairedGenerators.begin(), pairedGenerators.end(),
-			[&](const Entry& entry)
+			[&](const PairedEntry& entry)
 			{
 				return gen == entry.generator;
 			}),
@@ -74,7 +76,7 @@ void ForceRegistry::applyAll(std::vector<RigidBody>& bodies, float dt)
 		}
 	}
 
-	for (Entry& entry : pairedGenerators)
+	for (PairedEntry& entry : pairedGenerators)
 	{
 		if (entry.body->isStatic) continue;
 		// We skip the check of 

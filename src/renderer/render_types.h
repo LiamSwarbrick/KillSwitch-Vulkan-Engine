@@ -22,8 +22,9 @@ MAT_HUD                // E.g. Minimap, current weapon, ammo. These are ui eleme
 
 // WARNING(Liam): Make sure core/imported_components.h is up to date with this
 #define MATERIAL_LIST(X) \
-    X(MAT_UNLIT_OPAQUE)  \
-    X(MAT_LIT_OPAQUE)
+    X(MAT_UNLIT)         \
+    X(MAT_LIT)           \
+    X(MAT_LIT_OUTLINE)
 
 
 typedef enum

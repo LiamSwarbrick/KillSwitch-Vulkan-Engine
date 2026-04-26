@@ -7,8 +7,10 @@ The simple improvement would be to multithread this.
 I.e. one ThreadStagingObjects per thread, and load textures + mipmap generation across threads.
 Then while one thread is waiting on a fence, other work is not blocked along with it.
 
+Joint transforms seems like a lot of data upload, for each animated character.
+Maybe multithreaded copies?
 
-Tiled architectures aren't fully utilised (Apply and mobile)
+When adding MacOS support: Tiled architectures aren't fully utilised (Apple and mobile)
 - There is a big bandwidth usage between passes.
   Because after the depth prepass, an unresolved MSAA depth buffer
   must be written back to main memory before the next renderpass (which loads it again).
@@ -19,3 +21,4 @@ Tiled architectures aren't fully utilised (Apply and mobile)
 - This mostly applies to Apple's hardware, which is more like mobile.
   We currently don't plan on support for either, but supporting Mac
   wouldn't be too hard, so in the future it's a possibility.
+

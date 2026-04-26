@@ -24,7 +24,7 @@ struct EPAEdge
 };
 
 // For O(log n) access using set instead of O(n)
-bool epa_compareEdges(const EPAEdge& a, const EPAEdge& b)
+static bool epa_compareEdges(const EPAEdge& a, const EPAEdge& b)
 {
 	if (a.a == b.a)
 	{

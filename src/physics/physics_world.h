@@ -163,7 +163,7 @@ private:
 	// Helper for AABB
 	void calculateAABB(RigidBody* body);
 
-	inline RigidBody& getBody();
+	//inline RigidBody& getBody();
 
 private:
 	// --- SYSTEMS ---

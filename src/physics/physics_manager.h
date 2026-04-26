@@ -10,6 +10,8 @@
 
 #include "glm/glm.hpp"
 
+#include <unordered_map>
+
 struct EntityRaycastHit
 {
 	EntityID entity = NULL_ENTITY;
