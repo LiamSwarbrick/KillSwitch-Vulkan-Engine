@@ -37,6 +37,18 @@ DebugUICameraMode DebugUI_GetCameraMode()
     return debug_ui_state.camera_mode;
 }
 
+void DebugUI_SetGameplayCameraMode(DebugUICameraMode mode)
+{
+    // Gameplay camera mode only supports FP/TP.
+    debug_ui_state.gameplay_camera_mode =
+        (mode == DebugUICameraMode::FPCam) ? DebugUICameraMode::FPCam : DebugUICameraMode::TPCam;
+}
+
+DebugUICameraMode DebugUI_GetGameplayCameraMode()
+{
+    return debug_ui_state.gameplay_camera_mode;
+}
+
 void DebugUI_SetFPCamState(const FPCamState* state)
 {
     if (!state) return;
@@ -85,10 +97,10 @@ void DebugUI_SetTPCamCameraInfo(const CameraInfo* camera)
 
 CameraInfo DebugUI_GetCameraInfo(float dt)
 {
-    // Gameplay camera follows the currently selected non-debug camera mode.
+    // Gameplay camera follows dedicated gameplay mode (FP/TP) when debug UI is hidden.
     if (!debug_ui_state.show_debug_ui)
     {
-        switch (debug_ui_state.camera_mode)
+        switch (debug_ui_state.gameplay_camera_mode)
         {
             case DebugUICameraMode::FPCam:
                 if (debug_ui_state.has_fp_camera)
@@ -96,12 +108,9 @@ CameraInfo DebugUI_GetCameraInfo(float dt)
                 return DebugUI::FreeCam_Update(debug_ui_state.free_cam, dt);
 
             case DebugUICameraMode::TPCam:
+            default:
                 if (debug_ui_state.has_tp_camera)
                     return debug_ui_state.tp_camera;
-                return DebugUI::FreeCam_Update(debug_ui_state.free_cam, dt);
-
-            case DebugUICameraMode::FreeCam:
-            default:
                 return DebugUI::FreeCam_Update(debug_ui_state.free_cam, dt);
         }
     }

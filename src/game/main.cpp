@@ -172,9 +172,6 @@ int main(int argc, char *argv[])
     if (const TPCamState* initial_tp_cam = DebugUI_GetTPCamState())
         game_tp_cam = *initial_tp_cam;
 
-    // Gameplay starts in third-person camera mode.
-    DebugUI_SetCameraMode(DebugUICameraMode::TPCam);
-
     // Publish initial camera snapshots so debug camera switching is valid on frame 0.
     CameraInfo initial_fp_camera = Game::FPCam_Update(game_fp_cam, &scene.GetECS(), 0.0f, false, false);
     CameraInfo initial_tp_camera = Game::TPCam_Update(game_tp_cam, &scene.GetECS(), 0.0f, false, true);
@@ -217,9 +214,9 @@ int main(int argc, char *argv[])
 
         if (toggle_fp_tp_camera)
         {
-            DebugUICameraMode mode = DebugUI_GetCameraMode();
+            DebugUICameraMode mode = DebugUI_GetGameplayCameraMode();
             mode = (mode == DebugUICameraMode::TPCam) ? DebugUICameraMode::FPCam : DebugUICameraMode::TPCam;
-            DebugUI_SetCameraMode(mode);
+            DebugUI_SetGameplayCameraMode(mode);
         }
 
         // Quit if requested from any menu
@@ -271,20 +268,20 @@ int main(int argc, char *argv[])
         if (const TPCamState* debug_tp_cam = DebugUI_GetTPCamState())
             game_tp_cam = *debug_tp_cam;
 
-        DebugUICameraMode active_camera_mode = DebugUI_GetCameraMode();
+        DebugUICameraMode gameplay_camera_mode = DebugUI_GetGameplayCameraMode();
 
         // In debug mode, RMB drag still drives look even outside normal playing state.
         bool allow_mouse_look = (is_playing && !debug_ui_open) || (debug_ui_open && right_mouse_down);
 
         // Only the active gameplay camera consumes look input each frame.
-        bool fp_allow_mouse_look = allow_mouse_look && active_camera_mode == DebugUICameraMode::FPCam;
-        bool tp_allow_mouse_look = allow_mouse_look && active_camera_mode == DebugUICameraMode::TPCam;
+        bool fp_allow_mouse_look = allow_mouse_look && gameplay_camera_mode == DebugUICameraMode::FPCam;
+        bool tp_allow_mouse_look = allow_mouse_look && gameplay_camera_mode == DebugUICameraMode::TPCam;
 
         // Freeze non-input simulation drift while paused/menu.
-        float fp_cam_dt = (is_playing && active_camera_mode == DebugUICameraMode::FPCam) ? dt : 0.0f;
-        float tp_cam_dt = (is_playing && active_camera_mode == DebugUICameraMode::TPCam) ? dt : 0.0f;
-        bool fp_apply_fov = active_camera_mode == DebugUICameraMode::FPCam;
-        bool tp_apply_fov = active_camera_mode == DebugUICameraMode::TPCam;
+        float fp_cam_dt = (is_playing && gameplay_camera_mode == DebugUICameraMode::FPCam) ? dt : 0.0f;
+        float tp_cam_dt = (is_playing && gameplay_camera_mode == DebugUICameraMode::TPCam) ? dt : 0.0f;
+        bool fp_apply_fov = gameplay_camera_mode == DebugUICameraMode::FPCam;
+        bool tp_apply_fov = gameplay_camera_mode == DebugUICameraMode::TPCam;
 
         CameraInfo game_fp_camera = Game::FPCam_Update(game_fp_cam, &scene.GetECS(), fp_cam_dt, fp_allow_mouse_look, fp_apply_fov);
         CameraInfo game_tp_camera = Game::TPCam_Update(game_tp_cam, &scene.GetECS(), tp_cam_dt, tp_allow_mouse_look, tp_apply_fov);

@@ -14,6 +14,7 @@
 
 namespace Game
 {
+    // Pull renderer FOV once so TP camera state starts synchronized with render settings.
     inline void TPCam_SyncFovFromRenderer(TPCamState& cam)
     {
         if (cam.fov_initialized) return;
@@ -23,6 +24,7 @@ namespace Game
         cam.fov_initialized = true;
     }
 
+    // Write TP camera FOV back to renderer when this camera is the active gameplay camera.
     inline void TPCam_ApplyFovToRenderer(const TPCamState& cam)
     {
         if (!cam.fov_initialized) return;
@@ -36,6 +38,7 @@ namespace Game
         }
     }
 
+    // Fallback bind target: first animated entity is treated as a player candidate.
     inline EntityID TPCam_FindFirstBindablePlayer(ECS* ecs)
     {
         if (!ecs) return NULL_ENTITY;
@@ -50,15 +53,18 @@ namespace Game
         return found;
     }
 
+    // Update TP camera orbit around target and return per-frame camera data.
     inline CameraInfo TPCam_Update(TPCamState& cam, ECS* ecs, float dt, bool allow_mouse_look, bool apply_fov_to_renderer)
     {
         static constexpr float MOUSE_SENSITIVITY  = 0.10f;
         static constexpr float GAMEPAD_LOOK_SPEED = 120.0f;
 
+        // Keep FOV state and renderer projection synchronized.
         TPCam_SyncFovFromRenderer(cam);
         if (apply_fov_to_renderer)
             TPCam_ApplyFovToRenderer(cam);
 
+        // Mouse look can be gated by caller (e.g. debug UI interaction).
         if (allow_mouse_look)
         {
             float mouse_dx = 0.0f;
@@ -69,21 +75,25 @@ namespace Game
             cam.pitch -= mouse_dy * MOUSE_SENSITIVITY;
         }
 
+        // Right-stick look remains active for controller orbit input.
         cam.yaw += (Input_GetActionValue(ACTION_CAMERA_RIGHT) - Input_GetActionValue(ACTION_CAMERA_LEFT))
             * GAMEPAD_LOOK_SPEED * dt;
         cam.pitch += (Input_GetActionValue(ACTION_CAMERA_UP) - Input_GetActionValue(ACTION_CAMERA_DOWN))
             * GAMEPAD_LOOK_SPEED * dt;
 
+        // Clamp vertical orbit and minimum distance for stable third-person framing.
         if (cam.pitch > 80.0f) cam.pitch = 80.0f;
         if (cam.pitch < -80.0f) cam.pitch = -80.0f;
         if (cam.distance < 0.5f) cam.distance = 0.5f;
 
+        // Recompute orbit forward from yaw/pitch.
         glm::vec3 forward;
         forward.x = cosf(glm::radians(cam.yaw)) * cosf(glm::radians(cam.pitch));
         forward.y = sinf(glm::radians(cam.pitch));
         forward.z = sinf(glm::radians(cam.yaw)) * cosf(glm::radians(cam.pitch));
         cam.forward = glm::normalize(forward);
 
+        // Re-resolve bind target if the current entity is invalid or missing.
         C_Transform* bound_transform = nullptr;
         if (ecs && cam.bound_entity != NULL_ENTITY)
             bound_transform = ecs->GetComponentPtr<C_Transform>(cam.bound_entity);
@@ -98,6 +108,7 @@ namespace Game
             }
         }
 
+        // When bound, orbit around player head-height target.
         if (bound_transform)
         {
             glm::vec3 player_pos = glm::vec3(bound_transform->matrix[3]);

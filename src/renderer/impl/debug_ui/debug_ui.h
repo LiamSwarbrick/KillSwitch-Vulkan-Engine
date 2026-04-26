@@ -24,7 +24,8 @@ namespace DebugUI
         bool show_asset_browser = true;
         bool show_camera        = true;
 
-        DebugUICameraMode camera_mode  = DebugUICameraMode::TPCam;
+        DebugUICameraMode camera_mode  = DebugUICameraMode::FreeCam;
+        DebugUICameraMode gameplay_camera_mode = DebugUICameraMode::TPCam;
         FreeCamState free_cam   = {};   // owned here; updated by FreeCam_Update each frame
         FPCamState fp_cam       = {};   // synced with game-owned FP cam state
         TPCamState tp_cam       = {};   // synced with game-owned TP cam state

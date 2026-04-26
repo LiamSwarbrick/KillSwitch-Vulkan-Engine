@@ -66,8 +66,13 @@ void DebugUI_SetImGuiCallback(DebugUI_ImGuiBuildCallback callback, void* user_da
 
 bool DebugUI_IsOpen();
 
+// Debug camera mode is used by the Debug UI Camera panel (includes FreeCam).
 void DebugUI_SetCameraMode(DebugUICameraMode mode);
 DebugUICameraMode DebugUI_GetCameraMode();
+
+// Gameplay camera mode is used when debug UI is hidden (FP/TP only).
+void DebugUI_SetGameplayCameraMode(DebugUICameraMode mode);
+DebugUICameraMode DebugUI_GetGameplayCameraMode();
 
 // Game pushes/pulls FP camera state so debug UI can display and edit it.
 void DebugUI_SetFPCamState(const FPCamState* state);
