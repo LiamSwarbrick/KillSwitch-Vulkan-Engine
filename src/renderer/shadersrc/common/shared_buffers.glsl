@@ -5,6 +5,8 @@
     but for performance I may throw some padding in anyway :)
 */
 
+#include "shared_types.glsl"
+
 struct SceneData
 {
     mat4 view;
@@ -72,36 +74,42 @@ struct LightsHeader
 };
 
 
-#define LIGHT_FALLOFF_FACTOR 1.0  // Higher than 1.0 will fall off faster
+// #define LIGHT_FALLOFF_FACTOR 5.0  // Higher than 1.0 will fall off faster
 
 #ifdef IS_GLSL
-    float get_attenuation(float dist, float radius)
+    float get_attenuation(float dist)
     {
-        float s = dist / radius;
-        if (s >= 1.0) return 0.0;
-
-        float s2 = s*s;
-        float s2_prime = 1.0 - s2;
-        return s2_prime*s2_prime / (1.0 + LIGHT_FALLOFF_FACTOR * s);
+        return 1.0 / max(1.0, dist*dist);
     }
+    // float get_attenuation(float dist, float radius)
+    // {
+    //     return max(1.0, dist*dist);
+    //     // float s = dist / radius;
+    //     // if (s >= 1.0) return 0.0;
+
+    //     // float s2 = s*s;
+    //     // float s2_prime = 1.0 - s2;
+    //     // return s2_prime*s2_prime / (1.0 + LIGHT_FALLOFF_FACTOR * s);
+    // }
 #endif
 
-#ifndef IS_GLSL
-    static float get_light_intensity(float target_brightness, float target_dist, float radius)
-    {
-        if (target_dist >= radius) return target_brightness;
+// #ifndef IS_GLSL
+//     static float get_light_intensity(float target_brightness, float target_dist, float radius)
+//     {
+//         return target_brightness;
+//         // if (target_dist >= radius) return target_brightness;
 
-        float s = target_dist / radius;
-        float s2 = s * s;
-        float F = LIGHT_FALLOFF_FACTOR;
+//         // float s = target_dist / radius;
+//         // float s2 = s * s;
+//         // float F = LIGHT_FALLOFF_FACTOR;
 
-        // Inverse of the attenuation formula
-        float numerator = 1.0f + F * s;
-        float denominator = (1.0f - s2) * (1.0f - s2);
+//         // // Inverse of the attenuation formula
+//         // float numerator = 1.0f + F * s;
+//         // float denominator = (1.0f - s2) * (1.0f - s2);
 
-        return target_brightness * (numerator / denominator);
-    }
-#endif
+//         // return target_brightness * (numerator / denominator);
+//     }
+// #endif
 
 // #ifndef IS_GLSL
 // static

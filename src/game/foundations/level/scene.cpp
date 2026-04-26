@@ -19,6 +19,7 @@ namespace rj = rapidjson;
 void Scene::StartUp()
 {
     m_ecs.RegisterComponent<C_Transform>();
+    m_ecs.RegisterComponent<C_Light>();
     m_ecs.RegisterComponent<C_StaticMesh>();
     m_ecs.RegisterComponent<C_AnimatedMesh>();
 
@@ -105,13 +106,12 @@ EntityID Scene::InstantiatePrefab(Asset* prefab, glm::vec3 spawnPosition)
                 LightComponentType light_type;
                 switch (light_data.type)
                 {
-                    case 2: light_type = LIGHT_COMPONENT_SPOTLIGHT; break;
-                    case 3: light_type = LIGHT_COMPONENT_POINTLIGHT; break;
+                    case 2: light_type = LIGHT_COMPONENT_POINTLIGHT; break;
+                    case 3: light_type = LIGHT_COMPONENT_SPOTLIGHT; break;
                     default: SDL_assert(0 && "Unimplemented light type detected (directional/area lights not implemented yet).");
                 }
-
-                SDL_assert(light_data.range <= 0.0f && "Make sure in Blender to set the custom distance of the light, otherwise no culling can occurr");
-        ;
+                
+                SDL_assert(light_data.range >= 0.0f && "Make sure in Blender to set the custom distance of the light, otherwise no culling can occurr");
                 m_ecs.AddComponent<C_Light>(eID, {
                     .type = light_type,
                     .color = glm::vec3(light_data.color[0], light_data.color[1], light_data.color[2]),//glm::vec3(0.7f, 0.7f, 1.0f),
@@ -246,7 +246,6 @@ EntityID Scene::InstantiatePrefab(Asset* prefab, glm::vec3 spawnPosition)
     float elapsed_ms = (float)(end_time - start_time) / 1000000.0f;
     SDL_Log("[Entity Time] Instantiated %zu nodes into ECS in %.2f ms", prefab->node_count, elapsed_ms);
 
-
     return rootEntity;
 }
 
@@ -308,7 +307,6 @@ void Scene::Render()
         glm::vec3 position = glm::vec3(transform.matrix[3]);
         glm::quat rotation = glm::quat_cast(transform.matrix);
         glm::vec3 direction = rotation * glm::vec3(0.0f, 0.0f, 1.0f);
-
         Renderer_PushLight(light, position, direction);
     });
 

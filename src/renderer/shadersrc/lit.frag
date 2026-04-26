@@ -146,7 +146,7 @@ void main()
     float dither_scale = float(scene.rendertarget_size.y) / 270.0;  // <- Basically, dither as if 270p
     float dith_threshold = dither_threshold(gl_FragCoord.xy / dither_scale);
     vec4 base_color     = sample_texture2d_with_fallback(uv, mat.texture_idx_basecolor, mat.sampler_idx, mat.base_color);
-    vec4 emissive_color = sample_texture2d_with_fallback(uv, mat.texture_idx_emissive,  mat.sampler_idx, vec4(mat.emissive_factor, 1.0));
+    vec4 emissive_color = sample_texture2d_with_fallback(uv, mat.texture_idx_emissive,  mat.sampler_idx, vec4(mat.emissive_factor, 0.0));
     // base_color = vec4(1.0);
     
     // Shadow maps?
@@ -163,8 +163,8 @@ void main()
     SpotLightBuffer sl_buf  = SpotLightBuffer(push.dc.spot_lights_ptr);
 
     // TODO: Tile/Clustered Shading
-    uint light_count = min(header.num_point_lights, 64u);
-    for (uint i = 0; i < light_count; ++i)
+    uint point_light_count = min(header.num_point_lights, 32u);
+    for (uint i = 0; i < point_light_count; ++i)
     {
         PointLight pl = pl_buf.point_lights[i];
         vec3 frag_to_light = pl.pos_and_radius.xyz - world_pos;
@@ -183,7 +183,7 @@ void main()
             brdf = ground_brdf(N, V, L);
         }
 
-        float attenuation = get_attenuation(dist, pl.pos_and_radius.w);
+        float attenuation = get_attenuation(dist);
         vec3 pl_radiance = brdf * pl.color_and_intensity.rgb * pl.color_and_intensity.a * attenuation;
         direct_light += pl_radiance;
     }

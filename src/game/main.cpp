@@ -58,7 +58,7 @@ CameraInfo temp_camera()
     return {
         .view = view,
         .position = pos,
-        .lens_distortion = -0.03f  // <- Subtle fish eye lens
+        .lens_distortion = -0.015f  // <- Subtle fish eye lens
     };
 }
 
@@ -84,7 +84,7 @@ int main(int argc, char *argv[])
         .enable_validation = enabled_validation_layers,
         .preferred_initial_settings = {  // Will fallback if these aren't possible
             .uncapped_fps = 0,
-            .msaa_sample_count = 4,
+            .msaa_sample_count = 1,
             .fov_y = 50.0f
         }
     };
@@ -179,7 +179,7 @@ int main(int argc, char *argv[])
     Scene scene{};
     scene.StartUp();
 
-    Asset* room_prefab = scene.LoadPrefab("assets/levels/lightstest.gltf");
+    Asset* room_prefab = scene.LoadPrefab("assets/levels/lightstest2.gltf");
     Asset* cube_prefab = scene.LoadPrefab("assets/props/simple_cube.gltf");
     Asset* sphere_prefab = scene.LoadPrefab("assets/props/simple_sphere.gltf");
     Asset* capsule_prefab = scene.LoadPrefab("assets/props/simple_capsule.gltf");
