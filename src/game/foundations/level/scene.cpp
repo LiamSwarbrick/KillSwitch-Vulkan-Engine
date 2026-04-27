@@ -115,6 +115,13 @@ EntityID Scene::InstantiatePrefab(Asset* prefab, glm::vec3 spawnPosition)
                 // 3.4 Finally add the component to the ECS!!!
                 m_ecs.AddComponent<C_Collider>(eID, std::move(colliderComponent));
             }
+
+
+            if (components.HasMember("PlayerInput"))
+            {
+                m_ecs.AddComponent<C_PlayerInput>(eID, {});
+                m_ecs.AddComponent<C_CharacterController>(eID, {});
+            }
         }
             // ---------------
             // -- TRANSFORM --
