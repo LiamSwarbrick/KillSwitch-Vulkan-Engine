@@ -4,6 +4,7 @@
 #include "foundations/scene.h"
 #include "core/components.h"
 #include "core/animation.h"
+#include "game/foundations/components.h"
 
 #include "SDL3/SDL.h"
 #include "SDL3/SDL_main.h"
@@ -137,7 +138,6 @@ int main(int argc, char *argv[])
 
     scene.InstantiatePrefab(room_prefab, glm::vec3(0,0,0));
     EntityID playerEntity = scene.InstantiatePrefab(catPrefab, glm::vec3(0, 0, 0));
-    scene.InstantiatePrefab(catPrefab, glm::vec3(0, 0, 0));
     scene.InstantiatePrefab(animationPrefab, glm::vec3(5, 20, 0));
     scene.BuildRendererScene();
 
