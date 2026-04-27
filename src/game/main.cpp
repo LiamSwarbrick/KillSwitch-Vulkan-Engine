@@ -139,9 +139,6 @@ int main(int argc, char *argv[])
     EntityID playerEntity = scene.InstantiatePrefab(catPrefab, glm::vec3(0, 0, 0));
     scene.InstantiatePrefab(catPrefab, glm::vec3(0, 0, 0));
     scene.InstantiatePrefab(animationPrefab, glm::vec3(5, 20, 0));
-    // render a second cat
-    EntityID playerEntity = scene.InstantiatePrefab(catPrefab, glm::vec3(10, 0, 10));
-
     scene.BuildRendererScene();
 
     // TODO: Debug UI is built around the idea of 1 asset at the moment.
