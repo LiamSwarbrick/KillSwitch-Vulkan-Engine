@@ -13,54 +13,48 @@ TO ENSURE THIS WORKS CORRECTLY, EMPTY DOORWAY NODES SHOULD PLACED AND NAMED AS F
 	EAST DOORWAY: "Doorway_E"
 	SOUTH DOORWAY: "Doorway_S"
 	WEST DOORWAY: "Doorway_W"
+	NORTH WALL: "Wall_N"
+	EAST WALL: "Wall_E"
+	SOUTH WALL: "Wall_S"
+	WEST WALL: "Wall_W"
 */
 
 static std::mt19937 rng(std::random_device{}());
 
-// Just literally checks if each room has the necessary door to connect in the direction specified
+// Just literally checks if each room has the necessary wall type to connect in the direction specified
 bool LevelGeneration::CanNeighbour(int roomAIndex, int roomBIndex, DoorDirection direction)
 {
 	const Room& roomA = palette[roomAIndex];
 	const Room& roomB = palette[roomBIndex];
-	if (direction == NORTH)
-	{
-		bool roomANorth = (roomA.doorwayMask & NORTH) != 0;
-		bool roomBSouth = (roomB.doorwayMask & SOUTH) != 0;
-		return roomANorth == roomBSouth;
-	}
-	if (direction == EAST)
-	{
-		bool roomAEast = (roomA.doorwayMask & EAST) != 0;
-		bool roomBWest = (roomB.doorwayMask & WEST) != 0;
-		return roomAEast == roomBWest;
-	}
-	if (direction == SOUTH)
-	{
-		bool roomASouth = (roomA.doorwayMask & SOUTH) != 0;
-		bool roomBNorth = (roomB.doorwayMask & NORTH) != 0;
-		return roomASouth == roomBNorth;
-	}
-	if (direction == WEST)
-	{
-		bool roomAWest = (roomA.doorwayMask & WEST) != 0;
-		bool roomBEast = (roomB.doorwayMask & EAST) != 0;
-		return roomAWest == roomBEast;
-	}
-	return false;
+
+	WallType roomAWallType = GetWallType(roomA.doorwayMask, direction);
+	WallType roomBWallType = GetWallType(roomB.doorwayMask, (DoorDirection)(((int)direction + 4) % 8));
+
+	return roomAWallType == roomBWallType;
 }
 
-uint8_t LevelGeneration::RequiredMask(int x, int y)
+uint16_t LevelGeneration::RequiredMask(int x, int y)
 {
-	// Check the neighbouring rooms and generate a required mask for the current room
-	uint8_t mask = 0;
-	if (y + 1 < gridHeight && grid[(y + 1) * gridWidth + x].isCollapsed && palette[grid[(y + 1) * gridWidth + x].validRooms[0]].doorwayMask & SOUTH)
-		mask |= NORTH;
-	else if (y - 1 >= 0 && grid[(y - 1) * gridWidth + x].isCollapsed && palette[grid[(y - 1) * gridWidth + x].validRooms[0]].doorwayMask & NORTH)
-		mask |= SOUTH;
-	else if (x + 1 < gridWidth && grid[y * gridWidth + (x + 1)].isCollapsed && palette[grid[y * gridWidth + (x + 1)].validRooms[0]].doorwayMask & WEST)
-		mask |= EAST;
-	else if (x - 1 >= 0 && grid[y * gridWidth + (x - 1)].isCollapsed && palette[grid[y * gridWidth + (x - 1)].validRooms[0]].doorwayMask & EAST)
-		mask |= WEST;
+	// Set default to be all walls
+	uint16_t mask = 170;
+
+	// In each direction, get the neighbours wall type and set required mask to match
+	for (int i = 0; i < 4; ++i)
+	{
+		glm::ivec2 neighbourCoords = { x + neighbourOffsets[i].x, y + neighbourOffsets[i].y };
+
+		if (neighbourCoords.x < 0 || neighbourCoords.x >= gridWidth || neighbourCoords.y < 0 || neighbourCoords.y >= gridHeight)
+			continue;
+
+		GridCell& neighbourRoom = grid[neighbourCoords.y * gridWidth + neighbourCoords.x];
+
+		if (!neighbourRoom.isCollapsed)
+			continue;
+
+		WallType neighbourWallType = GetWallType(palette[neighbourRoom.validRooms[0]].doorwayMask, (DoorDirection)(((int)directions[i] + 4) % 8));
+		SetWallType(mask, directions[i], neighbourWallType);
+	}
+
 	return mask;
 }
 
@@ -72,12 +66,12 @@ void LevelGeneration::BuildPalette(const std::vector<Asset*>& roomAssets)
 	// Scan every room asset and store all non-duplicate rotations of it
 	for (Asset* asset : roomAssets)
 	{
-		uint8_t defaultMask = ScanDoorways(asset);
+		uint16_t defaultMask = ScanDoorways(asset);
 
-		// For every room rotation, check if its a dupe, then push it to the palette
+		// For every room rotation, check if its a dupe, weight it, then push it to the palette
 		for (int i = 0; i < 4; ++i)
 		{
-			uint8_t rotatedMask = RotateMask(defaultMask, i);
+			uint16_t rotatedMask = RotateMask(defaultMask, i);
 			float rotation = i * -90.0f;
 
 			bool roomDuplicate = false;
@@ -92,36 +86,57 @@ void LevelGeneration::BuildPalette(const std::vector<Asset*>& roomAssets)
 
 			if (!roomDuplicate)
 			{
-				// Get the number of doors the room has, weight its placement then add to palette
-				int doorCount = 0;
-				int doors = rotatedMask;
-				while (doors > 0)
+				int doors = 0;
+				int opens = 0;
+				int walls = 0;
+
+				// Count wall types
+				for (int j = 0; j < 4; ++j)
 				{
-					doors &= doors - 1;
-					doorCount++;
+					WallType wallType = GetWallType(rotatedMask, directions[j]);
+					if (wallType == DOOR)
+						doors++;
+					else if (wallType == OPEN)
+						opens++;
+					else
+						walls++;
 				}
 
-				//						CHANGE ROOM LAYOUT WEIGHTING HERE
-				float weight = 0.0f;
-				switch (doorCount) 
+				//                             CHANGE ROOM WEIGHTINGS HERE !!!!
+				float weight = 1.0f;
+
+				switch (opens)
 				{
 				case 4:
-					weight = 0.5f;
+					weight *= 0.1f;
 					break;
 				case 3:
-					weight = 1.0f;
+					weight *= 0.4f;
 					break;
 				case 2:
-					weight = 1.0f;
+					weight *= 0.6f;
 					break;
 				case 1:
-					weight = 0.5f;
-					break;
-				case 0:
-					weight = 0.01f;
+					weight *= 1.0f;
 					break;
 				}
-					
+
+				switch (doors)
+				{
+				case 4:
+					weight *= 0.5f;
+					break;
+				case 3:
+					weight *= 2.0f;
+					break;
+				case 2:
+					weight *= 3.0f;
+					break;
+				case 1:
+					weight *= 0.5f;
+					break;
+				}
+
 				palette.push_back({ asset, rotatedMask, rotation, weight });
 			}
 		}
@@ -136,14 +151,10 @@ void LevelGeneration::UpdatePossibilities(std::vector<glm::ivec2> updateRooms)
 		glm::ivec2 currentRoom = updateRooms.back();
 		updateRooms.pop_back();
 
-		// For easy neighbour querying
-		DoorDirection directions[4] = { NORTH, EAST, SOUTH, WEST };
-		glm::ivec2 neighbourDirections[4] = { {0, 1}, {1, 0}, {0, -1}, {-1, 0} };
-
 		for (int i = 0; i < 4; ++i)
 		{
-			// Instantiate neighbouring room and check if valid within level boundaries
-			glm::ivec2 neighbourRoom = { currentRoom.x + neighbourDirections[i].x, currentRoom.y + neighbourDirections[i].y };
+			// Get neighbouring room and check if valid within level boundaries
+			glm::ivec2 neighbourRoom = { currentRoom.x + neighbourOffsets[i].x, currentRoom.y + neighbourOffsets[i].y };
 			if (neighbourRoom.x < 0 || neighbourRoom.x >= gridWidth || neighbourRoom.y < 0 || neighbourRoom.y >= gridHeight)
 				continue;
 
@@ -184,58 +195,8 @@ void LevelGeneration::UpdatePossibilities(std::vector<glm::ivec2> updateRooms)
 	}
 }
 
-std::vector<glm::ivec2> LevelGeneration::GetTraversableRooms(glm::ivec2 startRoom)
-{
-	// Create vectors and push the starting room onto the stack
-	std::vector<glm::ivec2> traversableRooms;
-	std::vector<bool> visited(gridWidth * gridHeight, false);
-	std::vector<glm::ivec2> roomStack;
-
-	roomStack.push_back(startRoom);
-	int gridIndex = startRoom.y * gridWidth + startRoom.x;
-	visited[gridIndex] = true;
-
-	// Visit all rooms connected to the start room, and return their coords
-	while (!roomStack.empty())
-	{
-		glm::ivec2 currentRoom = roomStack.back();
-		roomStack.pop_back();
-		traversableRooms.push_back(currentRoom);
-
-		// For easy neighbour querying
-		DoorDirection directions[4] = { NORTH, EAST, SOUTH, WEST };
-		DoorDirection opposites[4] = { SOUTH, WEST, NORTH, EAST };
-		glm::ivec2 neighbourDirections[4] = { {0, 1}, {1, 0}, {0, -1}, {-1, 0} };
-
-		// Go through each non-visited valid neighbouring room
-		for (int i = 0; i < 4; ++i)
-		{
-			glm::ivec2 neighbourRoom = { currentRoom.x + neighbourDirections[i].x, currentRoom.y + neighbourDirections[i].y };
-			if (neighbourRoom.x < 0 || neighbourRoom.x >= gridWidth || neighbourRoom.y < 0 || neighbourRoom.y >= gridHeight)
-				continue;
-
-			int currentIndex = currentRoom.y * gridWidth + currentRoom.x;
-			int neighbourIndex = neighbourRoom.y * gridWidth + neighbourRoom.x;
-
-			if (visited[neighbourIndex])
-				continue;
-
-			// If there is a doorway between the rooms, push the neighbour to the stack and specify it as visited
-			uint8_t currentMask = palette[grid[currentIndex].validRooms[0]].doorwayMask;
-			uint8_t neighbourMask = palette[grid[neighbourIndex].validRooms[0]].doorwayMask;
-
-			if ((currentMask & directions[i]) && (neighbourMask & opposites[i]))
-			{
-				visited[neighbourIndex] = true;
-				roomStack.push_back(neighbourRoom);
-			}
-		}
-	}
-	return traversableRooms;
-}
-
 // Generates and instantiates a level
-void LevelGeneration::GenerateGrid(int width, int height, glm::ivec2 start, glm::ivec2 goal, uint8_t startDoorwayMask, int maxRooms)
+void LevelGeneration::GenerateGrid(int width, int height, glm::ivec2 start, glm::ivec2 goal, uint16_t startDoorwayMask, int maxRooms)
 {
 	while (true)
 	{
@@ -256,18 +217,18 @@ void LevelGeneration::GenerateGrid(int width, int height, glm::ivec2 start, glm:
 				GridCell& cell = grid[gridIndex];
 				cell.validRooms = allRooms;
 
-				// For rooms on the edge, remove possibility for doorway into the edge
+				// For rooms on the edge, remove possibility for doorway or open space into the edge
 				auto& p = cell.validRooms;
 				p.erase(std::remove_if(p.begin(), p.end(), [&](int index)
 					{
-						uint8_t mask = palette[index].doorwayMask;
-						if (y == height - 1 && (mask & NORTH))
+						uint16_t mask = palette[index].doorwayMask;
+						if (y == height - 1 && GetWallType(mask, NORTH) != WALL)
 							return true;
-						if (y == 0 && (mask & SOUTH))
+						if (y == 0 && GetWallType(mask, SOUTH) != WALL)
 							return true;
-						if (x == width - 1 && (mask & EAST))
+						if (x == width - 1 && GetWallType(mask, EAST) != WALL)
 							return true;
-						if (x == 0 && (mask & WEST))
+						if (x == 0 && GetWallType(mask, WEST) != WALL)
 							return true;
 						return false;
 					}
@@ -290,7 +251,6 @@ void LevelGeneration::GenerateGrid(int width, int height, glm::ivec2 start, glm:
 		// Create vector of room coordinates to update their neighbours list of valid rooms after the collapse
 		std::vector<glm::ivec2> updateRooms;
 		updateRooms.push_back(start);
-
 		UpdatePossibilities(updateRooms);
 
 		// Place rooms connected by doors until the room limit is reached
@@ -299,7 +259,7 @@ void LevelGeneration::GenerateGrid(int width, int height, glm::ivec2 start, glm:
 		{
 			std::vector<glm::ivec2> leafRooms;
 
-			// For each cell, if its neighbour has an unconnected door facing it, add to possible placements
+			// For each cell, if its neighbour has an unconnected door or open side facing it, add to possible placements
 			for (int y = 0; y < height; ++y)
 			{
 				for (int x = 0; x < width; ++x)
@@ -307,12 +267,14 @@ void LevelGeneration::GenerateGrid(int width, int height, glm::ivec2 start, glm:
 					if (grid[y * width + x].isCollapsed)
 						continue;
 
-					if (RequiredMask(x, y) != 0)
+					uint16_t requiredMask = RequiredMask(x, y);
+					
+					if (requiredMask != 170)
 						leafRooms.push_back({ x, y });
 				}
 			}
 
-			// If no more rooms can be placed connected to doors, all edges sealed therefore completed level
+			// If no more rooms can be placed, all edges sealed therefore completed level
 			if (leafRooms.empty())
 				break;
 
@@ -324,7 +286,7 @@ void LevelGeneration::GenerateGrid(int width, int height, glm::ivec2 start, glm:
 			if (nextRoomCoords.x < 0 || nextRoomCoords.x >= width || nextRoomCoords.y < 0 || nextRoomCoords.y >= height)
 				break;
 
-			// Randomly pick the room layout from the list of the cells valid rooms and update collapsed state
+			// Randomly (with weighting) pick the room layout from the list of the cells valid rooms and update collapsed state
 			gridIndex = nextRoomCoords.y * width + nextRoomCoords.x;
 			GridCell& cell = grid[gridIndex];
 
@@ -332,9 +294,8 @@ void LevelGeneration::GenerateGrid(int width, int height, glm::ivec2 start, glm:
 			for (int roomIndex : cell.validRooms)
 				weights.push_back(palette[roomIndex].weight);
 
-			std::discrete_distribution<> dist(weights.begin(), weights.end());
-			int chosenIndex = dist(rng);
-			int roomChoice = cell.validRooms[chosenIndex];
+			std::discrete_distribution<> distribution(weights.begin(), weights.end());
+			int roomChoice = cell.validRooms[distribution(rng)];
 
 			cell.validRooms = { roomChoice };
 			cell.isCollapsed = true;
@@ -345,12 +306,12 @@ void LevelGeneration::GenerateGrid(int width, int height, glm::ivec2 start, glm:
 			UpdatePossibilities(updateRooms);
 		}
 
-		// After max rooms placed, check for any doors leading into abyss and seal them
+		// After max rooms placed, check for any doors or open spaces leading into abyss and seal them
 		while (true)
 		{
 			std::vector<glm::ivec2> nonTerminatingRooms;
 
-			// For each cell, if its neighbour has an unconnected door facing it, add to necessary placements
+			// For each cell, if its neighbour has an unconnected door or open side facing it, add to necessary placements
 			for (int y = 0; y < height; ++y)
 			{
 				for (int x = 0; x < width; ++x)
@@ -358,19 +319,19 @@ void LevelGeneration::GenerateGrid(int width, int height, glm::ivec2 start, glm:
 					if (grid[y * width + x].isCollapsed)
 						continue;
 
-					if (RequiredMask(x, y) != 0)
+					if (RequiredMask(x, y) != 170)
 						nonTerminatingRooms.push_back({ x, y });
 				}
 			}
 
-			// Once no more door holes, level is finished
+			// Once no more holes, level is finished
 			if (nonTerminatingRooms.empty())
 				break;
 
-			// For every unsealed doorway, place a sealing room
+			// For every unsealed wall, place a sealing room
 			for (glm::ivec2& room : nonTerminatingRooms)
 			{
-				// Find the mask that only seals the open doors
+				// Find the mask that only seals the open sides
 				GridCell& cell = grid[room.y * width + room.x];
 				uint8_t requiredMask = RequiredMask(room.x, room.y);
 
@@ -395,7 +356,7 @@ void LevelGeneration::GenerateGrid(int width, int height, glm::ivec2 start, glm:
 			}
 		}
 
-		// Only create a valid level if the goal is reached and level reached correct size
+		// Only create the level if the goal is reached and level reached correct size
 		if (grid[goal.y * width + goal.x].isCollapsed && roomsPlaced >= maxRooms)
 			break;
 
@@ -429,43 +390,74 @@ void LevelGeneration::InstantiateLevel(Scene* scene)
 
 
 // Scans the loaded asset for doorway nodes, returning a bitmask of open doorway directions
-uint8_t LevelGeneration::ScanDoorways(Asset* asset)
+uint16_t LevelGeneration::ScanDoorways(Asset* asset)
 {
 	if (!asset)
 		return 0;
 	 
-	// Initialise mask, then check which doorways the asset contains, setting mask bits accordingly
-	uint8_t mask = 0;
+	// Initialise mask, then check which doorways/walls the asset contains, setting mask bits accordingly
+	uint16_t mask = 0;
 	for (size_t i = 0; i < asset->node_count; i++)
 	{
 		const char* nodeName = asset->nodes[i].name;
+
+		// Doorway type overrides wall type 
 		if (strcmp(nodeName, "Doorway_N") == 0)
-			mask |= NORTH;
-		else if (strcmp(nodeName, "Doorway_E") == 0)
-			mask |= EAST;
-		else if (strcmp(nodeName, "Doorway_S") == 0)
-			mask |= SOUTH;
-		else if (strcmp(nodeName, "Doorway_W") == 0)
-			mask |= WEST;
+			SetWallType(mask, NORTH, DOOR);
+		else if (strcmp(nodeName, "Wall_N") == 0)
+			if (GetWallType(mask, NORTH) != DOOR)
+				SetWallType(mask, NORTH, WALL);
+
+		if (strcmp(nodeName, "Doorway_E") == 0)
+			SetWallType(mask, EAST, DOOR);
+		else if (strcmp(nodeName, "Wall_E") == 0)
+			if (GetWallType(mask, EAST) != DOOR)
+				SetWallType(mask, EAST, WALL);
+
+		if (strcmp(nodeName, "Doorway_S") == 0)
+			SetWallType(mask, SOUTH, DOOR);
+		else if (strcmp(nodeName, "Wall_S") == 0)
+			if (GetWallType(mask, SOUTH) != DOOR)
+				SetWallType(mask, SOUTH, WALL);
+
+		if (strcmp(nodeName, "Doorway_W") == 0)
+			SetWallType(mask, WEST, DOOR);
+		else if (strcmp(nodeName, "Wall_W") == 0)
+			if (GetWallType(mask, WEST) != DOOR)
+				SetWallType(mask, WEST, WALL);
 	}
 	return mask;
 }
 
 // Shifting the mask left with wrap around rotates the room clockwise
-uint8_t LevelGeneration::RotateMask(uint8_t mask, int rotations)
+uint16_t LevelGeneration::RotateMask(uint16_t mask, int rotations)
 {
-	// 0, 1, 2, 3 rotations, each one rotating clockwise by shifting bits left
 	rotations = rotations % 4;
 	for (int i = 0; i < rotations; i++)
 	{
-		uint8_t shiftedMask = mask << 1;
+		// Store all current wall types, then reassign them clockwise 
+		WallType northType = GetWallType(mask, NORTH);
+		WallType eastType = GetWallType(mask, EAST);
+		WallType southType = GetWallType(mask, SOUTH);
+		WallType westType = GetWallType(mask, WEST);
 
-		// Wrap around if the west bit was shifted
-		if (shiftedMask & 16)
-			shiftedMask |= 1;
-		
-		// Only keep the last 4 bits
-		mask = shiftedMask & 0x0F;
+		SetWallType(mask, EAST, northType);
+		SetWallType(mask, SOUTH, eastType);
+		SetWallType(mask, WEST, southType);
+		SetWallType(mask, NORTH, westType);
 	}
 	return mask;
+}
+
+WallType LevelGeneration::GetWallType(uint16_t mask, DoorDirection direction)
+{
+	// Shifts the 2 direction bits to leftmost and returns them
+	return (WallType)((mask >> direction) & 0x03);
+}
+
+void LevelGeneration::SetWallType(uint16_t& mask, DoorDirection direction, WallType wallType)
+{
+	// Clear the correct bits, then assign the new wall type to them
+	mask &= ~(0x03 << direction);
+	mask |= wallType << direction;
 }
