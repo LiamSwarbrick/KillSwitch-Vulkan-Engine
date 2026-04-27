@@ -136,6 +136,7 @@ int main(int argc, char *argv[])
     Asset* animationPrefab = scene.LoadPrefab("assets/animations/sceneglb.glb");
 
     scene.InstantiatePrefab(room_prefab, glm::vec3(0,0,0));
+    EntityID playerEntity = scene.InstantiatePrefab(catPrefab, glm::vec3(0, 0, 0));
     scene.InstantiatePrefab(catPrefab, glm::vec3(0, 0, 0));
     scene.InstantiatePrefab(animationPrefab, glm::vec3(5, 20, 0));
     // render a second cat
@@ -169,31 +170,16 @@ int main(int argc, char *argv[])
             Renderer_ListenToWindowEvent(event);
         }
 
-        // controller test not ideal at all
         const bool* state = SDL_GetKeyboardState(NULL);
-        float speed = 5.0f * dt;
-        glm::vec3 movement(0.0f);
 
-        if (state[SDL_SCANCODE_I]) movement.z -= speed;
-        if (state[SDL_SCANCODE_K]) movement.z += speed;
-
-        if (state[SDL_SCANCODE_J]) movement.x -= speed;
-        if (state[SDL_SCANCODE_L]) movement.x += speed;
-
-        if (glm::length(movement) > 0.0f)
-        {
-            for (uint32_t i = 0; i < catPrefab->node_count; i++)
-            {
-                C_Transform* tf = scene.GetECS().GetComponentPtr<C_Transform>(playerEntity + i);
-                if (tf)
-                {
-                    // Apply movement directly to the world translation (column 3 of the matrix)
-                    tf->matrix[3][0] += movement.x;
-                    tf->matrix[3][1] += movement.y;
-                    tf->matrix[3][2] += movement.z;
-                }
+        scene.GetECS().GetView<C_AnimatedMesh, C_PlayerInput>().ForEach([&](EntityID e, C_AnimatedMesh&, C_PlayerInput& input) {
+                input.move_forward = state[SDL_SCANCODE_K];
+                input.move_backward = state[SDL_SCANCODE_I];
+                input.move_left = state[SDL_SCANCODE_L];
+                input.move_right = state[SDL_SCANCODE_J];
+                input.jump = state[SDL_SCANCODE_SPACE];
             }
-        }
+        );
 
         // Game ticks
         scene.Update(dt);
