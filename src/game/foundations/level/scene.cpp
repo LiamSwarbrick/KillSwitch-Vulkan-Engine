@@ -4,6 +4,7 @@
 
 // animation update
 #include "core/animation.h"
+#include "game/foundations/PlayerMovementSystem.h"
 // RapidJSON 
 #include "rapidjson/document.h"
 // Imported components for automated de-serialization
@@ -223,6 +224,7 @@ void Scene::BuildRendererScene()
 
 void Scene::Update(float dt)
 {
+    PlayerMovement_Update(&m_ecs, dt);
     Animation_Update(&m_ecs, dt);
 }
 
