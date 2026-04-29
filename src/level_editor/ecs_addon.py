@@ -755,35 +755,6 @@ def import_ecs_from_scene():
         print(f"[ECS IMPORT] Applied ECS to {obj.name}")
 
 
-# def override_gltf_light_range():
-#     try:
-#         from io_scene_gltf2.blender.exp.gltf2_blender_gather_lights import gather_lights_punctual
-
-#         original_gather = gather_lights_punctual
-
-#         def custom_gather_lights_punctual(blender_lamp, export_settings):
-#             light = original_gather(blender_lamp, export_settings)
-
-#             if light is None:
-#                 return None
-
-#             # Override range using radius
-#             radius = blender_lamp.shadow_soft_size
-
-#             if radius > 0.0:
-#                 light.range = radius
-
-#             return light
-
-#         import io_scene_gltf2.blender.exp.gltf2_blender_gather_lights as mod
-#         mod.gather_lights_punctual = custom_gather_lights_punctual
-
-#         print("[GLTF OVERRIDE] Light range now driven by radius")
-
-#     except Exception as e:
-#         print(f"[GLTF OVERRIDE] Failed: {e}")
-
-
 def prepare_lights_for_export():
     for obj in bpy.data.objects:
         if obj.type != 'LIGHT':

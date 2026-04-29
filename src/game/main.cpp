@@ -8,6 +8,8 @@
 
 #include "SDL3/SDL.h"
 #include "SDL3/SDL_main.h"
+#include "foundations/level/LevelGeneration.h"
+
 
 CameraInfo temp_camera()
 {
@@ -110,6 +112,7 @@ int main(int argc, char *argv[])
         AUDIO_CLIP_CATEGORY_SFX
     );
 
+    /*
     if (startup_music != 0)
     {
         if (!AudioSystem_PlaySoundtrackLoop(&audio_system, startup_music, 0.80f))
@@ -133,9 +136,10 @@ int main(int argc, char *argv[])
     {
         SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "AudioSystem: failed to load startup test SFX.");
     }
+    */
+
 
     // Dunno whether this resource manager will end up in the final build, if no one is integrating it due to more important tasks
-
     // ResourceManager resource_manager = ResourceManager_Create((ResourceManagerCreateInfo){
     //     .debug_name = "GameAssets",
     //     .initial_capacity = 32
@@ -143,7 +147,7 @@ int main(int argc, char *argv[])
 
     // ResourceHandle boot_vert = ResourceManager_RequestBinary(
     //     &resource_manager,
-    //     RESOURCE_TYPE_SHADER_BYTECODE,
+//     RESOURCE_TYPE_SHADER_BYTECODE,
     //     RESOURCE_RESIDENCY_BOOT,
     //     "shader.unlit.vert",
     //     "shaderspv/unlit.vert.spv"
@@ -188,7 +192,7 @@ int main(int argc, char *argv[])
     // Asset* catPrefab = scene.LoadPrefab("assets/animations/flatzombo.gltf");
     // Asset* animationPrefab = scene.LoadPrefab("assets/animations/cat.gltf");
 
-    scene.InstantiatePrefab(room_prefab, glm::vec3(0, 0, 0));
+    scene.InstantiatePrefab(room_prefab, glm::vec3(0, 0, 0), glm::identity<glm::quat>());
     // scene.InstantiatePrefab(cube_prefab, glm::vec3(0, 5.1, 0));
     // scene.InstantiatePrefab(cube_prefab, glm::vec3(3, 4.9, 0));
     // scene.InstantiatePrefab(capsule_prefab, glm::vec3(0, 5, 2));

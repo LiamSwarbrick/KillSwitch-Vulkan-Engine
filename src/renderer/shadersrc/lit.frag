@@ -167,6 +167,7 @@ void main()
     for (uint i = 0; i < point_light_count; ++i)
     {
         PointLight pl = pl_buf.point_lights[i];
+
         vec3 frag_to_light = pl.pos_and_radius.xyz - world_pos;
         float dist = length(frag_to_light);
         if (dist > pl.pos_and_radius.w)
@@ -183,17 +184,52 @@ void main()
             brdf = ground_brdf(N, V, L);
         }
 
-        float attenuation = get_attenuation(dist);
-        vec3 pl_radiance = brdf * pl.color_and_intensity.rgb * pl.color_and_intensity.a * attenuation;
-        direct_light += pl_radiance;
+        float attenuation = get_attenuation(dist, pl.pos_and_radius.w);
+        vec3 radiance = brdf * pl.color_and_intensity.rgb * pl.color_and_intensity.a * attenuation;
+        direct_light += radiance;
     }
     
-    // TODO: Spotlights
-    // for (uint i = 0; i < lights_buf.data.num_spot_lights; ++i)
-    // {
-    //     SpotLight pl = lights_buf.data.spot_lights[i];
+    uint spot_light_count = min(header.num_spot_lights, 32u);
+    for (uint i = 0; i < spot_light_count; ++i)
+    {
+        SpotLight sl = sl_buf.spot_lights[i];
+
+        vec3 frag_to_light = sl.pos_and_radius.xyz - world_pos;
+        float dist = length(frag_to_light);
+        if (dist > sl.pos_and_radius.w)
+            continue;
+
+        vec3 L = normalize(frag_to_light);
+        vec3 light_dir = normalize(sl.direction);
+        float cos_theta = dot(-L, light_dir);
+        float inner = cos(sl.inner_cone_angle);
+        float outer = cos(sl.outer_cone_angle);
+        float angular_attenuation = smoothstep(outer, inner, cos_theta);
+
+        // Early out if outside cone
+        if (angular_attenuation <= 0.0)
+            continue;
         
-    // }
+        vec3 brdf;
+        if (IS_CHARACTER)
+        {
+            brdf = toon_brdf(N, V, L);
+        }
+        else
+        {
+            brdf = ground_brdf(N, V, L);
+        }
+
+        float attenuation = get_attenuation(dist, sl.pos_and_radius.w);
+        vec3 radiance =
+            brdf *
+            sl.color_and_intensity.rgb *
+            sl.color_and_intensity.a *
+            attenuation *
+            angular_attenuation;
+
+        direct_light += radiance;
+    }
 
     vec3 ambient = vec3(0.);
     // vec3 ambient = compute_ambient_light(N);

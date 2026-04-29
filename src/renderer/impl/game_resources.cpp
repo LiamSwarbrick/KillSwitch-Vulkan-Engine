@@ -366,7 +366,7 @@ void create_window_dependent_resources()
     //     0, 0
     // );
 
-    // LDR color ping pong buffer for bloom
+    // LDR color target for bloom
     renderstate.rids.ldr_color_target_rid = create_rendertarget2d_resource(
         "LDR Color Target", flags, width, height,
         renderstate.swapchain_image_format,  // <- TODO: Is matching the swapchain image always best? I.e. sRGB?
@@ -539,8 +539,6 @@ void create_scene_resources()
     // TODO: This doesn't need to be a mapped buffer anymore, can just use FG_UploadBuffer or whatever
     FG_Resource* materials_res = &renderstate.registry.resources[renderstate.rids.materials_buffer_rid];
     vmaCopyMemoryToAllocation(renderstate.vma_allocator, loaded_materials, materials_res->allocation, 0, num_loaded_materials * sizeof(MaterialData));
-    // memcpy(materials_res->buffer.mapped_data, loaded_materials, mat_upload_size);
-    // vmaFlushAllocation(renderstate.vma_allocator, materials_res->allocation, 0, mat_upload_size);
 
     // Load Static meshes
     for (uint32_t i = 0; i < init_info->num_static_meshes; ++i)
