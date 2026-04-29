@@ -47,7 +47,7 @@ struct C_Collider
 struct C_CharacterController
 {
 	glm::vec3 velocity{ 0.0f };
-	float move_speed = 1.0f;
+	float move_speed = 3.0f;
 
 	glm::vec3 target_position{ 0.0f };
 	bool jumping = false;

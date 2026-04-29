@@ -118,6 +118,7 @@ EntityID Scene::InstantiatePrefab(Asset* prefab, glm::vec3 spawnPosition)
                 m_ecs.AddComponent<C_Collider>(eID, std::move(colliderComponent));
             }
 
+
             if (components.HasMember("PlayerInput"))
             {
                 m_ecs.AddComponent<C_PlayerInput>(eID, {});
@@ -153,8 +154,8 @@ EntityID Scene::InstantiatePrefab(Asset* prefab, glm::vec3 spawnPosition)
 
                 C_AnimatedMesh animMesh{ mesh, prefab };
                 animMesh.joint_count = joint_count;
-				animMesh.idleAnimationName = "Idle";
-                animMesh.splitJointName = "Spine";
+				animMesh.idleAnimationName = "IDLE";
+                animMesh.splitJointName = "SPINE";
 				OnStartAnim(animMesh, animMesh.idleAnimationName); // Start with idle animation by default
                 
 

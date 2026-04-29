@@ -134,12 +134,11 @@ int main(int argc, char *argv[])
 
     Asset* room_prefab = scene.LoadPrefab("assets/levels/testroom.gltf");
     Asset* catPrefab = scene.LoadPrefab("assets/animations/scene.gltf");
-    Asset* piru = scene.LoadPrefab("assets/blender/scene.gltf");
+    Asset* animationPrefab = scene.LoadPrefab("assets/animations/sceneglb.glb");
 
     scene.InstantiatePrefab(room_prefab, glm::vec3(0,0,0));
-    scene.InstantiatePrefab(piru, glm::vec3(1, 0, 0));
     EntityID playerEntity = scene.InstantiatePrefab(catPrefab, glm::vec3(0, 0, 0));
-
+    scene.InstantiatePrefab(animationPrefab, glm::vec3(5, 20, 0));
     scene.BuildRendererScene();
 
     // TODO: Debug UI is built around the idea of 1 asset at the moment.
