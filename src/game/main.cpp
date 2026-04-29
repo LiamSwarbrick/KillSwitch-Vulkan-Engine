@@ -212,8 +212,27 @@ int main(int argc, char *argv[])
     roomAssets.push_back(scene.LoadPrefab("assets/levels/2-Door-Corridor_Room.gltf"));
     roomAssets.push_back(scene.LoadPrefab("assets/levels/1-Door_Room.gltf"));
     roomAssets.push_back(scene.LoadPrefab("assets/levels/Solid_Room.gltf"));
+    roomAssets.push_back(scene.LoadPrefab("assets/levels/4_Open_Room.gltf"));
+    roomAssets.push_back(scene.LoadPrefab("assets/levels/3_Open_1_Wall_Room.gltf"));
+    roomAssets.push_back(scene.LoadPrefab("assets/levels/3_Open_1_Door_Room.gltf"));
+    roomAssets.push_back(scene.LoadPrefab("assets/levels/2_Opp_Open_Right_Door_Room.gltf"));
+    roomAssets.push_back(scene.LoadPrefab("assets/levels/2_Opp_Open_Left_Door_Room.gltf"));
+    roomAssets.push_back(scene.LoadPrefab("assets/levels/2_Opp_Open_2_Wall_Room.gltf"));
+    roomAssets.push_back(scene.LoadPrefab("assets/levels/2_Opp_Open_2_Door_Room.gltf"));
+    roomAssets.push_back(scene.LoadPrefab("assets/levels/2_Open_Right_Door_Room.gltf"));
+    roomAssets.push_back(scene.LoadPrefab("assets/levels/2_Open_Left_Door_Room.gltf"));
+    roomAssets.push_back(scene.LoadPrefab("assets/levels/2_Open_2_Wall_Room.gltf"));
+    roomAssets.push_back(scene.LoadPrefab("assets/levels/2_Open_2_Door_Room.gltf"));
+    roomAssets.push_back(scene.LoadPrefab("assets/levels/1_Open_West_Door_Room.gltf"));
+    roomAssets.push_back(scene.LoadPrefab("assets/levels/1_Open_North_Door_Room.gltf"));
+    roomAssets.push_back(scene.LoadPrefab("assets/levels/1_Open_East_Door_Room.gltf"));
+    roomAssets.push_back(scene.LoadPrefab("assets/levels/1_Open_3_Wall_Room.gltf"));
+    roomAssets.push_back(scene.LoadPrefab("assets/levels/1_Open_3_Door_Room.gltf"));
+    roomAssets.push_back(scene.LoadPrefab("assets/levels/1_Open_2_Door_West_Wall_Room.gltf"));
+    roomAssets.push_back(scene.LoadPrefab("assets/levels/1_Open_2_Door_North_Wall_Room.gltf"));
+    roomAssets.push_back(scene.LoadPrefab("assets/levels/1_Open_2_Door_East_Wall_Room.gltf"));
     generator.BuildPalette(roomAssets);
-    generator.GenerateGrid(9, 9, glm::ivec2({4, 4}), glm::ivec2({ 4, 4 }), ((DOOR << NORTH) + (DOOR << EAST) + (DOOR << SOUTH) + (DOOR << WEST)), 40);
+    generator.GenerateGrid(13, 13, glm::ivec2({ 6, 6 }), glm::ivec2({ 6, 6 }), ((DOOR << NORTH) + (DOOR << EAST) + (DOOR << SOUTH) + (DOOR << WEST)), 40);
     generator.InstantiateLevel(&scene);
 
 

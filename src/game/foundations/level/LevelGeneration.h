@@ -40,7 +40,7 @@ public:
     bool CanNeighbour(int roomAIndex, int roomBIndex, DoorDirection direction);
 
     // Creates a minimum required mask, checking neighbours wall types to ensure it connects validly
-    uint16_t LevelGeneration::RequiredMask(int x, int y);
+    uint16_t RequiredMask(int x, int y);
 
     // Builds all possibilities from given assets
     void BuildPalette(const std::vector<Asset*>& roomAssets);

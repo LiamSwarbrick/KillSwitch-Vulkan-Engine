@@ -111,16 +111,19 @@ void LevelGeneration::BuildPalette(const std::vector<Asset*>& roomAssets)
 				switch (opens)
 				{
 				case 4:
-					weight *= 0.1f;
+					weight *= 0.25f;
 					break;
 				case 3:
-					weight *= 0.4f;
+					weight *= 0.5f;
 					break;
 				case 2:
-					weight *= 0.6f;
+					weight *= 0.5f;
 					break;
 				case 1:
-					weight *= 1.0f;
+					weight *= 0.2f;
+					break;
+				default:
+					weight *= 0.4f;
 					break;
 				}
 
@@ -133,10 +136,32 @@ void LevelGeneration::BuildPalette(const std::vector<Asset*>& roomAssets)
 					weight *= 2.0f;
 					break;
 				case 2:
-					weight *= 3.0f;
+					weight *= 2.0f;
 					break;
 				case 1:
 					weight *= 0.5f;
+					break;
+				default:
+					weight *= 5.0f;
+					break;
+				}
+
+				switch (walls)
+				{
+				case 4:
+					weight *= 0.25f;
+					break;
+				case 3:
+					weight *= 1.5f;
+					break;
+				case 2:
+					weight *= 2.5f;
+					break;
+				case 1:
+					weight *= 0.5f;
+					break;
+				default:
+					weight *= 0.4f;
 					break;
 				}
 
@@ -415,25 +440,25 @@ uint16_t LevelGeneration::ScanDoorways(Asset* asset)
 		// Doorway type overrides wall type 
 		if (strcmp(nodeName, "Doorway_N") == 0)
 			SetWallType(mask, NORTH, DOOR);
-		else if (strcmp(nodeName, "Wall_N") == 0)
+		else if (strcmp(nodeName, "Wall_N") == 0 || strcmp(nodeName, "Wall_N_Full") == 0)
 			if (GetWallType(mask, NORTH) != DOOR)
 				SetWallType(mask, NORTH, WALL);
 
 		if (strcmp(nodeName, "Doorway_E") == 0)
 			SetWallType(mask, EAST, DOOR);
-		else if (strcmp(nodeName, "Wall_E") == 0)
+		else if (strcmp(nodeName, "Wall_E") == 0 || strcmp(nodeName, "Wall_E_Full") == 0)
 			if (GetWallType(mask, EAST) != DOOR)
 				SetWallType(mask, EAST, WALL);
 
 		if (strcmp(nodeName, "Doorway_S") == 0)
 			SetWallType(mask, SOUTH, DOOR);
-		else if (strcmp(nodeName, "Wall_S") == 0)
+		else if (strcmp(nodeName, "Wall_S") == 0 || strcmp(nodeName, "Wall_S_Full") == 0)
 			if (GetWallType(mask, SOUTH) != DOOR)
 				SetWallType(mask, SOUTH, WALL);
 
 		if (strcmp(nodeName, "Doorway_W") == 0)
 			SetWallType(mask, WEST, DOOR);
-		else if (strcmp(nodeName, "Wall_W") == 0)
+		else if (strcmp(nodeName, "Wall_W") == 0 || strcmp(nodeName, "Wall_W_Full") == 0)
 			if (GetWallType(mask, WEST) != DOOR)
 				SetWallType(mask, WEST, WALL);
 	}
