@@ -20,6 +20,7 @@ private:
 private:
     //bool LoadAsset(const char* fileName);
     bool FreeAsset(Asset* asset);
+    
 
 public:
     Scene() {}

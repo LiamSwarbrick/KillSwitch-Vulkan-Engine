@@ -81,8 +81,9 @@ EntityID Scene::InstantiatePrefab(Asset* prefab, glm::vec3 spawnPosition)
             }
         }
 
-        if (has_ecs_data)
-        { // if has ecs_data
+        if (node->light_index >= 0)
+        {
+            // LIGHT SOURCE ENTITY
             EntityID eID = m_ecs.CreateEntity((node->name) ? (node->name) : "");
             if (i == 0) rootEntity = eID;
 
@@ -121,6 +122,47 @@ EntityID Scene::InstantiatePrefab(Asset* prefab, glm::vec3 spawnPosition)
                     .spot_outer_cone_angle = light_data.spot_outer_cone_angle
                 });
             }
+        }
+        else if (has_ecs_data)
+        { // if has ecs_data
+            EntityID eID = m_ecs.CreateEntity((node->name) ? (node->name) : "");
+            if (i == 0) rootEntity = eID;
+
+            // ---------------
+            // -- TRANSFORM --
+            // ---------------
+            C_Transform t;
+            glm::vec3 position = glm::vec3(node->translation[0], node->translation[1], node->translation[2]) + spawnPosition;
+            glm::quat rotation = glm::quat(node->rotation[3], node->rotation[0], node->rotation[1], node->rotation[2]);
+            t.matrix = glm::mat4_cast(rotation);
+            t.matrix = glm::translate(t.matrix, position);
+            m_ecs.AddComponent<C_Transform>(eID, { t.matrix });
+
+            // // ------------------
+            // // -- LIGHT SOURCE --
+            // // ------------------
+            // if (node->light_index >= 0)
+            // {
+            //     SDL_assert(node->light_index < prefab->light_count);
+            //     Light light_data = prefab->lights[node->light_index];
+            //     LightComponentType light_type;
+            //     switch (light_data.type)
+            //     {
+            //         case 2: light_type = LIGHT_COMPONENT_POINTLIGHT; break;
+            //         case 3: light_type = LIGHT_COMPONENT_SPOTLIGHT; break;
+            //         default: SDL_assert(0 && "Unimplemented light type detected (directional/area lights not implemented yet).");
+            //     }
+                
+            //     SDL_assert(light_data.range >= 0.0f && "Make sure in Blender to set the custom distance of the light, otherwise no culling can occurr");
+            //     m_ecs.AddComponent<C_Light>(eID, {
+            //         .type = light_type,
+            //         .color = glm::vec3(light_data.color[0], light_data.color[1], light_data.color[2]),//glm::vec3(0.7f, 0.7f, 1.0f),
+            //         .intensity = light_data.intensity,
+            //         .radius = light_data.range,
+            //         .spot_inner_cone_angle = light_data.spot_inner_cone_angle,
+            //         .spot_outer_cone_angle = light_data.spot_outer_cone_angle
+            //     });
+            // }
 
 
 

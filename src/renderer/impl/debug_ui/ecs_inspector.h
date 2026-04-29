@@ -44,6 +44,32 @@ namespace DebugUI
     }
 
     template <>
+    inline void DrawComponentFields<C_Light>(C_Light& l)
+    {
+        if (l.type == LIGHT_COMPONENT_POINTLIGHT)
+        {
+            ImGui::Text("Point light");
+        }
+        else if (l.type == LIGHT_COMPONENT_SPOTLIGHT)
+        {
+            ImGui::Text("Spot light");
+        }
+        else
+        {
+            ImGui::Text("Unkown Light Type");
+        }
+        ImGui::Text("Color: (%f, %f, %f)", l.color.x, l.color.y, l.color.z);
+        ImGui::Text("Intensity: %f", l.intensity);
+        ImGui::Text("Radius: %f", l.radius);
+
+        if (l.type == LIGHT_COMPONENT_SPOTLIGHT)
+        {
+            ImGui::Text("Spot inner cone angle: %f (degrees)", glm::degrees(l.spot_inner_cone_angle));
+            ImGui::Text("Spot outer cone angle: %f (degrees)", glm::degrees(l.spot_outer_cone_angle));
+        }
+    }
+    
+    template <>
     inline void DrawComponentFields<C_RigidBody>(C_RigidBody& c)
     {
         // To visualize the rigidbody we would either define the function using RigidBody 
@@ -145,6 +171,7 @@ namespace DebugUI
         static std::vector<ComponentDrawEntry> draw_entries = {
             MakeDrawEntry<C_Transform>(ecs),
             MakeDrawEntry<C_StaticMesh>(ecs),
+            MakeDrawEntry<C_Light>(ecs),
             MakeDrawEntry<C_RigidBody>(ecs),
         };
 
