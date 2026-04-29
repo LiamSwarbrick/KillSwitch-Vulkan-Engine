@@ -3,6 +3,7 @@
 
 
 #include "shape.h"
+#include "sphere.h"
 
 #include "glm/glm.hpp"
 
@@ -38,6 +39,60 @@ public:
 			glm::vec3{ glm::min(base, tip) - glm::vec3(radius) },
 			glm::vec3{ glm::max(base, tip) + glm::vec3(radius) }
 		);
+	}
+
+	RaycastHit intersectsRay(const Ray& ray, const glm::vec3& position, const glm::quat& orientation) const override
+	{
+        glm::vec3 up = orientation * glm::vec3(0.0f, 1.0f, 0.0f);
+        glm::vec3 tip = position + up * halfHeight;
+        glm::vec3 base = position + up * -halfHeight;
+        glm::vec3 axis = tip - base;
+
+        // Test infinite cylinder along the capsule axis
+        glm::vec3  ao = ray.origin - base;
+        glm::vec3  aod = cross(ao, axis);
+        glm::vec3  d = cross(ray.direction, axis);
+
+        float axisLenSq = glm::dot(axis, axis);
+        float a = glm::dot(d, d);
+        float b = 2.0f * glm::dot(d, aod);
+        float c = glm::dot(aod, aod) - radius * radius * axisLenSq;
+        float disc = b * b - 4.0f * a * c;
+
+        if (disc < 0.0f) return RaycastHit::none();
+
+        float t = (-b - std::sqrt(disc)) / (2.0f * a);
+
+        if (t >= 0.0f && t <= ray.maxDistance)
+        {
+            glm::vec3  hitPoint = ray.origin + ray.direction * t;
+            float proj = glm::dot(hitPoint - base, axis) / axisLenSq;
+
+            if (proj >= 0.0f && proj <= 1.0f)
+            {
+                // Hit the cylindrical body
+                glm::vec3 axisPoint = base + axis * proj;
+
+                RaycastHit hit;
+                hit.t = t;
+                hit.point = hitPoint;
+                hit.normal = glm::normalize(hitPoint - axisPoint);
+                return hit;
+            }
+        }
+
+        // Test hemisphere caps — each cap is a sphere at the endpoint
+        SphereShape capSphere(radius);
+
+        RaycastHit tipHit = capSphere.intersectsRay(ray, tip, glm::quat());
+        RaycastHit baseHit = capSphere.intersectsRay(ray, base, glm::quat());
+
+        if (tipHit.isValid() && baseHit.isValid())
+            return tipHit.t < baseHit.t ? tipHit : baseHit;
+        if (tipHit.isValid())  return tipHit;
+        if (baseHit.isValid()) return baseHit;
+
+        return RaycastHit::none();
 	}
 
 };

@@ -27,7 +27,7 @@ public:
 
 	// Queries (for later)
 	RaycastHit raycast(const Ray& ray, const RigidBody& body, const PhysicsWorld& world) const;
-
+	bool testShapeIntersects(const IShape* shape, const glm::vec3& shapePosition, const glm::quat& shapeOrientation, const RigidBody& body, const PhysicsWorld& world) const;
 	RaycastHit raycastPlane(const Ray& ray, const PlaneShape& plane, const PhysicsWorld& world) const;
 
 	// Helper to transform shapes's pos and ori in case the shape has offset

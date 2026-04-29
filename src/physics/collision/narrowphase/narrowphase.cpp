@@ -42,7 +42,31 @@ Contact NarrowPhase::testPlane(const RigidBody& a, const PlaneShape& plane, cons
 
 RaycastHit NarrowPhase::raycast(const Ray& ray, const RigidBody& body, const PhysicsWorld& world) const
 {
-	return RaycastHit();
+	const IShape* shape = world.getShape(body.shapeHandle);
+
+	SDL_assert(shape && "Body has null shape");
+	if (!shape) return RaycastHit::none();
+
+	glm::vec3 position; glm::quat orientation;
+
+	resolveShapeTransform(shape, body.position, body.orientation, position, orientation);
+
+	return shape->intersectsRay(ray, position, orientation);
+}
+
+bool NarrowPhase::testShapeIntersects(const IShape* shape, const glm::vec3& shapePosition, const glm::quat& shapeOrientation, const RigidBody& body, const PhysicsWorld& world) const
+{
+	const IShape* shapeB = world.getShape(body.shapeHandle);
+
+	SDL_assert(shapeB && "Body B has null shape");
+
+	glm::vec3 positionB; glm::quat orientationB;
+
+	resolveShapeTransform(shapeB, body.position, body.orientation, positionB, orientationB);
+
+	GJKResult res = gjk_runGJK(shape, shapePosition, shapeOrientation, shapeB, positionB, orientationB);
+
+	return res.intersecting;
 }
 
 RaycastHit NarrowPhase::raycastPlane(const Ray& ray, const PlaneShape& plane, const PhysicsWorld& world) const

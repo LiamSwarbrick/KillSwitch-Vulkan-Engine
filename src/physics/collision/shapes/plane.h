@@ -32,6 +32,12 @@ public:
 		return AABB{};
 	}
 
+	RaycastHit intersectsRay(const Ray& ray, const glm::vec3& position, const glm::quat& orientation) const override
+	{
+		SDL_assert(false && "Not implemented, not using plane shapes");
+		return RaycastHit::none();
+	}
+
 };
 
 #endif // !PHYSICS_SHAPES_PLANE_H

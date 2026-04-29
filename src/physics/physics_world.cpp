@@ -9,8 +9,11 @@
 #include <vector>
 #include "physics_manager.h"
 
-PhysicsWorld::PhysicsWorld(uint32_t expectedBodies)
+PhysicsWorld::PhysicsWorld(uint8_t numBodyLayers, uint32_t expectedBodies)
 {
+	bodyLayerFilter = BodyLayerFilter(numBodyLayers);
+	broadPhase = BroadPhase(&bodyLayerFilter);
+
 	bodies.Reserve(expectedBodies);
 	shapes.Reserve(expectedBodies);
 	planes.Reserve(100);
@@ -159,6 +162,26 @@ void PhysicsWorld::removeForceLayers(RigidBodyHandle r, uint32_t layers)
 {
 	RigidBody* b = getBody(r);
 	b->forceLayers &= ~layers;
+}
+
+void PhysicsWorld::setNumLayers(uint8_t numLayers)
+{
+	bodyLayerFilter.setNumLayers(numLayers);
+}
+
+void PhysicsWorld::setLayerPair(uint8_t a, uint8_t b, bool shouldCollide)
+{
+	bodyLayerFilter.setLayerPair(a, b, shouldCollide);
+}
+
+void PhysicsWorld::enableLayerPair(uint8_t a, uint8_t b)
+{
+	bodyLayerFilter.enableLayerPair(a, b);
+}
+
+void PhysicsWorld::disableLayerPair(uint8_t a, uint8_t b)
+{
+	bodyLayerFilter.disableLayerPair(a, b);
 }
 
 
@@ -463,6 +486,76 @@ void PhysicsWorld::removeForce(RigidBodyHandle handle, IForceGenerator* gen)
 		forceRegistry.removePair(body, gen);
 }
 
+
+RaycastHit PhysicsWorld::raycast(const Ray& ray, const QueryFilter& filter) const
+{
+	std::vector<RaycastHit> hits = raycastAll(ray, filter);
+	if (hits.empty()) return { /* Default (invalid) RaycastHit */ };
+
+	size_t minIdx = 0;
+	float minT = hits[0].t;
+	for (size_t i = 1; i < hits.size(); i++)
+	{
+		if (hits[i].t < minT)
+		{
+			minIdx = i;
+			minT = hits[i].t;
+		}
+	}
+
+	return hits[minIdx];
+}
+
+std::vector<RaycastHit> PhysicsWorld::raycastAll(const Ray& ray, const QueryFilter& filter) const
+{
+	std::vector<RaycastHit> narrowHits;
+	std::vector<RaycastHit> broadHits;
+	broadPhase.queryRay(ray, getQueryFilterInternalFromQueryFilter(filter), broadHits);
+
+	if (broadHits.empty()) return narrowHits;
+
+	for (const RaycastHit& broadHit : broadHits)
+	{
+		// TODO: continue here
+		// We might either skip narrowphase casting, orrr send the raycast information, or just double check using narrowphase
+		RaycastHit hit = narrowPhase.raycast(ray, *broadHit.body, *this);
+		if (hit.isValid())
+			narrowHits.push_back(hit);
+	}
+
+	return narrowHits;
+}
+
+std::vector<RigidBodyHandle> PhysicsWorld::shapecast(ShapeHandle shapeHandle, const glm::vec3& position, const glm::quat& orientation, const QueryFilter& filter) const
+{
+	std::vector<RigidBody*> broadHits;
+	std::vector<RigidBodyHandle> hits;
+
+	const IShape* shape = getShape(shapeHandle);
+	// TODO: keep going
+	// Let's create an AABB out of the shape, check on broadphase and then
+	glm::vec3 shapePosition;
+	glm::quat shapeOrientation;
+	narrowPhase.resolveShapeTransform(shape,
+		position, orientation,
+		shapePosition, shapeOrientation);
+
+	AABB aabb = shape->computeAABB(shapePosition, shapeOrientation);
+
+	broadPhase.queryAABB(aabb, getQueryFilterInternalFromQueryFilter(filter), broadHits);
+
+	for (RigidBody* body : broadHits)
+	{
+		if (narrowPhase.testShapeIntersects(shape, shapePosition, shapeOrientation, *body, *this))
+		{
+			hits.push_back({ body->bodyID });
+		}
+	}
+
+	return hits;
+}
+
+
 void PhysicsWorld::setGravity(glm::vec3 g)
 {
 	gravityGen.gravity = g;
@@ -599,4 +692,17 @@ void PhysicsWorld::calculateAABB(RigidBody* body)
 			shapePosition, shapeOrientation);
 		body->aabb = shape->computeAABB(shapePosition, shapeOrientation).fattened(0.1f);
 	}
+}
+
+QueryFilterInternal PhysicsWorld::getQueryFilterInternalFromQueryFilter(const QueryFilter& queryFilter) const
+{
+	QueryFilterInternal res;
+
+	if (queryFilter.bodyToIgnore == InvalidRigidBodyHandle) return {};
+
+	res.bodyToIgnore = getBody(queryFilter.bodyToIgnore);
+	res.hasLayerOfQuery = queryFilter.hasLayerOfQuery;
+	res.layerOfQuery = queryFilter.layerOfQuery;
+
+	return res;
 }

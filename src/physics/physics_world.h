@@ -10,6 +10,8 @@
 
 #include "physics/collision/broadphase/broadphase.h"
 #include "physics/collision/narrowphase/narrowphase.h"
+#include "physics/collision/filters/body_layer_filter.h"
+
 #include "simulation/integrator.h"
 #include "simulation/solver.h"
 #include "simulation/force_registry.h"
@@ -32,7 +34,7 @@
 class PhysicsWorld
 {
 public:
-	explicit PhysicsWorld(uint32_t expectedBodies = 1024);
+	explicit PhysicsWorld(uint8_t numBodyLayers = 16U, uint32_t expectedBodies = 1024);
 	~PhysicsWorld();
 
 	// Non-copyable constructors
@@ -61,7 +63,6 @@ public:
 	// ------------------------------
 	// GETTERS & SETTERS
 	// ------------------------------
-	// setters & getters
 	glm::vec3 getVelocity(RigidBodyHandle r);
 	float getGravityScale(RigidBodyHandle r);
 	uint32_t getForceLayers(RigidBodyHandle r);
@@ -74,6 +75,12 @@ public:
 	void setForceLayers(RigidBodyHandle r, uint32_t layers);
 	void addForceLayers(RigidBodyHandle r, uint32_t layers);
 	void removeForceLayers(RigidBodyHandle r, uint32_t layers);
+
+	// IMPORTANT, FOR CHECKING BODIES IN BROADPHASE
+	void setNumLayers(uint8_t numLayers);
+	void setLayerPair(uint8_t a, uint8_t b, bool shouldCollide);
+	void enableLayerPair(uint8_t a, uint8_t b);
+	void disableLayerPair(uint8_t a, uint8_t b);
 
 
 	// ------------------------------
@@ -123,7 +130,7 @@ public:
 	std::vector<RaycastHit> raycastAll(const Ray& ray, const QueryFilter& filter = {}) const;
 
 	// Shape-casting too (might change the input to be ShapeCast or something like that, but for now this, will see when i implement it)
-	std::vector<EntityID> shapecast(
+	std::vector<RigidBodyHandle> shapecast(
 		ShapeHandle shape, const glm::vec3& position, const glm::quat& orientation,
 		const QueryFilter& filter = {}) const;
 
@@ -163,11 +170,15 @@ private:
 	// Helper for AABB
 	void calculateAABB(RigidBody* body);
 
+	// Helper to translate QueryFilter to QueryFilterInternal
+	QueryFilterInternal getQueryFilterInternalFromQueryFilter(const QueryFilter& queryFilter) const;
+
 	//inline RigidBody& getBody();
 
 private:
 	// --- SYSTEMS ---
 	BroadPhase broadPhase;
+	BodyLayerFilter bodyLayerFilter;
 	NarrowPhase narrowPhase;
 	Integrator integrator;
 	Solver solver;

@@ -1,5 +1,6 @@
 #include "game/foundations/scene.h"
 #include "game/foundations/components.h"
+#include "game/foundations/body_layer_collisions.h"
 #include "renderer/renderer.h"
 
 // animation update
@@ -26,6 +27,7 @@ void Scene::StartUp()
     m_prefabs.clear();
 
     m_physicsManager.startUp();
+    
 }
 
 void Scene::Shutdown()
@@ -178,6 +180,12 @@ EntityID Scene::InstantiatePrefab(Asset* prefab, glm::vec3 spawnPosition)
                 rbDesc.isKinematic = importedRigidbody.is_kinematic;
                 rbDesc.isCharacter = importedRigidbody.is_character;
                 rbDesc.isTrigger = importedRigidbody.is_trigger;
+
+                // TEMPORARY
+                if (importedRigidbody.is_static || importedRigidbody.is_trigger)
+                    rbDesc.bodyLayer = (uint8_t) BodyLayer::STATIC;
+                else
+                    rbDesc.bodyLayer = (uint8_t) BodyLayer::MOVING;
 
                 rbDesc.shape = shapeHandle;
 
@@ -340,4 +348,17 @@ void Scene::Render()
 
         Renderer_PushRenderable(r);
     });
+}
+
+void Scene::SetBodyCollisionLayers()
+{
+    m_physicsManager.setNumLayers(NUM_BODY_LAYERS);
+    //m_physicsManager.setLayerPair((uint8_t) BodyLayer::STATIC, (uint8_t) BodyLayer::STATIC, false);
+    m_physicsManager.disableLayerPair((uint8_t) BodyLayer::STATIC, (uint8_t) BodyLayer::STATIC);
+    // STATIC VS MOVING
+    // MOVING VS MOVING
+    // WEAPON VS MOVING
+    m_physicsManager.enableLayerPair((uint8_t) BodyLayer::STATIC, (uint8_t) BodyLayer::MOVING);
+    m_physicsManager.enableLayerPair((uint8_t) BodyLayer::MOVING, (uint8_t) BodyLayer::MOVING);
+    m_physicsManager.enableLayerPair((uint8_t) BodyLayer::WEAPON, (uint8_t) BodyLayer::MOVING);
 }

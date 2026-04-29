@@ -3,18 +3,19 @@
 
 #include "physics/core/types.h"
 
-struct QueryFilterInternal
-{
-
-};
-
 struct QueryFilter
 {
-	RigidBodyHandle bodyToIgnore;
-	// TODO: add the body layers (broadphase, like jolt) (no need to change the current data from the script)
-	
+	RigidBodyHandle bodyToIgnore = InvalidRigidBodyHandle;
+	bool hasLayerOfQuery = false;
+	uint8_t layerOfQuery = 0;
 };
 
+struct QueryFilterInternal
+{
+	const RigidBody* bodyToIgnore = nullptr;
+	bool hasLayerOfQuery = false;
+	uint8_t layerOfQuery = 0;
+};
 
 #endif // !PHYSICS_QUERIES_QUERY_FILTER_H
 

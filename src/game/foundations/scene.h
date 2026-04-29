@@ -1,3 +1,6 @@
+#ifndef FOUNDATIONS_SCENE_H
+#define FOUNDATIONS_SCENE_H
+
 #include "core/ecs.h"
 #include "core/my_c_runtime.h"
 #include "core/assetsys.h"
@@ -41,5 +44,9 @@ public:
     void Update(float dt);
     void Render();
 
+private:
+    // Helper to set the body's collision matrix
+    void SetBodyCollisionLayers();
 };
 
+#endif //FOUNDATIONS_SCENE_H
