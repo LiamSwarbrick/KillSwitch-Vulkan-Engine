@@ -13,13 +13,6 @@ struct C_Transform
     glm::mat4 matrix;
 };
 
-struct C_StaticMesh
-{
-	Mesh* mesh;
-	Asset* parent_asset;
-    MeshPrefab renderer_prefab;  // Loaded by renderer (empty before that)
-};
-
 typedef enum LightComponentType
 {
 	LIGHT_COMPONENT_POINTLIGHT,
@@ -35,9 +28,19 @@ struct C_Light
 	LightComponentType type;
 	glm::vec3 color;
 	float intensity;
+	float radius;
 	float spot_inner_cone_angle;  // <- Spotlights only
 	float spot_outer_cone_angle;
 };
+
+struct C_StaticMesh
+{
+	Mesh* mesh;
+	Asset* parent_asset;
+    MeshPrefab renderer_prefab;  // Loaded by renderer (empty before that)
+};
+
+
 
 // stores layer animation state
 struct AnimationLayer {

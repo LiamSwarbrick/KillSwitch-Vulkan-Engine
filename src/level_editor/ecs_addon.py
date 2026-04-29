@@ -790,7 +790,7 @@ class EXPORT_OT_level_glb(bpy.types.Operator, ExportHelper):
             filepath=self.filepath,
             
             # Exports separate .gltf, .bin, .png files
-            export_format='GLTF_SEPARATE',
+            export_format='GLTF_SEPARATE',    # NOTE: <- CHANGE THIS WHEN WE WANT GLB to 'GBL'
             export_image_format='AUTO', 
             export_texture_dir='textures', 
             
@@ -799,7 +799,9 @@ class EXPORT_OT_level_glb(bpy.types.Operator, ExportHelper):
             export_extras=True,
             
             # Apply all modifiers before export
-            export_apply=True
+            export_apply=True,
+
+            export_lights=True
         )
         
         self.report({'INFO'}, f"Level exported successfully to {self.filepath}")

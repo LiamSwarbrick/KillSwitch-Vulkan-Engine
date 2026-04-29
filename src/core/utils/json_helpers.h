@@ -20,7 +20,27 @@ template<typename T> void   rj_set(rj::Value& v, const T& val, rj::Document::All
 template<> int          rj_get<int>(const rj::Value& v) { return v.GetInt(); }
 template<> float        rj_get<float>(const rj::Value& v) { return v.GetFloat(); }
 template<> double       rj_get<double>(const rj::Value& v) { return v.GetDouble(); }
-template<> bool         rj_get<bool>(const rj::Value& v) { return v.GetBool(); }
+// template<> bool         rj_get<bool>(const rj::Value& v) { return v.GetBool(); }
+template<>
+inline bool rj_get<bool>(const rj::Value& v)
+{
+    if (v.IsBool())
+        return v.GetBool();
+
+    if (v.IsInt())
+        return v.GetInt() != 0;
+
+    if (v.IsUint())
+        return v.GetUint() != 0;
+
+    if (v.IsInt64())
+        return v.GetInt64() != 0;
+
+    if (v.IsUint64())
+        return v.GetUint64() != 0;
+
+    throw std::runtime_error("rj_get<bool>: value is not convertible to bool");
+}
 template<> std::string  rj_get<std::string>(const rj::Value& v) { return v.GetString(); }
 template<> glm::vec2    rj_get<glm::vec2>(const rj::Value& v)
 {

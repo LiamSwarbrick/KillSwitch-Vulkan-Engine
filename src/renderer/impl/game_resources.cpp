@@ -536,6 +536,7 @@ void create_scene_resources()
     }
 
     // Upload materials to global material buffer (all at once)
+    // TODO: This doesn't need to be a mapped buffer anymore, can just use FG_UploadBuffer or whatever
     FG_Resource* materials_res = &renderstate.registry.resources[renderstate.rids.materials_buffer_rid];
     vmaCopyMemoryToAllocation(renderstate.vma_allocator, loaded_materials, materials_res->allocation, 0, num_loaded_materials * sizeof(MaterialData));
     // memcpy(materials_res->buffer.mapped_data, loaded_materials, mat_upload_size);
