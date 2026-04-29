@@ -74,7 +74,7 @@ namespace DebugUI
     {
         // To visualize the rigidbody we would either define the function using RigidBody 
         // or somehow have access to the Scene / PhysicsManager to get the RigidBody here
-        ImGui::Text("RigidBodyHandle: %p", c.handle.index);
+        ImGui::Text("RigidBodyHandle: %d", c.handle.index);
     }
 
     // Registry: bit_index → draw function

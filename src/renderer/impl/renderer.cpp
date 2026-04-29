@@ -843,14 +843,14 @@ void Renderer_PushRenderable(Renderable renderable)
 
 void Renderer_PushLight(C_Light light, glm::vec3 position, glm::vec3 direction)
 {
+    glm::vec4 pos_and_radius = glm::vec4(position.x, position.y, position.z, light.radius);
+    glm::vec4 color_and_intensity = glm::vec4(light.color.x, light.color.y, light.color.z, light.intensity);
+
     switch (light.type)
     {
     case LIGHT_COMPONENT_POINTLIGHT:
         {
             SDL_assert(renderstate.renderables_arena.num_point_lights < MAX_POINTLIGHTS);
-
-            glm::vec4 pos_and_radius = glm::vec4(position.x, position.y, position.z, light.radius);
-            glm::vec4 color_and_intensity = glm::vec4(light.color.x, light.color.y, light.color.z, light.intensity);
 
             PointLight pl = {};
             memcpy(&pl.pos_and_radius, glm::value_ptr(pos_and_radius), sizeof(glm::vec4));
@@ -863,9 +863,6 @@ void Renderer_PushLight(C_Light light, glm::vec3 position, glm::vec3 direction)
     case LIGHT_COMPONENT_SPOTLIGHT:
         {
             SDL_assert(renderstate.renderables_arena.num_spot_lights < MAX_SPOTLIGHTS);
-
-            glm::vec4 pos_and_radius = glm::vec4(position.x, position.y, position.z, light.radius);
-            glm::vec4 color_and_intensity = glm::vec4(light.color.x, light.color.y, light.color.z, light.intensity);
 
             SpotLight sl = {};
             memcpy(&sl.pos_and_radius, glm::value_ptr(pos_and_radius), sizeof(glm::vec4));

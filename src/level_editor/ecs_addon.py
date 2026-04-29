@@ -755,13 +755,67 @@ def import_ecs_from_scene():
         print(f"[ECS IMPORT] Applied ECS to {obj.name}")
 
 
+# def override_gltf_light_range():
+#     try:
+#         from io_scene_gltf2.blender.exp.gltf2_blender_gather_lights import gather_lights_punctual
+
+#         original_gather = gather_lights_punctual
+
+#         def custom_gather_lights_punctual(blender_lamp, export_settings):
+#             light = original_gather(blender_lamp, export_settings)
+
+#             if light is None:
+#                 return None
+
+#             # Override range using radius
+#             radius = blender_lamp.shadow_soft_size
+
+#             if radius > 0.0:
+#                 light.range = radius
+
+#             return light
+
+#         import io_scene_gltf2.blender.exp.gltf2_blender_gather_lights as mod
+#         mod.gather_lights_punctual = custom_gather_lights_punctual
+
+#         print("[GLTF OVERRIDE] Light range now driven by radius")
+
+#     except Exception as e:
+#         print(f"[GLTF OVERRIDE] Failed: {e}")
+
+
+def prepare_lights_for_export():
+    for obj in bpy.data.objects:
+        if obj.type != 'LIGHT':
+            continue
+
+        light = obj.data
+
+        # if light.type == 'POINT':
+        radius = light.shadow_soft_size
+
+        if radius <= 0.0:
+            continue  # or handle error
+
+        light.use_custom_distance = True
+        light.cutoff_distance = radius
+
 # the exporter and importer operator
 class EXPORT_OT_level_glb(bpy.types.Operator, ExportHelper):
     bl_idname = "export.level_glb"
     bl_label = "Build Level (.glb)"
     filename_ext = ".glb"
 
-    def execute(self, context):        
+    def execute(self, context):
+
+        # Make sure all lights have a radius, cuz we use this to set the cut off distance
+        for obj in bpy.data.objects:
+            if obj.type == 'LIGHT':
+                light = obj.data
+                if light.type == 'POINT' and light.shadow_soft_size == 0.0:
+                    self.report({'ERROR'}, f"Light '{obj.name}' has radius = 0")
+                    return {'CANCELLED'}
+
         # Clean all BlenderKit metadata from nodes custom properties
         for entity in bpy.data.objects:
             for key in list(entity.keys()):
@@ -781,6 +835,7 @@ class EXPORT_OT_level_glb(bpy.types.Operator, ExportHelper):
                     del scene[key]
 
 
+        prepare_lights_for_export()
         bake_ecs_to_custom_properties()
 
         # strip_ecs_runtime_properties()

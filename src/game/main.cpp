@@ -179,12 +179,12 @@ int main(int argc, char *argv[])
     Scene scene{};
     scene.StartUp();
 
-    Asset* room_prefab = scene.LoadPrefab("assets/levels/lightroom1.gltf");
+    Asset* room_prefab = scene.LoadPrefab("assets/levels/melightstest0.gltf");
     // Asset* cube_prefab = scene.LoadPrefab("assets/props/simple_cube.gltf");
     // Asset* sphere_prefab = scene.LoadPrefab("assets/props/simple_sphere.gltf");
     // Asset* capsule_prefab = scene.LoadPrefab("assets/props/simple_capsule.gltf");
     // TODO: Change the following 2 prefabs so they can be imported (add the boolean "Is ECS Entity" with the new script where it is needed)
-    Asset* catPrefab = scene.LoadPrefab("assets/animations/zomboUntitled.gltf");
+    // Asset* catPrefab = scene.LoadPrefab("assets/animations/zomboUntitled.gltf");
     // Asset* catPrefab = scene.LoadPrefab("assets/animations/flatzombo.gltf");
     // Asset* animationPrefab = scene.LoadPrefab("assets/animations/cat.gltf");
 
@@ -196,7 +196,7 @@ int main(int argc, char *argv[])
     // scene.InstantiatePrefab(sphere_prefab, glm::vec3(-4.7, 7, -0.1));
     // scene.InstantiatePrefab(sphere_prefab, glm::vec3(0.1, 7, -4.7));
     // scene.InstantiatePrefab(sphere_prefab, glm::vec3(-0.1, 7, 4.7));
-    scene.InstantiatePrefab(catPrefab, glm::vec3(0, 0, 0));
+    // scene.InstantiatePrefab(catPrefab, glm::vec3(0, 0, 0));
     // scene.InstantiatePrefab(animationPrefab, glm::vec3(0, 0, 0));
     // render a second cat
     // EntityID playerEntity = scene.InstantiatePrefab(animationPrefab, glm::vec3(10, 0, 10));
