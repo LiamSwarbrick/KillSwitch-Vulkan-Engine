@@ -30,6 +30,7 @@ include_paths.rapidjson = EXTERNAL .. "rapidjson"
 include_paths.imgui = EXTERNAL .. "imgui"
 include_paths.imgui_backends = EXTERNAL .. "imgui/backends"
 include_paths.imgui_node_editor = EXTERNAL .. "imgui-node-editor"
+include_paths.miniaudio = EXTERNAL .. "miniaudio"
 
 lib_dirs = {}
 
@@ -189,7 +190,8 @@ workspace "AdventureEngine"
             include_paths.rapidjson,
             include_paths.imgui,
             include_paths.imgui_backends,
-            include_paths.imgui_node_editor
+            include_paths.imgui_node_editor,
+            include_paths.miniaudio
         }
 
         libdirs {
