@@ -24,6 +24,9 @@ static std::mt19937 rng(std::random_device{}());
 // Just literally checks if each room has the necessary wall type to connect in the direction specified
 bool LevelGeneration::CanNeighbour(int roomAIndex, int roomBIndex, DoorDirection direction)
 {
+	if (roomAIndex < 0 || roomAIndex >= palette.size() || roomBIndex < 0 || roomBIndex >= palette.size())
+		SDL_Log("Trying to check neighbour connections on invalid room numbers, RoomA: %d, RoomB: %d", roomAIndex, roomBIndex);
+
 	const Room& roomA = palette[roomAIndex];
 	const Room& roomB = palette[roomBIndex];
 
@@ -183,6 +186,14 @@ void LevelGeneration::UpdatePossibilities(std::vector<glm::ivec2> updateRooms)
 				// If the rooms could connect, add to valid rooms
 				if (compatible)
 					updatedValidRooms.push_back(neighbourValidRoom);
+			}
+
+			// If no rooms are valid, then a room type is missing, output which room type
+			if (updatedValidRooms.empty()) 
+			{
+				uint16_t requiredMask = RequiredMask(neighbourRoom.x, neighbourRoom.y);
+				SDL_Log("Room at %d,%d has no valid rooms left, it needs: N:%d E:%d S:%d W:%d", neighbourRoom.x, neighbourRoom.y,
+					GetWallType(requiredMask, NORTH), GetWallType(requiredMask, EAST), GetWallType(requiredMask, SOUTH), GetWallType(requiredMask, WEST));
 			}
 
 			// If neighbours valid rooms changed update them, then need to update their neighbours valid rooms too

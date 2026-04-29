@@ -213,7 +213,7 @@ int main(int argc, char *argv[])
     roomAssets.push_back(scene.LoadPrefab("assets/levels/1-Door_Room.gltf"));
     roomAssets.push_back(scene.LoadPrefab("assets/levels/Solid_Room.gltf"));
     generator.BuildPalette(roomAssets);
-    generator.GenerateGrid(9, 9, glm::ivec2({4, 4}), glm::ivec2({ 4, 4 }), (uint16_t)85, 40);
+    generator.GenerateGrid(9, 9, glm::ivec2({4, 4}), glm::ivec2({ 4, 4 }), ((DOOR << NORTH) + (DOOR << EAST) + (DOOR << SOUTH) + (DOOR << WEST)), 40);
     generator.InstantiateLevel(&scene);
 
 
