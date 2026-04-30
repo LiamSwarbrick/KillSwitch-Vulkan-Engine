@@ -97,11 +97,6 @@ struct AABB
 
         for (int i = 0; i < 3; i++)
         {
-            // Edge case, unsure if needed
-            if ((ray.direction[i] < F_EPSILON)
-                && (ray.origin[i] < min[i] || ray.origin[i] > max[i]))
-                return false;
-
             if (std::abs(ray.direction[i]) < F_EPSILON)
             {
                 if (ray.origin[i] < min[i] || ray.origin[i] > max[i])
@@ -414,6 +409,17 @@ struct BodyPair
     }
 
     bool isValid() const { return bodyA != nullptr; }
+};
+
+// Just in case BodyPair::operator< doesn't work (it has happened before)
+struct BodyPairComparer
+{
+    bool operator()(const BodyPair& a, const BodyPair& b)
+    {
+        if (a.bodyA != b.bodyA)
+            return a.bodyA < b.bodyA;
+        return a.bodyB < b.bodyB;
+    }
 };
 
 

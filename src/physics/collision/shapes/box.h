@@ -95,7 +95,7 @@ public:
         RaycastHit hit;
         hit.t = tMin;
         hit.point = ray.origin + ray.direction * tMin;
-        hit.normal = rot * localNormal;
+        hit.normal = rot * -localNormal;
 
         return hit;
 	}

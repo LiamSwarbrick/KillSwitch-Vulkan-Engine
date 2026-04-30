@@ -11,7 +11,7 @@
 
 PhysicsWorld::PhysicsWorld(uint8_t numBodyLayers, uint32_t expectedBodies)
 {
-	bodyLayerFilter = BodyLayerFilter(numBodyLayers);
+	bodyLayerFilter.StartUp(numBodyLayers);
 	broadPhase = BroadPhase(&bodyLayerFilter);
 
 	bodies.Reserve(expectedBodies);
@@ -223,6 +223,7 @@ RigidBodyHandle PhysicsWorld::addBody(const RigidBodyDesc& desc)
 	body.gravityScale = desc.gravityScale;
 	body.damping = desc.damping;
 	body.forceLayers = desc.forceLayers;
+	body.bodyLayer = desc.bodyLayer;
 
 	body.shapeHandle = desc.shape;
 
@@ -520,7 +521,10 @@ std::vector<RaycastHit> PhysicsWorld::raycastAll(const Ray& ray, const QueryFilt
 		// We might either skip narrowphase casting, orrr send the raycast information, or just double check using narrowphase
 		RaycastHit hit = narrowPhase.raycast(ray, *broadHit.body, *this);
 		if (hit.isValid())
+		{
+			hit.body = broadHit.body;
 			narrowHits.push_back(hit);
+		}
 	}
 
 	return narrowHits;
@@ -594,6 +598,8 @@ void PhysicsWorld::step(float dt)
 	detectCollisions();
 	testPlanes();
 	solve(dt);
+
+	dispatchEvents();
 }
 
 void PhysicsWorld::applyForces(float dt)
@@ -679,6 +685,89 @@ void PhysicsWorld::solve(float dt)
 	solver.solve(contacts, dt);
 }
 
+void PhysicsWorld::dispatchEvents()
+{
+	std::set<BodyPair> currentCollisionPairs;
+	std::set<BodyPair> currentTriggerPairs;
+
+	// --- FILL CURRENT PAIRS ---
+	for (const Contact& c : contacts)
+	{
+		bool trigger = c.bodyA->isTrigger || (c.bodyB && c.bodyB->isTrigger);
+
+		BodyPair pair = BodyPair(c.bodyA, c.bodyB);
+		RigidBodyHandle handleA = { c.bodyA->bodyID };
+		RigidBodyHandle handleB;
+		if (c.bodyB != nullptr)
+			handleB = RigidBodyHandle(c.bodyB->bodyID);
+
+		if (trigger)
+		{
+			bool isStaying = previousTriggerPairs.count(pair) > 0;
+
+			if (isStaying)
+			{
+				if (onTriggerStay) onTriggerStay(handleA, handleB, c);
+			}
+			else
+			{
+				if (onTriggerEnter) onTriggerEnter(handleA, handleB, c);
+			}
+
+			// Finally we add it to the current trigger pairs for the next step
+			currentTriggerPairs.insert(pair);
+		}
+		else
+		{
+			bool isStaying = previousCollisionPairs.count(pair) > 0;
+
+			if (isStaying)
+			{
+				if (onCollisionStay) onCollisionStay(handleA, handleB, c);
+			}
+			else
+			{
+				if (onCollisionEnter) onCollisionEnter(handleA, handleB, c);
+			}
+
+			// Finally we add it to the current collision pairs for the next step
+			currentCollisionPairs.insert(pair);
+		}
+	}
+
+	// --- COLLISION EXIT EVENT ---
+	for (const BodyPair& pair : previousCollisionPairs)
+	{
+		if (currentCollisionPairs.count(pair) == 0)
+		{
+			RigidBodyHandle handleA = { pair.bodyA->bodyID };
+			RigidBodyHandle handleB;
+			if (pair.bodyB != nullptr)
+				handleB = { pair.bodyB->bodyID };
+
+			if (onCollisionExit) onCollisionExit(handleA, handleB);
+		}
+	}
+
+	// --- TRIGGER EXIT EVENT ---
+	for (const BodyPair& pair : previousTriggerPairs)
+	{
+		if (currentTriggerPairs.count(pair) == 0)
+		{
+			RigidBodyHandle handleA = { pair.bodyA->bodyID };
+			RigidBodyHandle handleB;
+			if (pair.bodyB != nullptr)
+				handleB = { pair.bodyB->bodyID };
+
+			if (onTriggerExit) onTriggerExit(handleA, handleB);
+		}
+	}
+
+	// REPLACE CURRENT ONES
+	previousCollisionPairs = currentCollisionPairs;
+	previousTriggerPairs = currentTriggerPairs;
+}
+
 
 void PhysicsWorld::calculateAABB(RigidBody* body)
 {
@@ -698,9 +787,8 @@ QueryFilterInternal PhysicsWorld::getQueryFilterInternalFromQueryFilter(const Qu
 {
 	QueryFilterInternal res;
 
-	if (queryFilter.bodyToIgnore == InvalidRigidBodyHandle) return {};
-
-	res.bodyToIgnore = getBody(queryFilter.bodyToIgnore);
+	if (queryFilter.bodyToIgnore != InvalidRigidBodyHandle)
+		res.bodyToIgnore = getBody(queryFilter.bodyToIgnore);
 	res.hasLayerOfQuery = queryFilter.hasLayerOfQuery;
 	res.layerOfQuery = queryFilter.layerOfQuery;
 

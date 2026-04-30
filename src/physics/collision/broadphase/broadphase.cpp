@@ -81,7 +81,7 @@ void BroadPhase::queryPairs(std::vector<BodyPair>& outPairs) const
 	}
 }
 
-void BroadPhase::queryAABB(const AABB& aabb, const QueryFilterInternal& filter, std::vector<RigidBody*> outBodies) const
+void BroadPhase::queryAABB(const AABB& aabb, const QueryFilterInternal& filter, std::vector<RigidBody*>& outBodies) const
 {
 	for (RigidBody* body : bodies)
 	{
@@ -95,14 +95,15 @@ void BroadPhase::queryAABB(const AABB& aabb, const QueryFilterInternal& filter, 
 	}
 }
 
-void BroadPhase::queryRay(const Ray& ray, const QueryFilterInternal& filter, std::vector<RaycastHit> outBodies) const
+void BroadPhase::queryRay(const Ray& ray, const QueryFilterInternal& filter, std::vector<RaycastHit>& outBodies) const
 {
 	for (RigidBody* body : bodies)
 	{
 		RaycastHit hit;
+		bool shouldCollide = filter.hasLayerOfQuery ? bodyLayerFilter->shouldCollide(filter.layerOfQuery, body->bodyLayer) : false;
 
 		if (filter.bodyToIgnore && filter.bodyToIgnore == body) continue;
-		if (filter.hasLayerOfQuery && !bodyLayerFilter->shouldCollide(filter.layerOfQuery, body->bodyLayer)) continue;
+		if (!shouldCollide) continue;
 		
 		if (body->aabb.intersectsRay(ray, hit))
 		{

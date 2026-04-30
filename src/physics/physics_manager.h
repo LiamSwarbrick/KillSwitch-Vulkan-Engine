@@ -2,6 +2,8 @@
 #define PHYSICS_PHYSICS_MANAGER_H
 
 #include "core/ecs.h"
+#include "core/event.h"
+
 #include "physics/core/types.h"
 #include "physics_world.h"
 
@@ -136,15 +138,30 @@ public:
 		const QueryFilterExternal& filter = {}) const;
 
 	// ------------------------------
-	// EVENTS (planning for the future)
+	// EVENTS
 	// ------------------------------
-	std::function<void(EntityID a, EntityID b, const Contact&)> onCollisionEnter;
-	std::function<void(EntityID a, EntityID b, const Contact&)> onCollisionStay;
-	std::function<void(EntityID a, EntityID b)> onCollisionExit;
+	// Contrary to PhysicsWorld, where we use a single function (1 subscriber only), here we use proper events where other systems can subscribe to. 
+	// If we had a global bus, the physics manager would be the one subscribe the world events there.
+	struct CollisionEnterAndStayArgs
+	{
+		EntityID a;
+		EntityID b;
+		const Contact& contact;
+	};
 
-	std::function<void(EntityID a, EntityID b)> onTriggerEnter;
-	std::function<void(EntityID a, EntityID b)> onTriggerStay;
-	std::function<void(EntityID a, EntityID b)> onTriggerExit;
+	struct CollisionExitArgs
+	{
+		EntityID a;
+		EntityID b;
+	};
+
+	Event<CollisionEnterAndStayArgs> onCollisionEnter;
+	Event<CollisionEnterAndStayArgs> onCollisionStay;
+	Event<CollisionExitArgs> onCollisionExit;
+
+	Event<CollisionEnterAndStayArgs> onTriggerEnter;
+	Event<CollisionEnterAndStayArgs> onTriggerStay;
+	Event<CollisionExitArgs> onTriggerExit;
 
 
 private:
@@ -176,7 +193,7 @@ private:
 	//EntityID bodyToEntity(RigidBody* body) const;
 
 	// Need this to translate events fired from world to RigidBodyHandle to EntityID
-	//void bindWorldEvents();
+	void bindWorldEvents();
 
 	// Extra little helper
 	inline EntityRaycastHit rayHitToEntityRayHit(const RaycastHit& rayHit) const;

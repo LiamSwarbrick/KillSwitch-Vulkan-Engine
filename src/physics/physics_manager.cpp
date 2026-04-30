@@ -13,7 +13,7 @@
 
 void PhysicsManager::startUp()
 {
-	//bindWorldEvents();
+	bindWorldEvents();
 }
 
 void PhysicsManager::shutDown()
@@ -30,7 +30,12 @@ void PhysicsManager::clear()
 
 RigidBodyHandle PhysicsManager::createBody(EntityID entity, const RigidBodyDesc& desc)
 {
-	assert(entityToHandle.find(entity) == entityToHandle.end() && "Entity already has rigidbody");
+	auto it = entityToHandle.find(entity);
+	if (it != entityToHandle.end())
+	{
+		assert(false && "Entity already has rigidbody");
+	}
+	
 
 	RigidBodyHandle handle = world.addBody(desc);
 
@@ -70,8 +75,12 @@ inline RigidBodyHandle PhysicsManager::getHandle(EntityID entity) const
 {
 	// Can fail but shouldn't if entities are managed properly!
 	auto it = entityToHandle.find(entity);
-	SDL_assert(it == entityToHandle.end() && "Invalid EntityID to RigidBodyHandle");
-	if (it == entityToHandle.end()) return InvalidRigidBodyHandle;
+	
+	if (it == entityToHandle.end())
+	{
+		SDL_assert(false && "Invalid EntityID to RigidBodyHandle");
+		return InvalidRigidBodyHandle;
+	}
 
 	return it->second;
 }
@@ -80,8 +89,12 @@ inline EntityID PhysicsManager::getEntityID(RigidBodyHandle handle) const
 {
 	// Should never fail !!!
 	auto it = handleToEntity.find(handle);
-	SDL_assert(it == handleToEntity.end() && "Invalid RigidBodyHandle to EntityID");
-	if (it == handleToEntity.end()) return NULL_ENTITY;
+
+	if (it == handleToEntity.end())
+	{
+		SDL_assert(false && "Invalid RigidBodyHandle to EntityID");
+		return NULL_ENTITY;
+	}
 
 	return it->second;
 }
@@ -92,6 +105,66 @@ inline QueryFilter PhysicsManager::getQueryFilterFromQueryFilterExternal(const Q
 	if (queryFilterExternal.bodyToIgnore != NULL_ENTITY) res.bodyToIgnore = getHandle(queryFilterExternal.bodyToIgnore);
 	res.hasLayerOfQuery = queryFilterExternal.hasLayerOfQuery;
 	res.layerOfQuery = queryFilterExternal.layerOfQuery;
+
+	return res;
+}
+
+void PhysicsManager::bindWorldEvents()
+{
+	world.onCollisionEnter = [this](RigidBodyHandle handleA, RigidBodyHandle handleB, const Contact& c)
+		{
+			EntityID a = getEntityID(handleA);
+			EntityID b = getEntityID(handleB);
+
+			if (a != NULL_ENTITY && b != NULL_ENTITY)
+				onCollisionEnter.Invoke({ a, b, c });
+		};
+
+	world.onCollisionStay = [this](RigidBodyHandle handleA, RigidBodyHandle handleB, const Contact& c)
+		{
+			EntityID a = getEntityID(handleA);
+			EntityID b = getEntityID(handleB);
+
+			if (a != NULL_ENTITY && b != NULL_ENTITY)
+				onCollisionStay.Invoke({ a, b, c });
+		};
+
+	world.onCollisionExit = [this](RigidBodyHandle handleA, RigidBodyHandle handleB)
+		{
+			EntityID a = getEntityID(handleA);
+			EntityID b = getEntityID(handleB);
+
+			if (a != NULL_ENTITY && b != NULL_ENTITY)
+				onCollisionExit.Invoke({ a, b });
+		};
+
+	world.onTriggerEnter = [this](RigidBodyHandle handleA, RigidBodyHandle handleB, const Contact& c)
+		{
+			EntityID a = getEntityID(handleA);
+			EntityID b = getEntityID(handleB);
+
+			if (a != NULL_ENTITY && b != NULL_ENTITY)
+				onTriggerEnter.Invoke({ a, b, c });
+		};
+
+	world.onTriggerStay = [this](RigidBodyHandle handleA, RigidBodyHandle handleB, const Contact& c)
+		{
+			EntityID a = getEntityID(handleA);
+			EntityID b = getEntityID(handleB);
+
+			if (a != NULL_ENTITY && b != NULL_ENTITY)
+				onTriggerStay.Invoke({ a, b, c });
+		};
+
+	world.onTriggerExit = [this](RigidBodyHandle handleA, RigidBodyHandle handleB)
+		{
+			EntityID a = getEntityID(handleA);
+			EntityID b = getEntityID(handleB);
+
+			if (a != NULL_ENTITY && b != NULL_ENTITY)
+				onTriggerExit.Invoke({ a, b });
+		};
+
 }
 
 inline EntityRaycastHit PhysicsManager::rayHitToEntityRayHit(const RaycastHit& rayHit) const

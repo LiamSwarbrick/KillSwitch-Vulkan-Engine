@@ -2,14 +2,20 @@
 #define PHYSICS_COLLISION_FILTERS_BODY_LAYER_FILTER_H
 
 #include <cstdint>
+#include <vector>
+
+//#define BODY_LAYER_MATRIX_VECTOR_IMPLEMENTATION 
 
 // Could do this templated, to have a more optimized matrix of layers, but i'll stick to uint8_t, 
 // don't think we will need more than 255 layers
 class BodyLayerFilter
 {
 public:
-	explicit BodyLayerFilter(uint8_t numLayers = (uint8_t) 16U);
+	explicit BodyLayerFilter() = default;
 	~BodyLayerFilter();
+
+	void StartUp(uint8_t numLayers = (uint8_t)16U);
+	void ShutDown();
 
 	bool shouldCollide(uint8_t a, uint8_t b) const;
 
@@ -21,7 +27,11 @@ public:
 
 private:
 	uint8_t m_numLayers = 0;
-	bool* m_collisionMatrix = nullptr;
+#ifdef BODY_LAYER_MATRIX_VECTOR_IMPLEMENTATION
+	std::vector<bool> m_collisionMatrix;
+#else
+	bool* m_collisionMatrix;
+#endif
 };
 
 #endif // !PHYSICS_COLLISION_FILTERS_BODY_LAYER_FILTER_H
