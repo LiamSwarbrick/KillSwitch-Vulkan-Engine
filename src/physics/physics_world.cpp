@@ -9,8 +9,11 @@
 #include <vector>
 #include "physics_manager.h"
 
-PhysicsWorld::PhysicsWorld(uint32_t expectedBodies)
+PhysicsWorld::PhysicsWorld(uint8_t numBodyLayers, uint32_t expectedBodies)
 {
+	bodyLayerFilter.StartUp(numBodyLayers);
+	broadPhase = BroadPhase(&bodyLayerFilter);
+
 	bodies.Reserve(expectedBodies);
 	shapes.Reserve(expectedBodies);
 	planes.Reserve(100);
@@ -161,6 +164,26 @@ void PhysicsWorld::removeForceLayers(RigidBodyHandle r, uint32_t layers)
 	b->forceLayers &= ~layers;
 }
 
+void PhysicsWorld::setNumLayers(uint8_t numLayers)
+{
+	bodyLayerFilter.setNumLayers(numLayers);
+}
+
+void PhysicsWorld::setLayerPair(uint8_t a, uint8_t b, bool shouldCollide)
+{
+	bodyLayerFilter.setLayerPair(a, b, shouldCollide);
+}
+
+void PhysicsWorld::enableLayerPair(uint8_t a, uint8_t b)
+{
+	bodyLayerFilter.enableLayerPair(a, b);
+}
+
+void PhysicsWorld::disableLayerPair(uint8_t a, uint8_t b)
+{
+	bodyLayerFilter.disableLayerPair(a, b);
+}
+
 
 RigidBodyHandle PhysicsWorld::addBody(const RigidBodyDesc& desc)
 {
@@ -200,6 +223,7 @@ RigidBodyHandle PhysicsWorld::addBody(const RigidBodyDesc& desc)
 	body.gravityScale = desc.gravityScale;
 	body.damping = desc.damping;
 	body.forceLayers = desc.forceLayers;
+	body.bodyLayer = desc.bodyLayer;
 
 	body.shapeHandle = desc.shape;
 
@@ -463,6 +487,79 @@ void PhysicsWorld::removeForce(RigidBodyHandle handle, IForceGenerator* gen)
 		forceRegistry.removePair(body, gen);
 }
 
+
+RaycastHit PhysicsWorld::raycast(const Ray& ray, const QueryFilter& filter) const
+{
+	std::vector<RaycastHit> hits = raycastAll(ray, filter);
+	if (hits.empty()) return { /* Default (invalid) RaycastHit */ };
+
+	size_t minIdx = 0;
+	float minT = hits[0].t;
+	for (size_t i = 1; i < hits.size(); i++)
+	{
+		if (hits[i].t < minT)
+		{
+			minIdx = i;
+			minT = hits[i].t;
+		}
+	}
+
+	return hits[minIdx];
+}
+
+std::vector<RaycastHit> PhysicsWorld::raycastAll(const Ray& ray, const QueryFilter& filter) const
+{
+	std::vector<RaycastHit> narrowHits;
+	std::vector<RaycastHit> broadHits;
+	broadPhase.queryRay(ray, getQueryFilterInternalFromQueryFilter(filter), broadHits);
+
+	if (broadHits.empty()) return narrowHits;
+
+	for (const RaycastHit& broadHit : broadHits)
+	{
+		// TODO: continue here
+		// We might either skip narrowphase casting, orrr send the raycast information, or just double check using narrowphase
+		RaycastHit hit = narrowPhase.raycast(ray, *broadHit.body, *this);
+		if (hit.isValid())
+		{
+			hit.body = broadHit.body;
+			narrowHits.push_back(hit);
+		}
+	}
+
+	return narrowHits;
+}
+
+std::vector<RigidBodyHandle> PhysicsWorld::shapecast(ShapeHandle shapeHandle, const glm::vec3& position, const glm::quat& orientation, const QueryFilter& filter) const
+{
+	std::vector<RigidBody*> broadHits;
+	std::vector<RigidBodyHandle> hits;
+
+	const IShape* shape = getShape(shapeHandle);
+	// TODO: keep going
+	// Let's create an AABB out of the shape, check on broadphase and then
+	glm::vec3 shapePosition;
+	glm::quat shapeOrientation;
+	narrowPhase.resolveShapeTransform(shape,
+		position, orientation,
+		shapePosition, shapeOrientation);
+
+	AABB aabb = shape->computeAABB(shapePosition, shapeOrientation);
+
+	broadPhase.queryAABB(aabb, getQueryFilterInternalFromQueryFilter(filter), broadHits);
+
+	for (RigidBody* body : broadHits)
+	{
+		if (narrowPhase.testShapeIntersects(shape, shapePosition, shapeOrientation, *body, *this))
+		{
+			hits.push_back({ body->bodyID });
+		}
+	}
+
+	return hits;
+}
+
+
 void PhysicsWorld::setGravity(glm::vec3 g)
 {
 	gravityGen.gravity = g;
@@ -501,6 +598,8 @@ void PhysicsWorld::step(float dt)
 	detectCollisions();
 	testPlanes();
 	solve(dt);
+
+	dispatchEvents();
 }
 
 void PhysicsWorld::applyForces(float dt)
@@ -586,6 +685,89 @@ void PhysicsWorld::solve(float dt)
 	solver.solve(contacts, dt);
 }
 
+void PhysicsWorld::dispatchEvents()
+{
+	std::set<BodyPair> currentCollisionPairs;
+	std::set<BodyPair> currentTriggerPairs;
+
+	// --- FILL CURRENT PAIRS ---
+	for (const Contact& c : contacts)
+	{
+		bool trigger = c.bodyA->isTrigger || (c.bodyB && c.bodyB->isTrigger);
+
+		BodyPair pair = BodyPair(c.bodyA, c.bodyB);
+		RigidBodyHandle handleA = { c.bodyA->bodyID };
+		RigidBodyHandle handleB;
+		if (c.bodyB != nullptr)
+			handleB = RigidBodyHandle(c.bodyB->bodyID);
+
+		if (trigger)
+		{
+			bool isStaying = previousTriggerPairs.count(pair) > 0;
+
+			if (isStaying)
+			{
+				if (onTriggerStay) onTriggerStay(handleA, handleB, c);
+			}
+			else
+			{
+				if (onTriggerEnter) onTriggerEnter(handleA, handleB, c);
+			}
+
+			// Finally we add it to the current trigger pairs for the next step
+			currentTriggerPairs.insert(pair);
+		}
+		else
+		{
+			bool isStaying = previousCollisionPairs.count(pair) > 0;
+
+			if (isStaying)
+			{
+				if (onCollisionStay) onCollisionStay(handleA, handleB, c);
+			}
+			else
+			{
+				if (onCollisionEnter) onCollisionEnter(handleA, handleB, c);
+			}
+
+			// Finally we add it to the current collision pairs for the next step
+			currentCollisionPairs.insert(pair);
+		}
+	}
+
+	// --- COLLISION EXIT EVENT ---
+	for (const BodyPair& pair : previousCollisionPairs)
+	{
+		if (currentCollisionPairs.count(pair) == 0)
+		{
+			RigidBodyHandle handleA = { pair.bodyA->bodyID };
+			RigidBodyHandle handleB;
+			if (pair.bodyB != nullptr)
+				handleB = { pair.bodyB->bodyID };
+
+			if (onCollisionExit) onCollisionExit(handleA, handleB);
+		}
+	}
+
+	// --- TRIGGER EXIT EVENT ---
+	for (const BodyPair& pair : previousTriggerPairs)
+	{
+		if (currentTriggerPairs.count(pair) == 0)
+		{
+			RigidBodyHandle handleA = { pair.bodyA->bodyID };
+			RigidBodyHandle handleB;
+			if (pair.bodyB != nullptr)
+				handleB = { pair.bodyB->bodyID };
+
+			if (onTriggerExit) onTriggerExit(handleA, handleB);
+		}
+	}
+
+	// REPLACE CURRENT ONES
+	previousCollisionPairs = currentCollisionPairs;
+	previousTriggerPairs = currentTriggerPairs;
+}
+
 
 void PhysicsWorld::calculateAABB(RigidBody* body)
 {
@@ -599,4 +781,16 @@ void PhysicsWorld::calculateAABB(RigidBody* body)
 			shapePosition, shapeOrientation);
 		body->aabb = shape->computeAABB(shapePosition, shapeOrientation).fattened(0.1f);
 	}
+}
+
+QueryFilterInternal PhysicsWorld::getQueryFilterInternalFromQueryFilter(const QueryFilter& queryFilter) const
+{
+	QueryFilterInternal res;
+
+	if (queryFilter.bodyToIgnore != InvalidRigidBodyHandle)
+		res.bodyToIgnore = getBody(queryFilter.bodyToIgnore);
+	res.hasLayerOfQuery = queryFilter.hasLayerOfQuery;
+	res.layerOfQuery = queryFilter.layerOfQuery;
+
+	return res;
 }

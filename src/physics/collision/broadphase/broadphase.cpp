@@ -1,8 +1,8 @@
 #include "broadphase.h"
 
-BroadPhase::BroadPhase()
+BroadPhase::BroadPhase(BodyLayerFilter* bodyLayerFilter)
+	: bodyLayerFilter(bodyLayerFilter)
 {
-
 }
 
 // Acceleration structure not found :sob:
@@ -67,6 +67,7 @@ void BroadPhase::queryPairs(std::vector<BodyPair>& outPairs) const
 
 			if (a->isStatic && b->isStatic) continue;
 			if (a->isTrigger && b->isTrigger) continue;
+			if (!bodyLayerFilter->shouldCollide(a->bodyLayer, b->bodyLayer)) continue;
 
 			if ((a->position.y < 1.5f && b->position.y == 0.0f)
 				|| (b->position.y < 1.5f && a->position.y == 0.0f))
@@ -80,10 +81,34 @@ void BroadPhase::queryPairs(std::vector<BodyPair>& outPairs) const
 	}
 }
 
-void BroadPhase::queryAABB(const AABB& aabb, const QueryFilter& filter, std::vector<RigidBody*> outBodies) const
+void BroadPhase::queryAABB(const AABB& aabb, const QueryFilterInternal& filter, std::vector<RigidBody*>& outBodies) const
 {
+	for (RigidBody* body : bodies)
+	{
+		if (filter.bodyToIgnore && filter.bodyToIgnore == body) continue;
+		if (filter.hasLayerOfQuery && !bodyLayerFilter->shouldCollide(filter.layerOfQuery, body->bodyLayer)) continue;
+
+		if (aabb.overlaps(body->aabb))
+		{
+			outBodies.push_back(body);
+		}
+	}
 }
 
-void BroadPhase::queryRay(const Ray& ray, const QueryFilter& filter, std::vector<RigidBody*> outBodies) const
+void BroadPhase::queryRay(const Ray& ray, const QueryFilterInternal& filter, std::vector<RaycastHit>& outBodies) const
 {
+	for (RigidBody* body : bodies)
+	{
+		RaycastHit hit;
+		bool shouldCollide = filter.hasLayerOfQuery ? bodyLayerFilter->shouldCollide(filter.layerOfQuery, body->bodyLayer) : false;
+
+		if (filter.bodyToIgnore && filter.bodyToIgnore == body) continue;
+		if (!shouldCollide) continue;
+		
+		if (body->aabb.intersectsRay(ray, hit))
+		{
+			hit.body = body;
+			outBodies.push_back(hit);
+		}
+	}
 }

@@ -1,5 +1,6 @@
 #include "core/core.h"
 #include "core/input.h"
+#include "core/input.h"
 #include "renderer/renderer.h"
 #include "renderer/debug_ui_api.h"
 #include "foundations/scene.h"
@@ -8,7 +9,8 @@
 #include "game_ui.h"
 #include "fp_cam.h"
 #include "tp_cam.h"
-#include "audio_system.h"
+#include "game/foundations/components.h"
+#include "core/audio_system.h"
 
 #include "SDL3/SDL.h"
 #include "SDL3/SDL_main.h"
@@ -35,13 +37,13 @@ int main(int argc, char *argv[])
         .enable_validation = enabled_validation_layers,
         .preferred_initial_settings = {  // Will fallback if these aren't possible
             .uncapped_fps = 0,
-            .msaa_sample_count = 4,
+            .msaa_sample_count = 1,
             .fov_y = 50.0f
         }
     };
     Renderer_Init(&renderer_info);
 
-    /*AudioSystem audio_system = AudioSystem_Create((AudioSystemCreateInfo){
+    AudioSystem audio_system = AudioSystem_Create((AudioSystemCreateInfo){
         .debug_name = "GameAudio",
         .initial_capacity = 8,
         .master_volume = 1.0f
@@ -83,7 +85,7 @@ int main(int argc, char *argv[])
     else
     {
         SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "AudioSystem: failed to load startup test SFX.");
-    }*/
+    }
 
     Input_Init("assets/keybindings.json");
     GameUI_Init();
@@ -134,34 +136,34 @@ int main(int argc, char *argv[])
     Scene scene{};
     scene.StartUp();
 
-    Asset* room_prefab = scene.LoadPrefab("assets/levels/testroom_new.gltf");
-    Asset* cube_prefab = scene.LoadPrefab("assets/props/simple_cube.gltf");
-    Asset* sphere_prefab = scene.LoadPrefab("assets/props/simple_sphere.gltf");
-    Asset* capsule_prefab = scene.LoadPrefab("assets/props/simple_capsule.gltf");
+    Asset* room_prefab = scene.LoadPrefab("assets/levels/lightroom1.gltf");
+    // Asset* cube_prefab = scene.LoadPrefab("assets/props/simple_cube.gltf");
+    // Asset* sphere_prefab = scene.LoadPrefab("assets/props/simple_sphere.gltf");
+    // Asset* capsule_prefab = scene.LoadPrefab("assets/props/simple_capsule.gltf");
     // TODO: Change the following 2 prefabs so they can be imported (add the boolean "Is ECS Entity" with the new script where it is needed)
-    Asset* catPrefab = scene.LoadPrefab("assets/animations/scene.gltf");
+    // Asset* catPrefab = scene.LoadPrefab("assets/animations/scene.gltf");
     // Asset* catPrefab = scene.LoadPrefab("assets/animations/flatzombo.gltf");
-    Asset* animationPrefab = scene.LoadPrefab("assets/animations/sceneglb.glb");
+    Asset* animationPrefab = scene.LoadPrefab("assets/animations/cat.gltf");
 
     scene.InstantiatePrefab(room_prefab, glm::vec3(0, 0, 0));
-    scene.InstantiatePrefab(cube_prefab, glm::vec3(0, 5.1, 0));
-    scene.InstantiatePrefab(cube_prefab, glm::vec3(3, 4.9, 0));
-    scene.InstantiatePrefab(capsule_prefab, glm::vec3(0, 5, 2));
-    scene.InstantiatePrefab(sphere_prefab, glm::vec3(4.7, 7, 0.1));
-    scene.InstantiatePrefab(sphere_prefab, glm::vec3(-4.7, 7, -0.1));
-    scene.InstantiatePrefab(sphere_prefab, glm::vec3(0.1, 7, -4.7));
-    scene.InstantiatePrefab(sphere_prefab, glm::vec3(-0.1, 7, 4.7));
-    scene.InstantiatePrefab(catPrefab, glm::vec3(0, 0, 0));
-    scene.InstantiatePrefab(animationPrefab, glm::vec3(5, 20, 0));
+    // scene.InstantiatePrefab(cube_prefab, glm::vec3(0, 5.1, 0));
+    // scene.InstantiatePrefab(cube_prefab, glm::vec3(3, 4.9, 0));
+    // scene.InstantiatePrefab(capsule_prefab, glm::vec3(0, 5, 2));
+    // scene.InstantiatePrefab(sphere_prefab, glm::vec3(4.7, 7, 0.1));
+    // scene.InstantiatePrefab(sphere_prefab, glm::vec3(-4.7, 7, -0.1));
+    // scene.InstantiatePrefab(sphere_prefab, glm::vec3(0.1, 7, -4.7));
+    // scene.InstantiatePrefab(sphere_prefab, glm::vec3(-0.1, 7, 4.7));
+    // scene.InstantiatePrefab(catPrefab, glm::vec3(0, 0, 0));
+    // scene.InstantiatePrefab(animationPrefab, glm::vec3(0, 0, 0));
     // render a second cat
-    EntityID playerEntity = scene.InstantiatePrefab(catPrefab, glm::vec3(10, 0, 10));
+    // EntityID playerEntity = scene.InstantiatePrefab(animationPrefab, glm::vec3(10, 0, 10));
 
     scene.BuildRendererScene();
 
     // TODO: Debug UI is built around the idea of 1 asset at the moment.
     //       This must change with the new scene system that can load many asset prefabs.
     DebugUI_SetECS(&scene.GetECS());
-    DebugUI_SetAsset(animationPrefab);
+    DebugUI_SetAsset(room_prefab);
 
     // Game owns FP/TP camera state; seed both from Debug UI state once at startup.
     FPCamState game_fp_cam = {};
@@ -233,33 +235,19 @@ int main(int argc, char *argv[])
 
         // controller test not ideal at all
         const bool* state = SDL_GetKeyboardState(NULL);
-        float speed = 5.0f * dt;
-        glm::vec3 movement(0.0f);
 
-        if (state[SDL_SCANCODE_I]) movement.z -= speed;
-        if (state[SDL_SCANCODE_K]) movement.z += speed;
-
-        if (state[SDL_SCANCODE_J]) movement.x -= speed;
-        if (state[SDL_SCANCODE_L]) movement.x += speed;
-
-        if (glm::length(movement) > 0.0f)
-        {
-            for (uint32_t i = 0; i < catPrefab->node_count; i++)
-            {
-                C_Transform* tf = scene.GetECS().GetComponentPtr<C_Transform>(playerEntity + i);
-                if (tf)
-                {
-                    // Apply movement directly to the world translation (column 3 of the matrix)
-                    tf->matrix[3][0] += movement.x;
-                    tf->matrix[3][1] += movement.y;
-                    tf->matrix[3][2] += movement.z;
-                }
+        scene.GetECS().GetView<C_AnimatedMesh, C_PlayerInput>().ForEach([&](EntityID e, C_AnimatedMesh&, C_PlayerInput& input) {
+                input.move_forward = state[SDL_SCANCODE_K];
+                input.move_backward = state[SDL_SCANCODE_I];
+                input.move_left = state[SDL_SCANCODE_L];
+                input.move_right = state[SDL_SCANCODE_J];
+                input.jump = state[SDL_SCANCODE_SPACE];
             }
-        }
+        );
 
         // Game ticks
         scene.Update(dt);
-        //AudioSystem_Update(&audio_system, dt);
+        AudioSystem_Update(&audio_system, dt);
 
         // Pull latest edits from Debug UI (bind target/FOV/mode-facing state).
         if (const FPCamState* debug_fp_cam = DebugUI_GetFPCamState())

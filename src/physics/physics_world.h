@@ -10,6 +10,8 @@
 
 #include "physics/collision/broadphase/broadphase.h"
 #include "physics/collision/narrowphase/narrowphase.h"
+#include "physics/collision/filters/body_layer_filter.h"
+
 #include "simulation/integrator.h"
 #include "simulation/solver.h"
 #include "simulation/force_registry.h"
@@ -32,7 +34,7 @@
 class PhysicsWorld
 {
 public:
-	explicit PhysicsWorld(uint32_t expectedBodies = 1024);
+	explicit PhysicsWorld(uint8_t numBodyLayers = 16U, uint32_t expectedBodies = 1024);
 	~PhysicsWorld();
 
 	// Non-copyable constructors
@@ -61,7 +63,6 @@ public:
 	// ------------------------------
 	// GETTERS & SETTERS
 	// ------------------------------
-	// setters & getters
 	glm::vec3 getVelocity(RigidBodyHandle r);
 	float getGravityScale(RigidBodyHandle r);
 	uint32_t getForceLayers(RigidBodyHandle r);
@@ -74,6 +75,12 @@ public:
 	void setForceLayers(RigidBodyHandle r, uint32_t layers);
 	void addForceLayers(RigidBodyHandle r, uint32_t layers);
 	void removeForceLayers(RigidBodyHandle r, uint32_t layers);
+
+	// IMPORTANT, FOR CHECKING BODIES IN BROADPHASE
+	void setNumLayers(uint8_t numLayers);
+	void setLayerPair(uint8_t a, uint8_t b, bool shouldCollide);
+	void enableLayerPair(uint8_t a, uint8_t b);
+	void disableLayerPair(uint8_t a, uint8_t b);
 
 
 	// ------------------------------
@@ -123,13 +130,23 @@ public:
 	std::vector<RaycastHit> raycastAll(const Ray& ray, const QueryFilter& filter = {}) const;
 
 	// Shape-casting too (might change the input to be ShapeCast or something like that, but for now this, will see when i implement it)
-	std::vector<EntityID> shapecast(
+	std::vector<RigidBodyHandle> shapecast(
 		ShapeHandle shape, const glm::vec3& position, const glm::quat& orientation,
 		const QueryFilter& filter = {}) const;
 
 	// ------------------------------
-	// EVENTS (TODO)
+	// EVENTS
 	// ------------------------------
+	// These are going to be single subscriber functions.
+	// The one who should subscribe to these is the PhysicsManager, nobody else.
+	// Then the PhysicsManager will be the one to propagate the event (either him, or subscribe these to a global bus)
+	std::function<void(RigidBodyHandle a, RigidBodyHandle b, const Contact& contact)> onCollisionEnter;
+	std::function<void(RigidBodyHandle a, RigidBodyHandle b, const Contact& contact)> onCollisionStay;
+	std::function<void(RigidBodyHandle a, RigidBodyHandle b)> onCollisionExit;
+
+	std::function<void(RigidBodyHandle a, RigidBodyHandle b, const Contact& contact)> onTriggerEnter;
+	std::function<void(RigidBodyHandle a, RigidBodyHandle b, const Contact& contact)> onTriggerStay;
+	std::function<void(RigidBodyHandle a, RigidBodyHandle b)> onTriggerExit;
 
 
 	// ------------------------------
@@ -157,17 +174,21 @@ private:
 	void solve(float dt); // solve interpenetration
 
 	// TODO after implementing events
-	// void dispatchEvents();
+	void dispatchEvents();
 
 private:
 	// Helper for AABB
 	void calculateAABB(RigidBody* body);
+
+	// Helper to translate QueryFilter to QueryFilterInternal
+	QueryFilterInternal getQueryFilterInternalFromQueryFilter(const QueryFilter& queryFilter) const;
 
 	//inline RigidBody& getBody();
 
 private:
 	// --- SYSTEMS ---
 	BroadPhase broadPhase;
+	BodyLayerFilter bodyLayerFilter;
 	NarrowPhase narrowPhase;
 	Integrator integrator;
 	Solver solver;
@@ -202,7 +223,7 @@ private:
 	// we keep it here with .reserve() so we don't allocate too much in the step.
 	std::vector<Contact> contacts;
 
-	// previous frame. to detect OnEnter, OnStay, OnExit
+	// FOR EVENTS: previous frame. to detect OnEnter, OnStay, OnExit
 	std::set<BodyPair> previousCollisionPairs;
 	std::set<BodyPair> previousTriggerPairs;
 

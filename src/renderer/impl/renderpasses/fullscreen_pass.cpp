@@ -13,7 +13,7 @@ void FullscreenPass_Execute(VkCommandBuffer cmd, uint32_t pass_idx)
     {
         // NOTE: Empty camera info, so don't use it bcuz view matrix is all zeroes
         VkExtent3D extent = renderstate.registry.resources[desc->outputs[0].rid].image.extent;
-        SceneData scene_data = MakeSceneData((CameraInfo){}, (VkExtent2D){ extent.width, extent.height });
+        SceneData scene_data = MakeSceneData(renderstate.main_camera, (VkExtent2D){ extent.width, extent.height });
         scene_ptr = PushToMappedArena(&renderstate.scenes_arena, &scene_data, sizeof(SceneData));
     }
 

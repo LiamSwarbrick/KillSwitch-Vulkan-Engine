@@ -836,7 +836,7 @@ void Renderer_ChangeScene(Scene_InitInfo new_scene_info)
 void Renderer_PushRenderable(Renderable renderable)
 {
     SDL_assert(renderstate.renderables_arena.items &&
-        renderstate.renderables_arena.num_renderables + 1 < MAX_RENDERED_OBJECTS
+        renderstate.renderables_arena.num_renderables < MAX_RENDERED_OBJECTS
     );
     renderstate.renderables_arena.items[renderstate.renderables_arena.num_renderables++] = renderable;
 }
@@ -847,9 +847,9 @@ void Renderer_PushLight(C_Light light, glm::vec3 position, glm::vec3 direction)
     {
     case LIGHT_COMPONENT_POINTLIGHT:
         {
-            SDL_assert(renderstate.renderables_arena.num_point_lights + 1 < MAX_POINTLIGHTS);
+            SDL_assert(renderstate.renderables_arena.num_point_lights < MAX_POINTLIGHTS);
 
-            glm::vec4 pos_and_radius = glm::vec4(position.x, position.y, position.z, get_light_radius(light.color, light.intensity));
+            glm::vec4 pos_and_radius = glm::vec4(position.x, position.y, position.z, light.radius);
             glm::vec4 color_and_intensity = glm::vec4(light.color.x, light.color.y, light.color.z, light.intensity);
 
             PointLight pl = {};
@@ -862,9 +862,9 @@ void Renderer_PushLight(C_Light light, glm::vec3 position, glm::vec3 direction)
         
     case LIGHT_COMPONENT_SPOTLIGHT:
         {
-            SDL_assert(renderstate.renderables_arena.num_spot_lights + 1 < MAX_SPOTLIGHTS);
+            SDL_assert(renderstate.renderables_arena.num_spot_lights < MAX_SPOTLIGHTS);
 
-            glm::vec4 pos_and_radius = glm::vec4(position.x, position.y, position.z, get_light_radius(light.color, light.intensity));
+            glm::vec4 pos_and_radius = glm::vec4(position.x, position.y, position.z, light.radius);
             glm::vec4 color_and_intensity = glm::vec4(light.color.x, light.color.y, light.color.z, light.intensity);
 
             SpotLight sl = {};
@@ -1006,6 +1006,7 @@ void Renderer_DrawFrame(CameraInfo main_camera)
     // TODO (once topological sorting and multiqueue stuff is in, this can be in parallel with the depth prepass)
 
     // Depth prepass
+    FG_Resource* depth_buffer_res = &renderstate.registry.resources[renderstate.rids.depth_buffer_rid];
     RenderPassDesc depth_prepass_desc = {
         .debug_name = "Depth Prepass",
 
@@ -1032,7 +1033,7 @@ void Renderer_DrawFrame(CameraInfo main_camera)
         },
 
         .is_compute = 0,
-        .render_area = { .offset = { 0, 0 }, .extent = renderstate.swapchain_extent },
+        .render_area = { .offset = { 0, 0 }, .extent = { depth_buffer_res->image.extent.width, depth_buffer_res->image.extent.height } },
         
         .execute_callback = DepthPrepass_Execute,
         .user_data = NULL
@@ -1040,6 +1041,7 @@ void Renderer_DrawFrame(CameraInfo main_camera)
     uint32_t depth_prepass = FG_AddPass(depth_prepass_desc);
 
     // Forward Opaque Pass
+    FG_Resource* forward_target_res = &renderstate.registry.resources[renderstate.rids.forward_target_rid];
     RenderPassDesc forward_opaque_desc = {
         .debug_name = "Forward Opaque Pass",
 
@@ -1085,7 +1087,7 @@ void Renderer_DrawFrame(CameraInfo main_camera)
         },
 
         .is_compute = 0,
-        .render_area = { .offset = { 0, 0 }, .extent = renderstate.swapchain_extent },
+        .render_area = { .offset = { 0, 0 }, .extent = { forward_target_res->image.extent.width, forward_target_res->image.extent.height } },
         
         .execute_callback = ForwardOpaque_Execute,
         .user_data = NULL
@@ -1096,11 +1098,11 @@ void Renderer_DrawFrame(CameraInfo main_camera)
     #warning TODO: Add in bloom passes
 
     // PostProcess Tone-mapping and Lens Effect
+    FG_Resource* hdr_color_target_res = &renderstate.registry.resources[renderstate.rids.hdr_color_target_rid];
     FullscreenPass_UserData tonemap_pass_user_data = {
         .shader_id = SHADER_TONEMAP 
     };
-    tonemap_pass_user_data.push_pass.texture_indices[0] = renderstate.registry.resources[renderstate.rids.hdr_color_target_rid].bindless_texture_idx;
-
+    tonemap_pass_user_data.push_pass.texture_indices[0] = hdr_color_target_res->bindless_texture_idx;
     RenderPassDesc tonemap_pass_desc = {
         .debug_name = "Tone Map",
         
@@ -1139,7 +1141,7 @@ void Renderer_DrawFrame(CameraInfo main_camera)
         },
 
         .is_compute = 0,
-        .render_area = { .offset = { 0, 0 }, .extent = renderstate.swapchain_extent },
+        .render_area = { .offset = { 0, 0 }, .extent = { hdr_color_target_res->image.extent.width, hdr_color_target_res->image.extent.height } },
         
         .execute_callback = FullscreenPass_Execute,
         .user_data = &tonemap_pass_user_data
@@ -1192,7 +1194,7 @@ void Renderer_DrawFrame(CameraInfo main_camera)
         },
 
         .is_compute = 0,
-        .render_area = { .offset = { 0, 0 }, .extent = renderstate.swapchain_extent },
+        .render_area = { .offset = { 0, 0 }, .extent = { renderstate.swapchain_extent.width, renderstate.swapchain_extent.height } },
         
         .execute_callback = FullscreenPass_Execute_With_ImGui,
         .user_data = &swapchain_pass_user_data

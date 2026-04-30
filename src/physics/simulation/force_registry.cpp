@@ -1,6 +1,7 @@
 #include "force_registry.h"
 
-#include <xmemory>
+#include <memory>
+#include <algorithm>
 
 
 void ForceRegistry::addGenerator(IForceGenerator* gen)

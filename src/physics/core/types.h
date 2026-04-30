@@ -8,6 +8,9 @@
 #include "glm/glm.hpp"
 #include "glm/gtc/quaternion.hpp"
 
+#include "physics/queries/raycast.h"
+
+
 // For floats
 constexpr float F_EPSILON = 1e-6f;
 
@@ -80,12 +83,60 @@ struct AABB
         return AABB(glm::min(a.min, b.min), glm::max(a.max, b.max));
     }
 
-
-    // TODO: For the future when raycasting
-    bool intersectsRay(glm::vec3& origin, glm::vec3& direction, float maxDistance, float& t)
+    // Returns true when the ray intersects the AABB
+    bool intersectsRay(const Ray& ray, RaycastHit& outHit) const
     {
-        SDL_assert(false && "NEED TO IMPLEMENT!!!");
-        return false;
+        // Slab method, refer to https://education.siggraph.org/static/HyperGraph/raytrace/rtinter3.htm
+
+        float tMin = 0.0f;
+        float tMax = ray.maxDistance;
+
+        // Extra information for raycasthit
+        int normalAxis = -1;
+        float normalSign = 1.0f;
+
+        for (int i = 0; i < 3; i++)
+        {
+            if (std::abs(ray.direction[i]) < F_EPSILON)
+            {
+                if (ray.origin[i] < min[i] || ray.origin[i] > max[i])
+                    return false;
+            }
+            else
+            {
+                float invD = 1.0f / ray.direction[i]; // careful with infinite values
+
+                float t0 = (min[i] - ray.origin[i]) * invD;
+                float t1 = (max[i] - ray.origin[i]) * invD;
+
+                float sign = 1.0f;
+                if (t0 > t1)
+                {
+                    std::swap(t0, t1);
+                    sign = -1.0f;
+                }
+
+                //tMin = std::max(tMin, t0);
+                if (t0 > tMin)
+                {
+                    tMin = t0;
+                    normalAxis = i;
+                    normalSign = sign;
+                }
+                tMax = std::min(tMax, t1);
+
+                if (tMax < tMin) return false;
+                if (tMax < 0.0f) return false;
+            }
+        }
+
+        if (normalAxis < 0) return false;
+
+        outHit.t = tMin;
+        outHit.point = ray.origin + ray.direction * tMin;
+        outHit.normal[normalAxis] = -normalSign;
+
+        return true;
     }
 };
 
@@ -219,6 +270,12 @@ DEFINE_ENUM_CLASS_BITWISE_OPERATORS(ForceLayer);
 // ------------------
 // RIGIDBODY RELATED
 // ------------------
+//enum InnerBodyLayer : uint8_t
+//{
+//    STATIC = 0,
+//    MOVING,
+//    WEAPONS
+//};
 
 // Descriptor to create RigidBodies via PhysicsManager.createBody()
 struct RigidBodyDesc
@@ -237,13 +294,14 @@ struct RigidBodyDesc
 
     uint32_t forceLayers = (uint32_t) ForceLayer::Default;
 
+    uint8_t bodyLayer = 0U;
+
     // RigidBody type
     bool isStatic = false;
     bool isKinematic = false;
     bool isCharacter = false;
     bool isTrigger = false;
 };
-
 
 struct RigidBody
 {
@@ -260,6 +318,10 @@ struct RigidBody
 
     // We could add body layer (as in player, enemy, etc, to provide better query options, but idk)
     uint32_t forceLayers = (uint32_t) ForceLayer::Default;
+
+    // Not the same as force layer, this will enable custom collisions from game code
+    // One object could be "DEBRIS" and other "MOVING" and they would not collide with each other
+    uint8_t bodyLayer = 0U;
 
     ShapeHandle shapeHandle; // get shape via physicsWorld.getShape()
 
@@ -347,6 +409,17 @@ struct BodyPair
     }
 
     bool isValid() const { return bodyA != nullptr; }
+};
+
+// Just in case BodyPair::operator< doesn't work (it has happened before)
+struct BodyPairComparer
+{
+    bool operator()(const BodyPair& a, const BodyPair& b)
+    {
+        if (a.bodyA != b.bodyA)
+            return a.bodyA < b.bodyA;
+        return a.bodyB < b.bodyB;
+    }
 };
 
 

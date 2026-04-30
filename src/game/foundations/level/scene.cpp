@@ -1,9 +1,11 @@
 #include "game/foundations/scene.h"
 #include "game/foundations/components.h"
+#include "game/foundations/body_layer_collisions.h"
 #include "renderer/renderer.h"
 
 // animation update
 #include "core/animation.h"
+#include "game/foundations/PlayerMovementSystem.h"
 // RapidJSON 
 #include "rapidjson/document.h"
 // Imported components for automated de-serialization
@@ -19,12 +21,16 @@ namespace rj = rapidjson;
 void Scene::StartUp()
 {
     m_ecs.RegisterComponent<C_Transform>();
+    m_ecs.RegisterComponent<C_Light>();
     m_ecs.RegisterComponent<C_StaticMesh>();
     m_ecs.RegisterComponent<C_AnimatedMesh>();
+    m_ecs.RegisterComponent<C_PlayerInput>();
+    m_ecs.RegisterComponent<C_CharacterController>();
 
     m_prefabs.clear();
 
     m_physicsManager.startUp();
+    SetBodyCollisionLayers();
 }
 
 void Scene::Shutdown()
@@ -95,13 +101,31 @@ EntityID Scene::InstantiatePrefab(Asset* prefab, glm::vec3 spawnPosition)
             t.matrix = glm::translate(t.matrix, position);
             m_ecs.AddComponent<C_Transform>(eID, { t.matrix });
 
-            // TEMP LIGHTS:
-            m_ecs.AddComponent<C_Light>(eID, {
-                .type = LIGHT_COMPONENT_POINTLIGHT,
-                .color = glm::vec3(0.7f, 0.7f, 1.0f),
-                .intensity = 1.0f
-            });
-            /////////
+            // ------------------
+            // -- LIGHT SOURCE --
+            // ------------------
+            if (node->light_index >= 0)
+            {
+                SDL_assert(node->light_index < prefab->light_count);
+                Light light_data = prefab->lights[node->light_index];
+                LightComponentType light_type;
+                switch (light_data.type)
+                {
+                    case 2: light_type = LIGHT_COMPONENT_POINTLIGHT; break;
+                    case 3: light_type = LIGHT_COMPONENT_SPOTLIGHT; break;
+                    default: SDL_assert(0 && "Unimplemented light type detected (directional/area lights not implemented yet).");
+                }
+                
+                SDL_assert(light_data.range >= 0.0f && "Make sure in Blender to set the custom distance of the light, otherwise no culling can occurr");
+                m_ecs.AddComponent<C_Light>(eID, {
+                    .type = light_type,
+                    .color = glm::vec3(light_data.color[0], light_data.color[1], light_data.color[2]),//glm::vec3(0.7f, 0.7f, 1.0f),
+                    .intensity = light_data.intensity,
+                    .radius = light_data.range,
+                    .spot_inner_cone_angle = light_data.spot_inner_cone_angle,
+                    .spot_outer_cone_angle = light_data.spot_outer_cone_angle
+                });
+            }
 
 
 
@@ -160,6 +184,12 @@ EntityID Scene::InstantiatePrefab(Asset* prefab, glm::vec3 spawnPosition)
                 rbDesc.isCharacter = importedRigidbody.is_character;
                 rbDesc.isTrigger = importedRigidbody.is_trigger;
 
+                // TEMPORARY
+                if (importedRigidbody.is_static || importedRigidbody.is_trigger)
+                    rbDesc.bodyLayer = (uint8_t) BodyLayer::STATIC;
+                else
+                    rbDesc.bodyLayer = (uint8_t) BodyLayer::MOVING;
+
                 rbDesc.shape = shapeHandle;
 
                 RigidBodyHandle rbHandle = m_physicsManager.createBody(eID, rbDesc);
@@ -170,6 +200,12 @@ EntityID Scene::InstantiatePrefab(Asset* prefab, glm::vec3 spawnPosition)
                 // 3.4 Finally add the component to the ECS!!!
                 if(rbHandle.isValid())
                     m_ecs.AddComponent<C_RigidBody>(eID, { rbHandle });
+            } // if rigidbodycomponent
+
+            if (components.HasMember("PlayerInput"))
+            {
+                m_ecs.AddComponent<C_PlayerInput>(eID, {});
+                m_ecs.AddComponent<C_CharacterController>(eID, {});
             }
 
             // -- MESH
@@ -194,10 +230,10 @@ EntityID Scene::InstantiatePrefab(Asset* prefab, glm::vec3 spawnPosition)
 
                     C_AnimatedMesh animMesh{ mesh, prefab };
                     animMesh.joint_count = joint_count;
-                    animMesh.idleAnimationName = "Idle";
-                    animMesh.splitJointName = "Spine";
+                    animMesh.idleAnimationName = "IDLE";
+                    animMesh.splitJointName = "SPINE";
                     OnStartAnim(animMesh, animMesh.idleAnimationName); // Start with idle animation by default
-
+                
 
                     if (joint_count > 0)
                     {
@@ -226,7 +262,6 @@ EntityID Scene::InstantiatePrefab(Asset* prefab, glm::vec3 spawnPosition)
     uint64_t end_time = SDL_GetTicksNS();
     float elapsed_ms = (float)(end_time - start_time) / 1000000.0f;
     SDL_Log("[Entity Time] Instantiated %zu nodes into ECS in %.2f ms", prefab->node_count, elapsed_ms);
-
 
     return rootEntity;
 }
@@ -277,7 +312,22 @@ void Scene::BuildRendererScene()
 
 void Scene::Update(float dt)
 {
+    PlayerMovement_Update(&m_ecs, dt);
+    
     m_physicsManager.update(m_ecs, dt);
+
+    Ray ray = { glm::vec3(0.0f, 0.5f, 2.0f), glm::normalize(glm::vec3(0.0f, 0.0f, -1.0f)), 10.0f};
+    QueryFilterExternal filter;
+    filter.hasLayerOfQuery = true;
+    filter.layerOfQuery = (uint8_t) BodyLayer::WEAPON;
+    auto hits = m_physicsManager.raycastAll(ray, filter);
+    for (EntityRaycastHit hit : hits)
+    {
+        std::cout << "[Raycast Hit] Entity: [" << hit.entity << " | " << m_ecs.GetEntityTag(hit.entity) << "] at t : " << hit.t
+            << ", point: [" << hit.point.x << "," << hit.point.y << "," << hit.point.z << "]"
+            << ", normal: [" << hit.normal.x << "," << hit.normal.y << "," << hit.normal.z << "]"
+            << std::endl;
+    }
     Animation_Update(&m_ecs, dt);
 }
 
@@ -289,7 +339,6 @@ void Scene::Render()
         glm::vec3 position = glm::vec3(transform.matrix[3]);
         glm::quat rotation = glm::quat_cast(transform.matrix);
         glm::vec3 direction = rotation * glm::vec3(0.0f, 0.0f, 1.0f);
-
         Renderer_PushLight(light, position, direction);
     });
 
@@ -323,4 +372,17 @@ void Scene::Render()
 
         Renderer_PushRenderable(r);
     });
+}
+
+void Scene::SetBodyCollisionLayers()
+{
+    m_physicsManager.setNumLayers(NUM_BODY_LAYERS);
+    //m_physicsManager.setLayerPair((uint8_t) BodyLayer::STATIC, (uint8_t) BodyLayer::STATIC, false);
+    m_physicsManager.disableLayerPair((uint8_t) BodyLayer::STATIC, (uint8_t) BodyLayer::STATIC);
+    // STATIC VS MOVING
+    // MOVING VS MOVING
+    // WEAPON VS MOVING
+    m_physicsManager.enableLayerPair((uint8_t) BodyLayer::STATIC, (uint8_t) BodyLayer::MOVING);
+    m_physicsManager.enableLayerPair((uint8_t) BodyLayer::MOVING, (uint8_t) BodyLayer::MOVING);
+    m_physicsManager.enableLayerPair((uint8_t) BodyLayer::WEAPON, (uint8_t) BodyLayer::MOVING);
 }

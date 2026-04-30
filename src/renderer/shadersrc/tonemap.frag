@@ -34,8 +34,7 @@ void main()
 {
     // LENS DISTORTION
     SceneData scene  = SceneBuffer(push.dc.scene_ptr).scene;
-    const float distortion_amount = -0.03;  
-    vec2 uv = lens_distortion(frag_uv, distortion_amount, scene.aspect);
+    vec2 uv = lens_distortion(frag_uv, scene.lens_distortion, scene.aspect);
 
     // TONEMAPPING
     // NOTE: Currently LDR is sRGB because it matches swapchain image format
@@ -49,12 +48,12 @@ void main()
         uv
     ).rgb;
     
-    float exposure = 2.4;
+    float exposure = 2.0;
     vec3 color = hdr * exposure;
     color = tonemap_reinhard(color);
 
     // Slight contrast curvyness
-    const float mids_factor = 0.8;
+    const float mids_factor = 0.9;
     color = pow(color, vec3(mids_factor));  // <1 apparently brightens mids a bit
 
     // DO NOT GAMMA CORRECT: That is done automatically

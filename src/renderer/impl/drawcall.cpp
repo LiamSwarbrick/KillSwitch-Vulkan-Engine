@@ -61,6 +61,7 @@ void EndDrawCalls()
         .num_point_lights  = renderstate.renderables_arena.num_point_lights,
         .num_spot_lights   = renderstate.renderables_arena.num_spot_lights
     };
+    
     vmaCopyMemoryToAllocation(renderstate.vma_allocator, &header, lights_header_buf->allocation, 0, sizeof(LightsHeader));
     vmaCopyMemoryToAllocation(renderstate.vma_allocator,
         renderstate.renderables_arena.point_lights, pl_buf->allocation, 0, sizeof(PointLight) * header.num_point_lights
