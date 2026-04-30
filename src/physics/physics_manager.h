@@ -2,6 +2,8 @@
 #define PHYSICS_PHYSICS_MANAGER_H
 
 #include "core/ecs.h"
+#include "core/event.h"
+
 #include "physics/core/types.h"
 #include "physics_world.h"
 
@@ -138,13 +140,13 @@ public:
 	// ------------------------------
 	// EVENTS (planning for the future)
 	// ------------------------------
-	std::function<void(EntityID a, EntityID b, const Contact&)> onCollisionEnter;
-	std::function<void(EntityID a, EntityID b, const Contact&)> onCollisionStay;
-	std::function<void(EntityID a, EntityID b)> onCollisionExit;
+	Event<EntityID, EntityID, const Contact&> onCollisionEnter;
+	Event<EntityID, EntityID, const Contact&> onCollisionStay;
+	Event<EntityID, EntityID> onCollisionExit;
 
-	std::function<void(EntityID a, EntityID b)> onTriggerEnter;
-	std::function<void(EntityID a, EntityID b)> onTriggerStay;
-	std::function<void(EntityID a, EntityID b)> onTriggerExit;
+	Event<EntityID, EntityID> onTriggerEnter;
+	Event<EntityID, EntityID> onTriggerStay;
+	Event<EntityID, EntityID> onTriggerExit;
 
 
 private:
