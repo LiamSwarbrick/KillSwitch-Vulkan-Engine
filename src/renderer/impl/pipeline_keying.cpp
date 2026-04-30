@@ -149,7 +149,7 @@ VkPipeline create_graphics_pipeline(PipelineKey key)
     depth_info.depthCompareOp    = (VkCompareOp)key.depth_op;
     depth_info.stencilTestEnable = key.stencil_mode != 0;
 
-    // Find attachment formats from the framegraph using key.pass_type to get pass_id
+    // Find attachment formats from the framegraph using key.pass_idx
     RenderPassDesc* pass = &renderstate.framegraph.passes[key.pass_idx];
     ResourceRegistry* reg = &renderstate.registry;
 
@@ -295,13 +295,16 @@ VkPipeline create_graphics_pipeline(PipelineKey key)
     pipe_info.pColorBlendState    = &blend_info;
     pipe_info.pDynamicState       = &dyn_info;
     pipe_info.layout              = renderstate.global_pipeline_layout;
-    
-
+    pipe_info.renderPass          = VK_NULL_HANDLE;
+    pipe_info.subpass             = 0;
+    pipe_info.basePipelineHandle  = VK_NULL_HANDLE;
+    pipe_info.basePipelineIndex   = 0;
     
 
     VkPipeline new_pipeline;
     VK_CHECK(vkCreateGraphicsPipelines(renderstate.device, VK_NULL_HANDLE, 1, &pipe_info, nullptr, &new_pipeline));
     // TODO: Replace VK_NULL_HANLDE with renderstate.pipeline_cache_vulkan and serialise pipelines on exit.
+
 
     return new_pipeline;
 }

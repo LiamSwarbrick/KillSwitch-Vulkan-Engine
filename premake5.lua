@@ -30,6 +30,7 @@ include_paths.rapidjson = EXTERNAL .. "rapidjson"
 include_paths.imgui = EXTERNAL .. "imgui"
 include_paths.imgui_backends = EXTERNAL .. "imgui/backends"
 include_paths.imgui_node_editor = EXTERNAL .. "imgui-node-editor"
+include_paths.miniaudio = EXTERNAL .. "miniaudio"
 
 lib_dirs = {}
 
@@ -189,7 +190,8 @@ workspace "AdventureEngine"
             include_paths.rapidjson,
             include_paths.imgui,
             include_paths.imgui_backends,
-            include_paths.imgui_node_editor
+            include_paths.imgui_node_editor,
+            include_paths.miniaudio
         }
 
         libdirs {
@@ -197,6 +199,38 @@ workspace "AdventureEngine"
         }
 
         links {
+            "SDL3"   -- The lib we just built via cmake in prebuildcommands
+        }
+
+    -- --------------------------------------------------------------------
+    -- Physics Module
+    -- --------------------------------------------------------------------
+    project "physics"
+        kind "StaticLib"
+        language "C++"
+        cppdialect "C++latest"
+
+        files {
+            SRC .. "physics/**.hpp",
+            SRC .. "physics/**.h",
+            SRC .. "physics/**.cpp"
+        }
+
+        includedirs { 
+            SRC,  -- Exported API headers
+            SRC .. "physics/**",
+            include_paths.glm,
+            include_paths.cgltf, -- because we include core/components.h
+            include_paths.rapidjson,
+            include_paths.SDL3 -- Assertions (in case)
+        }
+
+        libdirs {
+            lib_dirs.SDL3
+        }
+
+        links {
+            "core",
             "SDL3"   -- The lib we just built via cmake in prebuildcommands
         }
 
@@ -361,6 +395,7 @@ workspace "AdventureEngine"
 
         links {  -- NOTE: Must link from highest level dependency to lowest level.   
             "renderer",
+            "physics",
             "core",
             "SDL3",
             "imgui",

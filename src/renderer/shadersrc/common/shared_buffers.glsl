@@ -5,14 +5,22 @@
     but for performance I may throw some padding in anyway :)
 */
 
+#include "shared_types.glsl"
+
 struct SceneData
 {
     mat4 view;
     mat4 proj;
     mat4 view_proj;
+
     vec3 cam_position;
-    
+    float time;
+
+    float near_plane;
+    float far_plane;
     float aspect;
+    float lens_distortion;  // Negative = wide-angle (none=0.0, subtle fish-eye=-0.03)
+
     uvec2 rendertarget_size;
 };
 
@@ -41,13 +49,116 @@ struct MaterialData
     // uint32_t texture_idx_normalmap;
 };
 
+#define MAX_POINTLIGHTS 500
+#define MAX_SPOTLIGHTS  500
+struct PointLight
+{
+    vec4 pos_and_radius;
+    vec4 color_and_intensity;
+};
+
+struct SpotLight
+{
+    vec4 pos_and_radius;
+    vec4 color_and_intensity;
+    vec3 direction;
+    float inner_cone_angle;
+    float outer_cone_angle;
+    // TODO: For future shadow map cache, add a dirty bit for if it has moved
+};
+
+struct LightsHeader
+{
+    uint32_t num_point_lights;
+    uint32_t num_spot_lights;
+};
+
+
+// #define LIGHT_FALLOFF_FACTOR 5.0  // Higher than 1.0 will fall off faster
+
+#ifdef IS_GLSL
+    float get_attenuation(float dist)
+    {
+        return 1.0 / max(1.0, dist*dist);
+    }
+    // float get_attenuation(float dist, float radius)
+    // {
+    //     return max(1.0, dist*dist);
+    //     // float s = dist / radius;
+    //     // if (s >= 1.0) return 0.0;
+
+    //     // float s2 = s*s;
+    //     // float s2_prime = 1.0 - s2;
+    //     // return s2_prime*s2_prime / (1.0 + LIGHT_FALLOFF_FACTOR * s);
+    // }
+#endif
+
+// #ifndef IS_GLSL
+//     static float get_light_intensity(float target_brightness, float target_dist, float radius)
+//     {
+//         return target_brightness;
+//         // if (target_dist >= radius) return target_brightness;
+
+//         // float s = target_dist / radius;
+//         // float s2 = s * s;
+//         // float F = LIGHT_FALLOFF_FACTOR;
+
+//         // // Inverse of the attenuation formula
+//         // float numerator = 1.0f + F * s;
+//         // float denominator = (1.0f - s2) * (1.0f - s2);
+
+//         // return target_brightness * (numerator / denominator);
+//     }
+// #endif
+
+// #ifndef IS_GLSL
+// static
+// #endif
+// float get_attenuation(float distance_to_light)
+// {
+//     // TODO: Replace with https://lisyarus.github.io/blog/posts/point-light-attenuation.html
+//     #ifdef IS_GLSL
+//         return 1.0 / max(distance_to_light*distance_to_light, 1.0);
+//     #else
+//         distance_to_light *= distance_to_light;
+//         if (distance_to_light < 1.0f)
+//         {
+//             return 1.0f;
+//         }
+//         else
+//         {
+//             return 1.0 / distance_to_light;
+//         }
+//     #endif
+// }
+
+// #ifndef IS_GLSL
+
+//     #include "glm/glm.hpp"
+
+//     // Function to get max perceivable distance of point and spot light (based on attenuation)
+//     static float get_light_radius(glm::vec3 color, float intensity)
+//     {
+//         // TODO: https://lisyarus.github.io/blog/posts/point-light-attenuation.html
+//         // And replace get_attenutation with that one as well
+//         #warning TODO: IMPLEMENT ATTENTUATION
+//         return 100.0;
+//     }
+
+// #endif
+
+
+
+
 #ifndef IS_GLSL
-    
+
     typedef struct PushConstant_DrawCall PushConstant_DrawCall;
     typedef struct SceneData             SceneData;
     typedef struct ObjectData            ObjectData;
     typedef struct Vertex                Vertex;
     typedef struct MaterialData          MaterialData;
+    typedef struct PointLight            PointLight;
+    typedef struct SpotLight             SpotLight;
 
 #else
 
@@ -63,6 +174,19 @@ struct MaterialData
     layout (buffer_reference, scalar) readonly buffer MaterialBuffer
     {
         MaterialData materials[];
+    };
+
+    layout (buffer_reference, scalar) readonly buffer LightsHeaderBuffer
+    {
+        LightsHeader header;
+    };
+    layout (buffer_reference, scalar) readonly buffer PointLightBuffer
+    {
+        PointLight point_lights[];
+    };
+    layout (buffer_reference, scalar) readonly buffer SpotLightBuffer
+    {
+        SpotLight spot_lights[];
     };
 
     // Pointer types for current mesh:

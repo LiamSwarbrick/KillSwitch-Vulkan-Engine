@@ -91,6 +91,8 @@ Notably: The motivation section predates the implementation.
 #ifndef RENDERER_FRAMEGRAPH_H
 #define RENDERER_FRAMEGRAPH_H
 
+// #define VERBOSE_FRAMEGRAPH_LOGGING
+
 // Arbitrary predefined array sizes for simplicity
 #define MAX_PASS_RESOURCE_BANDWIDTH  8
 #define MAX_PASSES          256
@@ -125,7 +127,6 @@ typedef struct PassResourceUsage
 {
     uint32_t rid;                 // Index into a resource array (the internal registry)
     FG_UsageFlags usage_flags;    // Tells the graph HOW to use this resource in this pass
-    FG_SamplerType sampler_type;  // Only for input image resources. Not using combined image samplers so we can have different samplers for the same image in different passes
 
     // Optional MSAA resolve step for outputs
     uint32_t resolve_rid;  // Set to UINT32_MAX when not used
@@ -147,7 +148,6 @@ PassResourceUsage;
 typedef struct RenderPassDesc
 {
     char debug_name[64];  // TODO: Add to renderdoc with vkDebugMarkerSetObjectNameEXT somehow
-    uint32_t pass_type;
 
     // Resource inputs/outputs (buffers and image attachments)
     // NOTE: Output is just an attachment, so things like input depth buffer from another pass would be an output if used for forward rendering
@@ -220,7 +220,7 @@ typedef struct ImageResourceData
 
     // Metadata about the image needed for parts of the frame graph
     VkFormat                format;
-    VkExtent3D              extent;  // TODO: Use for checking if render_area matches (also can use custom scissor and viewport if it's oversized?)
+    VkExtent3D              extent;
     VkImageUsageFlags       usage;   // Tells us if we can go into BindlessHeap (when has SAMPLED_BIT)
     VkImageSubresourceRange subresource_range;  // Required for barriers
 }
@@ -265,7 +265,7 @@ typedef struct FG_Resource
     // Shader side access to resources
     union
     {
-        uint32_t image_bindless_index;       // Index into the global texture array, UINT32_MAX for nonsamplable images e.g. the swapchain
+        uint32_t bindless_texture_idx;       // Index into the global texture array, UINT32_MAX for nonsamplable images e.g. the swapchain
         VkDeviceAddress buffer_gpu_address;  // Buffer device address for shader
     };
 

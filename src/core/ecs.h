@@ -1,10 +1,10 @@
-#ifndef ECS_H
-#define ECS_H
+#ifndef CORE_ECS_H
+#define CORE_ECS_H
 
-
+#include "ecs/types.h"
 #include "ecs/registry.h"
 #include "ecs/view.h"
 #include "ecs/entity.h"
 
 
-#endif //ECS_H
+#endif //CORE_ECS_H

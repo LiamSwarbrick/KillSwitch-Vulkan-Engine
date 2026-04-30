@@ -94,6 +94,8 @@ typedef struct Light {
     float color[3];
     float intensity;
     float range;
+    float spot_inner_cone_angle;
+    float spot_outer_cone_angle;
 } Light;
 
 typedef struct Bone {

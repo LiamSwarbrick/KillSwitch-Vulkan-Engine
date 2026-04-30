@@ -1,5 +1,6 @@
 #include "game/foundations/scene.h"
 #include "game/foundations/components.h"
+#include "game/foundations/body_layer_collisions.h"
 #include "renderer/renderer.h"
 
 // animation update
@@ -10,6 +11,9 @@
 // Imported components for automated de-serialization
 #include "imported_components.h"
 
+// types from physics
+#include "physics/core/types.h"
+
 #include "SDL3/SDL.h"
 
 namespace rj = rapidjson;
@@ -17,16 +21,22 @@ namespace rj = rapidjson;
 void Scene::StartUp()
 {
     m_ecs.RegisterComponent<C_Transform>();
+    m_ecs.RegisterComponent<C_Light>();
     m_ecs.RegisterComponent<C_StaticMesh>();
     m_ecs.RegisterComponent<C_AnimatedMesh>();
     m_ecs.RegisterComponent<C_PlayerInput>();
     m_ecs.RegisterComponent<C_CharacterController>();
 
     m_prefabs.clear();
+
+    m_physicsManager.startUp();
+    SetBodyCollisionLayers();
 }
 
 void Scene::Shutdown()
 {
+    m_physicsManager.shutDown();
+
     for (Asset* asset : m_prefabs)
     {
         free_asset(asset);
@@ -76,55 +86,11 @@ EntityID Scene::InstantiatePrefab(Asset* prefab, glm::vec3 spawnPosition)
             }
         }
 
-        EntityID eID = m_ecs.CreateEntity((node->name) ? (node->name) : "");
-        if (i == 0) rootEntity = eID;
-
         if (has_ecs_data)
-        {
-            // 2. And put the "_ecs" value in the following
-            rj::Value& components = doc["_ecs"];
+        { // if has ecs_data
+            EntityID eID = m_ecs.CreateEntity((node->name) ? (node->name) : "");
+            if (i == 0) rootEntity = eID;
 
-            if (components.HasMember("ColliderComponent"))
-            {
-                ImportedCollider importedCollider = StructFromRapidJsonValue<ImportedCollider>(components["ColliderComponent"]);
-
-            // 3.2. use the ImportedComponent as a helper for your C_Component
-            C_Collider colliderComponent;
-            switch (importedCollider.collider_type)
-            {
-            case ImportedColliderType::COL_TYPE_BOX:
-                colliderComponent.type = ColliderType::Box;
-                colliderComponent.box.halfWidths = importedCollider.half_widths;
-                break;
-            case ImportedColliderType::COL_TYPE_SPHERE:
-                colliderComponent.type = ColliderType::Sphere;
-                colliderComponent.sphere.radius = importedCollider.radius;
-                break;
-            case ImportedColliderType::COL_TYPE_CAPSULE:
-                colliderComponent.type = ColliderType::Capsule;
-                colliderComponent.capsule.radius = importedCollider.radius;
-                colliderComponent.capsule.height = importedCollider.height;
-                break;
-            default:
-                // what the helly (sorry im tired)
-                SDL_assert(false);
-                break;
-            }
-
-                // 3.3 If we had more data to acces (in the node), feel free to add data to your component, 
-                // but that won't probably be the case for player defined components
-
-                // 3.4 Finally add the component to the ECS!!!
-                m_ecs.AddComponent<C_Collider>(eID, std::move(colliderComponent));
-            }
-
-
-            if (components.HasMember("PlayerInput"))
-            {
-                m_ecs.AddComponent<C_PlayerInput>(eID, {});
-                m_ecs.AddComponent<C_CharacterController>(eID, {});
-            }
-        }
             // ---------------
             // -- TRANSFORM --
             // ---------------
@@ -135,54 +101,167 @@ EntityID Scene::InstantiatePrefab(Asset* prefab, glm::vec3 spawnPosition)
             t.matrix = glm::translate(t.matrix, position);
             m_ecs.AddComponent<C_Transform>(eID, { t.matrix });
 
-        // -- MESH
-        if (node->mesh_index >= 0)
-        {
-            Mesh* mesh = &prefab->meshes[node->mesh_index];
-            if (mesh->vertex_type == VERTEX_TYPE_SKINNED)
+            // ------------------
+            // -- LIGHT SOURCE --
+            // ------------------
+            if (node->light_index >= 0)
             {
-                uint32_t joint_count = 0;
-                if (node->skin_index >= 0) {
-                    joint_count = (uint32_t)prefab->skins[node->skin_index].joint_count;
+                SDL_assert(node->light_index < prefab->light_count);
+                Light light_data = prefab->lights[node->light_index];
+                LightComponentType light_type;
+                switch (light_data.type)
+                {
+                    case 2: light_type = LIGHT_COMPONENT_POINTLIGHT; break;
+                    case 3: light_type = LIGHT_COMPONENT_SPOTLIGHT; break;
+                    default: SDL_assert(0 && "Unimplemented light type detected (directional/area lights not implemented yet).");
                 }
-                else if (prefab->skin_count > 0) {
-                    joint_count = (uint32_t)prefab->skins[0].joint_count;
-                }
-                else {
-                    joint_count = 1;
+                
+                SDL_assert(light_data.range >= 0.0f && "Make sure in Blender to set the custom distance of the light, otherwise no culling can occurr");
+                m_ecs.AddComponent<C_Light>(eID, {
+                    .type = light_type,
+                    .color = glm::vec3(light_data.color[0], light_data.color[1], light_data.color[2]),//glm::vec3(0.7f, 0.7f, 1.0f),
+                    .intensity = light_data.intensity,
+                    .radius = light_data.range,
+                    .spot_inner_cone_angle = light_data.spot_inner_cone_angle,
+                    .spot_outer_cone_angle = light_data.spot_outer_cone_angle
+                });
+            }
+
+
+
+            // 2. And put the "_ecs" value in the following
+            rj::Value& components = doc["_ecs"];
+
+            // -------------------
+            // RIGIDBODY COMPONENT
+            // -------------------
+            if (components.HasMember("RigidbodyComponent"))
+            {
+                // 3.1. Automated import!!!! you don't have to do anything just declare it!!!!
+                ImportedRigidbody importedRigidbody = StructFromRapidJsonValue<ImportedRigidbody>(components["RigidbodyComponent"]);
+
+                bool supported = true;
+                float halfHeight;
+                // 3.2. use the ImportedComponent as a helper for your C_Component
+                ShapeDesc shapeDesc;
+                switch (importedRigidbody.collider_type)
+                {
+                case ImportedColliderType::COL_TYPE_BOX:
+                    shapeDesc = ShapeDesc::makeBox(importedRigidbody.half_widths);
+                    break;
+                case ImportedColliderType::COL_TYPE_SPHERE:
+                    shapeDesc = ShapeDesc::makeSphere(importedRigidbody.radius);
+                    break;
+                case ImportedColliderType::COL_TYPE_CAPSULE:
+                    // convert importedRigidbody.height (full height with radii) to halfHeight (center to sphere)
+                    halfHeight = std::max(0.0f, importedRigidbody.height / 2 - importedRigidbody.radius);
+                    shapeDesc = ShapeDesc::makeCapsule(importedRigidbody.radius, halfHeight);
+                    break;
+                default:
+                    supported = false;
+                    SDL_assert(false && "Shape Type not supported for now");
+                    break;
                 }
 
-                C_AnimatedMesh animMesh{ mesh, prefab };
-                animMesh.joint_count = joint_count;
-				animMesh.idleAnimationName = "IDLE";
-                animMesh.splitJointName = "SPINE";
-				OnStartAnim(animMesh, animMesh.idleAnimationName); // Start with idle animation by default
+                if (!supported) continue; // ignore current entity if has unsupported shape type
+
+                shapeDesc.localOffset = importedRigidbody.collider_position_offset;
+                shapeDesc.localOrientation = importedRigidbody.collider_rotation_offset;
+
+                // Create the shape
+                ShapeHandle shapeHandle = m_physicsManager.createShape(shapeDesc);
+
+                RigidBodyDesc rbDesc;
+
+                rbDesc.position = position; // from the transform
+                rbDesc.orientation = rotation; // from the transform
+                rbDesc.mass = importedRigidbody.mass;
+                rbDesc.gravityScale = importedRigidbody.gravity_scale;
+                rbDesc.damping = importedRigidbody.damping;
+                rbDesc.forceLayers = importedRigidbody.force_layers;
+                rbDesc.isStatic = importedRigidbody.is_static;
+                rbDesc.isKinematic = importedRigidbody.is_kinematic;
+                rbDesc.isCharacter = importedRigidbody.is_character;
+                rbDesc.isTrigger = importedRigidbody.is_trigger;
+
+                // TEMPORARY
+                if (importedRigidbody.is_static || importedRigidbody.is_trigger)
+                    rbDesc.bodyLayer = (uint8_t) BodyLayer::STATIC;
+                else
+                    rbDesc.bodyLayer = (uint8_t) BodyLayer::MOVING;
+
+                rbDesc.shape = shapeHandle;
+
+                RigidBodyHandle rbHandle = m_physicsManager.createBody(eID, rbDesc);
+
+                // 3.3 If we had more data to acces (in the node), feel free to add data to your component, 
+                // but that won't probably be the case for player defined components
+
+                // 3.4 Finally add the component to the ECS!!!
+                if(rbHandle.isValid())
+                    m_ecs.AddComponent<C_RigidBody>(eID, { rbHandle });
+            } // if rigidbodycomponent
+
+            if (components.HasMember("PlayerInput"))
+            {
+                m_ecs.AddComponent<C_PlayerInput>(eID, {});
+                m_ecs.AddComponent<C_CharacterController>(eID, {});
+            }
+
+            // -- MESH
+            if (node->mesh_index >= 0)
+            {
+                Mesh* mesh = &prefab->meshes[node->mesh_index];
+                if (mesh->vertex_type == VERTEX_TYPE_SKINNED)
+                {
+                    uint32_t joint_count = 0;
+                    if (node->skin_index >= 0)
+                    {
+                        joint_count = (uint32_t)prefab->skins[node->skin_index].joint_count;
+                    }
+                    else if (prefab->skin_count > 0)
+                    {
+                        joint_count = (uint32_t)prefab->skins[0].joint_count;
+                    }
+                    else
+                    {
+                        joint_count = 1;
+                    }
+
+                    C_AnimatedMesh animMesh{ mesh, prefab };
+                    animMesh.joint_count = joint_count;
+                    animMesh.idleAnimationName = "IDLE";
+                    animMesh.splitJointName = "SPINE";
+                    OnStartAnim(animMesh, animMesh.idleAnimationName); // Start with idle animation by default
                 
 
-                    if (joint_count > 0) {
+                    if (joint_count > 0)
+                    {
                         animMesh.joint_matrices = (glm::mat4*)malloc(joint_count * sizeof(glm::mat4));
-                        for (uint32_t j = 0; j < joint_count; j++) {
+                        for (uint32_t j = 0; j < joint_count; j++)
+                        {
                             animMesh.joint_matrices[j] = glm::mat4(1.0f);
                         }
                     }
-                    else {
+                    else
+                    {
                         animMesh.joint_matrices = nullptr;
                     }
 
-                m_ecs.AddComponent<C_AnimatedMesh>(eID, std::move(animMesh));
-            }
-            else
-            {
-                C_StaticMesh staticMesh{ &prefab->meshes[node->mesh_index], prefab };
-                m_ecs.AddComponent<C_StaticMesh>(eID, { staticMesh.mesh, staticMesh.parent_asset });
-            }
-        }
+                    m_ecs.AddComponent<C_AnimatedMesh>(eID, std::move(animMesh));
+                }
+                else
+                {
+                    C_StaticMesh staticMesh{ &prefab->meshes[node->mesh_index], prefab };
+                    m_ecs.AddComponent<C_StaticMesh>(eID, { staticMesh.mesh, staticMesh.parent_asset });
+                }
+            } // if (node->mesh_index >= 0)
+        } // if has ecs_data
     }
 
     uint64_t end_time = SDL_GetTicksNS();
     float elapsed_ms = (float)(end_time - start_time) / 1000000.0f;
     SDL_Log("[Entity Time] Instantiated %zu nodes into ECS in %.2f ms", prefab->node_count, elapsed_ms);
-
 
     return rootEntity;
 }
@@ -234,14 +313,39 @@ void Scene::BuildRendererScene()
 void Scene::Update(float dt)
 {
     PlayerMovement_Update(&m_ecs, dt);
+    
+    m_physicsManager.update(m_ecs, dt);
+
+    Ray ray = { glm::vec3(0.0f, 0.5f, 2.0f), glm::normalize(glm::vec3(0.0f, 0.0f, -1.0f)), 10.0f};
+    QueryFilterExternal filter;
+    filter.hasLayerOfQuery = true;
+    filter.layerOfQuery = (uint8_t) BodyLayer::WEAPON;
+    auto hits = m_physicsManager.raycastAll(ray, filter);
+    for (EntityRaycastHit hit : hits)
+    {
+        std::cout << "[Raycast Hit] Entity: [" << hit.entity << " | " << m_ecs.GetEntityTag(hit.entity) << "] at t : " << hit.t
+            << ", point: [" << hit.point.x << "," << hit.point.y << "," << hit.point.z << "]"
+            << ", normal: [" << hit.normal.x << "," << hit.normal.y << "," << hit.normal.z << "]"
+            << std::endl;
+    }
     Animation_Update(&m_ecs, dt);
 }
 
 void Scene::Render()
 {
+    // Push light components (or light entities?) this frame
+    m_ecs.GetView<C_Transform, C_Light>().ForEach([&](C_Transform& transform, C_Light& light)
+    {
+        glm::vec3 position = glm::vec3(transform.matrix[3]);
+        glm::quat rotation = glm::quat_cast(transform.matrix);
+        glm::vec3 direction = rotation * glm::vec3(0.0f, 0.0f, 1.0f);
+        Renderer_PushLight(light, position, direction);
+    });
+
     m_ecs.GetView<C_Transform, C_StaticMesh>().ForEach([&](C_Transform& transform, C_StaticMesh& mesh)
     {
         // Skip invalid / not-yet-uploaded meshes
+        // (not that we support streaming yet, and if we did, textures are the actual bottleneck)
         if (mesh.renderer_prefab.mesh_rids.primitive_count == 0)
             return;
 
@@ -268,4 +372,17 @@ void Scene::Render()
 
         Renderer_PushRenderable(r);
     });
+}
+
+void Scene::SetBodyCollisionLayers()
+{
+    m_physicsManager.setNumLayers(NUM_BODY_LAYERS);
+    //m_physicsManager.setLayerPair((uint8_t) BodyLayer::STATIC, (uint8_t) BodyLayer::STATIC, false);
+    m_physicsManager.disableLayerPair((uint8_t) BodyLayer::STATIC, (uint8_t) BodyLayer::STATIC);
+    // STATIC VS MOVING
+    // MOVING VS MOVING
+    // WEAPON VS MOVING
+    m_physicsManager.enableLayerPair((uint8_t) BodyLayer::STATIC, (uint8_t) BodyLayer::MOVING);
+    m_physicsManager.enableLayerPair((uint8_t) BodyLayer::MOVING, (uint8_t) BodyLayer::MOVING);
+    m_physicsManager.enableLayerPair((uint8_t) BodyLayer::WEAPON, (uint8_t) BodyLayer::MOVING);
 }

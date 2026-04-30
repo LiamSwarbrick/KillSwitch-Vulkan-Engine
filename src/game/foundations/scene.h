@@ -1,13 +1,20 @@
+#ifndef FOUNDATIONS_SCENE_H
+#define FOUNDATIONS_SCENE_H
+
 #include "core/ecs.h"
 #include "core/my_c_runtime.h"
 #include "core/assetsys.h"
 
 #include "level/hierarchy.h"
 
+#include "physics/physics_manager.h"
+
+
 class Scene {
 
 private:
     ECS m_ecs;
+    PhysicsManager m_physicsManager;
 
     std::vector<Asset*> m_prefabs;
 
@@ -37,5 +44,9 @@ public:
     void Update(float dt);
     void Render();
 
+private:
+    // Helper to set the body's collision matrix
+    void SetBodyCollisionLayers();
 };
 
+#endif //FOUNDATIONS_SCENE_H

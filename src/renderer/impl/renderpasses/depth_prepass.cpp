@@ -26,7 +26,7 @@ void DepthPrepass_Execute(VkCommandBuffer cmd, uint32_t pass_idx)
         for (uint32_t p = 0; p < drawcall.renderable->mesh_prefab.mesh_rids.primitive_count; ++p)
         {
             PrimitiveRIDs* prim = &drawcall.renderable->mesh_prefab.mesh_rids.primitives[p];
-            MaterialData* mat = &((MaterialData*)renderstate.registry.resources[renderstate.rids.material_ssbo_rid].buffer.mapped_data)[prim->material_index];
+            MaterialData* mat = &((MaterialData*)renderstate.registry.resources[renderstate.rids.materials_buffer_rid].buffer.mapped_data)[prim->material_index];
 
             // Skip alpha blend or masked geometry (masked skipped because of Alpha2Coverage)
             if (mat->blend_mode != BLEND_MODE_BLEND)

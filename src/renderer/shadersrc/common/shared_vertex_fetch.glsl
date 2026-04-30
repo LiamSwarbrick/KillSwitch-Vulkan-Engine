@@ -39,6 +39,21 @@ void fetch_vertex_pos_uv(
     v_uv     = VTexcoordBuffer(push.dc.v_texcoords_ptr).texcoords[vertex_buf_index];
 }
 
+void fetch_vertex_pos_normal(
+    uint index,             // <- Index buffer index, which is gl_VertexIndex because we are submitting vkCmdDraw per index instead
+    out uint vertex_buf_index,
+    out vec3 v_pos,
+    out vec3 v_normal)
+{
+    // Pull vertex data
+    IndexBuffer ib   = IndexBuffer(push.dc.index_ptr);
+    vertex_buf_index = ib.indices[index];
+
+    v_pos    = VPositionBuffer(push.dc.v_positions_ptr).positions[vertex_buf_index];
+    v_normal = VNormalBuffer(push.dc.v_normals_ptr).normals[vertex_buf_index];
+}
+
+
 mat4 compute_model_matrix(uint vertex_buf_index)
 {
     ObjectData obj   = ObjectBuffer(push.dc.object_ptr).object;
