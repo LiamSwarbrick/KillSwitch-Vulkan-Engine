@@ -716,7 +716,12 @@ def apply_ecs_to_object(obj, ecs_data):
                         if value & item.value:
                             flags.add(item.identifier)
                     value = flags
-
+                elif prop_meta.identifier == "half_widths":
+                    # Convert from Engine's XZY to Blender's XYZ
+                    print(f"--- Converting HalfWidths of {obj.name}")
+                    value = list(value)  # ensure it's a list
+                    if len(value) == 3:
+                        value = [value[0], value[2], value[1]]  # X,Z,Y
                 elif prop_meta and prop_meta.type == 'FLOAT' and prop_meta.is_array:
                     value = tuple(value)
                     if len(value) == 4 and prop_meta.subtype == 'EULER':
