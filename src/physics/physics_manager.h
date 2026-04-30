@@ -138,15 +138,30 @@ public:
 		const QueryFilterExternal& filter = {}) const;
 
 	// ------------------------------
-	// EVENTS (planning for the future)
+	// EVENTS
 	// ------------------------------
-	Event<EntityID, EntityID, const Contact&> onCollisionEnter;
-	Event<EntityID, EntityID, const Contact&> onCollisionStay;
-	Event<EntityID, EntityID> onCollisionExit;
+	// Contrary to PhysicsWorld, where we use a single function (1 subscriber only), here we use proper events where other systems can subscribe to. 
+	// If we had a global bus, the physics manager would be the one subscribe the world events there.
+	struct CollisionEnterAndStayArgs
+	{
+		EntityID a;
+		EntityID b;
+		const Contact& contact;
+	};
 
-	Event<EntityID, EntityID> onTriggerEnter;
-	Event<EntityID, EntityID> onTriggerStay;
-	Event<EntityID, EntityID> onTriggerExit;
+	struct CollisionExitArgs
+	{
+		EntityID a;
+		EntityID b;
+	};
+
+	Event<CollisionEnterAndStayArgs> onCollisionEnter;
+	Event<CollisionEnterAndStayArgs> onCollisionStay;
+	Event<CollisionExitArgs> onCollisionExit;
+
+	Event<CollisionEnterAndStayArgs> onTriggerEnter;
+	Event<CollisionEnterAndStayArgs> onTriggerStay;
+	Event<CollisionExitArgs> onTriggerExit;
 
 
 private:
@@ -178,7 +193,7 @@ private:
 	//EntityID bodyToEntity(RigidBody* body) const;
 
 	// Need this to translate events fired from world to RigidBodyHandle to EntityID
-	//void bindWorldEvents();
+	void bindWorldEvents();
 
 	// Extra little helper
 	inline EntityRaycastHit rayHitToEntityRayHit(const RaycastHit& rayHit) const;

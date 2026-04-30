@@ -411,5 +411,16 @@ struct BodyPair
     bool isValid() const { return bodyA != nullptr; }
 };
 
+// Just in case BodyPair::operator< doesn't work (it has happened before)
+struct BodyPairComparer
+{
+    bool operator()(const BodyPair& a, const BodyPair& b)
+    {
+        if (a.bodyA != b.bodyA)
+            return a.bodyA < b.bodyA;
+        return a.bodyB < b.bodyB;
+    }
+};
+
 
 #endif // !PHYSICS_CORE_TYPES_H

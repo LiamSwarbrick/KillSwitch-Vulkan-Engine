@@ -135,8 +135,18 @@ public:
 		const QueryFilter& filter = {}) const;
 
 	// ------------------------------
-	// EVENTS (TODO)
+	// EVENTS
 	// ------------------------------
+	// These are going to be single subscriber functions.
+	// The one who should subscribe to these is the PhysicsManager, nobody else.
+	// Then the PhysicsManager will be the one to propagate the event (either him, or subscribe these to a global bus)
+	std::function<void(RigidBodyHandle a, RigidBodyHandle b, const Contact& contact)> onCollisionEnter;
+	std::function<void(RigidBodyHandle a, RigidBodyHandle b, const Contact& contact)> onCollisionStay;
+	std::function<void(RigidBodyHandle a, RigidBodyHandle b)> onCollisionExit;
+
+	std::function<void(RigidBodyHandle a, RigidBodyHandle b, const Contact& contact)> onTriggerEnter;
+	std::function<void(RigidBodyHandle a, RigidBodyHandle b, const Contact& contact)> onTriggerStay;
+	std::function<void(RigidBodyHandle a, RigidBodyHandle b)> onTriggerExit;
 
 
 	// ------------------------------
@@ -164,7 +174,7 @@ private:
 	void solve(float dt); // solve interpenetration
 
 	// TODO after implementing events
-	// void dispatchEvents();
+	void dispatchEvents();
 
 private:
 	// Helper for AABB
@@ -213,7 +223,7 @@ private:
 	// we keep it here with .reserve() so we don't allocate too much in the step.
 	std::vector<Contact> contacts;
 
-	// previous frame. to detect OnEnter, OnStay, OnExit
+	// FOR EVENTS: previous frame. to detect OnEnter, OnStay, OnExit
 	std::set<BodyPair> previousCollisionPairs;
 	std::set<BodyPair> previousTriggerPairs;
 
