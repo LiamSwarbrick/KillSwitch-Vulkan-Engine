@@ -560,6 +560,10 @@ void Renderer_Init(const Renderer_InitInfo* info)
         .spot_lights  =  (SpotLight*)L_calloc(MAX_SPOTLIGHTS, sizeof(SpotLight), &renderstate.main.tt)
     };
 
+    // Zero shadowing cache
+    renderstate.num_shadowed_spotlights = 0;
+    memset(&renderstate.currently_shadowed_spotlight_indices, 0, sizeof(renderstate.currently_shadowed_spotlight_indices));
+
     // Init per frame structures (except for swapchain_image_acquired_semaphore, which is handled by create_or_recreate_swapchain)
     {
         VkFenceCreateInfo render_fence_create_info = {
@@ -1223,12 +1227,10 @@ void Renderer_DrawFrame(CameraInfo main_camera)
 
     /*  Execute FrameGraph
 
-        Gathers renderables from game state, based on flags, provides each
-        pass their drawlists e.g. renderable with rig and unlit material would
-        go to that specific pass.
-
-        OR I can leave each execute callback to gather their relevant items themselves,
-        which is probably easier
+        Calls the execute callback of renderpasses in the framegraph in order.
+        TODO: Multiqueue, multithreaded support.
+        TODO: Topological sorting, and other optimisations that are easy now that
+              a framegraph is in place.
     
     */
 
