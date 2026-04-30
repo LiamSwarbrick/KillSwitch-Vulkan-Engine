@@ -560,9 +560,9 @@ void Renderer_Init(const Renderer_InitInfo* info)
         .spot_lights  =  (SpotLight*)L_calloc(MAX_SPOTLIGHTS, sizeof(SpotLight), &renderstate.main.tt)
     };
 
-    // Zero shadowing cache
+    // Shadowing cache
     renderstate.num_shadowed_spotlights = 0;
-    memset(&renderstate.currently_shadowed_spotlight_indices, 0, sizeof(renderstate.currently_shadowed_spotlight_indices));
+    memset(&renderstate.currently_shadowed_spotlight_indices, UINT32_MAX, sizeof(renderstate.currently_shadowed_spotlight_indices));
 
     // Init per frame structures (except for swapchain_image_acquired_semaphore, which is handled by create_or_recreate_swapchain)
     {
@@ -1004,10 +1004,13 @@ void Renderer_DrawFrame(CameraInfo main_camera)
     b32 use_msaa = renderstate.multisampling_count_flag > VK_SAMPLE_COUNT_1_BIT;
 
     // Shadowmap pass
+    // for (uint32_t )
+#error This is where i left off for shadow mapping
     // TODO (once topological sorting and multiqueue stuff is in, this can be in parallel with the depth prepass)
 
     // Depth prepass
     FG_Resource* depth_buffer_res = &renderstate.registry.resources[renderstate.rids.depth_buffer_rid];
+    SceneData depth_prepass_scene_data = MakeSceneData(renderstate.main_camera, (VkExtent2D){ depth_buffer_res->image.extent.width, depth_buffer_res->image.extent.height });
     RenderPassDesc depth_prepass_desc = {
         .debug_name = "Depth Prepass",
 
@@ -1036,8 +1039,8 @@ void Renderer_DrawFrame(CameraInfo main_camera)
         .is_compute = 0,
         .render_area = { .offset = { 0, 0 }, .extent = { depth_buffer_res->image.extent.width, depth_buffer_res->image.extent.height } },
         
-        .execute_callback = DepthPrepass_Execute,
-        .user_data = NULL
+        .execute_callback = DepthMapPass_Execute,
+        .user_data = &depth_prepass_scene_data
     };
     uint32_t depth_prepass = FG_AddPass(depth_prepass_desc);
 

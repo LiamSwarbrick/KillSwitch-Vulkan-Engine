@@ -90,9 +90,8 @@ typedef struct RenderState
     // FUTURE: Render shadow map into a texture atlas so multiple go in one.
     //         That allows dynamically sized shadows (e.g. small spotlights don't take up a whole texture)
     //         since all shadow map textures should be preallocated each frame.
-    #define MAX_SHADOWED_SPOTLIGHTS 1    // <- ONE FOR NOW TIL THINGS ARE WORKING
     uint32_t num_shadowed_spotlights;
-    uint32_t currently_shadowed_spotlight_indices[MAX_SHADOWED_SPOTLIGHTS];
+    uint32_t currently_shadowed_spotlight_indices[MAX_SHADOWMAPS];
 
     CameraInfo main_camera;
 

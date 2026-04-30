@@ -9,9 +9,9 @@ void DepthMapPass_Execute(VkCommandBuffer cmd, uint32_t pass_idx)
 
     uint64_t scene_ptr = 0;
     {
-        VkExtent3D extents = renderstate.registry.resources[renderstate.rids.depth_buffer_rid].image.extent;
-        SceneData scene_data = MakeSceneData(renderstate.main_camera, (VkExtent2D){ extents.width, extents.height });
-        scene_ptr = PushToMappedArena(&renderstate.scenes_arena, &scene_data, sizeof(SceneData));
+        // Scene data stored in userdata field of depth pass
+        SceneData* scene_data = (SceneData*)desc->user_data;
+        scene_ptr = PushToMappedArena(&renderstate.scenes_arena, scene_data, sizeof(SceneData));
     }
     
     PushConstant_PassHeader push_pass = {};  // No inputs, so doesn't care use push constant's upper bytes
