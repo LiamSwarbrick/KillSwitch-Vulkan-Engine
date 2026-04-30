@@ -11,7 +11,7 @@
 #include "SDL3/SDL.h"
 #include "SDL3/SDL_main.h"
 
-CameraInfo temp_camera(float dt)
+CameraInfo temp_camera(float dt, bool allow_mouse_look)
 {
     static glm::vec3 pos = glm::vec3(0.0f, 0.0f, 3.0f);
 
@@ -24,12 +24,16 @@ CameraInfo temp_camera(float dt)
     static constexpr float MOVE_SPEED         = 5.0f;    // units per second
     static constexpr float SPRINT_MULTIPLIER  = 4.0f;
 
-    // --- ROTATION: mouse delta + right stick ---
-    float mouse_dx, mouse_dy;
-    Input_GetMouseDelta(&mouse_dx, &mouse_dy);
+    // --- ROTATION: mouse delta (while dragging) + right stick ---
+    if (allow_mouse_look)
+    {
+        float mouse_dx = 0.0f;
+        float mouse_dy = 0.0f;
+        Input_GetMouseDelta(&mouse_dx, &mouse_dy);
 
-    yaw   +=  mouse_dx * MOUSE_SENSITIVITY;
-    pitch -=  mouse_dy * MOUSE_SENSITIVITY;  // inverted: mouse up = look up
+        yaw   +=  mouse_dx * MOUSE_SENSITIVITY;
+        pitch -=  mouse_dy * MOUSE_SENSITIVITY;  // inverted: mouse up = look up
+    }
 
     yaw   += (Input_GetActionValue(ACTION_CAMERA_RIGHT) - Input_GetActionValue(ACTION_CAMERA_LEFT)) * GAMEPAD_LOOK_SPEED * dt;
     pitch += (Input_GetActionValue(ACTION_CAMERA_UP)    - Input_GetActionValue(ACTION_CAMERA_DOWN)) * GAMEPAD_LOOK_SPEED * dt;
@@ -239,8 +243,10 @@ int main(int argc, char *argv[])
         }
         Input_Update();
 
-        // Capture mouse for free-camera rotation
-        SDL_SetWindowRelativeMouseMode(window, true);
+        // Hold LMB to enter relative mouse mode and rotate temp camera.
+        Uint32 mouse_buttons = SDL_GetMouseState(nullptr, nullptr);
+        bool left_mouse_down = (mouse_buttons & SDL_BUTTON_MASK(SDL_BUTTON_LEFT)) != 0;
+        SDL_SetWindowRelativeMouseMode(window, left_mouse_down);
 
         const bool* state = SDL_GetKeyboardState(NULL);
 
@@ -263,7 +269,7 @@ int main(int argc, char *argv[])
         {
             scene.Render();
 
-            Renderer_DrawFrame(temp_camera(dt));
+            Renderer_DrawFrame(temp_camera(dt, left_mouse_down));
         }
     }
 
