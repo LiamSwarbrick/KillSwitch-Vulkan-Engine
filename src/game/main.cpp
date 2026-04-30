@@ -143,7 +143,7 @@ int main(int argc, char *argv[])
     // TODO: Change the following 2 prefabs so they can be imported (add the boolean "Is ECS Entity" with the new script where it is needed)
     // Asset* catPrefab = scene.LoadPrefab("assets/animations/scene.gltf");
     // Asset* catPrefab = scene.LoadPrefab("assets/animations/flatzombo.gltf");
-    Asset* animationPrefab = scene.LoadPrefab("assets/animations/cat.gltf");
+    Asset* animationPrefab = scene.LoadPrefab("assets/animations/sceneglb.glb");
 
     scene.InstantiatePrefab(room_prefab, glm::vec3(0, 0, 0));
     // scene.InstantiatePrefab(cube_prefab, glm::vec3(0, 5.1, 0));
@@ -154,7 +154,7 @@ int main(int argc, char *argv[])
     // scene.InstantiatePrefab(sphere_prefab, glm::vec3(0.1, 7, -4.7));
     // scene.InstantiatePrefab(sphere_prefab, glm::vec3(-0.1, 7, 4.7));
     // scene.InstantiatePrefab(catPrefab, glm::vec3(0, 0, 0));
-    // scene.InstantiatePrefab(animationPrefab, glm::vec3(0, 0, 0));
+    scene.InstantiatePrefab(animationPrefab, glm::vec3(0, 0, 0));
     // render a second cat
     // EntityID playerEntity = scene.InstantiatePrefab(animationPrefab, glm::vec3(10, 0, 10));
 
