@@ -48,6 +48,9 @@ public:
     // Updates the list of valid rooms for each room
     void UpdatePossibilities(std::vector<glm::ivec2> updateRooms);
 
+    // Traverses from the start room to all connected rooms, and returns a list of the visited room coordinates
+    std::vector<glm::ivec2> GetTraversableRooms(glm::ivec2 startRoom);
+
     // Fills a grid with rooms that connect properly
     void GenerateGrid(int width, int height, glm::ivec2 start, glm::ivec2 goal, uint16_t startDoorwayMask, int maxRooms);
 
