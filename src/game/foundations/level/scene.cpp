@@ -5,6 +5,7 @@
 
 // animation update
 #include "core/animation.h"
+#include "game/foundations/PlayerMovementSystem.h"
 // RapidJSON 
 #include "rapidjson/document.h"
 // Imported components for automated de-serialization
@@ -23,6 +24,8 @@ void Scene::StartUp()
     m_ecs.RegisterComponent<C_Light>();
     m_ecs.RegisterComponent<C_StaticMesh>();
     m_ecs.RegisterComponent<C_AnimatedMesh>();
+    m_ecs.RegisterComponent<C_PlayerInput>();
+    m_ecs.RegisterComponent<C_CharacterController>();
 
     m_prefabs.clear();
 
@@ -197,6 +200,12 @@ EntityID Scene::InstantiatePrefab(Asset* prefab, glm::vec3 spawnPosition)
                 // 3.4 Finally add the component to the ECS!!!
                 if(rbHandle.isValid())
                     m_ecs.AddComponent<C_RigidBody>(eID, { rbHandle });
+            } // if rigidbodycomponent
+
+            if (components.HasMember("PlayerInput"))
+            {
+                m_ecs.AddComponent<C_PlayerInput>(eID, {});
+                m_ecs.AddComponent<C_CharacterController>(eID, {});
             }
 
             // -- MESH
@@ -221,10 +230,10 @@ EntityID Scene::InstantiatePrefab(Asset* prefab, glm::vec3 spawnPosition)
 
                     C_AnimatedMesh animMesh{ mesh, prefab };
                     animMesh.joint_count = joint_count;
-                    animMesh.idleAnimationName = "Idle";
-                    animMesh.splitJointName = "Spine";
+                    animMesh.idleAnimationName = "IDLE";
+                    animMesh.splitJointName = "SPINE";
                     OnStartAnim(animMesh, animMesh.idleAnimationName); // Start with idle animation by default
-
+                
 
                     if (joint_count > 0)
                     {
@@ -303,6 +312,8 @@ void Scene::BuildRendererScene()
 
 void Scene::Update(float dt)
 {
+    PlayerMovement_Update(&m_ecs, dt);
+    
     m_physicsManager.update(m_ecs, dt);
 
     Ray ray = { glm::vec3(0.0f, 0.5f, 2.0f), glm::normalize(glm::vec3(0.0f, 0.0f, -1.0f)), 10.0f};

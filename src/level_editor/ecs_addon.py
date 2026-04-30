@@ -282,6 +282,9 @@ class BaseComponent(bpy.types.PropertyGroup):
             if prop != "rna_type" and prop != "bl_label":
                 layout.prop(self, prop)
 
+class PlayerInput(BaseComponent):
+    bl_label = "PlayerInput"
+
 class HealthComponent(BaseComponent):
     bl_label = "Health"
     max_health: bpy.props.IntProperty(default=200)

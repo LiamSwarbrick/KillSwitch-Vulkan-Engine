@@ -4,6 +4,7 @@
 #include "foundations/scene.h"
 #include "core/components.h"
 #include "core/animation.h"
+#include "game/foundations/components.h"
 #include "core/audio_system.h"
 
 #include "SDL3/SDL.h"
@@ -186,7 +187,7 @@ int main(int argc, char *argv[])
     // TODO: Change the following 2 prefabs so they can be imported (add the boolean "Is ECS Entity" with the new script where it is needed)
     // Asset* catPrefab = scene.LoadPrefab("assets/animations/scene.gltf");
     // Asset* catPrefab = scene.LoadPrefab("assets/animations/flatzombo.gltf");
-    // Asset* animationPrefab = scene.LoadPrefab("assets/animations/cat.gltf");
+    Asset* animationPrefab = scene.LoadPrefab("assets/animations/cat.gltf");
 
     scene.InstantiatePrefab(room_prefab, glm::vec3(0, 0, 0));
     // scene.InstantiatePrefab(cube_prefab, glm::vec3(0, 5.1, 0));
@@ -228,6 +229,17 @@ int main(int argc, char *argv[])
             if (event.type == SDL_EVENT_QUIT) running = false;
             Renderer_ListenToWindowEvent(event);
         }
+
+        const bool* state = SDL_GetKeyboardState(NULL);
+
+        scene.GetECS().GetView<C_AnimatedMesh, C_PlayerInput>().ForEach([&](EntityID e, C_AnimatedMesh&, C_PlayerInput& input) {
+                input.move_forward = state[SDL_SCANCODE_K];
+                input.move_backward = state[SDL_SCANCODE_I];
+                input.move_left = state[SDL_SCANCODE_L];
+                input.move_right = state[SDL_SCANCODE_J];
+                input.jump = state[SDL_SCANCODE_SPACE];
+            }
+        );
 
         // Game ticks
         scene.Update(dt);
