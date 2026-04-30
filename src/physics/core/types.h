@@ -97,11 +97,6 @@ struct AABB
 
         for (int i = 0; i < 3; i++)
         {
-            // Edge case, unsure if needed
-            if ((ray.direction[i] < F_EPSILON)
-                && (ray.origin[i] < min[i] || ray.origin[i] > max[i]))
-                return false;
-
             if (std::abs(ray.direction[i]) < F_EPSILON)
             {
                 if (ray.origin[i] < min[i] || ray.origin[i] > max[i])

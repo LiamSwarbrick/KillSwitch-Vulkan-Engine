@@ -11,7 +11,7 @@
 struct Ray
 {
 	glm::vec3 origin;
-	glm::vec3 direction;
+	glm::vec3 direction; // Direction vector in space, not orientation
 
 	// Important addition to have a maxDistance attribute
 	float maxDistance = std::numeric_limits<float>::max();

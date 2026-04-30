@@ -27,7 +27,7 @@ void Scene::StartUp()
     m_prefabs.clear();
 
     m_physicsManager.startUp();
-    
+    SetBodyCollisionLayers();
 }
 
 void Scene::Shutdown()
@@ -304,6 +304,19 @@ void Scene::BuildRendererScene()
 void Scene::Update(float dt)
 {
     m_physicsManager.update(m_ecs, dt);
+
+    Ray ray = { glm::vec3(0.0f, 0.5f, 2.0f), glm::normalize(glm::vec3(0.0f, 0.0f, -1.0f)), 10.0f};
+    QueryFilterExternal filter;
+    filter.hasLayerOfQuery = true;
+    filter.layerOfQuery = (uint8_t) BodyLayer::WEAPON;
+    auto hits = m_physicsManager.raycastAll(ray, filter);
+    for (EntityRaycastHit hit : hits)
+    {
+        std::cout << "[Raycast Hit] Entity: [" << hit.entity << " | " << m_ecs.GetEntityTag(hit.entity) << "] at t : " << hit.t
+            << ", point: [" << hit.point.x << "," << hit.point.y << "," << hit.point.z << "]"
+            << ", normal: [" << hit.normal.x << "," << hit.normal.y << "," << hit.normal.z << "]"
+            << std::endl;
+    }
     Animation_Update(&m_ecs, dt);
 }
 

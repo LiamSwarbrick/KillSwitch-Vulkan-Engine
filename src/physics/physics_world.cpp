@@ -11,7 +11,7 @@
 
 PhysicsWorld::PhysicsWorld(uint8_t numBodyLayers, uint32_t expectedBodies)
 {
-	bodyLayerFilter = BodyLayerFilter(numBodyLayers);
+	bodyLayerFilter.StartUp(numBodyLayers);
 	broadPhase = BroadPhase(&bodyLayerFilter);
 
 	bodies.Reserve(expectedBodies);
@@ -223,6 +223,7 @@ RigidBodyHandle PhysicsWorld::addBody(const RigidBodyDesc& desc)
 	body.gravityScale = desc.gravityScale;
 	body.damping = desc.damping;
 	body.forceLayers = desc.forceLayers;
+	body.bodyLayer = desc.bodyLayer;
 
 	body.shapeHandle = desc.shape;
 
@@ -520,7 +521,10 @@ std::vector<RaycastHit> PhysicsWorld::raycastAll(const Ray& ray, const QueryFilt
 		// We might either skip narrowphase casting, orrr send the raycast information, or just double check using narrowphase
 		RaycastHit hit = narrowPhase.raycast(ray, *broadHit.body, *this);
 		if (hit.isValid())
+		{
+			hit.body = broadHit.body;
 			narrowHits.push_back(hit);
+		}
 	}
 
 	return narrowHits;
@@ -698,9 +702,8 @@ QueryFilterInternal PhysicsWorld::getQueryFilterInternalFromQueryFilter(const Qu
 {
 	QueryFilterInternal res;
 
-	if (queryFilter.bodyToIgnore == InvalidRigidBodyHandle) return {};
-
-	res.bodyToIgnore = getBody(queryFilter.bodyToIgnore);
+	if (queryFilter.bodyToIgnore != InvalidRigidBodyHandle)
+		res.bodyToIgnore = getBody(queryFilter.bodyToIgnore);
 	res.hasLayerOfQuery = queryFilter.hasLayerOfQuery;
 	res.layerOfQuery = queryFilter.layerOfQuery;
 

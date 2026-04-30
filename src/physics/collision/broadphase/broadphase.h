@@ -29,7 +29,19 @@ public:
 	~BroadPhase() = default;
 
 	BroadPhase(const BroadPhase&) = delete;
-	//BroadPhase& operator=(const BroadPhase&) = delete;
+	BroadPhase& operator=(const BroadPhase&) = delete;
+
+	BroadPhase& operator=(BroadPhase&& other) noexcept
+	{
+		bodies.clear();
+		bodies = other.bodies;
+		bodyLayerFilter = other.bodyLayerFilter;
+
+		other.bodies.clear();
+		other.bodyLayerFilter = nullptr;
+
+		return *this;
+	}
 
 
 	// ----------------
@@ -43,8 +55,8 @@ public:
 	// ----------------
 	void queryPairs(std::vector<BodyPair>& outPairs) const;
 
-	void queryAABB(const AABB& aabb, const QueryFilterInternal& filter, std::vector<RigidBody*> outBodies) const;
-	void queryRay(const Ray& ray, const QueryFilterInternal& filter, std::vector<RaycastHit> outBodies) const;
+	void queryAABB(const AABB& aabb, const QueryFilterInternal& filter, std::vector<RigidBody*>& outBodies) const;
+	void queryRay(const Ray& ray, const QueryFilterInternal& filter, std::vector<RaycastHit>& outBodies) const;
 
 };
 
