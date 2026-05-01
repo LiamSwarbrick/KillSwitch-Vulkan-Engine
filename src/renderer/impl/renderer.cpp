@@ -556,13 +556,10 @@ void Renderer_Init(const Renderer_InitInfo* info)
 
         .num_point_lights = 0,
         .num_spot_lights = 0,
-        .point_lights = (PointLight*)L_calloc(MAX_POINTLIGHTS, sizeof(PointLight), &renderstate.main.tt),
-        .spot_lights  =  (SpotLight*)L_calloc(MAX_SPOTLIGHTS, sizeof(SpotLight), &renderstate.main.tt)
+        .point_lights =   (PointLight*)L_calloc(MAX_POINTLIGHTS, sizeof(PointLight), &renderstate.main.tt),
+        .spot_lights  =    (SpotLight*)L_calloc(MAX_SPOTLIGHTS, sizeof(SpotLight), &renderstate.main.tt),
+        .is_spotlight_shadowed = (b32*)L_calloc(MAX_SPOTLIGHTS, sizeof(b32), &renderstate.main.tt),
     };
-
-    // Shadowing cache
-    renderstate.num_shadowed_spotlights = 0;
-    memset(&renderstate.currently_shadowed_spotlight_indices, UINT32_MAX, sizeof(renderstate.currently_shadowed_spotlight_indices));
 
     // Init per frame structures (except for swapchain_image_acquired_semaphore, which is handled by create_or_recreate_swapchain)
     {
@@ -677,6 +674,7 @@ void Renderer_Shutdown()
     L_free(renderstate.renderables_arena.items, &renderstate.main.tt);
     L_free(renderstate.renderables_arena.point_lights, &renderstate.main.tt);
     L_free(renderstate.renderables_arena.spot_lights, &renderstate.main.tt);
+    L_free(renderstate.renderables_arena.is_spotlight_shadowed, &renderstate.main.tt);
     DestroyDrawCallCollections();
 
     // Shutdown Pipeline Keying and Frame Graph subsystems
@@ -845,8 +843,10 @@ void Renderer_PushRenderable(Renderable renderable)
     renderstate.renderables_arena.items[renderstate.renderables_arena.num_renderables++] = renderable;
 }
 
-void Renderer_PushLight(C_Light light, glm::vec3 position, glm::vec3 direction)
+void Renderer_PushLight(C_Light light, glm::vec3 position, glm::vec3 direction, b32 is_shadowed)
 {
+    SDL_assert(is_shadowed == (light.type == LIGHT_COMPONENT_SPOTLIGHT) && "Only shadowing spot lights for now");
+
     glm::vec4 pos_and_radius = glm::vec4(position.x, position.y, position.z, light.radius);
     glm::vec4 color_and_intensity = glm::vec4(light.color.x, light.color.y, light.color.z, light.intensity);
 
@@ -875,7 +875,9 @@ void Renderer_PushLight(C_Light light, glm::vec3 position, glm::vec3 direction)
             sl.inner_cone_angle = light.spot_inner_cone_angle;
             sl.outer_cone_angle = light.spot_outer_cone_angle;
 
-            renderstate.renderables_arena.spot_lights[renderstate.renderables_arena.num_spot_lights++] = sl;
+            renderstate.renderables_arena.spot_lights[renderstate.renderables_arena.num_spot_lights] = sl;
+            renderstate.renderables_arena.is_spotlight_shadowed[renderstate.renderables_arena.num_spot_lights] = is_shadowed;
+            ++renderstate.renderables_arena.num_spot_lights;
         }
         break;
         
@@ -972,10 +974,6 @@ void Renderer_DrawFrame(CameraInfo main_camera)
     EndDrawCalls();
 
     
-    // Reset renderables arena head for next frame
-    renderstate.renderables_arena.num_renderables = 0;
-    renderstate.renderables_arena.num_point_lights = 0;
-    renderstate.renderables_arena.num_spot_lights = 0;
 
     // Set main camera
     renderstate.main_camera = main_camera;
@@ -1001,13 +999,84 @@ void Renderer_DrawFrame(CameraInfo main_camera)
 
     b32 use_msaa = renderstate.multisampling_count_flag > VK_SAMPLE_COUNT_1_BIT;
 
+    // TODO: Once topological sorting and multiqueue stuff is in, shadowmaps can be in parallel with the depth prepass (multiqueue shit).
+
+
     // Shadowmap pass
-    
-    // TODO (once topological sorting and multiqueue stuff is in, this can be in parallel with the depth prepass)
+    // NOTE: The shadowmaps should be cached and only recomputed on change.
+    //       But for now, we will just render MAX_SHADOWMAPS each frame, to saturate the available shadowmaps with the closest spotlights.
+    //       This should realistically do the closest ones, but for now, just do it in the order they appear in renderables_arena.is_spotlight_shadowed array
+    renderstate.num_shadowed_spotlights = 0;
+    memset(renderstate.shadowed_spotlight_indices, 0, sizeof(renderstate.shadowed_spotlight_indices));
+    for (uint32_t i = 0; i < renderstate.renderables_arena.num_spot_lights; ++i)
+    {
+        if (renderstate.renderables_arena.is_spotlight_shadowed[i])
+        {
+            renderstate.shadowed_spotlight_indices[renderstate.num_shadowed_spotlights++] = i;
+        }
+
+        if (renderstate.num_shadowed_spotlights == MAX_SHADOWMAPS)
+        {
+            break;
+        }
+    }
+
+    DepthPass_UserData shadowmap_user_datas[MAX_SHADOWMAPS] = {};  // Must be declared up here to not go out of scope
+    uint32_t shadowmap_pass_ids[MAX_SHADOWMAPS] = {};
+    memset(shadowmap_pass_ids, UINT32_MAX, sizeof(shadowmap_pass_ids));
+
+    for (uint32_t shadowmap_i = 0; shadowmap_i < renderstate.num_shadowed_spotlights; ++shadowmap_i)
+    {
+        uint32_t shadowmap_rid = renderstate.rids.shadow_map_rids[shadowmap_i];
+        FG_Resource* shadowmap_res = &renderstate.registry.resources[shadowmap_rid];
+        
+        SpotLight spotlight = renderstate.renderables_arena.spot_lights[renderstate.shadowed_spotlight_indices[shadowmap_i]];
+        shadowmap_user_datas[shadowmap_i].scene_data = MakeSpotLightSceneData(
+            spotlight,
+            (VkExtent2D){ shadowmap_res->image.extent.width, shadowmap_res->image.extent.height }
+        );
+        shadowmap_user_datas[shadowmap_i].msaa_flag = PK_MultisamplingFlag(VK_SAMPLE_COUNT_1_BIT);
+
+        RenderPassDesc shadowmap_desc = {
+            .debug_name = {},  // Set below with snprintf
+
+            .input_count = {},
+            .output_count = 1,
+            .outputs = {
+                {
+                    .rid = shadowmap_rid,
+                    .usage_flags = FG_USAGE_DEPTH,
+
+                    .resolve_rid  = UINT32_MAX,
+                    .resolve_mode = VK_RESOLVE_MODE_NONE,
+
+                    .layout = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL,
+                    .access = VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
+                    .stage  = VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT,
+                    .queue_family_index = renderstate.queue_family_indices.graphics_family,
+
+                    .load_op = VK_ATTACHMENT_LOAD_OP_CLEAR,
+                    .store_op = VK_ATTACHMENT_STORE_OP_STORE,
+                    .clear_value = { .depthStencil = { 1.0f, 0 } }
+                }
+            },
+
+            .is_compute = 0,
+            .render_area = { .offset = { 0, 0 }, .extent = { shadowmap_res->image.extent.width, shadowmap_res->image.extent.height } },
+            
+            .execute_callback = DepthMapPass_Execute,
+            .user_data = &shadowmap_user_datas[shadowmap_i]
+        };
+        snprintf(shadowmap_desc.debug_name, sizeof(shadowmap_desc.debug_name), "Shadow Map Pass %d", shadowmap_i);
+        shadowmap_pass_ids[shadowmap_i] = FG_AddPass(shadowmap_desc);
+    }
 
     // Depth prepass
     FG_Resource* depth_buffer_res = &renderstate.registry.resources[renderstate.rids.depth_buffer_rid];
-    SceneData depth_prepass_scene_data = MakeSceneData(renderstate.main_camera, (VkExtent2D){ depth_buffer_res->image.extent.width, depth_buffer_res->image.extent.height });
+    DepthPass_UserData depth_prepass_user_data = {
+        MakeSceneData(renderstate.main_camera, (VkExtent2D){ depth_buffer_res->image.extent.width, depth_buffer_res->image.extent.height }),
+        PK_MultisamplingFlag(renderstate.multisampling_count_flag)
+    };
     RenderPassDesc depth_prepass_desc = {
         .debug_name = "Depth Prepass",
 
@@ -1037,7 +1106,7 @@ void Renderer_DrawFrame(CameraInfo main_camera)
         .render_area = { .offset = { 0, 0 }, .extent = { depth_buffer_res->image.extent.width, depth_buffer_res->image.extent.height } },
         
         .execute_callback = DepthMapPass_Execute,
-        .user_data = &depth_prepass_scene_data
+        .user_data = &depth_prepass_user_data
     };
     uint32_t depth_prepass = FG_AddPass(depth_prepass_desc);
 
@@ -1204,7 +1273,6 @@ void Renderer_DrawFrame(CameraInfo main_camera)
 
 
 
-
     /*
         Build and Render ImGUI Frame
         - Doing this after the framegraph is built so we can visualize the framegraph too!
@@ -1257,6 +1325,11 @@ void Renderer_DrawFrame(CameraInfo main_camera)
     // End of graphics commands recording
 
     
+
+    // Reset renderables arena head for next frame
+    renderstate.renderables_arena.num_renderables = 0;
+    renderstate.renderables_arena.num_point_lights = 0;
+    renderstate.renderables_arena.num_spot_lights = 0;
 
 
 

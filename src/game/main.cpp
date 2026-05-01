@@ -223,7 +223,24 @@ int main(int argc, char *argv[])
         uint64_t current_time = SDL_GetTicksNS();
         float dt = (float)(current_time - last_time) / 1000000000.0f;
         last_time = current_time;
-        if (dt > 0.1f) dt = 0.1f;   
+        if (dt > 0.1f) dt = 0.1f;
+
+        static double frame_time_accumulation = 0.0;
+        static int num_frames_accumulated = 0;
+        frame_time_accumulation += (double)dt;
+        ++num_frames_accumulated;
+        if (num_frames_accumulated >= 30)
+        {
+            double fps = (double)num_frames_accumulated / frame_time_accumulation;
+            
+            // Append average FPS to window title
+            char new_window_title[256] = {};
+            snprintf(new_window_title, sizeof(new_window_title), "%s | FPS=%f", title, fps);
+            SDL_SetWindowTitle(window, new_window_title);
+
+            frame_time_accumulation = 0.0;
+            num_frames_accumulated = 0;
+        }
 
         // Event Loop
         SDL_Event event;

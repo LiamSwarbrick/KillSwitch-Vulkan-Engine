@@ -84,14 +84,14 @@ typedef struct RenderState
     RenderView renderables_arena;  // Renderables array which gets sorted into draw calls by which shaders they use
     DrawCallsPerShader drawcalls_collection;  // Draw Calls are accumulated each frame per shader
 
-    // Before shadowing a spotlight, we check if it's already been shadowed
-    // Done by hashing the spotlight data relevant to the shadowing
-    // NOTE: When doing the shadow map, we can use the radius to set the far plane optimally
-    // FUTURE: Render shadow map into a texture atlas so multiple go in one.
-    //         That allows dynamically sized shadows (e.g. small spotlights don't take up a whole texture)
-    //         since all shadow map textures should be preallocated each frame.
+    // // Before shadowing a spotlight, we check if it's already been shadowed
+    // // Done by hashing the spotlight data relevant to the shadowing
+    // // NOTE: When doing the shadow map, we can use the radius to set the far plane optimally
+    // // FUTURE: Render shadow map into a texture atlas so multiple go in one.
+    // //         That allows dynamically sized shadows (e.g. small spotlights don't take up a whole texture)
+    // //         since all shadow map textures should be preallocated each frame.
     uint32_t num_shadowed_spotlights;
-    uint32_t currently_shadowed_spotlight_indices[MAX_SHADOWMAPS];
+    uint32_t shadowed_spotlight_indices[MAX_SHADOWMAPS];
 
     CameraInfo main_camera;
 

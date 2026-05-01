@@ -373,6 +373,21 @@ void create_window_dependent_resources()
         VK_IMAGE_ASPECT_COLOR_BIT,
         0, 0
     );
+
+    // Shadow maps
+    const uint32_t shadow_map_width  = 512;  // NOTE: Our program should run on super low end hardware
+    const uint32_t shadow_map_height = 512;  //       So keeping shadow maps small for now.
+    for (uint32_t i = 0; i < MAX_SHADOWMAPS; ++i)
+    {
+        char res_name[64] = {};
+        snprintf(res_name, sizeof(res_name), "Shadow Map %i", i);
+        renderstate.rids.shadow_map_rids[i] = create_rendertarget2d_resource(
+            res_name, flags, shadow_map_width, shadow_map_height,
+            VK_FORMAT_D32_SFLOAT,
+            VK_IMAGE_ASPECT_DEPTH_BIT,
+            0, 0
+        );
+    }
 }
 
 void create_scene_resources()

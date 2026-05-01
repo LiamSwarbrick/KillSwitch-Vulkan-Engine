@@ -18,11 +18,12 @@ SceneData MakeSpotLightSceneData(SpotLight spotlight, VkExtent2D extent)
 
     glm::mat4 light_view = glm::lookAtRH(pos, pos + dir, glm::vec3(0.0f, 1.0f, 0.0f));
     float aspect = 1.0f;  // Square shadow map
-    float z_near = 0.1f;
-    float z_far = spotlight.pos_and_radius[3];  // Setting radius to be the far plane (do i need some padding?)
-    glm::mat4 light_proj = glm::perspectiveRH_ZO(spotlight.outer_cone_angle, aspect, z_near, z_far);
+    float near_plane = 0.1f;
+    float far_plane = spotlight.pos_and_radius[3];  // Setting radius to be the far plane (do i need some padding?)
+    glm::mat4 light_proj = glm::perspectiveRH_ZO(spotlight.outer_cone_angle, aspect, near_plane, far_plane);
     light_proj[1][1] *= -1;  // Vulkan Flips Y
     glm::mat4 light_view_proj = light_proj * light_view;
+    glm::uvec2 extent_uvec2 = glm::uvec2(extent.width, extent.height);
 
 
     SceneData data = {};
@@ -32,11 +33,10 @@ SceneData MakeSpotLightSceneData(SpotLight spotlight, VkExtent2D extent)
 
     memcpy(data.cam_position, glm::value_ptr(pos), sizeof(glm::vec3));
     data.time = (float)((double)SDL_GetTicks() / 1000.0);
-#error Finis hthis and add renderpass
     data.near_plane = near_plane;
     data.far_plane = far_plane;
     data.aspect = aspect;
-    data.lens_distortion = cam.lens_distortion;
+    data.lens_distortion = 0.0f;  // Doesn't do anything in shadowmaps btw
 
     memcpy(data.rendertarget_size, glm::value_ptr(extent_uvec2), sizeof(glm::uvec2));
 

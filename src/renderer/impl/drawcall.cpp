@@ -90,7 +90,6 @@ void AddDrawCall(Renderable* r)
 
     // Submit draw with depth prepasss
     {
-        // TODO: Should I ALWAYS be depth prepassing? It may break under some materials that displace vertices in the vertex shader
         uint32_t shader_id = SHADER_DEPTH;
         uint32_t* shader_drawcall_count = &renderstate.drawcalls_collection.array[shader_id].drawcall_count;
 
@@ -98,7 +97,7 @@ void AddDrawCall(Renderable* r)
             *shader_drawcall_count + 1 < MAX_DRAWCALLS_PER_SHADER &&
             "If this is exceeded, either increase MAX_DRAWCALLS_PER_SHADER to a ludicrous value, or use a dynamic array."
         );
-
+        
         renderstate.drawcalls_collection.array[shader_id].drawcalls[
             (*shader_drawcall_count)++
         ] = drawcall;

@@ -55,7 +55,7 @@ typedef struct CameraInfo
 CameraInfo;
 
 void Renderer_PushRenderable(Renderable renderable);
-void Renderer_PushLight(C_Light light, glm::vec3 position, glm::vec3 direction);
+void Renderer_PushLight(C_Light light, glm::vec3 position, glm::vec3 direction, b32 is_shadowed);
 
 void Renderer_DrawFrame(CameraInfo main_camera);
 

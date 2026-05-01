@@ -6,12 +6,12 @@
 void DepthMapPass_Execute(VkCommandBuffer cmd, uint32_t pass_idx)
 {
     RenderPassDesc* desc = &renderstate.framegraph.passes[pass_idx];
+    DepthPass_UserData* user_data = (DepthPass_UserData*)desc->user_data;
 
     uint64_t scene_ptr = 0;
     {
         // Scene data stored in userdata field of depth pass
-        SceneData* scene_data = (SceneData*)desc->user_data;
-        scene_ptr = PushToMappedArena(&renderstate.scenes_arena, scene_data, sizeof(SceneData));
+        scene_ptr = PushToMappedArena(&renderstate.scenes_arena, &user_data->scene_data, sizeof(SceneData));
     }
     
     PushConstant_PassHeader push_pass = {};  // No inputs, so doesn't care use push constant's upper bytes
@@ -29,7 +29,7 @@ void DepthMapPass_Execute(VkCommandBuffer cmd, uint32_t pass_idx)
             MaterialData* mat = &((MaterialData*)renderstate.registry.resources[renderstate.rids.materials_buffer_rid].buffer.mapped_data)[prim->material_index];
 
             // Skip alpha blend or masked geometry (masked skipped because of Alpha2Coverage)
-            if (mat->blend_mode != BLEND_MODE_BLEND)
+            if (mat->blend_mode == BLEND_MODE_BLEND)
                 continue;
 
             PipelineKey key = {
@@ -45,7 +45,7 @@ void DepthMapPass_Execute(VkCommandBuffer cmd, uint32_t pass_idx)
                 .blend_mode     = mat->blend_mode,
                 .polygon_mode   = VK_POLYGON_MODE_FILL,
                 .front_face     = VK_FRONT_FACE_COUNTER_CLOCKWISE,
-                .msaa_samples   = (uint64_t)PK_MultisamplingFlag(renderstate.multisampling_count_flag)
+                .msaa_samples   = (uint64_t)user_data->msaa_flag
             };
 
             // TODO: Use sort key
@@ -57,7 +57,7 @@ void DepthMapPass_Execute(VkCommandBuffer cmd, uint32_t pass_idx)
     ExecuteDraws(cmd, push_pass, scene_ptr);
 }
 
-
+#if 0  // TODO: DELETE
 #warning TODO: Swap prepass to just set userdata of depthmap_execute
 void DepthPrepass_Execute(VkCommandBuffer cmd, uint32_t pass_idx)
 {
@@ -112,3 +112,4 @@ void DepthPrepass_Execute(VkCommandBuffer cmd, uint32_t pass_idx)
     SortDraws(DrawPrimSortFunc_Default);
     ExecuteDraws(cmd, push_pass, scene_ptr);
 }
+#endif

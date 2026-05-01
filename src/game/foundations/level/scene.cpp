@@ -319,7 +319,8 @@ void Scene::Render()
         glm::vec3 position = glm::vec3(transform.matrix[3]);
         glm::quat rotation = glm::quat_cast(transform.matrix);
         glm::vec3 direction = rotation * glm::vec3(0.0f, 0.0f, -1.0f);
-        Renderer_PushLight(light, position, direction);
+        b32 is_shadowed = light.type == LIGHT_COMPONENT_SPOTLIGHT;
+        Renderer_PushLight(light, position, direction, is_shadowed);
     });
 
     m_ecs.GetView<C_Transform, C_StaticMesh>().ForEach([&](C_Transform& transform, C_StaticMesh& mesh)

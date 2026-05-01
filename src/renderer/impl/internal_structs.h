@@ -79,6 +79,7 @@ typedef struct RenderView
     uint32_t num_spot_lights;
     PointLight* point_lights;
     SpotLight* spot_lights;
+    b32* is_spotlight_shadowed;
 }
 RenderView;
 

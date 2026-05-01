@@ -39,7 +39,7 @@ void ForwardOpaque_Execute(VkCommandBuffer cmd, uint32_t pass_idx)
                     .pass_idx       = pass_idx,
                     .vertex_type    = (uint64_t)drawcall.renderable->mesh_prefab.vertex_type,
                     .depth_test     = 1,
-                    .depth_write    = 1,  // Still depth writing because of geometry not included in prepass
+                    .depth_write    = 0,  // NOTE: Relying on depth prepass
                     .depth_op       = VK_COMPARE_OP_LESS_OR_EQUAL,  // <- Equal prolly good bcuz of invariant gl_Position in shaders
                     .stencil_mode   = 0,
                     .cull_mode      = VK_CULL_MODE_BACK_BIT,
