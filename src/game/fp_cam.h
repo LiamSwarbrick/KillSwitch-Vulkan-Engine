@@ -3,6 +3,7 @@
 #include "renderer/debug_ui_api.h"
 #include "renderer/renderer.h"
 #include "core/components.h"
+#include "foundations/components.h"
 #include "core/ecs.h"
 #include "core/input.h"
 #include "core/input_actions.h"
@@ -44,7 +45,7 @@ namespace Game
         if (!ecs) return NULL_ENTITY;
 
         EntityID found = NULL_ENTITY;
-        ecs->GetView<C_Transform, C_AnimatedMesh>().ForEach([&](EntityID id, C_Transform&, C_AnimatedMesh&)
+        ecs->GetView<C_PlayerInput>().ForEach([&](EntityID id, C_PlayerInput&)
         {
             if (found == NULL_ENTITY)
                 found = id;
