@@ -60,6 +60,20 @@ void Renderer_PushLight(C_Light light, glm::vec3 position, glm::vec3 direction);
 void Renderer_DrawFrame(CameraInfo main_camera);
 
 
+// UI TEXTURE for game-side ImGui
+
+typedef struct Renderer_UITexture
+{
+    u64         imgui_texture_id;  // Cast to ImTextureID at call site
+    uint32_t    width;
+    uint32_t    height;
+}
+Renderer_UITexture;
+
+// Loads an image and register it with ImGui Vulkan backend.
+bool Renderer_LoadUITexture(const char* filepath, bool nearest_sampling, Renderer_UITexture* out_texture);
+
+
 // SCENE API (On scene change resources for GPU)
 
 typedef struct Scene_InitInfo
