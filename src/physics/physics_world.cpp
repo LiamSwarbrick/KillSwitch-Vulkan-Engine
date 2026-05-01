@@ -6,8 +6,9 @@
 #include "shapes/plane.h"
 
 #include "SDL3/SDL.h"
+
+#include <memory>
 #include <vector>
-#include "physics_manager.h"
 
 PhysicsWorld::PhysicsWorld(uint8_t numBodyLayers, uint32_t expectedBodies)
 {
@@ -16,6 +17,7 @@ PhysicsWorld::PhysicsWorld(uint8_t numBodyLayers, uint32_t expectedBodies)
 
 	bodies.Reserve(expectedBodies);
 	shapes.Reserve(expectedBodies);
+	characters.Reserve(300);
 	planes.Reserve(100);
 	
 	contacts.reserve(expectedBodies * 2);
@@ -185,6 +187,51 @@ void PhysicsWorld::disableLayerPair(uint8_t a, uint8_t b)
 }
 
 
+PhysicsCharacter::GroundState PhysicsWorld::getCharacterGroundState(RigidBodyHandle r)
+{
+	PhysicsCharacter* c = getCharacter(r);
+
+	if (c == nullptr) return PhysicsCharacter::GroundState::Undefined;
+
+	return c->groundState;
+}
+
+float PhysicsWorld::getCharacterMaxWalkableAngle(RigidBodyHandle r)
+{
+	PhysicsCharacter* c = getCharacter(r);
+
+	if (c == nullptr) return -1.0f;
+
+	return c->maxWalkableAngle;
+}
+
+void PhysicsWorld::setCharacterMaxWalkableAngle(RigidBodyHandle r, float maxWalkableAngle)
+{
+	PhysicsCharacter* c = getCharacter(r);
+
+	if (c == nullptr) return;
+
+	c->maxWalkableAngle = maxWalkableAngle;
+}
+
+float PhysicsWorld::getCharacterStepHeight(RigidBodyHandle r)
+{
+	PhysicsCharacter* c = getCharacter(r);
+
+	if (c == nullptr) return -1.0f;
+
+	return c->stepHeight;
+}
+
+void PhysicsWorld::setCharacterStepHeight(RigidBodyHandle r, float stepHeight)
+{
+	PhysicsCharacter* c = getCharacter(r);
+
+	if (c == nullptr) return;
+
+	c->stepHeight = stepHeight;
+}
+
 RigidBodyHandle PhysicsWorld::addBody(const RigidBodyDesc& desc)
 {
 	SDL_assert(desc.shape.isValid() && "RigidBodyDesc must have a valid ShapeHandle");
@@ -245,11 +292,18 @@ RigidBodyHandle PhysicsWorld::addBody(const RigidBodyDesc& desc)
 
 	bodies.Set(index, std::move(body));
 
+	RigidBody* bodyPtr = bodies.GetPtr(index);
+
 	// TODO: reminder to insert and remove into broadphase
 	broadPhase.insert(bodies.GetPtr(index));
 
+	// Extra: create character if body.isCharacter
+	if (bodyPtr->isCharacter)
+	{
+		addCharacter(bodyPtr);
+	}
 
-	return RigidBodyHandle{ index };
+	return { index };
 }
 
 void PhysicsWorld::removeBody(RigidBodyHandle handle)
@@ -274,6 +328,12 @@ void PhysicsWorld::removeBody(RigidBodyHandle handle)
 
 	// release shape ref before deleting
 	releaseShape(body->shapeHandle);
+
+	// Before deleting the body, delete the character info if it is a character
+	if (body->isCharacter)
+	{
+		removeCharacter(handle);
+	}
 
 	// SparseSet.Delete() has internal check of a handle.
 	bodies.Delete(handle.index);
@@ -311,6 +371,91 @@ void PhysicsWorld::setBodyShape(RigidBodyHandle bodyHandle, ShapeHandle shapeHan
 	broadPhase.remove(body);
 	calculateAABB(body);
 	broadPhase.insert(body);
+}
+
+PhysicsCharacter* PhysicsWorld::getCharacter(RigidBodyHandle r)
+{
+	CharacterHandle cHandle = getCharacterHandle(r);
+
+	if (!cHandle.isValid()) return nullptr;
+
+	return characters.GetPtr(cHandle);
+}
+
+inline CharacterHandle PhysicsWorld::getCharacterHandle(RigidBodyHandle r)
+{
+	if (!r.isValid()) return InvalidCharacterHandle;
+
+	auto it = bodyToCharacter.find(r);
+
+	if (it == bodyToCharacter.end())
+	{
+		SDL_assert(false && "Invalid RigidBodyHandle to CharacterHandle");
+		return InvalidCharacterHandle;
+	}
+
+	return it->second;
+}
+
+// We could call addCharacter using the handle, but im tired of using Get
+// This is a private method anyway, and we can use body.bodyID for the handle index
+void PhysicsWorld::addCharacter(RigidBody* body)
+{
+	if (body == nullptr) return;
+
+	PhysicsCharacter defaultCharacter;
+	defaultCharacter.body = body;
+
+	// Check the index
+	uint32_t index;
+	if (freeCharacterIndices.size() == 0)
+	{
+		if (characters.Size() == UINT32_MAX)
+		{
+			SDL_assert(false && "RigidBody count has reached its limit, can't insert more");
+		}
+
+		index = characters.Size();
+	}
+	else
+	{
+		index = freeCharacterIndices.back();
+		freeCharacterIndices.pop_back();
+	}
+
+	CharacterHandle cHandle = { index };
+
+	characters.Set(index, std::move(defaultCharacter));
+	bodyToCharacter.insert({ body->bodyID, cHandle });
+}
+
+void PhysicsWorld::removeCharacter(RigidBodyHandle r)
+{
+	if (!r.isValid()) return;
+
+	CharacterHandle cHandle = getCharacterHandle(r);
+
+	if (!cHandle.isValid()) return;
+
+	characters.Delete(r.index);
+	freeCharacterIndices.push_back(r.index);
+	bodyToCharacter.erase(r);
+}
+
+// NOTE: to change the default character info please go into physics/core/types.h and change PhysicsCharacter's default values instead!!!!!!!!
+void PhysicsWorld::setCharacterInfo(RigidBodyHandle r, const PhysicsCharacterInfo& info)
+{
+	PhysicsCharacter* c = getCharacter(r);
+
+	// Comparing info. values to the default values, and setting them if they are not default ones
+	if (info.groundState != PhysicsCharacter::GroundState::Undefined)
+		c->groundState = info.groundState;
+	if (info.groundNormal != glm::vec3(0.0f))
+		c->groundNormal = info.groundNormal;
+	if (info.maxWalkableAngle >= 0.0f)
+		c->maxWalkableAngle = info.maxWalkableAngle;
+	if (info.stepHeight >= 0.0f)
+		c->stepHeight = info.stepHeight;
 }
 
 ShapeHandle PhysicsWorld::createShape(const ShapeDesc& desc)
@@ -699,7 +844,7 @@ void PhysicsWorld::dispatchEvents()
 		RigidBodyHandle handleA = { c.bodyA->bodyID };
 		RigidBodyHandle handleB;
 		if (c.bodyB != nullptr)
-			handleB = RigidBodyHandle(c.bodyB->bodyID);
+			handleB = { c.bodyB->bodyID };
 
 		if (trigger)
 		{

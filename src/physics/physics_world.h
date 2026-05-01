@@ -26,9 +26,11 @@
 #include "glm/glm.hpp"
 #include "glm/gtc/quaternion.hpp"
 
+#include <vector>
 #include <set>
 #include <span>
 #include <memory>
+#include <unordered_map>
 
 
 class PhysicsWorld
@@ -61,7 +63,7 @@ public:
 
 
 	// ------------------------------
-	// GETTERS & SETTERS
+	// GETTERS & SETTERS FOR BODIES AND CHARACTER
 	// ------------------------------
 	glm::vec3 getVelocity(RigidBodyHandle r);
 	float getGravityScale(RigidBodyHandle r);
@@ -82,6 +84,14 @@ public:
 	void enableLayerPair(uint8_t a, uint8_t b);
 	void disableLayerPair(uint8_t a, uint8_t b);
 
+	// Characters
+	PhysicsCharacter::GroundState getCharacterGroundState(RigidBodyHandle r);
+	// No point in setting the ground state manually really, its just an indicator, it does not have a purpose inside the solver
+	
+	float getCharacterMaxWalkableAngle(RigidBodyHandle r);
+	void setCharacterMaxWalkableAngle(RigidBodyHandle r, float maxWalkableAngle);
+	float getCharacterStepHeight(RigidBodyHandle r);
+	void setCharacterStepHeight(RigidBodyHandle r, float stepHeight);
 
 	// ------------------------------
 	// BODY MANAGEMENT
@@ -93,6 +103,14 @@ public:
 	const RigidBody* getBody(RigidBodyHandle handle) const;
 	void setBodyShape(RigidBodyHandle handle, ShapeHandle shape);
 
+	PhysicsCharacter* getCharacter(RigidBodyHandle r);
+private:
+	inline CharacterHandle getCharacterHandle(RigidBodyHandle r);
+	void addCharacter(RigidBody* body);
+	void removeCharacter(RigidBodyHandle r);
+
+public:
+	void setCharacterInfo(RigidBodyHandle r, const PhysicsCharacterInfo& info);
 
 	// ------------------------------
 	// SHAPE MANAGEMENT
@@ -199,6 +217,11 @@ private:
 	SparseSet<RigidBody> bodies;
 	std::vector<uint32_t> freeBodyIndices;
 
+	SparseSet<PhysicsCharacter> characters;
+	std::vector<uint32_t> freeCharacterIndices;
+
+	std::unordered_map<uint32_t, CharacterHandle> bodyToCharacter;
+
 	// i will use a sparseset of pointers... for polymorphism, even thought we could have a better data structure
 	// a pool would suffice, because we do not worry about cache friendliness when it comes to shapes
 	// we're not going to iterate over shapes, they are going to be accesed from rigidbodies
@@ -212,7 +235,7 @@ private:
 	void retainShape(ShapeHandle handle);
 	void releaseShape(ShapeHandle handle);
 	void clearShapeRefs(); // Have to free the memory using delete manually
-		
+
 	SparseSet<ShapeRef> shapes;
 	std::vector<uint32_t> freeShapeIndices;
 

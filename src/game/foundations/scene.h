@@ -19,6 +19,8 @@ private:
     EntityID m_currentPlayer = NULL_ENTITY;
 
     std::vector<Asset*> m_prefabs;
+    Subscription<CollisionEnterAndStayArgs> m_onCollisionEnterSubscription;
+    Subscription<CollisionEnterAndStayArgs> m_onCollisionStaySubscription;
 
     Hierarchy<u32> m_hierarchy;
 

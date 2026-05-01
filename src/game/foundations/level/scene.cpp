@@ -36,10 +36,25 @@ void Scene::StartUp()
 
     m_physicsManager.startUp();
     SetBodyCollisionLayers();
+
+    auto printCollision = [](CollisionEnterAndStayArgs args)
+    {
+            std::cout << "Collision: [" << args.a << "-" << args.b
+                << "], Point: [" << args.contact.point.x << ", " << args.contact.point.y << ", " << args.contact.point.z
+                << "]  Normal: [" << args.contact.normal.x << ", " << args.contact.normal.y << ", " << args.contact.normal.z << "]"
+                << std::endl;
+    };
+
+    // Both ways of subscribing
+    m_onCollisionEnterSubscription = m_physicsManager.onCollisionEnter += printCollision; 
+    m_onCollisionStaySubscription = m_physicsManager.onCollisionStay.Subscribe(printCollision);
 }
 
 void Scene::Shutdown()
 {
+    // Unsubscribe before shutting down
+    m_onCollisionEnterSubscription.Unsubscribe();
+    m_onCollisionStaySubscription.Unsubscribe();
     m_physicsManager.shutDown();
 
     for (Asset* asset : m_prefabs)
@@ -327,13 +342,13 @@ void Scene::Update(float dt)
     filter.hasLayerOfQuery = true;
     filter.layerOfQuery = (uint8_t) BodyLayer::WEAPON;
     auto hits = m_physicsManager.raycastAll(ray, filter);
-    for (EntityRaycastHit hit : hits)
+    /*for (EntityRaycastHit hit : hits)
     {
         std::cout << "[Raycast Hit] Entity: [" << hit.entity << " | " << m_ecs.GetEntityTag(hit.entity) << "] at t : " << hit.t
             << ", point: [" << hit.point.x << "," << hit.point.y << "," << hit.point.z << "]"
             << ", normal: [" << hit.normal.x << "," << hit.normal.y << "," << hit.normal.z << "]"
             << std::endl;
-    }
+    }*/
     Animation_Update(&m_ecs, dt);
 }
 
@@ -433,10 +448,6 @@ void Scene::UpdatePlayer(float dt)
     if (controller.jumping_cooldown < 0.0f)
     {
         // Raycast to update if we are jumping
-        Ray feetRay;
-        feetRay.origin = translation; // We will have to add the capsule's halfHeight +(-) radius to get the feet
-        feetRay.direction = glm::vec3(0.0f, -1.0f, 0.0f);
-        feetRay.maxDistance = 0.35f; // Very small distance
         // For that, we need the current Character's transform AND shape to find the feet, and then throw a very tiny ray
         IShape* shape = m_physicsManager.getShape(m_currentPlayer);
         ShapeType shapeType = shape->getType();
@@ -446,7 +457,11 @@ void Scene::UpdatePlayer(float dt)
             return;
         }
         CapsuleShape* capsuleShape = static_cast<CapsuleShape*>(shape);
-        feetRay.origin.y -= (capsuleShape->halfHeight + capsuleShape->radius - 0.3f);
+        
+        Ray feetRay;
+        feetRay.origin = translation; // We will have to add the capsule's halfHeight +(-) radius to get the feet
+        feetRay.direction = glm::vec3(0.0f, -1.0f, 0.0f);
+        feetRay.maxDistance = capsuleShape->halfHeight + capsuleShape->radius + 0.15f; // add a small distance to the halfheight + radius
 
         QueryFilterExternal filter;
         filter.bodyToIgnore = m_currentPlayer;

@@ -332,6 +332,22 @@ void PhysicsManager::setBodyShape(EntityID e, ShapeHandle shapeHandle)
 	world.setBodyShape(handle, shapeHandle);
 }
 
+PhysicsCharacter* PhysicsManager::getCharacter(EntityID entity)
+{
+	RigidBodyHandle handle = getHandle(entity);
+	if (!handle.isValid()) return nullptr;
+
+	return world.getCharacter(handle);
+}
+
+void PhysicsManager::setCharacterInfo(EntityID entity, const PhysicsCharacterInfo& info)
+{
+	RigidBodyHandle handle = getHandle(entity);
+	if (!handle.isValid()) return;
+
+	world.setCharacterInfo(handle, info);
+}
+
 
 // ------------------------------
 // FORCES (REGISTRY)
@@ -348,7 +364,10 @@ void PhysicsManager::removeGenerator(IForceGenerator* gen)
 
 void PhysicsManager::addForce(EntityID entity, IForceGenerator* gen)
 {
-	world.addForce(entityToHandle.at(entity), gen);
+	RigidBodyHandle handle = getHandle(entity);
+	if (!handle.isValid()) return;
+
+	world.addForce(handle, gen);
 }
 
 void PhysicsManager::addForce(RigidBodyHandle handle, IForceGenerator* gen)
@@ -384,6 +403,43 @@ void PhysicsManager::enableLayerPair(uint8_t a, uint8_t b)
 void PhysicsManager::disableLayerPair(uint8_t a, uint8_t b)
 {
 	world.disableLayerPair(a, b);
+}
+
+PhysicsCharacter::GroundState PhysicsManager::getCharacterGroundState(EntityID e)
+{
+	RigidBodyHandle handle = getHandle(e);
+
+	return world.getCharacterGroundState(handle);
+}
+
+float PhysicsManager::getCharacterMaxWalkableAngle(EntityID e)
+{
+	RigidBodyHandle handle = getHandle(e);
+
+	return world.getCharacterMaxWalkableAngle(handle);
+}
+
+void PhysicsManager::setCharacterMaxWalkableAngle(EntityID e, float maxWalkableAngle)
+{
+	RigidBodyHandle handle = getHandle(e);
+	if (!handle.isValid()) return;
+
+	world.setCharacterMaxWalkableAngle(handle, maxWalkableAngle);
+}
+
+float PhysicsManager::getCharacterStepHeight(EntityID e)
+{
+	RigidBodyHandle handle = getHandle(e);
+
+	return world.getCharacterMaxWalkableAngle(handle);
+}
+
+void PhysicsManager::setCharacterStepHeight(EntityID e, float stepHeight)
+{
+	RigidBodyHandle handle = getHandle(e);
+	if (!handle.isValid()) return;
+
+	world.setCharacterStepHeight(handle, stepHeight);
 }
 
 EntityRaycastHit PhysicsManager::raycast(const Ray& ray, const QueryFilterExternal& filter) const

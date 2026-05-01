@@ -32,6 +32,19 @@ struct QueryFilterExternal
 	uint8_t layerOfQuery = 0; // If we are casting on a specific layer, that layer will collide only with the ones that has activated collisions
 };
 
+struct CollisionEnterAndStayArgs
+{
+	EntityID a;
+	EntityID b;
+	const Contact& contact;
+};
+
+struct CollisionExitArgs
+{
+	EntityID a;
+	EntityID b;
+};
+
 class PhysicsManager
 {
 public:
@@ -63,6 +76,9 @@ public:
 	void destroyBody(EntityID entity);
 	// do not confuse with setShape(ShapeHandle handle, ShapeDesc);
 	void setBodyShape(EntityID e, ShapeHandle handle);
+
+	PhysicsCharacter* getCharacter(EntityID entity);
+	void setCharacterInfo(EntityID entity, const PhysicsCharacterInfo& info);
 
 	// ------------------------------
 	// SHAPE MANAGEMENT
@@ -112,6 +128,13 @@ public:
 	void enableLayerPair(uint8_t a, uint8_t b);
 	void disableLayerPair(uint8_t a, uint8_t b);
 
+	// Characters
+	PhysicsCharacter::GroundState getCharacterGroundState(EntityID e);
+	float getCharacterMaxWalkableAngle(EntityID e);
+	void setCharacterMaxWalkableAngle(EntityID e, float maxWalkableAngle);
+	float getCharacterStepHeight(EntityID e);
+	void setCharacterStepHeight(EntityID e, float stepHeight);
+
 	// ------------------------------
 	// FORCES (REGISTRY)
 	// ------------------------------
@@ -144,19 +167,6 @@ public:
 	// ------------------------------
 	// Contrary to PhysicsWorld, where we use a single function (1 subscriber only), here we use proper events where other systems can subscribe to. 
 	// If we had a global bus, the physics manager would be the one subscribe the world events there.
-	struct CollisionEnterAndStayArgs
-	{
-		EntityID a;
-		EntityID b;
-		const Contact& contact;
-	};
-
-	struct CollisionExitArgs
-	{
-		EntityID a;
-		EntityID b;
-	};
-
 	Event<CollisionEnterAndStayArgs> onCollisionEnter;
 	Event<CollisionEnterAndStayArgs> onCollisionStay;
 	Event<CollisionExitArgs> onCollisionExit;
