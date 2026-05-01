@@ -61,7 +61,13 @@ public:
 
         if (disc < 0.0f) return RaycastHit::none();
 
-        float t = (-b - std::sqrt(disc)) / (2.0f * a);
+        float t0 = (-b - std::sqrt(disc)) / (2.0f * a);
+        float t1 = (-b + std::sqrt(disc)) / (2.0f * a);
+
+        if (t0 > t1) std::swap(t0, t1);
+        if (t0 < 0.0f) t0 = t1;
+
+        float t = t0;
 
         if (t >= 0.0f && t <= ray.maxDistance)
         {

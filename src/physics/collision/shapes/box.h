@@ -44,10 +44,11 @@ public:
         glm::vec3 localOrg = rotT * (ray.origin - position);
         glm::vec3 localDir = rotT * ray.direction;
 
-        float tMin = 0.0f;
-        float tMax = ray.maxDistance;
-        int   normalAxis = -1;
-        float normalSign = 1.0f;
+        float tMin = std::numeric_limits<float>::lowest();
+        float tMax = std::numeric_limits<float>::max();
+
+        int entryAxis = -1, exitAxis = -1;
+        float entrySign = 1.0f, exitSign = 1;
 
         for (int i = 0; i < 3; i++)
         {
@@ -75,27 +76,36 @@ public:
                 if (t0 > tMin)
                 {
                     tMin = t0;
-                    normalAxis = i;
-                    normalSign = sign;
+                    entryAxis = i;
+                    entrySign = sign;
                 }
-
-                tMax = std::min(tMax, t1);
+                if (t1 < tMax)
+                {
+                    tMax = t1;
+                    exitAxis = i;
+                    exitSign = sign;
+                }
 
                 if (tMax < tMin) return RaycastHit::none();
                 if (tMax < 0.0f) return RaycastHit::none();
             }
         }
 
-        if (normalAxis < 0) return RaycastHit::none();
+        bool inside = tMin < 0.0f;
+        float t = inside ? tMax : tMin;
+        if (t < F_EPSILON || t > ray.maxDistance) return RaycastHit::none();
 
         // Reconstruct world-space normal from hit axis
         glm::vec3 localNormal = glm::vec3(0.0f);
-        localNormal[normalAxis] = normalSign;
+        if(inside)
+            localNormal[exitAxis] = exitSign;
+        else
+            localNormal[entryAxis] = -entrySign;
 
         RaycastHit hit;
-        hit.t = tMin;
-        hit.point = ray.origin + ray.direction * tMin;
-        hit.normal = rot * -localNormal;
+        hit.t = t;
+        hit.point = ray.origin + ray.direction * t;
+        hit.normal = rot * localNormal;
 
         return hit;
 	}

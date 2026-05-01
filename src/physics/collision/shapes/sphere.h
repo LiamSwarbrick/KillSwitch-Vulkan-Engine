@@ -3,6 +3,8 @@
 
 #include "shape.h"
 
+#include <cmath>
+
 class SphereShape: public IShape
 {
 public:
@@ -31,15 +33,41 @@ public:
 		// Sphere is rotation-invariant — orientation unused
 		// Resolve using quadratic formula
 		glm::vec3  oc = ray.origin - position;
-		float a = dot(ray.direction, ray.direction);
+		float oc2 = glm::dot(oc, oc);
+		float r2 = radius * radius;
+		float t, t0, t1;
+#if 1
+		// Geometrical solution
+		float tc = glm::dot(oc, ray.direction);
+		float d2 = oc2 - tc * tc;
+		if (d2 > r2) return RaycastHit::none(); // Hit's outside the sphere
+
+		float thc = sqrt(r2 - d2); // pythagoras
+
+		t0 = tc - thc;
+		t1 = tc + thc;
+#else
+		// Analytical solution
+
+		// float a = dot(ray.direction, ray.direction); // assuming direction is normalized, a is 1
 		float b = 2.0f * dot(oc, ray.direction);
-		float c = dot(oc, oc) - radius * radius;
-		float disc = b * b - 4.0f * a * c;
+		float c = oc2 - r2;
+		float disc = b * b - 4.0f * c;
 
 		if (disc < 0.0f) return RaycastHit::none();
 
-		float t = (-b - std::sqrt(disc)) / (2.0f * a);
+		t0 = t1 = -b * 0.5f;
 
+		float discSqrt = std::sqrt(disc);
+
+		t0 = (-b - discSqrt) * 0.5f;
+		t1 = (-b + discSqrt) * 0.5f;
+#endif
+		if (t0 > t1) std::swap(t0, t1);
+
+		if (t0 < 0.0f) t0 = t1;
+
+		t = t0;
 		if (t < 0.0f || t > ray.maxDistance)
 			return RaycastHit::none();
 
