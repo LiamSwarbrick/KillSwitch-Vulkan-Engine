@@ -28,7 +28,7 @@ PipelineKeyMultisamplingBits PK_MultisamplingFlag(VkSampleCountFlagBits sample_c
         case (VK_SAMPLE_COUNT_2_BIT): return PKEY_MULTISAMPLING_2X;
         case (VK_SAMPLE_COUNT_4_BIT): return PKEY_MULTISAMPLING_4X;
         case (VK_SAMPLE_COUNT_8_BIT): return PKEY_MULTISAMPLING_8X;
-        default: SDL_assert(0);
+        default: SDL_assert(0); abort();
     }
 }
 

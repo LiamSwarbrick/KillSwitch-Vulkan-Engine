@@ -22,6 +22,15 @@ typedef struct DepthPass_UserData
 }
 DepthPass_UserData;
 
+typedef struct ForwardPass_UserData
+{
+    PushConstant_PassHeader push_pass;
+
+    // In forward pass execute, uplaod
+    uint32_t num_shadowed_spotlights;
+    uint32_t shadowed_spotlight_indices[MAX_SHADOWMAPS];
+}
+ForwardPass_UserData;
 
 glm::mat4 MakeProjectionMatrix(float fov_y_radians, float aspect, float near, float far);
 SceneData MakeSpotLightSceneData(SpotLight spotlight, VkExtent2D extent);

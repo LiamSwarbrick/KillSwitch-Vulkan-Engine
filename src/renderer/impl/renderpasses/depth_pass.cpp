@@ -1,0 +1,58 @@
+#include "../framegraph.h"
+#include "../internal_state.h"
+#include "../../render_types.h"
+#include "shaders.h"
+
+void DepthMapPass_Execute(VkCommandBuffer cmd, uint32_t pass_idx)
+{
+    RenderPassDesc* desc = &renderstate.framegraph.passes[pass_idx];
+    DepthPass_UserData* user_data = (DepthPass_UserData*)desc->user_data;
+
+    uint64_t scene_ptr = 0;
+    {
+        // Scene data stored in userdata field of depth pass
+        scene_ptr = PushToMappedArena(&renderstate.scenes_arena, &user_data->scene_data, sizeof(SceneData));
+    }
+    
+    PushConstant_PassHeader push_pass = {};  // No inputs, so doesn't care use push constant's upper bytes
+
+    ResetDrawArena();
+
+    const uint32_t shader_id = SHADER_DEPTH;
+    for (uint32_t i = 0; i < renderstate.drawcalls_collection.array[shader_id].drawcall_count; ++i)
+    {
+        DrawCall drawcall = renderstate.drawcalls_collection.array[shader_id].drawcalls[i];
+
+        for (uint32_t p = 0; p < drawcall.renderable->mesh_prefab.mesh_rids.primitive_count; ++p)
+        {
+            PrimitiveRIDs* prim = &drawcall.renderable->mesh_prefab.mesh_rids.primitives[p];
+            MaterialData* mat = &((MaterialData*)renderstate.registry.resources[renderstate.rids.materials_buffer_rid].buffer.mapped_data)[prim->material_index];
+
+            // Skip alpha blend or masked geometry (masked skipped because of Alpha2Coverage)
+            if (mat->blend_mode == BLEND_MODE_BLEND)
+                continue;
+
+            PipelineKey key = {
+                .pipeline_type  = PK_PIPELINE_TYPE_GRAPHICS,
+                .shader_id      = shader_id,
+                .pass_idx       = pass_idx,
+                .vertex_type    = (uint64_t)drawcall.renderable->mesh_prefab.vertex_type,
+                .depth_test     = 1,
+                .depth_write    = 1,
+                .depth_op       = VK_COMPARE_OP_LESS,
+                .stencil_mode   = 0,
+                .cull_mode      = VK_CULL_MODE_BACK_BIT,
+                .blend_mode     = mat->blend_mode,
+                .polygon_mode   = VK_POLYGON_MODE_FILL,
+                .front_face     = VK_FRONT_FACE_COUNTER_CLOCKWISE,
+                .msaa_samples   = (uint64_t)user_data->msaa_flag
+            };
+
+            // TODO: Use sort key
+            PushDrawPrimitive(drawcall, key, p, 0);
+        }
+    }
+
+    SortDraws(DrawPrimSortFunc_Default);
+    ExecuteDraws(cmd, push_pass, scene_ptr);
+}

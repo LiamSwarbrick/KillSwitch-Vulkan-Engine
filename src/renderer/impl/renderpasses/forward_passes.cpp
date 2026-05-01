@@ -6,6 +6,7 @@
 void ForwardOpaque_Execute(VkCommandBuffer cmd, uint32_t pass_idx)
 {
     RenderPassDesc* desc = &renderstate.framegraph.passes[pass_idx];
+    ForwardPass_UserData* user_data = (ForwardPass_UserData*)desc->user_data;
 
     uint64_t scene_ptr = 0;
     {
@@ -15,7 +16,7 @@ void ForwardOpaque_Execute(VkCommandBuffer cmd, uint32_t pass_idx)
     }
 
     uint32_t forward_shaders[] = { SHADER_UNLIT, SHADER_LIT, SHADER_OUTLINE };
-    PushConstant_PassHeader push_pass = {};  // Unused
+    PushConstant_PassHeader push_pass = user_data->push_pass;
 
     ResetDrawArena();
     

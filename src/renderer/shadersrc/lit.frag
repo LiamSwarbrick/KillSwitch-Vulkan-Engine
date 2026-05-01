@@ -128,8 +128,9 @@ vec3 apply_dithered_fog(
     float fog = clamp((z_linear - 2.0) / 25.0, 0.0, 1.0);
     float fog_step = fog > dither ? 1.0 : 0.0;
 
-    vec3 fog_tint = vec3(0.005, 0.005, 0.02);
-    vec3 fogged_color = fog_tint * fog_step;
+    // vec3 fog_color = vec3(0.005, 0.005, 0.025);
+    vec3 fog_color = vec3(0.005, 0.007, 0.03);
+    vec3 fogged_color = fog_color * fog_step;
 
     return mix(color, fogged_color, fog);
 }
@@ -159,8 +160,11 @@ void main()
     vec3 direct_light = vec3(0.);
 
     LightsHeader header = LightsHeaderBuffer(push.dc.lights_header_ptr).header;
-    PointLightBuffer pl_buf = PointLightBuffer(push.dc.point_lights_ptr);
-    SpotLightBuffer sl_buf  = SpotLightBuffer(push.dc.spot_lights_ptr);
+    PointLightBuffer pl_buf = PointLightBuffer(header.point_lights_ptr);
+    SpotLightBuffer sl_buf  = SpotLightBuffer(header.spot_lights_ptr);
+    SpotLightShadowMapIndexBuffer sl_shadow_map_indices = SpotLightShadowMapIndexBuffer(header.spotlight_shadowmap_index_buf_ptr);
+    ShadowMapSpotLightCamerasBuffer shadow_map_sl_cameras = ShadowMapSpotLightCamerasBuffer(header.shadowmap_spotlight_camera_buf_ptr);
+
 
     // TODO: Tile/Clustered Shading
     uint point_light_count = min(header.num_point_lights, 32u);
@@ -193,6 +197,8 @@ void main()
     for (uint i = 0; i < spot_light_count; ++i)
     {
         SpotLight sl = sl_buf.spot_lights[i];
+
+
 
         vec3 frag_to_light = sl.pos_and_radius.xyz - world_pos;
         float dist = length(frag_to_light);
@@ -241,6 +247,10 @@ void main()
     const float color_levels = 4.0;  // How many "shades" the texture can have
     vec3 tex_quantized = floor(base_color.rgb * color_levels) / color_levels;
     vec3 tex_remainder = fract(base_color.rgb * color_levels);
+
+    // Alternative look which makes the lit regions more high fidelity. Maybe make it an option?
+    // vec3 tex_quantized = floor(lit_rgb * color_levels) / color_levels;
+    // vec3 tex_remainder = fract(lit_rgb * color_levels);
 
     vec3 dithered_tex;
     dithered_tex.r = tex_quantized.r + (tex_remainder.r > dith_threshold ? (1.0 / color_levels) : 0.0);

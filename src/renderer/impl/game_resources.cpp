@@ -242,6 +242,36 @@ void create_startup_resources()
         "SpotLightsBuffer", FG_RESOURCE_TYPE_BUFFER, flags, &spot_lights_info
     );
 
+    // SpotLightShadowMapIndexBuffer
+    ResourceCreateInfo spot_light_shadow_map_index_buf_info = {
+        .buffer_create_info = {
+            .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
+            .size  = sizeof(int) * MAX_SPOTLIGHTS,
+            .usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT
+                   | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT
+                   | VK_BUFFER_USAGE_TRANSFER_DST_BIT
+        },
+        .is_buffer_cpu_accessible = 1
+    };
+    renderstate.rids.spotlight_shadowmap_index_buffer_rid = FG_CreateResource(
+        "SpotLightShadowMapIndexBuffer", FG_RESOURCE_TYPE_BUFFER, flags, &spot_light_shadow_map_index_buf_info
+    );
+
+    // ShadowMapSpotLightCamerasBuffer
+    ResourceCreateInfo shadowmap_spotlight_camera_buf_info = {
+        .buffer_create_info = {
+            .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
+            .size  = sizeof(glm::mat4) * MAX_SHADOWMAPS,
+            .usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT
+                   | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT
+                   | VK_BUFFER_USAGE_TRANSFER_DST_BIT
+        },
+        .is_buffer_cpu_accessible = 1
+    };
+    renderstate.rids.shadowmap_spotlight_camera_buffer_rid = FG_CreateResource(
+        "ShadowMapSpotLightCamerasBuffer", FG_RESOURCE_TYPE_BUFFER, flags, &shadowmap_spotlight_camera_buf_info
+    );
+
 
 #if 0  // NOTE: Keeping in case it's useful for game ui to have quad code lying around
     // TEST QUAD

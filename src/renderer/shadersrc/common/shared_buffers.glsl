@@ -7,6 +7,11 @@
 
 #include "shared_types.glsl"
 
+#define MAX_SHADOWMAPS 1    // <- ONE FOR NOW TIL THINGS ARE WORKING
+#define MAX_POINTLIGHTS 5000
+#define MAX_SPOTLIGHTS  5000
+
+// NOTE: On the C++ side, mat and vec types here are not glm types, they are float arrays defined in shared_types.glsl
 struct SceneData
 {
     mat4 view;
@@ -49,8 +54,6 @@ struct MaterialData
     // uint32_t texture_idx_normalmap;
 };
 
-#define MAX_POINTLIGHTS 500
-#define MAX_SPOTLIGHTS  500
 struct PointLight
 {
     vec4 pos_and_radius;
@@ -71,6 +74,10 @@ struct LightsHeader
 {
     uint32_t num_point_lights;
     uint32_t num_spot_lights;
+    uint64_t point_lights_ptr;
+    uint64_t spot_lights_ptr;
+    uint64_t spotlight_shadowmap_index_buf_ptr;
+    uint64_t shadowmap_spotlight_camera_buf_ptr;
 };
 
 #ifdef IS_GLSL
@@ -82,7 +89,7 @@ struct LightsHeader
     float get_attenuation(float dist, float range)
     {
         // Standard inverse square
-        float attenuation = 1.0 / max(dist * dist, 0.01);
+        float attenuation = 1.0 / max(dist * dist, 1.0);
         
         // Smoothly transition to zero at the radius/range limit
         // to match the KHR_lights_punctual recommendation
@@ -128,6 +135,14 @@ struct LightsHeader
     layout (buffer_reference, scalar) readonly buffer SpotLightBuffer
     {
         SpotLight spot_lights[];
+    };
+    layout (buffer_reference, scalar) readonly buffer SpotLightShadowMapIndexBuffer
+    {
+        int spotlight_shadowmap_index[];  // -1 means no shadowmap available for this spotlight
+    };
+    layout (buffer_reference, scalar) readonly buffer ShadowMapSpotLightCamerasBuffer
+    {
+        mat4 shadowmap_spotlight_viewproj[];  // Index by shadowmap idnex
     };
 
     // Pointer types for current mesh:

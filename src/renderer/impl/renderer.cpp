@@ -970,6 +970,23 @@ void Renderer_DrawFrame(CameraInfo main_camera)
     {
         AddDrawCall(&renderstate.renderables_arena.items[i]);
     }
+    
+    // Saturate shadow maps with spotlights
+    // TODO: Use nearest lights or some shit instead of just the first shadowed spotlights we come across
+    renderstate.num_shadowed_spotlights = 0;
+    memset(renderstate.shadowed_spotlight_indices, 0, sizeof(renderstate.shadowed_spotlight_indices));
+    for (uint32_t i = 0; i < renderstate.renderables_arena.num_spot_lights; ++i)
+    {
+        if (renderstate.renderables_arena.is_spotlight_shadowed[i])
+        {
+            renderstate.shadowed_spotlight_indices[renderstate.num_shadowed_spotlights++] = i;
+        }
+
+        if (renderstate.num_shadowed_spotlights == MAX_SHADOWMAPS)
+        {
+            break;
+        }
+    }
 
     EndDrawCalls();
 
@@ -1003,24 +1020,6 @@ void Renderer_DrawFrame(CameraInfo main_camera)
 
 
     // Shadowmap pass
-    // NOTE: The shadowmaps should be cached and only recomputed on change.
-    //       But for now, we will just render MAX_SHADOWMAPS each frame, to saturate the available shadowmaps with the closest spotlights.
-    //       This should realistically do the closest ones, but for now, just do it in the order they appear in renderables_arena.is_spotlight_shadowed array
-    renderstate.num_shadowed_spotlights = 0;
-    memset(renderstate.shadowed_spotlight_indices, 0, sizeof(renderstate.shadowed_spotlight_indices));
-    for (uint32_t i = 0; i < renderstate.renderables_arena.num_spot_lights; ++i)
-    {
-        if (renderstate.renderables_arena.is_spotlight_shadowed[i])
-        {
-            renderstate.shadowed_spotlight_indices[renderstate.num_shadowed_spotlights++] = i;
-        }
-
-        if (renderstate.num_shadowed_spotlights == MAX_SHADOWMAPS)
-        {
-            break;
-        }
-    }
-
     DepthPass_UserData shadowmap_user_datas[MAX_SHADOWMAPS] = {};  // Must be declared up here to not go out of scope
     uint32_t shadowmap_pass_ids[MAX_SHADOWMAPS] = {};
     memset(shadowmap_pass_ids, UINT32_MAX, sizeof(shadowmap_pass_ids));
@@ -1031,16 +1030,14 @@ void Renderer_DrawFrame(CameraInfo main_camera)
         FG_Resource* shadowmap_res = &renderstate.registry.resources[shadowmap_rid];
         
         SpotLight spotlight = renderstate.renderables_arena.spot_lights[renderstate.shadowed_spotlight_indices[shadowmap_i]];
-        shadowmap_user_datas[shadowmap_i].scene_data = MakeSpotLightSceneData(
-            spotlight,
-            (VkExtent2D){ shadowmap_res->image.extent.width, shadowmap_res->image.extent.height }
-        );
+        shadowmap_user_datas[shadowmap_i].scene_data = renderstate.shadowed_spotlight_scenedatas[shadowmap_i];
         shadowmap_user_datas[shadowmap_i].msaa_flag = PK_MultisamplingFlag(VK_SAMPLE_COUNT_1_BIT);
 
         RenderPassDesc shadowmap_desc = {
             .debug_name = {},  // Set below with snprintf
 
-            .input_count = {},
+            .input_count = 0,
+            .inputs = {},
             .output_count = 1,
             .outputs = {
                 {
@@ -1080,7 +1077,8 @@ void Renderer_DrawFrame(CameraInfo main_camera)
     RenderPassDesc depth_prepass_desc = {
         .debug_name = "Depth Prepass",
 
-        .input_count = {},
+        .input_count = 0,
+        .inputs = {},
         .output_count = 1,
         .outputs = {
             {
@@ -1115,7 +1113,8 @@ void Renderer_DrawFrame(CameraInfo main_camera)
     RenderPassDesc forward_opaque_desc = {
         .debug_name = "Forward Opaque Pass",
 
-        .input_count = {},
+        .input_count = renderstate.num_shadowed_spotlights,
+        .inputs = {},  // Shadowmap inputs set below
         .output_count = 2,
         .outputs = {
 
@@ -1160,12 +1159,35 @@ void Renderer_DrawFrame(CameraInfo main_camera)
         .render_area = { .offset = { 0, 0 }, .extent = { forward_target_res->image.extent.width, forward_target_res->image.extent.height } },
         
         .execute_callback = ForwardOpaque_Execute,
-        .user_data = NULL
     };
+
+    // Set input shadowmaps for forward pass
+    ForwardPass_UserData forward_user_data = {};
+    for (uint32_t i = 0; i < renderstate.num_shadowed_spotlights; ++i)
+    {
+        forward_opaque_desc.inputs[i] = (PassResourceUsage){
+            .rid = renderstate.rids.shadow_map_rids[i],
+            .usage_flags = FG_USAGE_SAMPLED,
+
+            .layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+            .access = VK_ACCESS_2_SHADER_READ_BIT,
+            .stage  = VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
+            .queue_family_index = renderstate.queue_family_indices.graphics_family
+        };
+
+        // Set texture index to sample shadow map in the shader
+        FG_Resource* shadow_map_i_res = &renderstate.registry.resources[renderstate.rids.shadow_map_rids[i]];
+        forward_user_data.push_pass.texture_indices[i] = shadow_map_i_res->bindless_texture_idx;
+    }
+    forward_opaque_desc.user_data = (ForwardPass_UserData*)&forward_user_data;
     uint32_t forward_opaque_pass = FG_AddPass(forward_opaque_desc);
+
+    // Transparent pass (alpha blended, back to front or Order Independant Transparancy)
+    // TODO: forward_transparent_desc = forward_opaque_pass_desc;
+    // then modify some of the attachments e.g. load_op and execute_callback
     
     // Bloom
-    #warning TODO: Add in bloom passes
+    // TODO
 
     // PostProcess Tone-mapping and Lens Effect
     FG_Resource* hdr_color_target_res = &renderstate.registry.resources[renderstate.rids.hdr_color_target_rid];

@@ -164,9 +164,10 @@ int main(int argc, char *argv[])
     // (void)boot_vert;
     // (void)boot_frag;
 
-    // Set 4xMSAA to test settings API
+    // Set 4xMSAA if available
     if (Renderer_GetSettingsCapabilities().max_msaa_samples >= 4)
     {
+        SDL_Log("Enabling 4xMSAA");
         Renderer_Settings settings = Renderer_GetSettings();
         settings.msaa_sample_count = 4;
         Renderer_ChangeSettings(settings);
