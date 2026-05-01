@@ -102,8 +102,7 @@ EntityID Scene::InstantiatePrefab(Asset* prefab, glm::vec3 spawnPosition)
             C_Transform t;
             glm::vec3 position = glm::vec3(node->translation[0], node->translation[1], node->translation[2]) + spawnPosition;
             glm::quat rotation = glm::quat(node->rotation[3], node->rotation[0], node->rotation[1], node->rotation[2]);
-            t.matrix = glm::mat4_cast(rotation);
-            t.matrix = glm::translate(t.matrix, position);
+            t.matrix = glm::translate(glm::mat4(1.0f), position) * glm::mat4(rotation);
             m_ecs.AddComponent<C_Transform>(eID, { t.matrix });
 
             // ------------------
