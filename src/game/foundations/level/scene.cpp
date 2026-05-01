@@ -16,6 +16,11 @@
 
 #include "SDL3/SDL.h"
 
+// To decompose the matrix
+#define GLM_ENABLE_EXPERIMENTAL
+#include "glm/gtx/matrix_decompose.hpp"
+
+
 namespace rj = rapidjson;
 
 void Scene::StartUp()
@@ -89,7 +94,7 @@ EntityID Scene::InstantiatePrefab(Asset* prefab, glm::vec3 spawnPosition)
         if (has_ecs_data)
         { // if has ecs_data
             EntityID eID = m_ecs.CreateEntity((node->name) ? (node->name) : "");
-            if (i == 0) rootEntity = eID;
+            if (rootEntity == MAX_ENTITIES) rootEntity = eID;
 
             // ---------------
             // -- TRANSFORM --
@@ -312,7 +317,9 @@ void Scene::BuildRendererScene()
 
 void Scene::Update(float dt)
 {
-    PlayerMovement_Update(&m_ecs, dt);
+    //PlayerMovement_Update(&m_ecs, dt);
+
+    UpdatePlayer(dt);
     
     m_physicsManager.update(m_ecs, dt);
 
@@ -372,6 +379,108 @@ void Scene::Render()
 
         Renderer_PushRenderable(r);
     });
+}
+
+void Scene::UpdatePlayer(float dt)
+{
+
+    // BIG IMPORTANT NOTE(jaime):
+    // WE NEED A fookin' class for this. if the player "crouches" we NEED to have a smaller capsule, 
+    // and i would appreciate if we had all IShapes stored in advance instead of creating them on the fly
+    // (PLEASE ALL CHARACTER SHAPES HAVE TO BE capsules please i beg you, otherwise physics die )
+
+    if (m_currentPlayer == NULL_ENTITY) return;
+    if (!m_ecs.Has(m_currentPlayer)) return;
+
+    C_Transform& transform = m_ecs.GetComponent<C_Transform>(m_currentPlayer);
+    C_PlayerInput& input = m_ecs.GetComponent<C_PlayerInput>(m_currentPlayer);
+    C_CharacterController& controller = m_ecs.GetComponent<C_CharacterController>(m_currentPlayer);
+
+    glm::vec3 scale;
+    glm::quat rotation;
+    glm::vec3 translation;
+    glm::vec3 skew;
+    glm::vec4 perspective;
+    glm::decompose(transform.matrix, scale, rotation, translation, skew, perspective);
+
+
+    glm::vec3 horizontalMoveDir(0.0f);
+
+    if (input.move_forward)
+        horizontalMoveDir.z -= 1.0f;
+    if (input.move_backward)
+        horizontalMoveDir.z += 1.0f;
+    if (input.move_left)
+        horizontalMoveDir.x -= 1.0f;
+    if (input.move_right)
+        horizontalMoveDir.x += 1.0f;
+
+    bool isMoving = glm::length(horizontalMoveDir) > 0.0f;
+    if (isMoving)
+        horizontalMoveDir = glm::normalize(horizontalMoveDir);
+
+    controller.velocity = horizontalMoveDir * controller.move_speed;
+
+    
+    // If we are jumping, we need to check IF we touch the floor
+    // We take away time from the jumping cooldown using dt to check next step
+    if (controller.jumping)
+    {
+        controller.jumping_cooldown -= dt;
+    }
+        
+
+    // We only need to check if the jumping cooldown is done
+    if (controller.jumping_cooldown < 0.0f)
+    {
+        // Raycast to update if we are jumping
+        Ray feetRay;
+        feetRay.origin = translation; // We will have to add the capsule's halfHeight +(-) radius to get the feet
+        feetRay.direction = glm::vec3(0.0f, -1.0f, 0.0f);
+        feetRay.maxDistance = 0.35f; // Very small distance
+        // For that, we need the current Character's transform AND shape to find the feet, and then throw a very tiny ray
+        IShape* shape = m_physicsManager.getShape(m_currentPlayer);
+        ShapeType shapeType = shape->getType();
+        if (shapeType != ShapeType::Capsule)
+        {
+            SDL_assert(false && "Character collider (IShape) needs to be of ShapeType::Capsule");
+            return;
+        }
+        CapsuleShape* capsuleShape = static_cast<CapsuleShape*>(shape);
+        feetRay.origin.y -= (capsuleShape->halfHeight + capsuleShape->radius - 0.3f);
+
+        QueryFilterExternal filter;
+        filter.bodyToIgnore = m_currentPlayer;
+        filter.hasLayerOfQuery = true;
+        filter.layerOfQuery = (uint8_t)BodyLayer::MOVING;
+
+        std::vector<EntityRaycastHit> hits = m_physicsManager.raycastAll(feetRay, filter);
+
+        if (!hits.empty())
+        {
+            controller.jumping = false;
+            controller.jumping_cooldown = 0.0f;
+        } // If there are hits, we are in the ground
+    } // If the jumping cooldown is done, we need to check if we can jump again
+
+    if (!controller.jumping)
+    {
+        // Important to add the velocity to the current one, NOT WITH addVelocity cause it would linearly add to it
+        glm::vec3 currentVelocity = m_physicsManager.getVelocity(m_currentPlayer);
+        controller.velocity.y += currentVelocity.y;
+        m_physicsManager.setVelocity(m_currentPlayer, controller.velocity);
+
+        if (input.jump)
+        {
+            controller.jumping = true;
+            controller.jumping_cooldown = 0.1f; // Adjust to avoid multiple-consecutive-frame / jittery jumping
+
+            glm::vec3 gravity = m_physicsManager.getGravity();
+            m_physicsManager.addVelocity(m_currentPlayer, -(gravity*0.5f)); // Adjust jump strength as you wish
+        }
+    }
+
+    //C_AnimatedMesh& animatedMesh = m_ecs.GetComponent<C_AnimatedMesh>(m_currentPlayer);
 }
 
 void Scene::SetBodyCollisionLayers()

@@ -1,5 +1,5 @@
 #version 460
-#extension GL_GOOGLE_include_directive : require
+//#extension GL_GOOGLE_include_directive : require
 #include "common/shared.glsl"
 #include "common/shared_material_read.glsl"
 
@@ -195,7 +195,7 @@ void main()
         
     // }
 
-    vec3 ambient = vec3(0.);
+    vec3 ambient = vec3(0.3);
     // vec3 ambient = compute_ambient_light(N);
     vec3 lit_rgb = (direct_light + ambient) * base_color.rgb + emissive_color.rgb;
 

@@ -17,6 +17,7 @@ struct C_CharacterController
 
 	glm::vec3 target_position{ 0.0f };
 	bool jumping = false;
+	float jumping_cooldown = 0.0f;
 
 	bool is_grounded = false;
 };

@@ -103,6 +103,8 @@ public:
 	void setForceLayers(EntityID e, uint32_t layers);
 	void addForceLayers(EntityID e, uint32_t layers);
 	void removeForceLayers(EntityID e, uint32_t layers);
+
+	glm::vec3 getGravity() const;
 	
 	// Important, to set the body layer's pairs for the collision matrix
 	void setNumLayers(uint8_t numLayers);

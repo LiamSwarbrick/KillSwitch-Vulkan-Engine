@@ -319,6 +319,11 @@ void PhysicsManager::removeForceLayers(EntityID e, uint32_t layers)
 	world.removeForceLayers(handle, layers);
 }
 
+glm::vec3 PhysicsManager::getGravity() const
+{
+	return world.getGravity();
+}
+
 void PhysicsManager::setBodyShape(EntityID e, ShapeHandle shapeHandle)
 {
 	RigidBodyHandle handle = getHandle(e);

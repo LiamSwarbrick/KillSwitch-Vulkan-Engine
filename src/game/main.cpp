@@ -65,7 +65,7 @@ int main(int argc, char *argv[])
 
     if (startup_music != 0)
     {
-        if (!AudioSystem_PlaySoundtrackLoop(&audio_system, startup_music, 0.80f))
+        if (!AudioSystem_PlaySoundtrackLoop(&audio_system, startup_music, 0.1f))
         {
             SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "AudioSystem: soundtrack loaded but failed to start playback.");
         }
@@ -77,7 +77,7 @@ int main(int argc, char *argv[])
 
     if (startup_test_sfx != 0)
     {
-        if (!AudioSystem_PlaySFXOneShot(&audio_system, startup_test_sfx, 1.0f))
+        if (!AudioSystem_PlaySFXOneShot(&audio_system, startup_test_sfx, 0.1f))
         {
             SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "AudioSystem: startup test SFX loaded but failed to start playback.");
         }
@@ -136,19 +136,21 @@ int main(int argc, char *argv[])
     Scene scene{};
     scene.StartUp();
 
-    Asset* room_prefab = scene.LoadPrefab("assets/levels/lightroom1.gltf");
+    Asset* room_prefab = scene.LoadPrefab("assets/levels/testroom_new.gltf");
     // Asset* cube_prefab = scene.LoadPrefab("assets/props/simple_cube.gltf");
     // Asset* sphere_prefab = scene.LoadPrefab("assets/props/simple_sphere.gltf");
-    // Asset* capsule_prefab = scene.LoadPrefab("assets/props/simple_capsule.gltf");
+    //Asset* capsule_prefab = scene.LoadPrefab("assets/props/zombie.gltf");
+    Asset* capsule_prefab = scene.LoadPrefab("assets/props/character_capsule.gltf");
     // TODO: Change the following 2 prefabs so they can be imported (add the boolean "Is ECS Entity" with the new script where it is needed)
     // Asset* catPrefab = scene.LoadPrefab("assets/animations/scene.gltf");
     // Asset* catPrefab = scene.LoadPrefab("assets/animations/flatzombo.gltf");
-    Asset* animationPrefab = scene.LoadPrefab("assets/animations/cat.gltf");
-
+    //Asset* animationPrefab = scene.LoadPrefab("assets/animations/cat.gltf");
+    
     scene.InstantiatePrefab(room_prefab, glm::vec3(0, 0, 0));
     // scene.InstantiatePrefab(cube_prefab, glm::vec3(0, 5.1, 0));
     // scene.InstantiatePrefab(cube_prefab, glm::vec3(3, 4.9, 0));
-    // scene.InstantiatePrefab(capsule_prefab, glm::vec3(0, 5, 2));
+    
+    EntityID playerID = scene.InstantiatePrefab(capsule_prefab, glm::vec3(0, 2, 0.01));
     // scene.InstantiatePrefab(sphere_prefab, glm::vec3(4.7, 7, 0.1));
     // scene.InstantiatePrefab(sphere_prefab, glm::vec3(-4.7, 7, -0.1));
     // scene.InstantiatePrefab(sphere_prefab, glm::vec3(0.1, 7, -4.7));
@@ -157,7 +159,7 @@ int main(int argc, char *argv[])
     // scene.InstantiatePrefab(animationPrefab, glm::vec3(0, 0, 0));
     // render a second cat
     // EntityID playerEntity = scene.InstantiatePrefab(animationPrefab, glm::vec3(10, 0, 10));
-
+    scene.SetPlayer(playerID);
     scene.BuildRendererScene();
 
     // TODO: Debug UI is built around the idea of 1 asset at the moment.
@@ -167,12 +169,18 @@ int main(int argc, char *argv[])
 
     // Game owns FP/TP camera state; seed both from Debug UI state once at startup.
     FPCamState game_fp_cam = {};
-    if (const FPCamState* initial_fp_cam = DebugUI_GetFPCamState())
+    if (const FPCamState* initial_fp_cam = DebugUI_GetFPCamState()) 
+    {
         game_fp_cam = *initial_fp_cam;
+        game_fp_cam.bound_entity = playerID;
+    }
 
     TPCamState game_tp_cam = {};
     if (const TPCamState* initial_tp_cam = DebugUI_GetTPCamState())
+    {
         game_tp_cam = *initial_tp_cam;
+        game_tp_cam.bound_entity = playerID;
+    }
 
     // Publish initial camera snapshots so debug camera switching is valid on frame 0.
     CameraInfo initial_fp_camera = Game::FPCam_Update(game_fp_cam, &scene.GetECS(), 0.0f, false, false);
@@ -236,7 +244,7 @@ int main(int argc, char *argv[])
         // controller test not ideal at all
         const bool* state = SDL_GetKeyboardState(NULL);
 
-        scene.GetECS().GetView<C_AnimatedMesh, C_PlayerInput>().ForEach([&](EntityID e, C_AnimatedMesh&, C_PlayerInput& input) {
+        scene.GetECS().GetView<C_PlayerInput>().ForEach([&](C_PlayerInput& input) {
                 input.move_forward = state[SDL_SCANCODE_K];
                 input.move_backward = state[SDL_SCANCODE_I];
                 input.move_left = state[SDL_SCANCODE_L];

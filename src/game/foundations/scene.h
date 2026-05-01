@@ -16,6 +16,8 @@ private:
     ECS m_ecs;
     PhysicsManager m_physicsManager;
 
+    EntityID m_currentPlayer = NULL_ENTITY;
+
     std::vector<Asset*> m_prefabs;
 
     Hierarchy<u32> m_hierarchy;
@@ -43,6 +45,11 @@ public:
 
     void Update(float dt);
     void Render();
+
+    void SetPlayer(EntityID id) { m_currentPlayer = id; }
+
+private:
+    void UpdatePlayer(float dt);
 
 private:
     // Helper to set the body's collision matrix
