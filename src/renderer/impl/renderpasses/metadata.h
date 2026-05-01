@@ -17,6 +17,7 @@ FullscreenPass_UserData;
 
 
 glm::mat4 MakeProjectionMatrix(float fov_y_radians, float aspect, float near, float far);
+SceneData MakeSpotLightSceneData(SpotLight spotlight);
 SceneData MakeSceneData(CameraInfo cam, VkExtent2D extents);
 
 void FullscreenPass_Execute(VkCommandBuffer cmd, uint32_t pass_idx);

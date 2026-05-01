@@ -979,10 +979,8 @@ void Renderer_DrawFrame(CameraInfo main_camera)
 
     /*  Build FrameGraph
 
-        Queries game state to know which renderpasses to use.
-        E.g. game.wearing_pyrovision_goggles would use swap the renderpass
-        that renders flame particles as fire, to a renderpass that makes them bubbles
-        or some shit.
+        Can vary the framegraph each frame based on game state to know which renderpasses to use.
+        E.g. bloom enabled vs disabled, or things far less trivial than that.
     */
 
     FG_Empty();
@@ -1000,6 +998,7 @@ void Renderer_DrawFrame(CameraInfo main_camera)
     b32 use_msaa = renderstate.multisampling_count_flag > VK_SAMPLE_COUNT_1_BIT;
 
     // Shadowmap pass
+    
     // TODO (once topological sorting and multiqueue stuff is in, this can be in parallel with the depth prepass)
 
     // Depth prepass
