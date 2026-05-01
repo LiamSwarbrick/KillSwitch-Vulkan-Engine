@@ -56,8 +56,8 @@ void EndDrawCalls()
     FG_Resource* lights_header_buf = &renderstate.registry.resources[renderstate.rids.lights_header_buffer_rid];
     FG_Resource* pl_buf = &renderstate.registry.resources[renderstate.rids.point_lights_buffer_rid];
     FG_Resource* sl_buf = &renderstate.registry.resources[renderstate.rids.spot_lights_buffer_rid];
-    FG_Resource* spotlight_shadowmap_id_buf_res = &renderstate.registry.resources[renderstate.rids.spotlight_shadowmap_index_buffer_rid];
-    FG_Resource* shadowmap_spotlight_camera_buf_res = &renderstate.registry.resources[renderstate.rids.spotlight_shadowmap_index_buffer_rid];
+    FG_Resource* spotlight_shadowmap_id_buf_res     = &renderstate.registry.resources[renderstate.rids.spotlight_shadowmap_index_buffer_rid];
+    FG_Resource* shadowmap_spotlight_camera_buf_res = &renderstate.registry.resources[renderstate.rids.shadowmap_spotlight_camera_buffer_rid];
 
     LightsHeader header = {
         .num_point_lights  = renderstate.renderables_arena.num_point_lights,

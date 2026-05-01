@@ -198,7 +198,24 @@ void main()
     {
         SpotLight sl = sl_buf.spot_lights[i];
 
+        float shadow_factor = 1.0;
+        int spotlight_shadowmap_index = sl_shadow_map_indices.spotlight_shadowmap_index[i];
+        if (spotlight_shadowmap_index >= 0)
+        {
+            // Shadow map is available
 
+            // SHADOW MAPPING
+            mat4 spotlight_view_proj = shadow_map_sl_cameras.shadowmap_spotlight_viewproj[spotlight_shadowmap_index];
+            vec4 shadow_coord = spotlight_view_proj * vec4(world_pos, 1.0);
+            shadow_coord.z -= 0.0005 * shadow_coord.w;  // Prevent shadow acne with a small bias (beware of peter panning)
+
+            uint32_t shadowmap_texture_idx = push.pass.texture_indices[spotlight_shadowmap_index];
+            shadow_factor = textureProj(sampler2DShadow(
+                global_textures[nonuniformEXT(shadowmap_texture_idx)],
+                global_samplers[FG_SAMPLER_SHADOW]),
+                shadow_coord
+            );
+        }
 
         vec3 frag_to_light = sl.pos_and_radius.xyz - world_pos;
         float dist = length(frag_to_light);
@@ -234,7 +251,7 @@ void main()
             attenuation *
             angular_attenuation;
 
-        direct_light += radiance;
+        direct_light += radiance * shadow_factor;
     }
 
     vec3 ambient = vec3(0.);

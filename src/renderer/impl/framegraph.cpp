@@ -1246,13 +1246,13 @@ void bindless_heap_create_all_samplers()
                     .minFilter         = VK_FILTER_LINEAR,
 
                     // Must clamp to border opaque white so that stuff outside the shadow map is considered unshadowed.
-                    .mipmapMode        = VK_SAMPLER_MIPMAP_MODE_LINEAR,
-                    .addressModeU      = VK_SAMPLER_ADDRESS_MODE_REPEAT,
-                    .addressModeV      = VK_SAMPLER_ADDRESS_MODE_REPEAT,
-                    .addressModeW      = VK_SAMPLER_ADDRESS_MODE_REPEAT,
+                    .mipmapMode        = VK_SAMPLER_MIPMAP_MODE_NEAREST,
+                    .addressModeU      = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER,
+                    .addressModeV      = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER,
+                    .addressModeW      = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER,
                     .mipLodBias        = 0.0f,
                     .anisotropyEnable  = VK_FALSE,
-                    .maxAnisotropy     = 0,
+                    .maxAnisotropy     = 0.0f,
 
                     // Hardware shadow comparison
                     .compareEnable     = VK_TRUE,
