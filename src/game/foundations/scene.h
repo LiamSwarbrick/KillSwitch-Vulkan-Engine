@@ -24,6 +24,8 @@ private:
 
     Hierarchy<u32> m_hierarchy;
 
+    glm::vec3 m_movementCameraForward = glm::vec3(0.0f, 0.0f, -1.0f);
+
 private:
     //bool LoadAsset(const char* fileName);
     bool FreeAsset(Asset* asset);
@@ -49,6 +51,7 @@ public:
     void Render();
 
     void SetPlayer(EntityID id) { m_currentPlayer = id; }
+    void SetMovementCameraForward(const glm::vec3& forward) { m_movementCameraForward = forward; }
 
 private:
     void UpdatePlayer(float dt);

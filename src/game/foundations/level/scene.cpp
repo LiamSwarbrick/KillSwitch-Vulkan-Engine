@@ -417,21 +417,41 @@ void Scene::UpdatePlayer(float dt)
     glm::vec4 perspective;
     glm::decompose(transform.matrix, scale, rotation, translation, skew, perspective);
 
+    // Flatten the camera forward vector so player movement stays horizontal.
+    auto flattenDirection = [](const glm::vec3& direction)
+        {
+            glm::vec3 flattened = glm::vec3(direction.x, 0.0f, direction.z);
+            float len = glm::length(flattened);
+            if (len <= 0.0001f)
+                return glm::vec3(0.0f, 0.0f, -1.0f);
+
+            return flattened / len;
+        };
+
+    // moving forward is now relative to the camera
+    glm::vec3 cameraForward = -flattenDirection(m_movementCameraForward);
+    glm::vec3 cameraRight = glm::normalize(glm::cross(cameraForward, glm::vec3(0.0f, 1.0f, 0.0f)));
 
     glm::vec3 horizontalMoveDir(0.0f);
 
     if (input.move_forward)
-        horizontalMoveDir.z -= 1.0f;
+        horizontalMoveDir += cameraForward;
     if (input.move_backward)
-        horizontalMoveDir.z += 1.0f;
+        horizontalMoveDir -= cameraForward;
     if (input.move_left)
-        horizontalMoveDir.x -= 1.0f;
+        horizontalMoveDir -= cameraRight;
     if (input.move_right)
-        horizontalMoveDir.x += 1.0f;
+        horizontalMoveDir += cameraRight;
 
     bool isMoving = glm::length(horizontalMoveDir) > 0.0f;
     if (isMoving)
+    {
         horizontalMoveDir = glm::normalize(horizontalMoveDir);
+        // update rotation 
+        glm::vec3 facingDir = glm::normalize(glm::vec3(horizontalMoveDir.x, 0.0f, horizontalMoveDir.z));
+        float yawDeg = glm::degrees(atan2f(facingDir.x, facingDir.z));
+        rotation = glm::angleAxis(glm::radians(yawDeg), glm::vec3(0.0f, 1.0f, 0.0f));
+    }
 
     controller.velocity = horizontalMoveDir * controller.move_speed;
 
@@ -494,6 +514,7 @@ void Scene::UpdatePlayer(float dt)
         }
     }
 
+    transform.matrix = glm::translate(glm::mat4(1.0f), translation) * glm::mat4_cast(rotation) * glm::scale(glm::mat4(1.0f), scale);
     //C_AnimatedMesh& animatedMesh = m_ecs.GetComponent<C_AnimatedMesh>(m_currentPlayer);
 }
 

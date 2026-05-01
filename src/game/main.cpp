@@ -241,7 +241,7 @@ int main(int argc, char *argv[])
         bool use_relative_mouse = (is_playing && !debug_ui_open) || (debug_ui_open && right_mouse_down);
         SDL_SetWindowRelativeMouseMode(window, use_relative_mouse);
 
-        // controller test not ideal at all
+        // controller test
         const bool* state = SDL_GetKeyboardState(NULL);
 
         scene.GetECS().GetView<C_PlayerInput>().ForEach([&](C_PlayerInput& input) {
@@ -253,6 +253,23 @@ int main(int argc, char *argv[])
             }
         );
 
+        // set movement camera foward
+        if (const FPCamState* debug_fp_cam = DebugUI_GetFPCamState())
+            game_fp_cam = *debug_fp_cam;
+
+        if (const TPCamState* debug_tp_cam = DebugUI_GetTPCamState())
+            game_tp_cam = *debug_tp_cam;
+
+        DebugUICameraMode gameplay_camera_mode = DebugUI_GetGameplayCameraMode();
+        DebugUICameraMode debug_camera_mode = DebugUI_GetCameraMode();
+        DebugUICameraMode active_fp_tp_mode = debug_ui_open ? debug_camera_mode : gameplay_camera_mode;
+
+        glm::vec3 movement_forward = (active_fp_tp_mode == DebugUICameraMode::TPCam)
+            ? game_tp_cam.forward
+            : game_fp_cam.forward;
+
+        scene.SetMovementCameraForward(movement_forward);
+
         // Game ticks
         scene.Update(dt);
         AudioSystem_Update(&audio_system, dt);
@@ -263,10 +280,6 @@ int main(int argc, char *argv[])
 
         if (const TPCamState* debug_tp_cam = DebugUI_GetTPCamState())
             game_tp_cam = *debug_tp_cam;
-
-        DebugUICameraMode gameplay_camera_mode = DebugUI_GetGameplayCameraMode();
-        DebugUICameraMode debug_camera_mode = DebugUI_GetCameraMode();
-        DebugUICameraMode active_fp_tp_mode = debug_ui_open ? debug_camera_mode : gameplay_camera_mode;
 
         // In debug mode, RMB drag still drives look even outside normal playing state.
         bool allow_mouse_look = (is_playing && !debug_ui_open) || (debug_ui_open && right_mouse_down);
