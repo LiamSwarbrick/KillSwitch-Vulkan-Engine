@@ -41,12 +41,12 @@ public:
 			m_subscribers.erase(id);
 	}
 
-	SubscriptionID operator+(Callback callback)
+	SubscriptionType operator+=(Callback callback)
 	{
 		return Subscribe(callback);
 	}
 
-	void operator-(SubscriptionID id)
+	void operator-=(SubscriptionID id)
 	{
 		Unsubscribe(id);
 	}

@@ -13,9 +13,11 @@ public:
 	Subscription() = default;
 
 	Subscription(EventType& event, SubscriptionID id)
-		: event(event), id(id)
+		: event(&event), id(id)
 	{
 	}
+
+	~Subscription() { Unsubscribe(); }
 
 	// Non-copyable
 	Subscription(const Subscription&) = delete;
@@ -40,8 +42,6 @@ public:
 
 		return *this;
 	}
-
-
 
 	// Public to be able to manually unsubscribe, but on destruction it unsubscribes anyway
 	void Unsubscribe()
