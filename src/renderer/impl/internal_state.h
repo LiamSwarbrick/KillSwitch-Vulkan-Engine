@@ -69,18 +69,30 @@ typedef struct RenderState
 
     // Pipeline Keying system and shader registry
     // FUTURE: If multithreading drawcalls are needed, see this article on sharing pipelines while using seperate maps per thread:
-    //         https://ruby0x1.github.io/machinery_blog_archive/post/vulkan-pipelines-and-render-states/index.html    
+    //         https://ruby0x1.github.io/machinery_blog_archive/post/vulkan-pipelines-and-render-states/index.html
+    //         (if this link dies, I have forked the blog myself)
     PipelineEntry* pipeline_map;          // Recreated only when swapchain format changes (so never under most circumstances)
     ShaderRegistry shader_registry;
     ResourceIDs rids;  // IDs into registry, framegraph, or pipeline hash
 
-    // Arenas reset each frame
+
+    // Arenas that reset each frame
     MappedArena scenes_arena;
     MappedArena object_transforms;
     MappedArena joint_transforms;
+    
+    RenderView renderables_arena;  // Renderables array which gets sorted into draw calls by which shaders they use
+    DrawCallsPerShader drawcalls_collection;  // Draw Calls are accumulated each frame per shader
 
-    // Draw Calls are accumulated each frame per shader
-    DrawCallsPerShader drawcalls_collection;
+    // Before shadowing a spotlight, we check if it's already been shadowed
+    // Done by hashing the spotlight data relevant to the shadowing
+    // NOTE: When doing the shadow map, we can use the radius to set the far plane optimally
+    // FUTURE: Render shadow map into a texture atlas so multiple go in one.
+    //         That allows dynamically sized shadows (e.g. small spotlights don't take up a whole texture)
+    //         since all shadow map textures should be preallocated each frame.
+    uint32_t num_shadowed_spotlights;
+    uint32_t currently_shadowed_spotlight_indices[MAX_SHADOWMAPS];
+
     CameraInfo main_camera;
 
     // Renderer execution state:
@@ -90,8 +102,11 @@ typedef struct RenderState
     b32 is_next_scene_set;
     Scene_InitInfo next_scene_info;
 
-    // Renderables arena
-    RenderView renderables_arena;
+
+
+
+    // IMGUI
+    //
 
     // imgui descriptor pool
     VkDescriptorPool imgui_descriptor_pool;

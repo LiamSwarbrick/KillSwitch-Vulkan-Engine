@@ -31,6 +31,12 @@ typedef struct ResourceIDs
     uint32_t hdr_color_target_rid;
     // uint32_t hdr_color_target_pingpong_rid;
     uint32_t ldr_color_target_rid;
+
+    #define MAX_SHADOWMAPS 1    // <- ONE FOR NOW TIL THINGS ARE WORKING
+    uint32_t shadow_map_rids[MAX_SHADOWMAPS]; 
+    // FUTURE: Atlassed maps with the scissor rectangle for better usage.
+    // I.e. thin spotlights can use a smaller sized image, but it's too expensive to allocate at run time
+    //      so atassing the shadow (e.g. splitting up a massive texture into tiles) is a better solution
 }
 ResourceIDs;
 

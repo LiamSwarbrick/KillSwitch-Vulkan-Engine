@@ -29,11 +29,40 @@ namespace DebugUI
         glm::vec3 skew;
         glm::vec4 perspective;
         glm::decompose(t.matrix, scale, rotation, translation, skew, perspective);
-        ImGui::Text("Position:  %.3f  %.3f  %.3f", translation.x, translation.y, translation.z);
-        ImGui::Text("Rotation:  %.3f  %.3f  %.3f  %.3f", rotation.x, rotation.y, rotation.z, rotation.w);
-        ImGui::Text("Scale:  %.3f  %.3f  %.3f", scale.x, scale.y, scale.z);
-        ImGui::Text("Skew:  %.3f  %.3f  %.3f", skew.x, skew.y, skew.z);
-        ImGui::Text("Perspective:  %.3f  %.3f  %.3f  %.3f", perspective.x, perspective.y, perspective.z, perspective.w);
+
+        // Convert rotation to Euler (degrees) for UI
+        glm::vec3 euler = glm::degrees(glm::eulerAngles(rotation));
+
+        // Editable UI
+        bool changed = false;
+        changed |= ImGui::DragFloat3("Position", &translation.x, 0.1f);
+        changed |= ImGui::DragFloat3("Rotation", &euler.x, 0.5f);
+        changed |= ImGui::DragFloat3("Scale", &scale.x, 0.1f, 0.001f, 100.0f);
+        
+        if (changed)
+        {
+            // Convert back to quaternion
+            glm::quat newRot = glm::quat(glm::radians(euler));
+
+            // Rebuild transform
+            glm::mat4 T = glm::translate(glm::mat4(1.0f), translation);
+            glm::mat4 R = glm::mat4(newRot);
+            glm::mat4 S = glm::scale(glm::mat4(1.0f), scale);
+
+            t.matrix = T * R * S;
+        }
+
+        // glm::vec3 scale;
+        // glm::quat rotation;
+        // glm::vec3 translation;
+        // glm::vec3 skew;
+        // glm::vec4 perspective;
+        // glm::decompose(t.matrix, scale, rotation, translation, skew, perspective);
+        // ImGui::Text("Position:  %.3f  %.3f  %.3f", translation.x, translation.y, translation.z);
+        // ImGui::Text("Rotation:  %.3f  %.3f  %.3f  %.3f", rotation.x, rotation.y, rotation.z, rotation.w);
+        // ImGui::Text("Scale:  %.3f  %.3f  %.3f", scale.x, scale.y, scale.z);
+        // ImGui::Text("Skew:  %.3f  %.3f  %.3f", skew.x, skew.y, skew.z);
+        // ImGui::Text("Perspective:  %.3f  %.3f  %.3f  %.3f", perspective.x, perspective.y, perspective.z, perspective.w);
     }
 
     template <>
@@ -58,15 +87,30 @@ namespace DebugUI
         {
             ImGui::Text("Unkown Light Type");
         }
-        ImGui::Text("Color: (%f, %f, %f)", l.color.x, l.color.y, l.color.z);
-        ImGui::Text("Intensity: %f", l.intensity);
-        ImGui::Text("Radius: %f", l.radius);
+        // ImGui::Text("Color: (%f, %f, %f)", l.color.x, l.color.y, l.color.z);
+        // ImGui::Text("Intensity: %f", l.intensity);
+        // ImGui::Text("Radius: %f", l.radius);
+        ImGui::ColorEdit3("Color", &l.color.x);
+        ImGui::DragFloat("Intensity", &l.intensity, 0.1f, 0.0f, 100.0f);
+        ImGui::DragFloat("Radius", &l.radius, 0.1f, 0.0f, 100.0f);
 
         if (l.type == LIGHT_COMPONENT_SPOTLIGHT)
         {
-            ImGui::Text("Spot inner cone angle: %f (degrees)", glm::degrees(l.spot_inner_cone_angle));
-            ImGui::Text("Spot outer cone angle: %f (degrees)", glm::degrees(l.spot_outer_cone_angle));
+            float inner = glm::degrees(l.spot_inner_cone_angle);
+            float outer = glm::degrees(l.spot_outer_cone_angle);
+
+            if (ImGui::DragFloat("Inner Cone", &inner, 0.1f, 0.0f, 90.0f))
+                l.spot_inner_cone_angle = glm::radians(inner);
+
+            if (ImGui::DragFloat("Outer Cone", &outer, 0.1f, 0.0f, 90.0f))
+                l.spot_outer_cone_angle = glm::radians(outer);
         }
+
+        // if (l.type == LIGHT_COMPONENT_SPOTLIGHT)
+        // {
+        //     ImGui::Text("Spot inner cone angle: %f (degrees)", glm::degrees(l.spot_inner_cone_angle));
+        //     ImGui::Text("Spot outer cone angle: %f (degrees)", glm::degrees(l.spot_outer_cone_angle));
+        // }
     }
     
     template <>

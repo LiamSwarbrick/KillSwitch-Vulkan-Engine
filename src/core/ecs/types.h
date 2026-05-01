@@ -15,7 +15,7 @@ constexpr EntityID MAX_ENTITIES = NULL_ENTITY;
 
 static constexpr EntityID NULL_ID = std::numeric_limits<EntityID>::max();
 
-#warning ECS:: Maximum number of components is 32, please don't forget to adjust accordingly in ecs/types.h
+// #warning ECS:: Maximum number of components is 32, please don't forget to adjust accordingly in ecs/types.h
 constexpr size_t MAX_COMPONENTS = 32;
 using ComponentMask = std::bitset<MAX_COMPONENTS>;
 

@@ -560,6 +560,10 @@ void Renderer_Init(const Renderer_InitInfo* info)
         .spot_lights  =  (SpotLight*)L_calloc(MAX_SPOTLIGHTS, sizeof(SpotLight), &renderstate.main.tt)
     };
 
+    // Shadowing cache
+    renderstate.num_shadowed_spotlights = 0;
+    memset(&renderstate.currently_shadowed_spotlight_indices, UINT32_MAX, sizeof(renderstate.currently_shadowed_spotlight_indices));
+
     // Init per frame structures (except for swapchain_image_acquired_semaphore, which is handled by create_or_recreate_swapchain)
     {
         VkFenceCreateInfo render_fence_create_info = {
@@ -1003,6 +1007,7 @@ void Renderer_DrawFrame(CameraInfo main_camera)
 
     // Depth prepass
     FG_Resource* depth_buffer_res = &renderstate.registry.resources[renderstate.rids.depth_buffer_rid];
+    SceneData depth_prepass_scene_data = MakeSceneData(renderstate.main_camera, (VkExtent2D){ depth_buffer_res->image.extent.width, depth_buffer_res->image.extent.height });
     RenderPassDesc depth_prepass_desc = {
         .debug_name = "Depth Prepass",
 
@@ -1031,8 +1036,8 @@ void Renderer_DrawFrame(CameraInfo main_camera)
         .is_compute = 0,
         .render_area = { .offset = { 0, 0 }, .extent = { depth_buffer_res->image.extent.width, depth_buffer_res->image.extent.height } },
         
-        .execute_callback = DepthPrepass_Execute,
-        .user_data = NULL
+        .execute_callback = DepthMapPass_Execute,
+        .user_data = &depth_prepass_scene_data
     };
     uint32_t depth_prepass = FG_AddPass(depth_prepass_desc);
 
@@ -1222,12 +1227,10 @@ void Renderer_DrawFrame(CameraInfo main_camera)
 
     /*  Execute FrameGraph
 
-        Gathers renderables from game state, based on flags, provides each
-        pass their drawlists e.g. renderable with rig and unlit material would
-        go to that specific pass.
-
-        OR I can leave each execute callback to gather their relevant items themselves,
-        which is probably easier
+        Calls the execute callback of renderpasses in the framegraph in order.
+        TODO: Multiqueue, multithreaded support.
+        TODO: Topological sorting, and other optimisations that are easy now that
+              a framegraph is in place.
     
     */
 
