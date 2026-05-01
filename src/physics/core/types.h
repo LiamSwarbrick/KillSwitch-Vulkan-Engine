@@ -88,12 +88,12 @@ struct AABB
     {
         // Slab method, refer to https://education.siggraph.org/static/HyperGraph/raytrace/rtinter3.htm
 
-        float tMin = 0.0f;
-        float tMax = ray.maxDistance;
+        float tMin = std::numeric_limits<float>::lowest(); // Change to take into account if origin is inside the AABB
+        float tMax = std::numeric_limits<float>::max();
 
         // Extra information for raycasthit
-        int normalAxis = -1;
-        float normalSign = 1.0f;
+        int entryAxis = -1, exitAxis = -1;
+        float entrySign = 1.0f, exitSign = 1.0f;
 
         for (int i = 0; i < 3; i++)
         {
@@ -120,21 +120,32 @@ struct AABB
                 if (t0 > tMin)
                 {
                     tMin = t0;
-                    normalAxis = i;
-                    normalSign = sign;
+                    entryAxis = i;
+                    entrySign = sign;
                 }
-                tMax = std::min(tMax, t1);
+                if (t1 < tMax)
+                {
+                    tMax = t1;
+                    exitAxis = i;
+                    exitSign = sign;
+                }
 
                 if (tMax < tMin) return false;
                 if (tMax < 0.0f) return false;
             }
         }
 
-        if (normalAxis < 0) return false;
+        bool inside = tMin < 0.0f;
+        float t = inside ? tMax : tMin;
+        if (t < F_EPSILON || t > ray.maxDistance) return false;
 
-        outHit.t = tMin;
-        outHit.point = ray.origin + ray.direction * tMin;
-        outHit.normal[normalAxis] = -normalSign;
+        outHit.t = t;
+        outHit.point = ray.origin + ray.direction * t;
+
+        if (inside)
+            outHit.normal[exitAxis] = exitSign;
+        else 
+            outHit.normal[entryAxis] = -entrySign;
 
         return true;
     }
@@ -205,51 +216,64 @@ struct ShapeDesc
     }
 };
 
-struct ShapeHandle
+// Using generic handle because im tired of doing the same handle over and over again
+template <typename T>
+struct PhysicsHandle
 {
     uint32_t index = UINT32_MAX;
 
-    bool isValid() const 
-    { 
-        return index != UINT32_MAX; 
-    }
-
-    bool operator==(const ShapeHandle& o) const 
-    { 
-        return index == o.index; 
-    }
-
-    bool operator!=(const ShapeHandle& o) const
-    {
-        return index != o.index;
-    }
-};
-
-// Identical to ShapeHandle or RigidBodyHandle
-struct PlaneHandle
-{
-    uint32_t index = UINT32_MAX;
 
     bool isValid() const
     {
         return index != UINT32_MAX;
     }
 
-    bool operator==(const PlaneHandle& o) const
+    operator uint32_t() const
+    {
+        return index;
+    }
+
+    operator int() const
+    {
+        return static_cast<int>(index);
+    }
+
+    void operator=(uint32_t value)
+    {
+        index = value;
+    }
+
+    bool operator==(const T& o) const
     {
         return index == o.index;
     }
 
-    bool operator!=(const PlaneHandle& o) const
+    bool operator!=(const T& o) const
     {
         return index != o.index;
     }
 };
 
+struct ShapeHandle : PhysicsHandle<ShapeHandle>
+{
+};
+
+struct PlaneHandle : PhysicsHandle<PlaneHandle>
+{
+};
+
+struct RigidBodyHandle : PhysicsHandle<RigidBodyHandle>
+{
+};
+
+struct CharacterHandle : PhysicsHandle<CharacterHandle>
+{
+};
+
 static constexpr ShapeHandle InvalidShapeHandle = { UINT32_MAX };
 static constexpr PlaneHandle InvalidPlaneHandle = { UINT32_MAX };
-
-
+static constexpr RigidBodyHandle InvalidRigidBodyHandle = { UINT32_MAX };
+static constexpr CharacterHandle InvalidCharacterHandle = { UINT32_MAX };
 
 
 // ------------------
@@ -338,44 +362,33 @@ struct RigidBody
     uint32_t bodyID; // to backtrack to handle in O(1)
 };
 
-struct RigidBodyHandle
+struct PhysicsCharacter
 {
-    uint32_t index = UINT32_MAX;
-
-    bool isValid() const
+    enum GroundState
     {
-        return index != UINT32_MAX;
-    }
+        OnGround,
+        OnSteepGround,
+        InAir,
+        Undefined // When getting a body that does not have a defined ground state
+    };
 
-    // For automatic casting
-    operator uint32_t() const
-    {
-        return index;
-    }
+    // Instead of pointer to body, could be RBHandle instead
+    RigidBody* body = nullptr;
 
-    operator int() const
-    {
-        return static_cast<int>(index);
-    }
+    GroundState groundState = GroundState::InAir;
+    glm::vec3 groundNormal = glm::vec3(0.0f, 1.0f, 0.0f); // For a more complex controller, we could have the groundNormal be the gravity's opposite, (normalized)
 
-    void operator=(uint32_t value)
-    {
-        index = value;
-    }
-
-    bool operator==(const RigidBodyHandle& o) const
-    {
-        return index == o.index;
-    }
-
-    bool operator!=(const RigidBodyHandle& o) const
-    {
-        return index != o.index;
-    }
+    float maxWalkableAngle = glm::radians(50.0f); // Maximum angle compared to groundNormal that makes it able to snap-walk on tilted/uneven terrain
+    float stepHeight = 0.4f; // Allows to climb / drop 
 };
 
-static constexpr RigidBodyHandle InvalidRigidBodyHandle = { UINT32_MAX };
-
+struct PhysicsCharacterInfo
+{
+    PhysicsCharacter::GroundState groundState = PhysicsCharacter::GroundState::Undefined;
+    glm::vec3 groundNormal = glm::vec3(0.0f);
+    float maxWalkableAngle = -1.0f; 
+    float stepHeight = -1.0f;
+};
 
 
 struct BodyPair
