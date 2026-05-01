@@ -1,5 +1,5 @@
 #version 460
-//#extension GL_GOOGLE_include_directive : require
+#extension GL_GOOGLE_include_directive : require
 #include "common/shared.glsl"
 #include "common/shared_material_read.glsl"
 
