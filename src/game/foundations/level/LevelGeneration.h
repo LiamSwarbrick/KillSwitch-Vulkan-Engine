@@ -5,6 +5,13 @@
 #include "core/ecs.h"
 #include <map>
 
+// Enum of room themes, add to this when making new theme
+enum Theme {
+    OUTSIDE = 0,
+    INSIDE = 1,
+    THEME_COUNT = 2
+};
+
 // Dedicating 2 bits for each type of wall
 enum WallType {
     OPEN = 0,
@@ -26,6 +33,7 @@ struct Room {
     uint16_t doorwayMask;
     float rotation;
     float weight;
+    Theme theme;
 };
 
 // Stores current state of a cell in the level grid
@@ -41,6 +49,9 @@ public:
 
     // Creates a minimum required mask, checking neighbours wall types to ensure it connects validly
     uint16_t RequiredMask(int x, int y);
+
+    // Checks connected neighbours themes, selects a theme from that list at random
+    Theme GetPreferredTheme(glm::ivec2 room);
 
     // Builds all possibilities from given assets
     void BuildPalette(const std::vector<Asset*>& roomAssets);
@@ -68,7 +79,7 @@ private:
     const glm::ivec2 neighbourOffsets[4] = { {0, 1}, {1, 0}, {0, -1}, {-1, 0} };
 
     // Helpers
-    uint16_t ScanDoorways(Asset* asset);
+    uint16_t ScanDoorways(Asset* asset, Theme& theme);
     uint16_t RotateMask(uint16_t mask, int steps);
     WallType GetWallType(uint16_t mask, DoorDirection direction);
     void SetWallType(uint16_t& mask, DoorDirection direction, WallType wallType);

@@ -211,6 +211,11 @@ int main(int argc, char *argv[])
     roomAssets.push_back(scene.LoadPrefab("assets/levels/2-AD-Door_Room.gltf"));
     roomAssets.push_back(scene.LoadPrefab("assets/levels/2-Door-Corridor_Room.gltf"));
     roomAssets.push_back(scene.LoadPrefab("assets/levels/1-Door_Room.gltf"));
+    roomAssets.push_back(scene.LoadPrefab("assets/levels/4_Door_Inside_Room.gltf"));
+    roomAssets.push_back(scene.LoadPrefab("assets/levels/3_Door_Inside_Room.gltf"));
+    roomAssets.push_back(scene.LoadPrefab("assets/levels/2_OP_Door_Inside_Room.gltf"));
+    roomAssets.push_back(scene.LoadPrefab("assets/levels/2_AD_Door_Inside_Room.gltf"));
+    roomAssets.push_back(scene.LoadPrefab("assets/levels/1_Door_Inside_Room.gltf"));
     roomAssets.push_back(scene.LoadPrefab("assets/levels/Solid_Room.gltf"));
     roomAssets.push_back(scene.LoadPrefab("assets/levels/4_Open_Room.gltf"));
     roomAssets.push_back(scene.LoadPrefab("assets/levels/3_Open_1_Wall_Room.gltf"));

@@ -33,7 +33,15 @@ bool LevelGeneration::CanNeighbour(int roomAIndex, int roomBIndex, DoorDirection
 	WallType roomAWallType = GetWallType(roomA.doorwayMask, direction);
 	WallType roomBWallType = GetWallType(roomB.doorwayMask, (DoorDirection)(((int)direction + 4) % 8));
 
-	return roomAWallType == roomBWallType;
+	// Rooms can only connect if both walls are same type
+	if (roomAWallType != roomBWallType)
+		return false;
+
+	// Rooms can only connect if themes match when connection is open
+	if (roomAWallType == OPEN && roomA.theme != roomB.theme)
+		return false;
+
+	return true;
 }
 
 uint16_t LevelGeneration::RequiredMask(int x, int y)
@@ -61,6 +69,35 @@ uint16_t LevelGeneration::RequiredMask(int x, int y)
 	return mask;
 }
 
+// Gets a list of the themes of a cells neighbours, then randomly picks a theme from the list
+Theme LevelGeneration::GetPreferredTheme(glm::ivec2 room)
+{
+	// Iterate through all neighbours and if connected by open or door, add their theme to a list
+	std::vector<Theme> neighbourThemes;
+	for (int i = 0; i < 4; ++i)
+	{
+		glm::ivec2 neighbourCoords = { room.x + neighbourOffsets[i].x, room.y + neighbourOffsets[i].y };
+		
+		if (neighbourCoords.x >= 0 && neighbourCoords.x < gridWidth && neighbourCoords.y >= 0 && neighbourCoords.y < gridHeight)
+		{
+			GridCell& neighbourCell = grid[neighbourCoords.y * gridWidth + neighbourCoords.x];
+			if (neighbourCell.isCollapsed && GetWallType(palette[neighbourCell.validRooms[0]].doorwayMask, (DoorDirection)(((int)directions[i] + 4) % 8)) != WALL)
+				neighbourThemes.push_back(palette[neighbourCell.validRooms[0]].theme);
+		}
+	}
+
+	// Default theme is outside
+	if (neighbourThemes.empty())
+	{
+		SDL_Log("No neighbours to propagate theme at grid cell: %d, %d", room.x, room.y);
+		return OUTSIDE;
+	}
+
+	// Pick a random theme from the list, with higher weighting to those appearing multiple times
+	std::uniform_int_distribution<size_t> randomTheme(0, neighbourThemes.size() - 1);
+	return neighbourThemes[randomTheme(rng)];
+}
+
 // Scans vector of room assets to fill a palette of room variations
 void LevelGeneration::BuildPalette(const std::vector<Asset*>& roomAssets)
 {
@@ -69,7 +106,8 @@ void LevelGeneration::BuildPalette(const std::vector<Asset*>& roomAssets)
 	// Scan every room asset and store all non-duplicate rotations of it
 	for (Asset* asset : roomAssets)
 	{
-		uint16_t defaultMask = ScanDoorways(asset);
+		Theme theme = OUTSIDE;
+		uint16_t defaultMask = ScanDoorways(asset, theme);
 
 		// For every room rotation, check if its a dupe, weight it, then push it to the palette
 		for (int i = 0; i < 4; ++i)
@@ -80,7 +118,7 @@ void LevelGeneration::BuildPalette(const std::vector<Asset*>& roomAssets)
 			bool roomDuplicate = false;
 			for (const auto& room : palette)
 			{
-				if (room.asset == asset && room.doorwayMask == rotatedMask)
+				if (room.asset == asset && room.doorwayMask == rotatedMask && room.theme == theme)
 				{
 					roomDuplicate = true;
 					break;
@@ -165,7 +203,7 @@ void LevelGeneration::BuildPalette(const std::vector<Asset*>& roomAssets)
 					break;
 				}
 
-				palette.push_back({ asset, rotatedMask, rotation, weight });
+				palette.push_back({ asset, rotatedMask, rotation, weight, theme });
 			}
 		}
 	}
@@ -318,15 +356,19 @@ void LevelGeneration::GenerateGrid(int width, int height, glm::ivec2 start, glm:
 			}
 		}
 
-		// Assign starting cell its room and update collapsed state
+		// Collapsing starting cell
 		int gridIndex = start.y * width + start.x;
 		GridCell& startingCell = grid[gridIndex];
 		int roomChoice = -1;
 
+		// Pick a random theme from themes and choose starting room
+		std::uniform_int_distribution<int> theme(0, THEME_COUNT - 1);
+		Theme randomTheme = (Theme)(theme(rng));
 		for (int i = 0; i < palette.size(); ++i)
-			if (palette[i].doorwayMask == startDoorwayMask)
+			if (palette[i].doorwayMask == startDoorwayMask && palette[i].theme == randomTheme)
 				roomChoice = i;
 
+		SDL_assert(roomChoice != -1);
 		startingCell.validRooms = { roomChoice };
 		startingCell.isCollapsed = true;
 
@@ -342,15 +384,18 @@ void LevelGeneration::GenerateGrid(int width, int height, glm::ivec2 start, glm:
 			glm::ivec2 offset = neighbourOffsets[i] * dirDist(rng);
 			glm::ivec2 position = start + offset;
 
-			// Find the palette index with a four door mask and collapse the room
 			gridIndex = position.y * width + position.x;
 			GridCell& Cell = grid[gridIndex];
 			roomChoice = -1;
 
+			// Pick a random theme 
+			std::uniform_int_distribution<int> theme(0, THEME_COUNT - 1);
+			randomTheme = (Theme)(theme(rng));
 			for (int i = 0; i < palette.size(); ++i)
-				if (palette[i].doorwayMask == ((DOOR << NORTH) + (DOOR << EAST) + (DOOR << SOUTH) + (DOOR << WEST)))
+				if (palette[i].doorwayMask == ((DOOR << NORTH) + (DOOR << EAST) + (DOOR << SOUTH) + (DOOR << WEST)) && palette[i].theme == randomTheme)
 					roomChoice = i;
 
+			SDL_assert(roomChoice != -1);
 			Cell.validRooms = { roomChoice };
 			Cell.isCollapsed = true;
 			updateRooms.push_back({ position.x, position.y });
@@ -391,14 +436,23 @@ void LevelGeneration::GenerateGrid(int width, int height, glm::ivec2 start, glm:
 			if (nextRoomCoords.x < 0 || nextRoomCoords.x >= width || nextRoomCoords.y < 0 || nextRoomCoords.y >= height)
 				break;
 
-			// Randomly (with weighting) pick the room layout from the list of the cells valid rooms and update collapsed state
 			gridIndex = nextRoomCoords.y * width + nextRoomCoords.x;
 			GridCell& cell = grid[gridIndex];
-
+			
+			// Select a theme and weight that theme so it has a higher chance of being picked
+			Theme preferredTheme = GetPreferredTheme(nextRoomCoords);
 			std::vector<float> weights;
 			for (int roomIndex : cell.validRooms)
-				weights.push_back(palette[roomIndex].weight);
+			{
+				float weight = palette[roomIndex].weight;
 
+				if (palette[roomIndex].theme == preferredTheme)
+					weight *= 10.0f;
+
+				weights.push_back(weight);
+			}
+
+			// Randomly (with weighting) pick the room layout from the list of the cells valid rooms and update collapsed state
 			std::discrete_distribution<> distribution(weights.begin(), weights.end());
 			int roomChoice = cell.validRooms[distribution(rng)];
 
@@ -439,11 +493,12 @@ void LevelGeneration::GenerateGrid(int width, int height, glm::ivec2 start, glm:
 				// Find the mask that only seals the open sides
 				GridCell& cell = grid[room.y * width + room.x];
 				uint8_t requiredMask = RequiredMask(room.x, room.y);
+				Theme preferredTheme = GetPreferredTheme(room);
 
 				// Add all possible terminating room layouts to a vector
 				std::vector<int> terminatingLayouts;
 				for (int i = 0; i < palette.size(); ++i)
-					if (palette[i].doorwayMask == requiredMask)
+					if (palette[i].doorwayMask == requiredMask && palette[i].theme == preferredTheme)
 						terminatingLayouts.push_back(i);
 
 				// Pick and place a terminating room to seal the level, keep adding to roomsPlaced
@@ -456,8 +511,18 @@ void LevelGeneration::GenerateGrid(int width, int height, glm::ivec2 start, glm:
 				}
 				else
 				{
-					SDL_Log("No terminating room type found for grid cell x:%d, y:%d", room.x, room.y);
+					// Try again, without the theme constraint
+					for (int i = 0; i < palette.size(); ++i)
+						if (palette[i].doorwayMask == requiredMask)
+							terminatingLayouts.push_back(i);
+
+					// If no terminating room exists, missing some assets
+					SDL_assert(!terminatingLayouts.empty());
+
+					std::uniform_int_distribution<int> pick(0, terminatingLayouts.size() - 1);
+					cell.validRooms = { terminatingLayouts[pick(rng)] };
 					cell.isCollapsed = true;
+					roomsPlaced++;
 				}
 			}
 		}
@@ -469,6 +534,8 @@ void LevelGeneration::GenerateGrid(int width, int height, glm::ivec2 start, glm:
 		float amountTraversable = (float)traversableRooms.size() / (roomsPlaced);
 		if (grid[goal.y * width + goal.x].isCollapsed && amountTraversable > 0.99f && roomsPlaced >= maxRooms)
 			break;
+		else
+			SDL_Log("Flipped up trying again..., traversable: %f, roomsplaced: %d, maxrooms: %d", amountTraversable, roomsPlaced, maxRooms);
 
 	}
 }
@@ -503,7 +570,7 @@ void LevelGeneration::InstantiateLevel(Scene* scene)
 
 
 // Scans the loaded asset for doorway nodes, returning a bitmask of open doorway directions
-uint16_t LevelGeneration::ScanDoorways(Asset* asset)
+uint16_t LevelGeneration::ScanDoorways(Asset* asset, Theme& theme)
 {
 	if (!asset)
 		return 0;
@@ -538,6 +605,10 @@ uint16_t LevelGeneration::ScanDoorways(Asset* asset)
 		else if (strcmp(nodeName, "Wall_W") == 0 || strcmp(nodeName, "Wall_W_Full") == 0)
 			if (GetWallType(mask, WEST) != DOOR)
 				SetWallType(mask, WEST, WALL);
+
+		// Get theme
+		if (strcmp(nodeName, "Floor_Inside") == 0)
+			theme = INSIDE;
 	}
 	return mask;
 }
