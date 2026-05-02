@@ -109,7 +109,7 @@ void EndDrawCalls()
     for (uint32_t i = 0; i < renderstate.num_shadowed_spotlights; ++i)
     {
         memcpy(
-            mapped_shadowmap_viewproj_matrices + i * sizeof(glm::mat4),
+            mapped_shadowmap_viewproj_matrices + i * 16,
             renderstate.shadowed_spotlight_scenedatas[i].view_proj,
             sizeof(glm::mat4)
         );

@@ -20,18 +20,11 @@ SceneData MakeSpotLightSceneData(SpotLight spotlight, VkExtent2D extent)
     float aspect = 1.0f;  // Square shadow map
     float near_plane = 0.1f;
     float far_plane = spotlight.pos_and_radius[3];  // Setting radius to be the far plane (do i need some padding?)
-    float fov_y = spotlight.outer_cone_angle * 2.0f;  // <- outer_cone_angle is the half angle, so multiply by 2
+    float fov_y = spotlight.outer_cone_angle * 2.0f;  // <- Angle from centre, hence double it
     glm::mat4 light_proj = glm::perspectiveRH_ZO(fov_y, aspect, near_plane, far_plane);
     light_proj[1][1] *= -1;  // Vulkan Flips Y
 
-    // NDC [-1,1] to texture space [0,1]
-    glm::mat4 bias_matrix = glm::mat4(
-        0.5f, 0.0f, 0.0f, 0.0f,
-        0.0f, 0.5f, 0.0f, 0.0f,
-        0.0f, 0.0f, 1.0f, 0.0f,
-        0.5f, 0.5f, 0.0f, 1.0f
-    );
-    glm::mat4 light_view_proj = bias_matrix * light_proj * light_view;
+    glm::mat4 light_view_proj = light_proj * light_view;
     glm::uvec2 extent_uvec2 = glm::uvec2(extent.width, extent.height);
 
 

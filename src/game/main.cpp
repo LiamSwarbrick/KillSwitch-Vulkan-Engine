@@ -86,11 +86,23 @@ int main(int argc, char *argv[])
         .enable_validation = enabled_validation_layers,
         .preferred_initial_settings = {  // Will fallback if these aren't possible
             .uncapped_fps = 0,
-            .msaa_sample_count = 1,
+            .msaa_sample_count = 4,
             .fov_y = 50.0f
         }
     };
     Renderer_Init(&renderer_info);
+
+    #if 0  // Just an example of settings API usage
+    // Set 4xMSAA if available
+    if (Renderer_GetSettingsCapabilities().max_msaa_samples >= 4)
+    {
+        SDL_Log("Enabling 4xMSAA");
+        Renderer_Settings settings = Renderer_GetSettings();
+        settings.msaa_sample_count = 4;
+        Renderer_ChangeSettings(settings);
+    }
+    #endif
+
 
     AudioSystem audio_system = AudioSystem_Create((AudioSystemCreateInfo){
         .debug_name = "GameAudio",
@@ -163,16 +175,6 @@ int main(int argc, char *argv[])
 
     // (void)boot_vert;
     // (void)boot_frag;
-
-    // Set 4xMSAA if available
-    if (Renderer_GetSettingsCapabilities().max_msaa_samples >= 4)
-    {
-        SDL_Log("Enabling 4xMSAA");
-        Renderer_Settings settings = Renderer_GetSettings();
-        settings.msaa_sample_count = 4;
-        Renderer_ChangeSettings(settings);
-    }
-
     
     /* LOADING NOTES
        Realistically, the splash screen assets would load first, then the main menu assets

@@ -26,6 +26,7 @@ vec3 ground_brdf(vec3 N, vec3 V, vec3 L)
     //   half_lambert = dot(N, L) * 0.5 + 0.5
     //   lambert      = max(dot(N, L), 0.0)
 
+    // return vec3(max(dot(N, L), 0.0));
     float brdf = dot(N, L) * 0.5 + 0.5;   // Half lambert
     return vec3(brdf);
 
@@ -124,8 +125,10 @@ vec3 apply_dithered_fog(
     float dither
 )
 {
+    const float fog_start = 5.0;
+    const float fog_length = 25.0;
     float z_linear = (near * far) / (far - depth * (far - near));
-    float fog = clamp((z_linear - 2.0) / 25.0, 0.0, 1.0);
+    float fog = clamp((z_linear - fog_start) / fog_length, 0.0, 1.0);
     float fog_step = fog > dither ? 1.0 : 0.0;
 
     // vec3 fog_color = vec3(0.005, 0.005, 0.025);
@@ -200,14 +203,15 @@ void main()
 
         float shadow_factor = 1.0;
         int spotlight_shadowmap_index = sl_shadow_map_indices.spotlight_shadowmap_index[i];
-        if (spotlight_shadowmap_index >= 0)
+        if (spotlight_shadowmap_index >= 0)  // If shadow map is available for this light
         {
-            // Shadow map is available
-
             // SHADOW MAPPING
             mat4 spotlight_view_proj = shadow_map_sl_cameras.shadowmap_spotlight_viewproj[spotlight_shadowmap_index];
             vec4 shadow_coord = spotlight_view_proj * vec4(world_pos, 1.0);
-            shadow_coord.z -= 0.0005 * shadow_coord.w;  // Prevent shadow acne with a small bias (beware of peter panning)
+            shadow_coord.z -= 0.0002 * shadow_coord.w;  // Prevent shadow acne with a small bias (beware of peter panning)
+
+            // NDC [-1,1] to [0,1]
+            shadow_coord.xy = 0.5 * (shadow_coord.xy + shadow_coord.w);
 
             uint32_t shadowmap_texture_idx = push.pass.texture_indices[spotlight_shadowmap_index];
             shadow_factor = textureProj(sampler2DShadow(

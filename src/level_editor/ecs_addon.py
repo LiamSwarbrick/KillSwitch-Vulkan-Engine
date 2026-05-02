@@ -762,6 +762,12 @@ def prepare_lights_for_export():
 
         light = obj.data
 
+        # Force the actual color into extras so we can read it directly
+        # Blender light colors are usually Linear RGB. (For some reason it always exports as white otherwise on glTF)
+        light["engine_color"] = [light.color[0], light.color[1], light.color[2]]
+
+        light["engine_intensity"] = light.energy
+
         # if light.type == 'POINT':
         radius = light.shadow_soft_size
 

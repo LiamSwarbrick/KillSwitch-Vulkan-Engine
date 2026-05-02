@@ -87,9 +87,6 @@ namespace DebugUI
         {
             ImGui::Text("Unkown Light Type");
         }
-        // ImGui::Text("Color: (%f, %f, %f)", l.color.x, l.color.y, l.color.z);
-        // ImGui::Text("Intensity: %f", l.intensity);
-        // ImGui::Text("Radius: %f", l.radius);
         ImGui::ColorEdit3("Color", &l.color.x);
         ImGui::DragFloat("Intensity", &l.intensity, 0.1f, 0.0f, 100.0f);
         ImGui::DragFloat("Radius", &l.radius, 0.1f, 0.0f, 100.0f);
@@ -105,12 +102,6 @@ namespace DebugUI
             if (ImGui::DragFloat("Outer Cone", &outer, 0.1f, 0.0f, 90.0f))
                 l.spot_outer_cone_angle = glm::radians(outer);
         }
-
-        // if (l.type == LIGHT_COMPONENT_SPOTLIGHT)
-        // {
-        //     ImGui::Text("Spot inner cone angle: %f (degrees)", glm::degrees(l.spot_inner_cone_angle));
-        //     ImGui::Text("Spot outer cone angle: %f (degrees)", glm::degrees(l.spot_outer_cone_angle));
-        // }
     }
     
     template <>

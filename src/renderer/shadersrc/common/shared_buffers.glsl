@@ -7,7 +7,7 @@
 
 #include "shared_types.glsl"
 
-#define MAX_SHADOWMAPS 1    // <- ONE FOR NOW TIL THINGS ARE WORKING
+#define MAX_SHADOWMAPS 3
 #define MAX_POINTLIGHTS 5000
 #define MAX_SPOTLIGHTS  5000
 

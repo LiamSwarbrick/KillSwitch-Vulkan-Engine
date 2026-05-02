@@ -5,6 +5,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include "stb_image.h"  // NOTE: Currently STB_IMAGE_IMPLEMENTATION is defined in renderer.cpp
+#include <ctype.h>
 
 // Helper functions to get indices from cgltf pointers
 static int get_mesh_index(cgltf_data* data, cgltf_mesh* target) { return target ? (int)(target - data->meshes) : -1; }
@@ -44,6 +45,49 @@ static int find_skeleton_root(Skin* skin) {
 		}
 	}
 	return 1;
+}
+
+static float get_float_from_extras(const char* extras, const char* key) {
+    if (!extras) return -1.0f;
+    char* target = (char*)strstr(extras, key);
+    if (!target) return -1.0f;
+
+    // Move pointer past the key and the ":" character
+    target = (char*)strstr(target, ":");
+    if (!target) return -1.0f;
+    target++; 
+
+    return (float)atof(target);
+}
+
+void get_vec3_from_extras(const char* extras, const char* key, float out[3]) {
+    if (!extras || !key) return;
+
+    // Find the key in the JSON string
+    char* target = (char*)strstr(extras, key);
+    if (!target) return;
+
+    // Move past the key and find the opening bracket '['
+    target = (char*)strstr(target, "[");
+    if (!target) return;
+    target++; // Step inside the bracket
+
+    // Parse the 3 components
+    for (int i = 0; i < 3; i++) {
+        // Skip whitespace, commas, or brackets to get to the next number
+        while (*target && !isdigit(*target) && *target != '-' && *target != '.') {
+            target++;
+        }
+        
+        if (*target) {
+            out[i] = (float)atof(target);
+            
+            // Move pointer past the current number to prepare for the next iteration
+            while (*target && (isdigit(*target) || *target == '.' || *target == '-' || *target == 'e')) {
+                target++;
+            }
+        }
+    }
 }
 
 Image load_image(const char* name, const char* uri)
@@ -284,7 +328,22 @@ Asset* load_asset(const char* filename) {
 		// cgltf types: 1=directional, 2=point, 3=spot
 		light->type = gltf_light->type;
 		memcpy(light->color, gltf_light->color, sizeof(float) * 3);
-		light->intensity = gltf_light->intensity;
+
+		// Try to get our custom "engine_intensity" from extras
+		float custom_intensity = -1.0f;
+		if (gltf_light->extras.data) {
+			custom_intensity = get_float_from_extras(gltf_light->extras.data, "engine_intensity");
+
+			get_vec3_from_extras(gltf_light->extras.data, "engine_color", light->color);
+		}
+
+		// If the custom property exists, use it. Otherwise, fallback to gltf intensity.
+		if (custom_intensity >= 0.0f) {
+			light->intensity = custom_intensity;
+		} else {
+			light->intensity = gltf_light->intensity;
+		}
+
 		light->range = gltf_light->range;
 		light->spot_inner_cone_angle = gltf_light->spot_inner_cone_angle;
 		light->spot_outer_cone_angle = gltf_light->spot_outer_cone_angle;

@@ -846,7 +846,7 @@ void Renderer_PushRenderable(Renderable renderable)
 void Renderer_PushLight(C_Light light, glm::vec3 position, glm::vec3 direction, b32 is_shadowed)
 {
     SDL_assert(is_shadowed == (light.type == LIGHT_COMPONENT_SPOTLIGHT) && "Only shadowing spot lights for now");
-
+#warning TODO: CPU Light assignment to clusters
     glm::vec4 pos_and_radius = glm::vec4(position.x, position.y, position.z, light.radius);
     glm::vec4 color_and_intensity = glm::vec4(light.color.x, light.color.y, light.color.z, light.intensity);
 
@@ -887,6 +887,56 @@ void Renderer_PushLight(C_Light light, glm::vec3 position, glm::vec3 direction, 
 
 void Renderer_DrawFrame(CameraInfo main_camera)
 {
+    /* Sort Drawcalls into arrays per shader
+
+        Example, Renderable r with MAT_PBR_WITH_OUTLINE:
+        r could be added to many different shaders: (pseudocode)
+            renderables_per_shader[SHADER_PBR].append(r);
+            renderables_per_shader[SHADER_OUTLINE].append(r);
+            renderables_per_shader[SHADER_SHADOWMAP].append(r);
+        
+        Importantly, renderables have per frame data like transforms etc.
+        For instance, an outline effect should be togglable in gameplay code. Same with visibility.
+    */
+
+    BeginDrawCalls();
+
+    for (uint32_t i = 0; i < renderstate.renderables_arena.num_renderables; ++i)
+    {
+        AddDrawCall(&renderstate.renderables_arena.items[i]);
+    }
+    
+    // Saturate shadow maps with spotlights
+    // TODO: Use nearest lights or some shit instead of just the first shadowed spotlights we come across
+    renderstate.num_shadowed_spotlights = 0;
+    memset(renderstate.shadowed_spotlight_indices, 0, sizeof(renderstate.shadowed_spotlight_indices));
+    for (uint32_t i = 0; i < renderstate.renderables_arena.num_spot_lights; ++i)
+    {
+        if (renderstate.renderables_arena.is_spotlight_shadowed[i])
+        {
+            renderstate.shadowed_spotlight_indices[renderstate.num_shadowed_spotlights++] = i;
+        }
+
+        if (renderstate.num_shadowed_spotlights == MAX_SHADOWMAPS)
+        {
+            break;
+        }
+    }
+
+    EndDrawCalls();
+
+    
+
+    // Set main camera
+    renderstate.main_camera = main_camera;
+
+
+
+
+
+
+
+
     /*  Get current swapchain image, and wait on sync structures
 
         This happens before building the frame graph, since we need to know
@@ -952,48 +1002,6 @@ void Renderer_DrawFrame(CameraInfo main_camera)
 
 
 
-    /* Sort Drawcalls into arrays per shader
-
-        Example, Renderable r with MAT_PBR_WITH_OUTLINE:
-        r could be added to many different shaders: (pseudocode)
-            renderables_per_shader[SHADER_PBR].append(r);
-            renderables_per_shader[SHADER_OUTLINE].append(r);
-            renderables_per_shader[SHADER_SHADOWMAP].append(r);
-        
-        Importantly, renderables have per frame data like transforms etc.
-        For instance, an outline effect should be togglable in gameplay code. Same with visibility.
-    */
-
-    BeginDrawCalls();
-
-    for (uint32_t i = 0; i < renderstate.renderables_arena.num_renderables; ++i)
-    {
-        AddDrawCall(&renderstate.renderables_arena.items[i]);
-    }
-    
-    // Saturate shadow maps with spotlights
-    // TODO: Use nearest lights or some shit instead of just the first shadowed spotlights we come across
-    renderstate.num_shadowed_spotlights = 0;
-    memset(renderstate.shadowed_spotlight_indices, 0, sizeof(renderstate.shadowed_spotlight_indices));
-    for (uint32_t i = 0; i < renderstate.renderables_arena.num_spot_lights; ++i)
-    {
-        if (renderstate.renderables_arena.is_spotlight_shadowed[i])
-        {
-            renderstate.shadowed_spotlight_indices[renderstate.num_shadowed_spotlights++] = i;
-        }
-
-        if (renderstate.num_shadowed_spotlights == MAX_SHADOWMAPS)
-        {
-            break;
-        }
-    }
-
-    EndDrawCalls();
-
-    
-
-    // Set main camera
-    renderstate.main_camera = main_camera;
 
 
     /*  Build FrameGraph
@@ -1295,6 +1303,8 @@ void Renderer_DrawFrame(CameraInfo main_camera)
 
 
 
+
+
     /*
         Build and Render ImGUI Frame
         - Doing this after the framegraph is built so we can visualize the framegraph too!
@@ -1313,6 +1323,8 @@ void Renderer_DrawFrame(CameraInfo main_camera)
     ImGui::Render();
 
     
+
+
 
 
     /*  Execute FrameGraph
