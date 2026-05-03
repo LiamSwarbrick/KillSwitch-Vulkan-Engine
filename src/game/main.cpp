@@ -1,6 +1,5 @@
 #include "core/core.h"
 #include "core/input.h"
-#include "core/input.h"
 #include "renderer/renderer.h"
 #include "renderer/debug_ui_api.h"
 #include "foundations/scene.h"
@@ -50,42 +49,53 @@ int main(int argc, char *argv[])
     });
     AudioSystem_LogSummary(&audio_system);
 
-    AudioClipHandle startup_music = AudioSystem_LoadClipEx(
+    AudioClipHandle startup_music = AudioSystem_LoadClip(
         &audio_system,
         "startup_music",
-        "All_Sounds_MP3_UNMASTERED2/Low_Winds.mp3",
-        AUDIO_CLIP_CATEGORY_SOUNDTRACK
+        "All_Sounds_MP3_UNMASTERED2/Bad_Signs.mp3"    
     );
-    AudioClipHandle startup_test_sfx = AudioSystem_LoadClipEx(
-        &audio_system,
-        "startup_test_sfx",
-        "All_Sounds_MP3_UNMASTERED2/TV_Static.mp3",
-        AUDIO_CLIP_CATEGORY_SFX
-    );
-
+    // Set up spatial audio for player start position
     if (startup_music != 0)
-    {
-        if (!AudioSystem_PlaySoundtrackLoop(&audio_system, startup_music, 0.1f))
         {
-            SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "AudioSystem: soundtrack loaded but failed to start playback.");
+            AudioSystem_SetClipMinMaxDistance(&audio_system, startup_music, 1.0f, 40.0f);
+            AudioSystem_PlaySpatialLoop(
+                &audio_system,
+                startup_music,
+                1.0f,
+                2.0f, 1.0f, 0.0f
+            );
         }
-    }
-    else
-    {
-        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "AudioSystem: failed to load startup soundtrack.");
-    }
 
-    if (startup_test_sfx != 0)
-    {
-        if (!AudioSystem_PlaySFXOneShot(&audio_system, startup_test_sfx, 0.1f))
-        {
-            SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "AudioSystem: startup test SFX loaded but failed to start playback.");
-        }
-    }
-    else
-    {
-        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "AudioSystem: failed to load startup test SFX.");
-    }
+    // AudioClipHandle startup_test_sfx = AudioSystem_LoadClipEx(
+    //     &audio_system,
+    //     "startup_test_sfx",
+    //     "All_Sounds_MP3_UNMASTERED2/TV_Static.mp3",
+    //     AUDIO_CLIP_CATEGORY_SFX
+    // );
+
+    // if (startup_music != 0)
+    // {
+    //     if (!AudioSystem_PlaySoundtrackLoop(&audio_system, startup_music, 0.1f))
+    //     {
+    //         SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "AudioSystem: soundtrack loaded but failed to start playback.");
+    //     }
+    // }
+    // else
+    // {
+    //     SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "AudioSystem: failed to load startup soundtrack.");
+    // }
+
+    // if (startup_test_sfx != 0)
+    // {
+    //     if (!AudioSystem_PlaySFXOneShot(&audio_system, startup_test_sfx, 0.1f))
+    //     {
+    //         SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "AudioSystem: startup test SFX loaded but failed to start playback.");
+    //     }
+    // }
+    // else
+    // {
+    //     SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "AudioSystem: failed to load startup test SFX.");
+    // }
 
     Input_Init("assets/keybindings.json");
     GameUI_Init();
@@ -253,58 +263,67 @@ int main(int argc, char *argv[])
             }
         );
 
-        // set movement camera foward
+        // pull cam edits from debug UI
         if (const FPCamState* debug_fp_cam = DebugUI_GetFPCamState())
             game_fp_cam = *debug_fp_cam;
 
         if (const TPCamState* debug_tp_cam = DebugUI_GetTPCamState())
             game_tp_cam = *debug_tp_cam;
 
-        DebugUICameraMode gameplay_camera_mode = DebugUI_GetGameplayCameraMode();
-        DebugUICameraMode debug_camera_mode = DebugUI_GetCameraMode();
-        DebugUICameraMode active_fp_tp_mode = debug_ui_open ? debug_camera_mode : gameplay_camera_mode;
+        const DebugUICameraMode gameplay_camera_mode = DebugUI_GetGameplayCameraMode();
+        const bool gameplay_fp_active = gameplay_camera_mode == DebugUICameraMode::FPCam;
+        const bool gameplay_tp_active = gameplay_camera_mode == DebugUICameraMode::TPCam;
 
-        glm::vec3 movement_forward = (active_fp_tp_mode == DebugUICameraMode::TPCam)
-            ? game_tp_cam.forward
-            : game_fp_cam.forward;
-
+        // Movement always follows gameplay mode (FP/TP), independent of debug FreeCam.
+        const glm::vec3 movement_forward = gameplay_tp_active ? game_tp_cam.forward : game_fp_cam.forward;
         scene.SetMovementCameraForward(movement_forward);
 
         // Game ticks
         scene.Update(dt);
-        AudioSystem_Update(&audio_system, dt);
-
-        // Pull latest edits from Debug UI (bind target/FOV/mode-facing state).
-        if (const FPCamState* debug_fp_cam = DebugUI_GetFPCamState())
-            game_fp_cam = *debug_fp_cam;
-
-        if (const TPCamState* debug_tp_cam = DebugUI_GetTPCamState())
-            game_tp_cam = *debug_tp_cam;
 
         // In debug mode, RMB drag still drives look even outside normal playing state.
-        bool allow_mouse_look = (is_playing && !debug_ui_open) || (debug_ui_open && right_mouse_down);
-
-        // The active FP/TP mode depends on context: debug camera mode when UI is open, gameplay mode otherwise.
-        bool fp_active = active_fp_tp_mode == DebugUICameraMode::FPCam;
-        bool tp_active = active_fp_tp_mode == DebugUICameraMode::TPCam;
-
-        bool fp_allow_mouse_look = allow_mouse_look && fp_active;
-        bool tp_allow_mouse_look = allow_mouse_look && tp_active;
-
-        // Freeze non-input simulation drift while paused/menu.
-        float fp_cam_dt = (is_playing && fp_active) ? dt : 0.0f;
-        float tp_cam_dt = (is_playing && tp_active) ? dt : 0.0f;
-        bool fp_apply_fov = fp_active;
-        bool tp_apply_fov = tp_active;
-
-        CameraInfo game_fp_camera = Game::FPCam_Update(game_fp_cam, &scene.GetECS(), fp_cam_dt, fp_allow_mouse_look, fp_apply_fov);
-        CameraInfo game_tp_camera = Game::TPCam_Update(game_tp_cam, &scene.GetECS(), tp_cam_dt, tp_allow_mouse_look, tp_apply_fov);
-
+        const bool allow_camera_input = (is_playing && !debug_ui_open) || (debug_ui_open && right_mouse_down);
+        const bool fp_allow_mouse_look = allow_camera_input && gameplay_fp_active;
+        const bool tp_allow_mouse_look = allow_camera_input && gameplay_tp_active;
+        const float fp_cam_dt = (is_playing && gameplay_fp_active) ? dt : 0.0f;
+        const float tp_cam_dt = (is_playing && gameplay_tp_active) ? dt : 0.0f;
+        CameraInfo game_fp_camera = Game::FPCam_Update(
+            game_fp_cam, &scene.GetECS(), fp_cam_dt, fp_allow_mouse_look, gameplay_fp_active
+        );
+        CameraInfo game_tp_camera = Game::TPCam_Update(
+            game_tp_cam, &scene.GetECS(), tp_cam_dt, tp_allow_mouse_look, gameplay_tp_active
+        );
         // Push resolved state/camera back to Debug UI so panels display authoritative game data.
         DebugUI_SetFPCamState(&game_fp_cam);
         DebugUI_SetTPCamState(&game_tp_cam);
         DebugUI_SetFPCamCameraInfo(&game_fp_camera);
         DebugUI_SetTPCamCameraInfo(&game_tp_camera);
+
+        // Rendering/audio consume one resolved camera for the frame.
+        CameraInfo game_camera = DebugUI_GetCameraInfo(dt);
+
+        // update spatial audio with audio position
+        glm::vec3 listener_pos = game_camera.position;
+        glm::vec3 listener_forward = glm::normalize(glm::vec3(
+            -game_camera.view[0][2],
+            -game_camera.view[1][2],
+            -game_camera.view[2][2]
+        ));
+        glm::vec3 listener_up = glm::normalize(glm::vec3(
+            game_camera.view[0][1],
+            game_camera.view[1][1],
+            game_camera.view[2][1]
+        ));
+
+        AudioSystem_UpdateSpatialState(
+            &audio_system, 
+            listener_pos.x, listener_pos.y, listener_pos.z, 
+            listener_forward.x, listener_forward.y, listener_forward.z,
+            listener_up.x, listener_up.y, listener_up.z,
+            nullptr, 1
+        );
+
+        AudioSystem_Update(&audio_system, dt);
 
         // Rendering
         uint32_t flags = SDL_GetWindowFlags(window);
@@ -312,12 +331,12 @@ int main(int argc, char *argv[])
         {
             scene.Render();
 
-            Renderer_DrawFrame(DebugUI_GetCameraInfo(dt));
+            Renderer_DrawFrame(game_camera);
         }
     }
 
     scene.Shutdown();
-    //AudioSystem_Destroy(&audio_system);
+    AudioSystem_Destroy(&audio_system);
     Input_Shutdown();
     Renderer_Shutdown();
     Core_Shutdown(window);
