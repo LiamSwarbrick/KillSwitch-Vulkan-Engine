@@ -39,6 +39,7 @@ struct Room {
 // Stores current state of a cell in the level grid
 struct GridCell {
     std::vector<int> validRooms;
+    std::vector<int> validThemes;
     bool isCollapsed = false;
 };
 
@@ -63,7 +64,7 @@ public:
     std::vector<glm::ivec2> GetTraversableRooms(glm::ivec2 startRoom);
 
     // Fills a grid with rooms that connect properly
-    void GenerateGrid(int width, int height, glm::ivec2 start, glm::ivec2 goal, uint16_t startDoorwayMask, int maxRooms);
+    void GenerateGrid(int width, int height, glm::ivec2 start, glm::ivec2 goal, uint16_t startDoorwayMask, Theme startTheme, int maxRooms);
 
     // Should place the entities into the Scene, need scene for instantiate prefab
     void InstantiateLevel(class Scene* scene);

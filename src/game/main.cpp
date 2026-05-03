@@ -236,8 +236,27 @@ int main(int argc, char *argv[])
     roomAssets.push_back(scene.LoadPrefab("assets/levels/1_Open_2_Door_West_Wall_Room.gltf"));
     roomAssets.push_back(scene.LoadPrefab("assets/levels/1_Open_2_Door_North_Wall_Room.gltf"));
     roomAssets.push_back(scene.LoadPrefab("assets/levels/1_Open_2_Door_East_Wall_Room.gltf"));
+    roomAssets.push_back(scene.LoadPrefab("assets/levels/4_Open_Inside_Room.gltf"));
+    roomAssets.push_back(scene.LoadPrefab("assets/levels/3_Open_1_Wall_Inside_Room.gltf"));
+    roomAssets.push_back(scene.LoadPrefab("assets/levels/3_Open_1_Door_Inside_Room.gltf"));
+    roomAssets.push_back(scene.LoadPrefab("assets/levels/2_Opp_Open_Right_Door_Inside_Room.gltf"));
+    roomAssets.push_back(scene.LoadPrefab("assets/levels/2_Opp_Open_Left_Door_Inside_Room.gltf"));
+    roomAssets.push_back(scene.LoadPrefab("assets/levels/2_Opp_Open_2_Wall_Inside_Room.gltf"));
+    roomAssets.push_back(scene.LoadPrefab("assets/levels/2_Opp_Open_2_Door_Inside_Room.gltf"));
+    roomAssets.push_back(scene.LoadPrefab("assets/levels/2_Open_Right_Door_Inside_Room.gltf"));
+    roomAssets.push_back(scene.LoadPrefab("assets/levels/2_Open_Left_Door_Inside_Room.gltf"));
+    roomAssets.push_back(scene.LoadPrefab("assets/levels/2_Open_2_Wall_Inside_Room.gltf"));
+    roomAssets.push_back(scene.LoadPrefab("assets/levels/2_Open_2_Door_Inside_Room.gltf"));
+    roomAssets.push_back(scene.LoadPrefab("assets/levels/1_Open_West_Door_Inside_Room.gltf"));
+    roomAssets.push_back(scene.LoadPrefab("assets/levels/1_Open_North_Door_Inside_Room.gltf"));
+    roomAssets.push_back(scene.LoadPrefab("assets/levels/1_Open_East_Door_Inside_Room.gltf"));
+    roomAssets.push_back(scene.LoadPrefab("assets/levels/1_Open_3_Wall_Inside_Room.gltf"));
+    roomAssets.push_back(scene.LoadPrefab("assets/levels/1_Open_3_Door_Inside_Room.gltf"));
+    roomAssets.push_back(scene.LoadPrefab("assets/levels/1_Open_2_Door_West_Wall_Inside_Room.gltf"));
+    roomAssets.push_back(scene.LoadPrefab("assets/levels/1_Open_2_Door_North_Wall_Inside_Room.gltf"));
+    roomAssets.push_back(scene.LoadPrefab("assets/levels/1_Open_2_Door_East_Wall_Inside_Room.gltf"));
     generator.BuildPalette(roomAssets);
-    generator.GenerateGrid(13, 13, glm::ivec2({ 6,6 }), glm::ivec2({ 6,6 }), ((DOOR << NORTH) + (DOOR << EAST) + (DOOR << SOUTH) + (DOOR << WEST)), 25);
+    generator.GenerateGrid(13, 13, glm::ivec2({ 6,6 }), glm::ivec2({ 6,6 }), ((DOOR << NORTH) + (DOOR << EAST) + (DOOR << SOUTH) + (DOOR << WEST)), INSIDE, 25);
     generator.InstantiateLevel(&scene);
 
 
