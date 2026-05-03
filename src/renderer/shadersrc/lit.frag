@@ -19,19 +19,27 @@ vec3 spectral_rainbow(float t)
     return c;
 }
 
+// Half-Lambert: https://developer.valvesoftware.com/wiki/Half_Lambert
+//   half_lambert = dot(N, L) * 0.5 + 0.5  (sometimes it's squared though)
+//   lambert      = max(dot(N, L), 0.0)
+
 vec3 ground_brdf(vec3 N, vec3 V, vec3 L)
 {
-    // Half-Lambert: https://developer.valvesoftware.com/wiki/Half_Lambert
-    // NOTE: Not using half lambert anymore because it's too bright for that horror aestetic.
-    //   half_lambert = dot(N, L) * 0.5 + 0.5
-    //   lambert      = max(dot(N, L), 0.0)
+    float NdotL = dot(N, L);
+    float lambert = max(NdotL, 0.0);
+    return vec3(lambert);
 
-    // return vec3(max(dot(N, L), 0.0));
-    float brdf = dot(N, L) * 0.5 + 0.5;   // Half lambert
-    return vec3(brdf);
+    // // float rim = pow(1.0 - lambert, 4.0);
+    // return vec3(lambert);// + (rim * spectral_rainbow(lambert));
+    // float NdotV = dot(N, V);
+    // float view_rim = pow(1.0 - max(NdotV, 0.0), 3.0);
+    // float light_mask = smoothstep(-0.2, 0.5, NdotL);
+    // float final_rim = view_rim * light_mask;
 
-    // float rim = pow(1.0 - half_lambert, 4.0);
-    // brdf += rim;  // rim * spectral_rainbow(half_lambert);
+
+    // float brdf = NdotL*NdotL * 0.5 + 0.5;   // Half lambert
+    // float rim = pow(1.0 - lambert, 4.0);
+    // return vec3(lambert) + rim * spectral_rainbow(lambert);
 }
 
 vec3 toon_brdf(vec3 N, vec3 V, vec3 L)
@@ -126,13 +134,13 @@ vec3 apply_dithered_fog(
 )
 {
     const float fog_start = 5.0;
-    const float fog_length = 25.0;
+    const float fog_length = 40.0;
     float z_linear = (near * far) / (far - depth * (far - near));
     float fog = clamp((z_linear - fog_start) / fog_length, 0.0, 1.0);
     float fog_step = fog > dither ? 1.0 : 0.0;
 
-    // vec3 fog_color = vec3(0.005, 0.005, 0.025);
-    vec3 fog_color = vec3(0.005, 0.007, 0.03);
+    vec3 fog_color = vec3(0.005, 0.005, 0.025);
+    // vec3 fog_color = vec3(0.005, 0.007, 0.03);
     vec3 fogged_color = fog_color * fog_step;
 
     return mix(color, fogged_color, fog);
@@ -152,6 +160,16 @@ void main()
     vec4 base_color     = sample_texture2d_with_fallback(uv, mat.texture_idx_basecolor, mat.sampler_idx, mat.base_color);
     vec4 emissive_color = sample_texture2d_with_fallback(uv, mat.texture_idx_emissive,  mat.sampler_idx, vec4(mat.emissive_factor, 0.0));
     // base_color = vec4(1.0);
+
+    if (!IS_CHARACTER)
+    {
+        float variation = sin(world_pos.x * 0.1) * cos(world_pos.z * 0.1);
+        float sat_factor = 1.0 + (variation * 0.5); 
+        float luma = dot(base_color.rgb, vec3(0.2126, 0.7152, 0.0722));
+        base_color.rgb = mix(vec3(luma), base_color.rgb, sat_factor);
+
+        base_color.rgb *= mix(1.0, 1.5, sat_factor);
+    }
     
     // Shadow maps?
     // TODO

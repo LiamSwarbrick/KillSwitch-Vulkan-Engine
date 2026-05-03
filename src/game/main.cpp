@@ -60,7 +60,7 @@ CameraInfo temp_camera()
     return {
         .view = view,
         .position = pos,
-        .lens_distortion = -0.015f  // <- Subtle fish eye lens
+        .lens_distortion = -0.025f  // <- Subtle fish eye lens
     };
 }
 
