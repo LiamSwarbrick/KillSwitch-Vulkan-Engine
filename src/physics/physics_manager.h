@@ -157,8 +157,8 @@ public:
 
 	std::vector<EntityRaycastHit> raycastAll(const Ray& ray, const QueryFilterExternal& filter = {}) const;
 
-	// Shape-casting too (might change the input to be ShapeCast or something like that, but for now this, will see when i implement it)
-	std::vector<EntityID> shapecast(
+	// Shape-casting too (might change the input to be shapeIntersects or something like that, but for now this, will see when i implement it)
+	std::vector<EntityID> shapeIntersects(
 		ShapeHandle shape, const glm::vec3& position, const glm::quat& orientation, 
 		const QueryFilterExternal& filter = {}) const;
 

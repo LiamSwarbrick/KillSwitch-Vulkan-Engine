@@ -679,7 +679,7 @@ std::vector<RaycastHit> PhysicsWorld::raycastAll(const Ray& ray, const QueryFilt
 	return narrowHits;
 }
 
-std::vector<RigidBodyHandle> PhysicsWorld::shapecast(ShapeHandle shapeHandle, const glm::vec3& position, const glm::quat& orientation, const QueryFilter& filter) const
+std::vector<RigidBodyHandle> PhysicsWorld::shapeIntersects(ShapeHandle shapeHandle, const glm::vec3& position, const glm::quat& orientation, const QueryFilter& filter) const
 {
 	std::vector<RigidBody*> broadHits;
 	std::vector<RigidBodyHandle> hits;
@@ -835,24 +835,6 @@ void PhysicsWorld::solve(float dt)
 	solver.solve(contacts, dt);
 }
 
-void PhysicsWorld::resetAllCharactersGroundState()
-{
-	for (PhysicsCharacter& c : characters.Data())
-	{
-		c.groundState = PhysicsCharacter::GroundState::InAir;
-	}
-}
-
-void PhysicsWorld::updateAllCharactersGroundState()
-{
-	for (PhysicsCharacter& c : characters.Data())
-	{
-		if (c.groundState != PhysicsCharacter::GroundState::InAir) continue;
-		
-		// TODO: raycast downwards (basically scene.cpp's code for the player movement) 
-		SDL_assert(false && "Need to implement this");
-	}
-}
 
 void PhysicsWorld::dispatchEvents()
 {

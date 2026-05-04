@@ -22,63 +22,20 @@ struct Solver::ExtendedContact
     bool isWalkableB = false;
 
     float totalInvMass = 1.0f;
-
-    ExtendedContact(const Contact& contact, PhysicsWorld& world)
-    {
-        point = contact.point;
-        normal = contact.normal;
-        pointA = contact.pointA;
-        pointB = contact.pointB;
-
-        depth = contact.depth;
-
-        bodyA = contact.bodyA;
-        bodyB = contact.bodyB;
-
-        totalInvMass = contact.bodyA->invMass + (contact.bodyB ? contact.bodyB->invMass : 0.0f);
-
-        if (bodyA->isCharacter)
-        {
-            charA = world.getCharacter({ bodyA->bodyID });
-
-            // groundNormal instead of (0.0f, 1.0f, 0.0f)
-            float upAlongNormal = glm::dot(normal, charA->groundNormal);
-            float slopeAngle = glm::acos(upAlongNormal);
-
-            isWalkableA = slopeAngle <= charA->maxWalkableAngle;
-
-            // if the slope is walkable, correct only on the character's groundNormal axis
-            if (isWalkableA)
-            {
-                normal = charA->groundNormal;
-                charA->groundState = PhysicsCharacter::GroundState::OnGround;
-            }
-        }
-
-        if (bodyB && bodyB->isCharacter)
-        {
-            charB = world.getCharacter({ bodyB->bodyID });
-            // -contact.normal because normal goes from B to A
-            // groundNormal instead of (0.0f, 1.0f, 0.0f)
-            float upAlongNormal = glm::dot(-normal, charB->groundNormal);
-
-            float slopeAngle = glm::acos(upAlongNormal);
-            isWalkableB = slopeAngle <= charB->maxWalkableAngle;
-
-            // if the slope is walkable, correct only on the character's groundNormal axis
-            if (isWalkableB)
-            {
-                normal = (-charB->groundNormal);
-                charB->groundState = PhysicsCharacter::GroundState::OnGround;
-            }
-        }
-    }
-
 };
 
 void Solver::solve(const std::vector<Contact>& contacts, float dt)
 {
-    world.resetAllCharactersGroundState();
+    // Before solving contacts, prepare characters for extra logic
+    for (PhysicsCharacter& c : world.characters.Data())
+    {
+        RigidBody* b = c.body;
+        c.groundState = PhysicsCharacter::GroundState::InAir;
+
+        // Store the position and velocity before resolving contacts of players, that way we can work out step-ups
+        c.prePosition = b->position;
+        c.preVelocity = b->velocity;
+    }
 
 	for (const Contact& contact : contacts)
 	{
@@ -91,61 +48,107 @@ void Solver::solve(const std::vector<Contact>& contacts, float dt)
         // Before resolving interpenetration, velocities or extra character steps, 
         // we need to see if there is a character involved in the contact, and if the contact
         // is "walkable" for the character, meaning we would need to change the normal and depth
-        ExtendedContact extendedContact(contact, world);
+        ExtendedContact extendedContact;
+        FillExtendedContact(contact, extendedContact, dt);
 
         // Resolve interpenetration and velocities (then try step up/down)
 		resolveInterpenetration(extendedContact, dt);
 
         resolveVelocities(extendedContact, dt);
 	}
+
+    for (PhysicsCharacter& c : world.characters.Data())
+    {
+        RigidBody* b = c.body;
+        //tryStepUp(c, *b, dt);
+        tryStepDown(c, *b, dt);
+    }
+
 }
 
-bool Solver::changeContactDependingOnCharacterWalkability(ExtendedContact& contact, float dt)
+void Solver::FillExtendedContact(const Contact& contact, ExtendedContact& outExtContact, float dt)
 {
-    RigidBody* a = contact.bodyA;
-    RigidBody* b = contact.bodyB;
+    outExtContact.point = contact.point;
+    outExtContact.normal = contact.normal;
+    outExtContact.pointA = contact.pointA;
+    outExtContact.pointB = contact.pointB;
 
-    bool isWalkable = false;
-    if (a->isCharacter)
+    outExtContact.depth = contact.depth;
+
+    outExtContact.bodyA = contact.bodyA;
+    outExtContact.bodyB = contact.bodyB;
+
+    outExtContact.totalInvMass = contact.bodyA->invMass + (contact.bodyB ? contact.bodyB->invMass : 0.0f);
+
+    if (contact.bodyA->isCharacter)
     {
-        PhysicsCharacter* character = world.getCharacter({ a->bodyID });
-        contact.charA = character;
+        outExtContact.charA = world.getCharacter({ contact.bodyA->bodyID });
 
-        // groundNormal instead of (0.0f, 1.0f, 0.0f)
-        float upAlongNormal = glm::dot(contact.normal, character->groundNormal);
+        // 
+        float upAlongNormal = glm::dot(contact.normal, world.UP_VECTOR);
         float slopeAngle = glm::acos(upAlongNormal);
 
-        isWalkable = slopeAngle <= character->maxWalkableAngle;
+        outExtContact.isWalkableA = slopeAngle <= outExtContact.charA->maxWalkableAngle;
 
         // if the slope is walkable, correct only on the character's groundNormal axis
-        if (isWalkable)
+        if (outExtContact.isWalkableA)
         {
-            contact.isWalkableA = true;
-            contact.normal = character->groundNormal;
-            character->groundState = PhysicsCharacter::GroundState::OnGround;
+            outExtContact.charA->groundState = PhysicsCharacter::GroundState::OnGround;
+            outExtContact.charA->jumping = false;
+
+            outExtContact.charA->groundNormal = contact.normal; // Changing to contact.normal so the player can move properly game-side
+            // setting the contact.normal to be UP_VECTOR so the contact resolution allows the player to stand on edges and other rigidbodies without pushing them horizontally (unless slope too much)
+            outExtContact.normal = world.UP_VECTOR;
         }
+        else if (outExtContact.charA->groundState != PhysicsCharacter::GroundState::OnGround)
+        {
+            // If it is not walkable, AND the character is NOT on the ground
+            // We need to check if we are at a slope or we're hitting a wall / ceiling
+
+            // If upAlongNormal is close or less than 0, we are InAir,
+            // If it is bigger than 0, we are in a slope
+
+            // We should probably change F_EPSILON to a custom value, to detect walls properly maybe
+            if (upAlongNormal > WALL_NORMAL_Y)
+                outExtContact.charA->groundState = PhysicsCharacter::GroundState::OnSteepGround;
+        }
+
     }
 
-    if (!isWalkable && b && b->isCharacter)
+    if (outExtContact.bodyB && outExtContact.bodyB->isCharacter)
     {
-        PhysicsCharacter* character = world.getCharacter({ b->bodyID });
+        outExtContact.charB = world.getCharacter({ outExtContact.bodyB->bodyID });
         // -contact.normal because normal goes from B to A
         // groundNormal instead of (0.0f, 1.0f, 0.0f)
-        float upAlongNormal = glm::dot(-contact.normal, character->groundNormal);
+        float upAlongNormal = glm::dot(-contact.normal, world.UP_VECTOR);
 
         float slopeAngle = glm::acos(upAlongNormal);
-        isWalkable = slopeAngle <= character->maxWalkableAngle;
+        outExtContact.isWalkableB = slopeAngle <= outExtContact.charB->maxWalkableAngle;
 
         // if the slope is walkable, correct only on the character's groundNormal axis
-        if (isWalkable)
+        if (outExtContact.isWalkableB)
         {
-            contact.isWalkableB = true;
-            contact.normal = (-character->groundNormal);
-            character->groundState = PhysicsCharacter::GroundState::OnGround;
+            outExtContact.charB->groundState = PhysicsCharacter::GroundState::OnGround;
+            outExtContact.charB->jumping = false;
+
+            outExtContact.charB->groundNormal = -contact.normal; // Changing to contact.normal so the player can move properly game-side
+            // setting the contact.normal to be -UP_VECTOR so the contact resolution allows the player to stand on edges and other rigidbodies without pushing them horizontally (unless slope too much)
+            outExtContact.normal = -world.UP_VECTOR;
+        }
+        else if (outExtContact.charB->groundState != PhysicsCharacter::GroundState::OnGround)
+        {
+            // If it is not walkable, AND the character is NOT on the ground
+            // We need to check if we are at a slope or we're hitting a wall / ceiling
+
+            // If upAlongNormal is close or less than 0, we are InAir,
+            // If it is bigger than 0, we are in a slope
+
+            // We should probably change F_EPSILON to a custom value, to detect walls properly maybe
+            if (upAlongNormal > WALL_NORMAL_Y)
+                outExtContact.charB->groundState = PhysicsCharacter::GroundState::OnSteepGround;
         }
     }
 
-    return isWalkable;
 }
 
 inline void Solver::resolveInterpenetration(const ExtendedContact& contact, float dt)
@@ -252,5 +255,65 @@ void Solver::resolveVelocities(const ExtendedContact& contact, float dt)
     }
     
 }
+
+void Solver::resolveCharacter(PhysicsCharacter& character, RigidBody& body, float dt)
+{
+}
+
+bool Solver::tryStepUp(PhysicsCharacter& character, RigidBody& body, float dt)
+{
+
+    return true;
+}
+
+bool Solver::tryStepDown(PhysicsCharacter& character, RigidBody& body, float dt)
+{
+    if (character.groundState == PhysicsCharacter::GroundState::InAir && !character.jumping)
+    {
+        RaycastHit hit;
+        QueryFilter filter;
+        filter.bodyToIgnore = { body.bodyID };
+
+        IShape* ishape = world.getShape(body.shapeHandle);
+        CapsuleShape* capsule = static_cast<CapsuleShape*>(ishape);
+        float characterHeight = capsule->halfHeight + capsule->radius;
+        
+        Ray ray;
+
+        ray.origin = body.position;
+        ray.origin.y -= characterHeight;
+        ray.direction = -world.UP_VECTOR; // Might have to change for -character.groundNormal (we will see)
+        ray.maxDistance = character.stepHeight;
+
+        // CURRENTLY DOESN'T WORK WITH RAYCAST, IMPLEMENT RAYCAST AND SWITCH TO THAT
+        // Basically it jitters because it doesn't take into account the shape, just ray
+        hit = world.raycast(ray, filter);
+        if (hit.isValid())
+        {
+            float upAlongNormal = glm::dot(hit.normal, world.UP_VECTOR);
+            float slopeAngle = glm::acos(upAlongNormal);
+
+            if (slopeAngle <= character.maxWalkableAngle)
+            {
+                body.position = body.position - world.UP_VECTOR * hit.t;
+                body.velocity.y = 0.0f; // Testing
+                character.groundNormal = hit.normal;
+                character.groundState = PhysicsCharacter::GroundState::OnGround;
+                character.jumping = false;
+            }
+            else
+            {
+                body.position = hit.point + characterHeight;
+                body.velocity.y = 0.0f; // Testing
+                character.groundNormal = world.UP_VECTOR;
+                character.groundState = PhysicsCharacter::GroundState::OnSteepGround;
+            }
+        }
+    }
+
+    return false;
+}
+
+
 
 

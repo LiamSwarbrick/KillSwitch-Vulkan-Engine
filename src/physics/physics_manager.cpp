@@ -464,11 +464,11 @@ std::vector<EntityRaycastHit> PhysicsManager::raycastAll(const Ray& ray, const Q
 	return entityRayHits;
 }
 
-std::vector<EntityID> PhysicsManager::shapecast(ShapeHandle shape, const glm::vec3& position, const glm::quat& orientation, const QueryFilterExternal& filter) const
+std::vector<EntityID> PhysicsManager::shapeIntersects(ShapeHandle shape, const glm::vec3& position, const glm::quat& orientation, const QueryFilterExternal& filter) const
 {
 	std::vector<EntityID> entityShapeHits;
 
-	std::vector<RigidBodyHandle> shapeHits = world.shapecast(shape, position, orientation, getQueryFilterFromQueryFilterExternal(filter));
+	std::vector<RigidBodyHandle> shapeHits = world.shapeIntersects(shape, position, orientation, getQueryFilterFromQueryFilterExternal(filter));
 	entityShapeHits.resize(shapeHits.size());
 
 	for (size_t i = 0; i < shapeHits.size(); i++)

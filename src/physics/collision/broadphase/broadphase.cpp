@@ -100,12 +100,12 @@ void BroadPhase::queryRay(const Ray& ray, const QueryFilterInternal& filter, std
 	for (RigidBody* body : bodies)
 	{
 		RaycastHit hit;
-		bool shouldCollide = filter.hasLayerOfQuery ? bodyLayerFilter->shouldCollide(filter.layerOfQuery, body->bodyLayer) : false;
+		bool shouldCollide = filter.hasLayerOfQuery ? bodyLayerFilter->shouldCollide(filter.layerOfQuery, body->bodyLayer) : true;
 
 		if (filter.bodyToIgnore && filter.bodyToIgnore == body) continue;
 		if (!shouldCollide) continue;
 		
-		if (body->aabb.intersectsRay(ray, hit))
+		if (body->aabb.intersectsRay(ray, hit) || body->aabb.contains(ray.origin))
 		{
 			hit.body = body;
 			outBodies.push_back(hit);

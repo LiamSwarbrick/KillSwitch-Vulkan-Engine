@@ -35,6 +35,8 @@
 
 class PhysicsWorld
 {
+	friend class Solver; // add as friend class to access character sparseset
+
 public:
 	explicit PhysicsWorld(uint8_t numBodyLayers = 16U, uint32_t expectedBodies = 1024);
 	~PhysicsWorld();
@@ -147,10 +149,12 @@ public:
 
 	std::vector<RaycastHit> raycastAll(const Ray& ray, const QueryFilter& filter = {}) const;
 
-	// Shape-casting too (might change the input to be ShapeCast or something like that, but for now this, will see when i implement it)
-	std::vector<RigidBodyHandle> shapecast(
+	// Shape - intersecting
+	std::vector<RigidBodyHandle> shapeIntersects(
 		ShapeHandle shape, const glm::vec3& position, const glm::quat& orientation,
 		const QueryFilter& filter = {}) const;
+
+	
 
 	// ------------------------------
 	// EVENTS
@@ -178,13 +182,6 @@ public:
 
 	void setMaxSteps(int max);
 	int getMaxSteps() const;
-
-
-	// Extra functions for the solver
-	// Before using solve, reset all groundState's to InAir
-	void resetAllCharactersGroundState();
-	// After using solve, resolve groundState using raycast downwards in case we are InAir
-	void updateAllCharactersGroundState();
 
 private:
 	// ------------------------------
@@ -263,6 +260,8 @@ private:
 	float fixedStep = 1.0f / 120.0f;
 	float stepAccumulator = 0.0f;
 	int maxSteps = 4;
+
+	glm::vec3 UP_VECTOR = glm::vec3(0.0f, 1.0f, 0.0f);
 };
 
 #endif // !PHYSICS_PHYSICS_WORLD_H

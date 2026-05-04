@@ -20,19 +20,24 @@ public:
 private:
 	// Definition in solver.cpp
 	struct ExtendedContact;
+	friend struct ExtendedContact;
 
-	bool changeContactDependingOnCharacterWalkability(ExtendedContact& contact, float dt);
+	void FillExtendedContact(const Contact& contact, ExtendedContact& outExtContact, float dt);
 
 	void resolveInterpenetration(const ExtendedContact& contact, float dt);
 	// Will be turned into full impulse solver for non-character bodies
 	void resolveVelocities(const ExtendedContact& contact, float dt);
 
-	void resolveCharacter(const ExtendedContact& contact, float dt);
-	bool tryStepUp();
-	bool tryStepDown();
+	void resolveCharacter(PhysicsCharacter& character, RigidBody& body, float dt);
+	// Step Up will let Characters climb low obstacles if moving. Obstacle height defined in PhysicsCharacter::stepHeight
+	// Good for climbing stairs if they are done using steps instead of a ramp
+	bool tryStepUp(PhysicsCharacter& character, RigidBody& body, float dt);
+	// Step Down will make Characters snap down stair 
+	bool tryStepDown(PhysicsCharacter& character, RigidBody& body, float dt);
 
 private:
 	PhysicsWorld& world;
+	const float WALL_NORMAL_Y = 0.01f;
 };
 
 #endif // !PHYSICS_SIMULATION_SOLVER_H
