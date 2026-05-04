@@ -39,10 +39,10 @@ void Scene::StartUp()
 
     auto printCollision = [](CollisionEnterAndStayArgs args)
     {
-            std::cout << "Collision: [" << args.a << "-" << args.b
+            /*std::cout << "Collision: [" << args.a << "-" << args.b
                 << "], Point: [" << args.contact.point.x << ", " << args.contact.point.y << ", " << args.contact.point.z
                 << "]  Normal: [" << args.contact.normal.x << ", " << args.contact.normal.y << ", " << args.contact.normal.z << "]"
-                << std::endl;
+                << std::endl;*/
     };
 
     // Both ways of subscribing
@@ -197,6 +197,8 @@ EntityID Scene::InstantiatePrefab(Asset* prefab, glm::vec3 spawnPosition)
                 rbDesc.mass = importedRigidbody.mass;
                 rbDesc.gravityScale = importedRigidbody.gravity_scale;
                 rbDesc.damping = importedRigidbody.damping;
+                rbDesc.restitution = 0.0f;
+                rbDesc.friction = 0.2f;
                 rbDesc.forceLayers = importedRigidbody.force_layers;
                 rbDesc.isStatic = importedRigidbody.is_static;
                 rbDesc.isKinematic = importedRigidbody.is_kinematic;
@@ -405,6 +407,8 @@ void Scene::UpdatePlayer(float dt)
 
     if (m_currentPlayer == NULL_ENTITY) return;
     if (!m_ecs.Has(m_currentPlayer)) return;
+    PhysicsCharacter* player = m_physicsManager.getCharacter(m_currentPlayer);
+    if (!player) return;
 
     C_Transform& transform = m_ecs.GetComponent<C_Transform>(m_currentPlayer);
     C_PlayerInput& input = m_ecs.GetComponent<C_PlayerInput>(m_currentPlayer);
@@ -452,9 +456,6 @@ void Scene::UpdatePlayer(float dt)
         float yawDeg = glm::degrees(atan2f(facingDir.x, facingDir.z));
         rotation = glm::angleAxis(glm::radians(yawDeg), glm::vec3(0.0f, 1.0f, 0.0f));
     }
-
-    controller.velocity = horizontalMoveDir * controller.move_speed;
-
     
     // If we are jumping, we need to check IF we touch the floor
     // We take away time from the jumping cooldown using dt to check next step
@@ -490,15 +491,18 @@ void Scene::UpdatePlayer(float dt)
 
         std::vector<EntityRaycastHit> hits = m_physicsManager.raycastAll(feetRay, filter);
 
-        if (!hits.empty())
+        if (/*!hits.empty() || */player->groundState == PhysicsCharacter::GroundState::OnGround)
         {
             controller.jumping = false;
             controller.jumping_cooldown = 0.0f;
         } // If there are hits, we are in the ground
     } // If the jumping cooldown is done, we need to check if we can jump again
 
-    if (!controller.jumping)
+    
+    if (!controller.jumping && player->groundState == PhysicsCharacter::GroundState::OnGround)
     {
+        controller.velocity = horizontalMoveDir * controller.move_speed;
+
         // Important to add the velocity to the current one, NOT WITH addVelocity cause it would linearly add to it
         glm::vec3 currentVelocity = m_physicsManager.getVelocity(m_currentPlayer);
         controller.velocity.y += currentVelocity.y;
@@ -512,6 +516,10 @@ void Scene::UpdatePlayer(float dt)
             glm::vec3 gravity = m_physicsManager.getGravity();
             m_physicsManager.addVelocity(m_currentPlayer, -(gravity*0.5f)); // Adjust jump strength as you wish
         }
+    }
+    else
+    {
+        //controller.velocity += horizontalMoveDir * controller.move_speed;
     }
 
     transform.matrix = glm::translate(glm::mat4(1.0f), translation) * glm::mat4_cast(rotation) * glm::scale(glm::mat4(1.0f), scale);
