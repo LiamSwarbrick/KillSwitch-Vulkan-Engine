@@ -24,15 +24,15 @@ namespace DebugUI
         bool show_asset_browser = true;
         bool show_camera        = true;
 
-        DebugUICameraMode camera_mode  = DebugUICameraMode::FreeCam;
-        DebugUICameraMode gameplay_camera_mode = DebugUICameraMode::TPCam;
-        FreeCamState free_cam   = {};   // owned here; updated by FreeCam_Update each frame
-        FPCamState fp_cam       = {};   // synced with game-owned FP cam state
-        TPCamState tp_cam       = {};   // synced with game-owned TP cam state
-        CameraInfo fp_camera    = {};   // synced with game-owned FP camera output
-        CameraInfo tp_camera    = {};   // synced with game-owned TP camera output
-        bool has_fp_camera      = false;
-        bool has_tp_camera      = false;
+        DebugUICameraMode camera_mode = DebugUICameraMode::FreeCam;
+        FreeCamState free_cam = {};   // owned here; updated by FreeCam_Update each frame
+
+        // Read-only snapshot pushed from the game-owned in-game camera module.
+        DebugUIInGameCameraSnapshot ingame_camera_snapshot = {};
+
+        // Pending camera edits produced by the camera panel and consumed by game.
+        bool has_pending_camera_edits = false;
+        DebugUICameraEdits pending_camera_edits = {};
 
         // Entity ID 
         uint32_t selected_entity_id = UINT32_MAX;
@@ -165,15 +165,41 @@ namespace DebugUI
                 player_candidates[player_count++] = id;
         });
 
-        DebugUI::DrawCameraPanel(
+        const DebugUI::CameraPanelResult panel_result = DebugUI::DrawCameraPanel(
             state.show_camera,
             state.camera_mode,
             state.free_cam,
-            state.fp_cam,
-            state.tp_cam,
+            state.ingame_camera_snapshot.fp_state,
+            state.ingame_camera_snapshot.tp_state,
             player_candidates.data(),
             player_count
         );
+
+        if (panel_result.reset_fp)
+        {
+            state.pending_camera_edits.reset_fp = true;
+            state.has_pending_camera_edits = true;
+        }
+
+        if (panel_result.reset_tp)
+        {
+            state.pending_camera_edits.reset_tp = true;
+            state.has_pending_camera_edits = true;
+        }
+
+        if (panel_result.fp_state_changed)
+        {
+            state.pending_camera_edits.apply_fp_state = true;
+            state.pending_camera_edits.fp_state = panel_result.fp_state;
+            state.has_pending_camera_edits = true;
+        }
+
+        if (panel_result.tp_state_changed)
+        {
+            state.pending_camera_edits.apply_tp_state = true;
+            state.pending_camera_edits.tp_state = panel_result.tp_state;
+            state.has_pending_camera_edits = true;
+        }
     }
 
     // Called after ImGui::NewFrame()

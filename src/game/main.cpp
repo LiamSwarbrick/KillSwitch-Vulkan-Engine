@@ -1,14 +1,12 @@
 #include "core/core.h"
 #include "core/input.h"
-#include "core/input.h"
 #include "renderer/renderer.h"
 #include "renderer/debug_ui_api.h"
 #include "foundations/scene.h"
 #include "core/components.h"
 #include "core/animation.h"
 #include "game_ui.h"
-#include "fp_cam.h"
-#include "tp_cam.h"
+#include "ingame_cam.h"
 #include "game/foundations/components.h"
 #include "core/audio_system.h"
 
@@ -50,42 +48,53 @@ int main(int argc, char *argv[])
     });
     AudioSystem_LogSummary(&audio_system);
 
-    AudioClipHandle startup_music = AudioSystem_LoadClipEx(
+    AudioClipHandle startup_music = AudioSystem_LoadClip(
         &audio_system,
         "startup_music",
-        "All_Sounds_MP3_UNMASTERED2/Low_Winds.mp3",
-        AUDIO_CLIP_CATEGORY_SOUNDTRACK
+        "All_Sounds_MP3_UNMASTERED2/Bad_Signs.mp3"    
     );
-    AudioClipHandle startup_test_sfx = AudioSystem_LoadClipEx(
-        &audio_system,
-        "startup_test_sfx",
-        "All_Sounds_MP3_UNMASTERED2/TV_Static.mp3",
-        AUDIO_CLIP_CATEGORY_SFX
-    );
-
+    // Set up spatial audio for player start position
     if (startup_music != 0)
-    {
-        if (!AudioSystem_PlaySoundtrackLoop(&audio_system, startup_music, 0.1f))
         {
-            SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "AudioSystem: soundtrack loaded but failed to start playback.");
+            AudioSystem_SetClipMinMaxDistance(&audio_system, startup_music, 1.0f, 40.0f);
+            AudioSystem_PlaySpatialLoop(
+                &audio_system,
+                startup_music,
+                1.0f,
+                2.0f, 1.0f, 0.0f
+            );
         }
-    }
-    else
-    {
-        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "AudioSystem: failed to load startup soundtrack.");
-    }
 
-    if (startup_test_sfx != 0)
-    {
-        if (!AudioSystem_PlaySFXOneShot(&audio_system, startup_test_sfx, 0.1f))
-        {
-            SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "AudioSystem: startup test SFX loaded but failed to start playback.");
-        }
-    }
-    else
-    {
-        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "AudioSystem: failed to load startup test SFX.");
-    }
+    // AudioClipHandle startup_test_sfx = AudioSystem_LoadClipEx(
+    //     &audio_system,
+    //     "startup_test_sfx",
+    //     "All_Sounds_MP3_UNMASTERED2/TV_Static.mp3",
+    //     AUDIO_CLIP_CATEGORY_SFX
+    // );
+
+    // if (startup_music != 0)
+    // {
+    //     if (!AudioSystem_PlaySoundtrackLoop(&audio_system, startup_music, 0.1f))
+    //     {
+    //         SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "AudioSystem: soundtrack loaded but failed to start playback.");
+    //     }
+    // }
+    // else
+    // {
+    //     SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "AudioSystem: failed to load startup soundtrack.");
+    // }
+
+    // if (startup_test_sfx != 0)
+    // {
+    //     if (!AudioSystem_PlaySFXOneShot(&audio_system, startup_test_sfx, 0.1f))
+    //     {
+    //         SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "AudioSystem: startup test SFX loaded but failed to start playback.");
+    //     }
+    // }
+    // else
+    // {
+    //     SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "AudioSystem: failed to load startup test SFX.");
+    // }
 
     Input_Init("assets/keybindings.json");
     GameUI_Init();
@@ -168,29 +177,7 @@ int main(int argc, char *argv[])
     //       This must change with the new scene system that can load many asset prefabs.
     DebugUI_SetECS(&scene.GetECS());
     DebugUI_SetAsset(room_prefab);
-
-    // Game owns FP/TP camera state; seed both from Debug UI state once at startup.
-    FPCamState game_fp_cam = {};
-    if (const FPCamState* initial_fp_cam = DebugUI_GetFPCamState()) 
-    {
-        game_fp_cam = *initial_fp_cam;
-        game_fp_cam.bound_entity = playerID;
-    }
-
-    TPCamState game_tp_cam = {};
-    if (const TPCamState* initial_tp_cam = DebugUI_GetTPCamState())
-    {
-        game_tp_cam = *initial_tp_cam;
-        game_tp_cam.bound_entity = playerID;
-    }
-
-    // Publish initial camera snapshots so debug camera switching is valid on frame 0.
-    CameraInfo initial_fp_camera = Game::FPCam_Update(game_fp_cam, &scene.GetECS(), 0.0f, false, false);
-    CameraInfo initial_tp_camera = Game::TPCam_Update(game_tp_cam, &scene.GetECS(), 0.0f, false, true);
-    DebugUI_SetFPCamState(&game_fp_cam);
-    DebugUI_SetTPCamState(&game_tp_cam);
-    DebugUI_SetFPCamCameraInfo(&initial_fp_camera);
-    DebugUI_SetTPCamCameraInfo(&initial_tp_camera);
+    InGameCam_Init(&scene.GetECS(), playerID);
 
     bool running = true;
 
@@ -206,46 +193,29 @@ int main(int argc, char *argv[])
         if (dt > 0.1f) dt = 0.1f;   
 
         // Event Loop
-        bool toggle_fp_tp_camera = false;
         SDL_Event event;
         while (SDL_PollEvent(&event))
         {
             if (event.type == SDL_EVENT_QUIT) running = false;
 
-            if (event.type == SDL_EVENT_KEY_DOWN && !event.key.repeat && event.key.scancode == SDL_SCANCODE_V)
-                toggle_fp_tp_camera = true;
-
-            if (event.type == SDL_EVENT_GAMEPAD_BUTTON_DOWN && event.gbutton.button == SDL_GAMEPAD_BUTTON_RIGHT_STICK)
-                toggle_fp_tp_camera = true;
-
             Renderer_ListenToWindowEvent(event);
             Input_ProcessEvent(event);
         }
+
         Input_Update();
         GameUI_Update();
 
-        if (toggle_fp_tp_camera)
-        {
-            DebugUICameraMode mode = DebugUI_GetGameplayCameraMode();
-            mode = (mode == DebugUICameraMode::TPCam) ? DebugUICameraMode::FPCam : DebugUICameraMode::TPCam;
-            DebugUI_SetGameplayCameraMode(mode);
-        }
-
-        // Quit if requested from any menu
-        if (GameUI_GetState() == GameState::Quitting) running = false;
-
-        // Only capture mouse while playing (release it on menus)
-        bool is_playing = GameUI_GetState() == GameState::Playing;
-        bool debug_ui_open = DebugUI_IsOpen();
-        Uint32 mouse_buttons = SDL_GetMouseState(nullptr, nullptr);
-        bool right_mouse_down = (mouse_buttons & SDL_BUTTON_MASK(SDL_BUTTON_RIGHT)) != 0;
-        // Keep relative mouse while actively controlling camera (gameplay or Debug UI RMB drag).
-        bool use_relative_mouse = (is_playing && !debug_ui_open) || (debug_ui_open && right_mouse_down);
-        SDL_SetWindowRelativeMouseMode(window, use_relative_mouse);
+        // cam toggle logic
+        if (GameUI_GetState() == GameState::Playing && Input_IsActionJustPressed(ACTION_TOGGLE_CAMERA)){InGameCam_ToggleGameplayMode();}
+        // pass debug ui edits
+        DebugUICameraEdits ui_camera_edits = {};
+        if (DebugUI_ConsumeCameraEdits(&ui_camera_edits)){InGameCam_ApplyDebugEdits(ui_camera_edits);}
+        // Only capture mouse while playing (release it on pause), keep relative mouse when debug UI toggled.
+        const bool right_mouse_down = (SDL_GetMouseState(nullptr, nullptr) & SDL_BUTTON_MASK(SDL_BUTTON_RIGHT)) != 0;
+        SDL_SetWindowRelativeMouseMode(window, (GameUI_GetState() == GameState::Playing && !DebugUI_IsOpen()) || (DebugUI_IsOpen() && right_mouse_down));
 
         // controller test
         const bool* state = SDL_GetKeyboardState(NULL);
-
         scene.GetECS().GetView<C_PlayerInput>().ForEach([&](C_PlayerInput& input) {
                 input.move_forward = state[SDL_SCANCODE_K];
                 input.move_backward = state[SDL_SCANCODE_I];
@@ -254,59 +224,40 @@ int main(int argc, char *argv[])
                 input.jump = state[SDL_SCANCODE_SPACE];
             }
         );
-
-        // set movement camera foward
-        if (const FPCamState* debug_fp_cam = DebugUI_GetFPCamState())
-            game_fp_cam = *debug_fp_cam;
-
-        if (const TPCamState* debug_tp_cam = DebugUI_GetTPCamState())
-            game_tp_cam = *debug_tp_cam;
-
-        DebugUICameraMode gameplay_camera_mode = DebugUI_GetGameplayCameraMode();
-        DebugUICameraMode debug_camera_mode = DebugUI_GetCameraMode();
-        DebugUICameraMode active_fp_tp_mode = debug_ui_open ? debug_camera_mode : gameplay_camera_mode;
-
-        glm::vec3 movement_forward = (active_fp_tp_mode == DebugUICameraMode::TPCam)
-            ? game_tp_cam.forward
-            : game_fp_cam.forward;
-
-        scene.SetMovementCameraForward(movement_forward);
+        // Movement always follows camera forward.
+        scene.SetMovementCameraForward(InGameCam_GetMovementForward());
 
         // Game ticks
         scene.Update(dt);
+
+        // Update in-game camera
+        InGameCam_Update(dt, GameUI_GetState() == GameState::Playing, DebugUI_IsOpen(), DebugUI_GetCameraMode(), right_mouse_down);
+        // pass camera snapshot to debug UI
+        const InGameCamSnapshot ingame_cam_snapshot = InGameCam_GetSnapshot();
+        DebugUI_SetInGameCameraSnapshot(&ingame_cam_snapshot);
+
+        // update spatial audio with audio position
+        glm::vec3 listener_pos = InGameCam_GetGameplayCamera().position;
+        glm::vec3 listener_forward = glm::normalize(glm::vec3(
+            -InGameCam_GetGameplayCamera().view[0][2],
+            -InGameCam_GetGameplayCamera().view[1][2],
+            -InGameCam_GetGameplayCamera().view[2][2]
+        ));
+        glm::vec3 listener_up = glm::normalize(glm::vec3(
+            InGameCam_GetGameplayCamera().view[0][1],
+            InGameCam_GetGameplayCamera().view[1][1],
+            InGameCam_GetGameplayCamera().view[2][1]
+        ));
+
+        AudioSystem_UpdateSpatialState(
+            &audio_system, 
+            listener_pos.x, listener_pos.y, listener_pos.z, 
+            listener_forward.x, listener_forward.y, listener_forward.z,
+            listener_up.x, listener_up.y, listener_up.z,
+            nullptr, 1
+        );
+
         AudioSystem_Update(&audio_system, dt);
-
-        // Pull latest edits from Debug UI (bind target/FOV/mode-facing state).
-        if (const FPCamState* debug_fp_cam = DebugUI_GetFPCamState())
-            game_fp_cam = *debug_fp_cam;
-
-        if (const TPCamState* debug_tp_cam = DebugUI_GetTPCamState())
-            game_tp_cam = *debug_tp_cam;
-
-        // In debug mode, RMB drag still drives look even outside normal playing state.
-        bool allow_mouse_look = (is_playing && !debug_ui_open) || (debug_ui_open && right_mouse_down);
-
-        // The active FP/TP mode depends on context: debug camera mode when UI is open, gameplay mode otherwise.
-        bool fp_active = active_fp_tp_mode == DebugUICameraMode::FPCam;
-        bool tp_active = active_fp_tp_mode == DebugUICameraMode::TPCam;
-
-        bool fp_allow_mouse_look = allow_mouse_look && fp_active;
-        bool tp_allow_mouse_look = allow_mouse_look && tp_active;
-
-        // Freeze non-input simulation drift while paused/menu.
-        float fp_cam_dt = (is_playing && fp_active) ? dt : 0.0f;
-        float tp_cam_dt = (is_playing && tp_active) ? dt : 0.0f;
-        bool fp_apply_fov = fp_active;
-        bool tp_apply_fov = tp_active;
-
-        CameraInfo game_fp_camera = Game::FPCam_Update(game_fp_cam, &scene.GetECS(), fp_cam_dt, fp_allow_mouse_look, fp_apply_fov);
-        CameraInfo game_tp_camera = Game::TPCam_Update(game_tp_cam, &scene.GetECS(), tp_cam_dt, tp_allow_mouse_look, tp_apply_fov);
-
-        // Push resolved state/camera back to Debug UI so panels display authoritative game data.
-        DebugUI_SetFPCamState(&game_fp_cam);
-        DebugUI_SetTPCamState(&game_tp_cam);
-        DebugUI_SetFPCamCameraInfo(&game_fp_camera);
-        DebugUI_SetTPCamCameraInfo(&game_tp_camera);
 
         // Rendering
         uint32_t flags = SDL_GetWindowFlags(window);
@@ -314,12 +265,14 @@ int main(int argc, char *argv[])
         {
             scene.Render();
 
-            Renderer_DrawFrame(DebugUI_GetCameraInfo(dt));
+            Renderer_DrawFrame(DebugUI_IsOpen() ? DebugUI_GetCameraInfo(dt) : InGameCam_GetGameplayCamera());
         }
+        // Quit if requested from any menu
+        if (GameUI_GetState() == GameState::Quitting) running = false;
     }
 
     scene.Shutdown();
-    //AudioSystem_Destroy(&audio_system);
+    AudioSystem_Destroy(&audio_system);
     Input_Shutdown();
     Renderer_Shutdown();
     Core_Shutdown(window);
