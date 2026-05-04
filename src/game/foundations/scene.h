@@ -18,7 +18,6 @@ private:
 
     EntityID m_currentPlayer = NULL_ENTITY;
 
-    std::vector<Asset*> m_prefabs;
     Subscription<CollisionEnterAndStayArgs> m_onCollisionEnterSubscription;
     Subscription<CollisionEnterAndStayArgs> m_onCollisionStaySubscription;
 
@@ -26,6 +25,8 @@ private:
 
     glm::vec3 m_movementCameraForward = glm::vec3(0.0f, 0.0f, -1.0f);
 
+public:
+    std::vector<Asset*> m_prefabs;
 private:
     //bool LoadAsset(const char* fileName);
     bool FreeAsset(Asset* asset);

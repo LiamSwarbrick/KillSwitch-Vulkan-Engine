@@ -9,7 +9,7 @@
 #include "free_cam.h"
 #include "renderer/debug_ui_api.h"
 #include "core/components.h"
-
+#include <vector>
 #include <array>
 
 namespace DebugUI
@@ -40,6 +40,7 @@ namespace DebugUI
         FrameGraphVisualizer fg_viz;
         AssetBrowser         asset_browser;
         Asset*               debug_asset = nullptr;
+        std::vector<Asset*>* asset_list = nullptr;
 
         // Viewport texture for displaying the 3D scene inside ImGui
         ImTextureID viewport_imgui_tex    = 0;
@@ -104,8 +105,8 @@ namespace DebugUI
             ImGuiID bottom_left, bottom_right;
             ImGui::DockBuilderSplitNode(bottom, ImGuiDir_Left, 0.25f, &bottom_left, &bottom_right);
 
-            ImGui::DockBuilderDockWindow("ECS Inspector", top_left);
-            ImGui::DockBuilderDockWindow("Asset Browser", bottom_left);
+            ImGui::DockBuilderDockWindow("Asset Browser", top_left);
+            ImGui::DockBuilderDockWindow("ECS Inspector", bottom_left);
             ImGui::DockBuilderDockWindow("Framegraph", bottom_right);
             ImGui::DockBuilderDockWindow("Viewport", top_right);
 
@@ -146,7 +147,8 @@ namespace DebugUI
         ImGui::SetNextWindowSize(ImVec2(900, 600), ImGuiCond_FirstUseEver);
         if (ImGui::Begin("Asset Browser", &state.show_asset_browser))
         {
-            state.asset_browser.Draw(state.debug_asset);
+            state.asset_browser.Draw(state.asset_list, state.debug_asset);
+            debug_asset_ptr = state.debug_asset;
         }
         ImGui::End();
     }

@@ -10,10 +10,19 @@ void DebugUI_SetECS(ECS* ecs)
     debug_ecs_ptr = ecs;
 }
 
-void DebugUI_SetAsset(Asset* asset)
+void DebugUI_SetAsset(std::vector<Asset*>* prefabs)
 {
-    debug_asset_ptr = asset;
-    debug_ui_state.debug_asset = asset;
+    debug_ui_state.asset_list = prefabs;
+
+    if (prefabs == nullptr || prefabs->empty())
+    {
+        debug_asset_ptr = nullptr;
+        debug_ui_state.debug_asset = nullptr;
+        return;
+    }
+
+    debug_asset_ptr = (*prefabs)[0];
+    debug_ui_state.debug_asset = (*prefabs)[0];
 }
 
 void DebugUI_SetImGuiCallback(DebugUI_ImGuiBuildCallback callback, void* user_data)

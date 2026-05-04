@@ -5,6 +5,7 @@
 #include "core/assetsys.h"
 #include "renderer/renderer.h"   // CameraInfo
 #include "glm/glm.hpp"
+#include <vector>
 
 // Shared game/debug FP camera state.
 struct FPCamState
@@ -57,7 +58,7 @@ inline void TPCam_ResetToDefault(TPCamState& cam)
 }
 
 void DebugUI_SetECS(ECS* ecs);
-void DebugUI_SetAsset(Asset* asset);
+void DebugUI_SetAsset(std::vector<Asset*>* prefabs);
 
 // Optional callback: called between ImGui::NewFrame() and ImGui::Render()
 // Game code can set this to build its own ImGui UI

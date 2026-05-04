@@ -176,7 +176,7 @@ int main(int argc, char *argv[])
     // TODO: Debug UI is built around the idea of 1 asset at the moment.
     //       This must change with the new scene system that can load many asset prefabs.
     DebugUI_SetECS(&scene.GetECS());
-    DebugUI_SetAsset(room_prefab);
+    DebugUI_SetAsset(&scene.m_prefabs);
     InGameCam_Init(&scene.GetECS(), playerID);
 
     bool running = true;
