@@ -2,6 +2,9 @@
 #include "internal_state.h"
 #include "renderpasses/metadata.h"
 
+#include <glm/glm.hpp>
+#include "renderer/shadersrc/common/shared_buffers.glsl"
+
 static inline b32 compute_light_cluster_bounds(
     // In
     glm::vec3 light_view_pos,
@@ -45,6 +48,9 @@ static inline b32 compute_light_cluster_bounds(
     min_y *= proj_y;
     max_y *= proj_y;
 
+    if (min_x > max_x) { float temp = min_x; min_x = max_x; max_x = temp; }
+    if (min_y > max_y) { float temp = min_y; min_y = max_y; max_y = temp; }
+
     // Min/Max tile ids that fill this cluster's screenspace AABB
     *tile_min_x = (int)((min_x * 0.5f + 0.5f) * CLUSTER_GRID_SIZE_X);
     *tile_max_x = (int)((max_x * 0.5f + 0.5f) * CLUSTER_GRID_SIZE_X);
@@ -85,16 +91,16 @@ void ClusteredShading_CPULightAssignmentToMappedBuffer()
     
     // NOTE: Assuming swapchain's aspect ratio for the projection matrix here:
     float aspect = (float)renderstate.swapchain_extent.width / (float)renderstate.swapchain_extent.height;
-    float near   = renderstate.main_camera.near;
-    float far    = renderstate.main_camera.far;
+    float near   = renderstate.main_camera.near_plane;
+    float far    = renderstate.main_camera.far_plane;
     glm::mat4 cam_proj = MakeProjectionMatrix(renderstate.settings.fov_y, aspect, near, far);
     float log_far_over_near = log(far / near);
 
     for (uint32_t i = 0; i < renderstate.renderables_arena.num_point_lights; ++i)
     {
         PointLight pl = renderstate.renderables_arena.point_lights[i];
-        glm::vec3 light_view_pos = glm::vec3(cam_view * glm::vec4(pl.pos_and_radius.x, pl.pos_and_radius.y, pl.pos_and_radius.z, 1.0f));
-        float light_radius       = pl.pos_and_radius.w;
+        glm::vec3 light_view_pos = glm::vec3(cam_view * glm::vec4(pl.pos_and_radius[0], pl.pos_and_radius[1], pl.pos_and_radius[2], 1.0f));
+        float light_radius       = pl.pos_and_radius[3];
         
         int tile_min_x,  tile_max_x;
         int tile_min_y,  tile_max_y;
@@ -122,8 +128,8 @@ void ClusteredShading_CPULightAssignmentToMappedBuffer()
     for (uint32_t i = 0; i < renderstate.renderables_arena.num_spot_lights; ++i)
     {
         SpotLight sl = renderstate.renderables_arena.spot_lights[i];
-        glm::vec3 light_view_pos = glm::vec3(cam_view * glm::vec4(sl.pos_and_radius.x, sl.pos_and_radius.y, sl.pos_and_radius.z, 1.0f));
-        float light_radius       = sl.pos_and_radius.w;
+        glm::vec3 light_view_pos = glm::vec3(cam_view * glm::vec4(sl.pos_and_radius[0], sl.pos_and_radius[1], sl.pos_and_radius[2], 1.0f));
+        float light_radius       = sl.pos_and_radius[3];
         
         int tile_min_x,  tile_max_x;
         int tile_min_y,  tile_max_y;
@@ -187,7 +193,7 @@ void ClusteredShading_CPULightAssignmentToMappedBuffer()
             cluster.point_count * sizeof(uint32_t)
         );
         memcpy(
-            &mapped_point_light_indices[cluster.spot_offset],
+            &mapped_spot_light_indices[cluster.spot_offset],
             &renderstate.renderables_arena.staging_spot_light_indices[c * MAX_SPOTLIGHTS],
             cluster.spot_count * sizeof(uint32_t)
         );

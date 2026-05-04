@@ -182,7 +182,7 @@ void create_startup_resources()
             .is_buffer_cpu_accessible = 1  // <- Hence mapped
         };
         renderstate.rids.joints_buffer_rid = FG_CreateResource(
-            "JointsBuffer", FG_RESOURCE_TYPE_BUFFER, flags, &objects_info
+            "JointsBuffer", FG_RESOURCE_TYPE_BUFFER, flags, &joints_info
         );
         renderstate.joint_transforms = MakeArenaOnBufferResource(renderstate.rids.joints_buffer_rid);
     }

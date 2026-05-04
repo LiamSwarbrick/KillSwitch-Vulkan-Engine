@@ -127,15 +127,13 @@ float dither_threshold(vec2 screen_pos)
 
 vec3 apply_dithered_fog(
     vec3 color,
-    float depth,
-    float near,
-    float far,
+    float z_linear,
     float dither
 )
 {
     const float fog_start = 5.0;
     const float fog_length = 40.0;
-    float z_linear = (near * far) / (far - depth * (far - near));
+    
     float fog = clamp((z_linear - fog_start) / fog_length, 0.0, 1.0);
     float fog_step = fog > dither ? 1.0 : 0.0;
 
@@ -183,15 +181,69 @@ void main()
     LightsHeader header = LightsHeaderBuffer(push.dc.lights_header_ptr).header;
     PointLightBuffer pl_buf = PointLightBuffer(header.point_lights_ptr);
     SpotLightBuffer sl_buf  = SpotLightBuffer(header.spot_lights_ptr);
+
+    // Multiple shadow maps
     SpotLightShadowMapIndexBuffer sl_shadow_map_indices = SpotLightShadowMapIndexBuffer(header.spotlight_shadowmap_index_buf_ptr);
     ShadowMapSpotLightCamerasBuffer shadow_map_sl_cameras = ShadowMapSpotLightCamerasBuffer(header.shadowmap_spotlight_camera_buf_ptr);
 
+    // Clustered shading
+    PointLightIndicesBuffer pl_indices = PointLightIndicesBuffer(header.point_light_indices_buf_ptr);
+    SpotLightIndicesBuffer sl_indices  = SpotLightIndicesBuffer(header.spot_light_indices_buf_ptr);
+    ClusterOffsetsBuffer clusters      = ClusterOffsetsBuffer(header.cluster_offsets_buf_ptr);
+    uvec2 pixel = uvec2(gl_FragCoord.xy);
 
-    // TODO: Tile/Clustered Shading
-    uint point_light_count = min(header.num_point_lights, 32u);
-    for (uint i = 0; i < point_light_count; ++i)
+    float fx = float(gl_FragCoord.x) / float(scene.rendertarget_size.x);
+    float fy = float(gl_FragCoord.y) / float(scene.rendertarget_size.y);
+    uint tile_x = uint(fx * CLUSTER_GRID_SIZE_X);
+    uint tile_y = uint(fy * CLUSTER_GRID_SIZE_Y);
+
+    // NOTE: Log scale slicing of Z clusters must match CPU side!
+    float depth = gl_FragCoord.z;
+    float near = scene.near_plane;
+    float far = scene.far_plane;
+    float z_linear = (near * far) / (far - depth * (far - near));
+    float log_z = log(z_linear / scene.near_plane) / log(scene.far_plane / scene.near_plane);
+    uint tile_z = uint(log_z * CLUSTER_GRID_SIZE_Z);
+    
+    tile_x = clamp(tile_x, 0u, CLUSTER_GRID_SIZE_X - 1u);
+    tile_y = clamp(tile_y, 0u, CLUSTER_GRID_SIZE_Y - 1u);
+    tile_z = clamp(tile_z, 0u, CLUSTER_GRID_SIZE_Z - 1u);
+
+    // Fetch cluster
+    uint cluster_index =
+        tile_x +
+        tile_y * CLUSTER_GRID_SIZE_X +
+        tile_z * CLUSTER_GRID_SIZE_X * CLUSTER_GRID_SIZE_Y;
+    Cluster cluster = clusters.clusters[cluster_index];
+
+// #define DEBUG_CLUSTER_VIZ
+#ifdef DEBUG_CLUSTER_VIZ
+// uint cid = cluster_index;
+// vec3 debugColor = vec3(
+//     float((cid * 97u) % 255u) / 255.0,
+//     float((cid * 57u) % 255u) / 255.0,
+//     float((cid * 23u) % 255u) / 255.0
+// );
+// out_color = vec4(debugColor, 1.0);
+// return;
+
+    uint light_count = cluster.point_count + cluster.spot_count;
+    float intensity = float(light_count) / 16.0; // tune max expected lights per cluster
+    intensity = clamp(intensity, 0.0, 1.0);
+    vec3 blue = vec3(0.0, 0.0, 1.0);
+    vec3 red  = vec3(1.0, 0.0, 0.0);
+    vec3 debug_color = mix(blue, red, intensity);
+    out_color = vec4(debug_color, 1.0);
+    return;
+#endif
+
+
+    // uint point_light_count = min(header.num_point_lights, 32u);
+    // for (uint i = 0; i < point_light_count; ++i)
+    for (uint i = 0; i < cluster.point_count; ++i)
     {
-        PointLight pl = pl_buf.point_lights[i];
+        uint light_index = pl_indices.indices[cluster.point_offset + i];
+        PointLight pl = pl_buf.point_lights[light_index];
 
         vec3 frag_to_light = pl.pos_and_radius.xyz - world_pos;
         float dist = length(frag_to_light);
@@ -214,10 +266,12 @@ void main()
         direct_light += radiance;
     }
     
-    uint spot_light_count = min(header.num_spot_lights, 32u);
-    for (uint i = 0; i < spot_light_count; ++i)
+    // uint spot_light_count = min(header.num_spot_lights, 32u);
+    // for (uint i = 0; i < spot_light_count; ++i)
+    for (uint i = 0; i < cluster.spot_count; ++i)
     {
-        SpotLight sl = sl_buf.spot_lights[i];
+        uint light_index = sl_indices.indices[cluster.spot_offset + i];
+        SpotLight sl = sl_buf.spot_lights[light_index];
 
         float shadow_factor = 1.0;
         int spotlight_shadowmap_index = sl_shadow_map_indices.spotlight_shadowmap_index[i];
@@ -300,9 +354,7 @@ void main()
     // Fog
     lit_rgb = apply_dithered_fog(
         lit_rgb,
-        gl_FragCoord.z,
-        scene.near_plane,
-        scene.far_plane,
+        z_linear,
         dith_threshold
     );
 
@@ -312,6 +364,7 @@ void main()
         process_alpha(final_color.a, mat.alpha_cutoff)
     );
 
+    // out_color += vec4(1.0);
 #else
     // Normal shading
     out_color = vec4((normalize(world_normal) + 1.)/2., 1.0);
