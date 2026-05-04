@@ -6,8 +6,7 @@
 #include "core/components.h"
 #include "core/animation.h"
 #include "game_ui.h"
-#include "fp_cam.h"
-#include "tp_cam.h"
+#include "ingame_cam.h"
 #include "game/foundations/components.h"
 #include "core/audio_system.h"
 
@@ -176,29 +175,7 @@ int main(int argc, char *argv[])
     //       This must change with the new scene system that can load many asset prefabs.
     DebugUI_SetECS(&scene.GetECS());
     DebugUI_SetAsset(room_prefab);
-
-    // Game owns FP/TP camera state; seed both from Debug UI state once at startup.
-    FPCamState game_fp_cam = {};
-    if (const FPCamState* initial_fp_cam = DebugUI_GetFPCamState()) 
-    {
-        game_fp_cam = *initial_fp_cam;
-        game_fp_cam.bound_entity = playerID;
-    }
-
-    TPCamState game_tp_cam = {};
-    if (const TPCamState* initial_tp_cam = DebugUI_GetTPCamState())
-    {
-        game_tp_cam = *initial_tp_cam;
-        game_tp_cam.bound_entity = playerID;
-    }
-
-    // Publish initial camera snapshots so debug camera switching is valid on frame 0.
-    CameraInfo initial_fp_camera = Game::FPCam_Update(game_fp_cam, &scene.GetECS(), 0.0f, false, false);
-    CameraInfo initial_tp_camera = Game::TPCam_Update(game_tp_cam, &scene.GetECS(), 0.0f, false, true);
-    DebugUI_SetFPCamState(&game_fp_cam);
-    DebugUI_SetTPCamState(&game_tp_cam);
-    DebugUI_SetFPCamCameraInfo(&initial_fp_camera);
-    DebugUI_SetTPCamCameraInfo(&initial_tp_camera);
+    InGameCam_Init(&scene.GetECS(), playerID);
 
     bool running = true;
 
@@ -214,46 +191,29 @@ int main(int argc, char *argv[])
         if (dt > 0.1f) dt = 0.1f;   
 
         // Event Loop
-        bool toggle_fp_tp_camera = false;
         SDL_Event event;
         while (SDL_PollEvent(&event))
         {
             if (event.type == SDL_EVENT_QUIT) running = false;
 
-            if (event.type == SDL_EVENT_KEY_DOWN && !event.key.repeat && event.key.scancode == SDL_SCANCODE_V)
-                toggle_fp_tp_camera = true;
-
-            if (event.type == SDL_EVENT_GAMEPAD_BUTTON_DOWN && event.gbutton.button == SDL_GAMEPAD_BUTTON_RIGHT_STICK)
-                toggle_fp_tp_camera = true;
-
             Renderer_ListenToWindowEvent(event);
             Input_ProcessEvent(event);
         }
+
         Input_Update();
         GameUI_Update();
 
-        if (toggle_fp_tp_camera)
-        {
-            DebugUICameraMode mode = DebugUI_GetGameplayCameraMode();
-            mode = (mode == DebugUICameraMode::TPCam) ? DebugUICameraMode::FPCam : DebugUICameraMode::TPCam;
-            DebugUI_SetGameplayCameraMode(mode);
-        }
-
-        // Quit if requested from any menu
-        if (GameUI_GetState() == GameState::Quitting) running = false;
-
-        // Only capture mouse while playing (release it on menus)
-        bool is_playing = GameUI_GetState() == GameState::Playing;
-        bool debug_ui_open = DebugUI_IsOpen();
-        Uint32 mouse_buttons = SDL_GetMouseState(nullptr, nullptr);
-        bool right_mouse_down = (mouse_buttons & SDL_BUTTON_MASK(SDL_BUTTON_RIGHT)) != 0;
-        // Keep relative mouse while actively controlling camera (gameplay or Debug UI RMB drag).
-        bool use_relative_mouse = (is_playing && !debug_ui_open) || (debug_ui_open && right_mouse_down);
-        SDL_SetWindowRelativeMouseMode(window, use_relative_mouse);
+        // cam toggle logic
+        if (GameUI_GetState() == GameState::Playing && Input_IsActionJustPressed(ACTION_TOGGLE_CAMERA)){InGameCam_ToggleGameplayMode();}
+        // pass debug ui edits
+        DebugUICameraEdits ui_camera_edits = {};
+        if (DebugUI_ConsumeCameraEdits(&ui_camera_edits)){InGameCam_ApplyDebugEdits(ui_camera_edits);}
+        // Only capture mouse while playing (release it on pause), keep relative mouse when debug UI toggled.
+        const bool right_mouse_down = (SDL_GetMouseState(nullptr, nullptr) & SDL_BUTTON_MASK(SDL_BUTTON_RIGHT)) != 0;
+        SDL_SetWindowRelativeMouseMode(window, (GameUI_GetState() == GameState::Playing && !DebugUI_IsOpen()) || (DebugUI_IsOpen() && right_mouse_down));
 
         // controller test
         const bool* state = SDL_GetKeyboardState(NULL);
-
         scene.GetECS().GetView<C_PlayerInput>().ForEach([&](C_PlayerInput& input) {
                 input.move_forward = state[SDL_SCANCODE_K];
                 input.move_backward = state[SDL_SCANCODE_I];
@@ -262,57 +222,29 @@ int main(int argc, char *argv[])
                 input.jump = state[SDL_SCANCODE_SPACE];
             }
         );
-
-        // pull cam edits from debug UI
-        if (const FPCamState* debug_fp_cam = DebugUI_GetFPCamState())
-            game_fp_cam = *debug_fp_cam;
-
-        if (const TPCamState* debug_tp_cam = DebugUI_GetTPCamState())
-            game_tp_cam = *debug_tp_cam;
-
-        const DebugUICameraMode gameplay_camera_mode = DebugUI_GetGameplayCameraMode();
-        const bool gameplay_fp_active = gameplay_camera_mode == DebugUICameraMode::FPCam;
-        const bool gameplay_tp_active = gameplay_camera_mode == DebugUICameraMode::TPCam;
-
-        // Movement always follows gameplay mode (FP/TP), independent of debug FreeCam.
-        const glm::vec3 movement_forward = gameplay_tp_active ? game_tp_cam.forward : game_fp_cam.forward;
-        scene.SetMovementCameraForward(movement_forward);
+        // Movement always follows camera forward.
+        scene.SetMovementCameraForward(InGameCam_GetMovementForward());
 
         // Game ticks
         scene.Update(dt);
 
-        // In debug mode, RMB drag still drives look even outside normal playing state.
-        const bool allow_camera_input = (is_playing && !debug_ui_open) || (debug_ui_open && right_mouse_down);
-        const bool fp_allow_mouse_look = allow_camera_input && gameplay_fp_active;
-        const bool tp_allow_mouse_look = allow_camera_input && gameplay_tp_active;
-        const float fp_cam_dt = (is_playing && gameplay_fp_active) ? dt : 0.0f;
-        const float tp_cam_dt = (is_playing && gameplay_tp_active) ? dt : 0.0f;
-        CameraInfo game_fp_camera = Game::FPCam_Update(
-            game_fp_cam, &scene.GetECS(), fp_cam_dt, fp_allow_mouse_look, gameplay_fp_active
-        );
-        CameraInfo game_tp_camera = Game::TPCam_Update(
-            game_tp_cam, &scene.GetECS(), tp_cam_dt, tp_allow_mouse_look, gameplay_tp_active
-        );
-        // Push resolved state/camera back to Debug UI so panels display authoritative game data.
-        DebugUI_SetFPCamState(&game_fp_cam);
-        DebugUI_SetTPCamState(&game_tp_cam);
-        DebugUI_SetFPCamCameraInfo(&game_fp_camera);
-        DebugUI_SetTPCamCameraInfo(&game_tp_camera);
-
-        // Rendering/audio consume one resolved camera for the frame.
-        CameraInfo game_camera = DebugUI_GetCameraInfo(dt);
+        // Update in-game camera
+        InGameCam_Update(dt, GameUI_GetState() == GameState::Playing, DebugUI_IsOpen(), DebugUI_GetCameraMode(), right_mouse_down);
+        // pass camera snapshot to debug UI
+        const InGameCamSnapshot ingame_cam_snapshot = InGameCam_GetSnapshot();
+        DebugUI_SetInGameCameraSnapshot(&ingame_cam_snapshot);
 
         // update spatial audio with audio position
-        glm::vec3 listener_pos = game_camera.position;
+        glm::vec3 listener_pos = InGameCam_GetGameplayCamera().position;
         glm::vec3 listener_forward = glm::normalize(glm::vec3(
-            -game_camera.view[0][2],
-            -game_camera.view[1][2],
-            -game_camera.view[2][2]
+            -InGameCam_GetGameplayCamera().view[0][2],
+            -InGameCam_GetGameplayCamera().view[1][2],
+            -InGameCam_GetGameplayCamera().view[2][2]
         ));
         glm::vec3 listener_up = glm::normalize(glm::vec3(
-            game_camera.view[0][1],
-            game_camera.view[1][1],
-            game_camera.view[2][1]
+            InGameCam_GetGameplayCamera().view[0][1],
+            InGameCam_GetGameplayCamera().view[1][1],
+            InGameCam_GetGameplayCamera().view[2][1]
         ));
 
         AudioSystem_UpdateSpatialState(
@@ -331,8 +263,10 @@ int main(int argc, char *argv[])
         {
             scene.Render();
 
-            Renderer_DrawFrame(game_camera);
+            Renderer_DrawFrame(DebugUI_IsOpen() ? DebugUI_GetCameraInfo(dt) : InGameCam_GetGameplayCamera());
         }
+        // Quit if requested from any menu
+        if (GameUI_GetState() == GameState::Quitting) running = false;
     }
 
     scene.Shutdown();

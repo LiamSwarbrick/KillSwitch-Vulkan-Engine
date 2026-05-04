@@ -10,16 +10,35 @@ namespace DebugUI
 {
     static constexpr const char* k_camera_mode_names[] = { "Free Cam", "FP Cam", "TP Cam" };
 
-    inline void DrawCameraPanel(
+    struct CameraPanelResult
+    {
+        bool fp_state_changed = false;
+        bool tp_state_changed = false;
+        bool reset_fp = false;
+        bool reset_tp = false;
+        FPCamState fp_state = {};
+        TPCamState tp_state = {};
+    };
+
+    inline CameraPanelResult DrawCameraPanel(
         bool& show,
         DebugUICameraMode& mode,
         const FreeCamState& free_cam,
-        FPCamState& fp_cam,
-        TPCamState& tp_cam,
+        const FPCamState& fp_cam,
+        const TPCamState& tp_cam,
         const EntityID* player_candidates,
         int player_candidate_count)
     {
-        if (!show) return;
+        CameraPanelResult result = {};
+        FPCamState edit_fp_cam = fp_cam;
+        TPCamState edit_tp_cam = tp_cam;
+
+        if (!show)
+        {
+            result.fp_state = edit_fp_cam;
+            result.tp_state = edit_tp_cam;
+            return result;
+        }
 
         // Default position: floating bottom-right of the screen, undocked.
         ImVec2 screen = ImGui::GetMainViewport()->Size;
@@ -34,7 +53,9 @@ namespace DebugUI
         if (!ImGui::Begin("Camera", &show, ImGuiWindowFlags_NoDocking))
         {
             ImGui::End();
-            return;
+            result.fp_state = edit_fp_cam;
+            result.tp_state = edit_tp_cam;
+            return result;
         }
 
         // --- Mode selector ---
@@ -48,17 +69,27 @@ namespace DebugUI
             if (i < mode_count - 1) ImGui::SameLine();
         }
 
-        auto DrawBoundPlayerCombo = [&](const char* label, EntityID& bound_entity)
+        auto DrawBoundPlayerCombo = [&](const char* label, EntityID& bound_entity) -> bool
         {
+            bool changed = false;
             bool has_players = (player_candidate_count > 0 && player_candidates);
             if (!has_players)
-                bound_entity = NULL_ENTITY;
+            {
+                if (bound_entity != NULL_ENTITY)
+                {
+                    bound_entity = NULL_ENTITY;
+                    changed = true;
+                }
+            }
 
             char preview[64];
             if (has_players)
             {
                 if (bound_entity == NULL_ENTITY)
+                {
                     bound_entity = player_candidates[0];
+                    changed = true;
+                }
 
                 snprintf(preview, sizeof(preview), "Entity %u", bound_entity);
             }
@@ -79,7 +110,10 @@ namespace DebugUI
 
                         bool selected = (bound_entity == id);
                         if (ImGui::Selectable(item_label, selected))
+                        {
                             bound_entity = id;
+                            changed = true;
+                        }
                         if (selected)
                             ImGui::SetItemDefaultFocus();
                     }
@@ -90,6 +124,8 @@ namespace DebugUI
                 }
                 ImGui::EndCombo();
             }
+
+            return changed;
         };
 
         // --- Live state ---
@@ -113,23 +149,27 @@ namespace DebugUI
 
             case DebugUICameraMode::FPCam:
             {
-                ImGui::Text("Position  %.2f  %.2f  %.2f", fp_cam.pos.x,     fp_cam.pos.y,     fp_cam.pos.z);
-                ImGui::Text("Forward   %.2f  %.2f  %.2f", fp_cam.forward.x, fp_cam.forward.y, fp_cam.forward.z);
-                ImGui::Text("Yaw       %.1f deg", fp_cam.yaw);
-                ImGui::Text("Pitch     %.1f deg", fp_cam.pitch);
+                ImGui::Text("Position  %.2f  %.2f  %.2f", edit_fp_cam.pos.x,     edit_fp_cam.pos.y,     edit_fp_cam.pos.z);
+                ImGui::Text("Forward   %.2f  %.2f  %.2f", edit_fp_cam.forward.x, edit_fp_cam.forward.y, edit_fp_cam.forward.z);
+                ImGui::Text("Yaw       %.1f deg", edit_fp_cam.yaw);
+                ImGui::Text("Pitch     %.1f deg", edit_fp_cam.pitch);
 
-                DrawBoundPlayerCombo("Bound Player", fp_cam.bound_entity);
+                if (DrawBoundPlayerCombo("Bound Player", edit_fp_cam.bound_entity))
+                    result.fp_state_changed = true;
 
-                if (ImGui::SliderFloat("FOV", &fp_cam.fov_deg, 40.0f, 4000.0f, "%.1f deg"))
+                if (ImGui::SliderFloat("FOV", &edit_fp_cam.fov_deg, 40.0f, 4000.0f, "%.1f deg"))
                 {
-                    fp_cam.fov_initialized = true;
+                    edit_fp_cam.fov_initialized = true;
+                    result.fp_state_changed = true;
                 }
 
                 if (ImGui::Button("Reset FP Cam"))
                 {
-                    EntityID keep_bound = fp_cam.bound_entity;
-                    FPCam_ResetToDefault(fp_cam);
-                    fp_cam.bound_entity = keep_bound;
+                    EntityID keep_bound = edit_fp_cam.bound_entity;
+                    FPCam_ResetToDefault(edit_fp_cam);
+                    edit_fp_cam.bound_entity = keep_bound;
+                    result.reset_fp = true;
+                    result.fp_state_changed = true;
                 }
 
                 ImGui::SeparatorText("Controls");
@@ -141,29 +181,34 @@ namespace DebugUI
 
             case DebugUICameraMode::TPCam:
             {
-                ImGui::Text("Position  %.2f  %.2f  %.2f", tp_cam.pos.x,     tp_cam.pos.y,     tp_cam.pos.z);
-                ImGui::Text("Target    %.2f  %.2f  %.2f", tp_cam.target.x,  tp_cam.target.y,  tp_cam.target.z);
-                ImGui::Text("Yaw       %.1f deg", tp_cam.yaw);
-                ImGui::Text("Pitch     %.1f deg", tp_cam.pitch);
+                ImGui::Text("Position  %.2f  %.2f  %.2f", edit_tp_cam.pos.x,     edit_tp_cam.pos.y,     edit_tp_cam.pos.z);
+                ImGui::Text("Target    %.2f  %.2f  %.2f", edit_tp_cam.target.x,  edit_tp_cam.target.y,  edit_tp_cam.target.z);
+                ImGui::Text("Yaw       %.1f deg", edit_tp_cam.yaw);
+                ImGui::Text("Pitch     %.1f deg", edit_tp_cam.pitch);
 
-                DrawBoundPlayerCombo("Bound Player", tp_cam.bound_entity);
+                if (DrawBoundPlayerCombo("Bound Player", edit_tp_cam.bound_entity))
+                    result.tp_state_changed = true;
 
-                if (ImGui::SliderFloat("Distance", &tp_cam.distance, 1.0f, 12.0f, "%.2f m"))
+                if (ImGui::SliderFloat("Distance", &edit_tp_cam.distance, 1.0f, 12.0f, "%.2f m"))
                 {
-                    if (tp_cam.distance < 0.5f)
-                        tp_cam.distance = 0.5f;
+                    if (edit_tp_cam.distance < 0.5f)
+                        edit_tp_cam.distance = 0.5f;
+                    result.tp_state_changed = true;
                 }
 
-                if (ImGui::SliderFloat("FOV", &tp_cam.fov_deg, 40.0f, 4000.0f, "%.1f deg"))
+                if (ImGui::SliderFloat("FOV", &edit_tp_cam.fov_deg, 40.0f, 4000.0f, "%.1f deg"))
                 {
-                    tp_cam.fov_initialized = true;
+                    edit_tp_cam.fov_initialized = true;
+                    result.tp_state_changed = true;
                 }
 
                 if (ImGui::Button("Reset TP Cam"))
                 {
-                    EntityID keep_bound = tp_cam.bound_entity;
-                    TPCam_ResetToDefault(tp_cam);
-                    tp_cam.bound_entity = keep_bound;
+                    EntityID keep_bound = edit_tp_cam.bound_entity;
+                    TPCam_ResetToDefault(edit_tp_cam);
+                    edit_tp_cam.bound_entity = keep_bound;
+                    result.reset_tp = true;
+                    result.tp_state_changed = true;
                 }
 
                 ImGui::SeparatorText("Controls");
@@ -180,6 +225,10 @@ namespace DebugUI
         }
 
         ImGui::End();
+
+        result.fp_state = edit_fp_cam;
+        result.tp_state = edit_tp_cam;
+        return result;
     }
 }
 
