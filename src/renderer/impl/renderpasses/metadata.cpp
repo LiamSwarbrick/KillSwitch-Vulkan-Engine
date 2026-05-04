@@ -48,9 +48,7 @@ SceneData MakeSpotLightSceneData(SpotLight spotlight, VkExtent2D extent)
 SceneData MakeSceneData(CameraInfo cam, VkExtent2D extent)
 {
     float aspect = (float)extent.width / (float)extent.height;
-    const float near_plane = 0.1f;
-    const float far_plane = 100.0f;
-    glm::mat4 proj = MakeProjectionMatrix(glm::radians(renderstate.settings.fov_y), aspect, near_plane, far_plane);
+    glm::mat4 proj = MakeProjectionMatrix(glm::radians(renderstate.settings.fov_y), aspect, cam.near_plane, cam.far_plane);
     glm::mat4 view_proj = proj * cam.view;
     glm::uvec2 extent_uvec2 = glm::uvec2(extent.width, extent.height);
 
@@ -62,8 +60,8 @@ SceneData MakeSceneData(CameraInfo cam, VkExtent2D extent)
     memcpy(data.cam_position, glm::value_ptr(cam.position), sizeof(glm::vec3));
     data.time = (float)((double)SDL_GetTicks() / 1000.0);
 
-    data.near_plane = near_plane;
-    data.far_plane = far_plane;
+    data.near_plane = cam.near_plane;
+    data.far_plane = cam.far_plane;
     data.aspect = aspect;
     data.lens_distortion = cam.lens_distortion;
 

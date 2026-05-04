@@ -10,6 +10,11 @@
 #define MAX_SHADOWMAPS 3
 #define MAX_POINTLIGHTS 5000
 #define MAX_SPOTLIGHTS  5000
+#define CLUSTER_GRID_SIZE_X 12
+#define CLUSTER_GRID_SIZE_Y 12
+#define CLUSTER_GRID_SIZE_Z 24
+#define CLUSTER_COUNT (CLUSTER_GRID_SIZE_X * CLUSTER_GRID_SIZE_Y * CLUSTER_GRID_SIZE_Z)
+#define CLUSTER_INDEX(x, y, z) (x + y*CLUSTER_GRID_SIZE_X + z*CLUSTER_GRID_SIZE_X*CLUSTER_GRID_SIZE_Y)
 
 // NOTE: On the C++ side, mat and vec types here are not glm types, they are float arrays defined in shared_types.glsl
 struct SceneData
@@ -70,22 +75,34 @@ struct SpotLight
     // TODO: For future shadow map cache, add a dirty bit for if it has moved
 };
 
+struct Cluster
+{
+    uint32_t point_count;
+    uint32_t point_offset;
+
+    uint32_t spot_count;
+    uint32_t spot_offset;
+};
+
+// NOTE: Currently all light buffers are uploaded during EndDrawCalls()
 struct LightsHeader
 {
     uint32_t num_point_lights;
     uint32_t num_spot_lights;
     uint64_t point_lights_ptr;
     uint64_t spot_lights_ptr;
+
+    // Multiple shadow maps
     uint64_t spotlight_shadowmap_index_buf_ptr;
     uint64_t shadowmap_spotlight_camera_buf_ptr;
+
+    // Clustered shading
+    uint64_t point_light_indices_buf_ptr;
+    uint64_t spot_light_indices_buf_ptr;
+    uint64_t cluster_offsets_buf_ptr;
 };
 
 #ifdef IS_GLSL
-    // float get_attenuation(float dist)
-    // {
-    //     return 1.0 / max(1.0, dist*dist);
-    // }
-
     float get_attenuation(float dist, float range)
     {
         // Standard inverse square
@@ -107,6 +124,8 @@ struct LightsHeader
     typedef struct MaterialData          MaterialData;
     typedef struct PointLight            PointLight;
     typedef struct SpotLight             SpotLight;
+    typedef struct Cluster               Cluster;
+    typedef struct LightsHeader          LightsHeader;
 
 #else
 
@@ -143,6 +162,20 @@ struct LightsHeader
     layout (buffer_reference, scalar) readonly buffer ShadowMapSpotLightCamerasBuffer
     {
         mat4 shadowmap_spotlight_viewproj[];  // Index by shadowmap idnex
+    };
+
+    // Clustered shading:
+    layout (buffer_reference, scalar) readonly buffer PointLightIndicesBuffer
+    {
+        uint indices[];  // One per light
+    };
+    layout (buffer_reference, scalar) readonly buffer SpotLightIndicesBuffer
+    {
+        uint indices[];
+    };
+    layout (buffer_reference, scalar) readonly buffer ClusterOffsetsBuffer
+    {
+        Cluster clusters[];  // Each element refers to a slice of the LightIndicesBuffer
     };
 
     // Pointer types for current mesh:

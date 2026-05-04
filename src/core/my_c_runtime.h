@@ -14,7 +14,7 @@ extern "C" {
 #include <math.h>
 
 // NOTE(Liam): Might deprecate these shorthand typedefs, but currently need them because
-// of older code. For public apis, best not to use them. 
+// of older code. For public apis, best not to use them. (except the bool types)
 typedef uint32_t u32;
 typedef uint64_t u64;
 typedef int32_t  s32;
@@ -52,11 +52,19 @@ typedef int8_t b8;
 
 //
 // Memory Tracker API (like a validation layer around calloc/free during debug mode)
-//          (Best simple tool thing I've ever made it's EPIC)
+//          (It's EPIC)
 //
 // NOTE: Wrapping around calloc to track memory allocations/leaks
 // Only tracks in debug mode. (i.e. when NDEBUG is NOT defined)
 // So release mode has the fast path: calls calloc/free and does nothing else.
+//
+// Remember that you ideally want as few allocations as possible in your code.
+// TODO: This project was started without a memory arena implementation
+//       so the code does use a few more mallocs than would be ideal.
+//       The renderer at least has it's own fixed sized arrays that act as arenas
+//       but it would be more ideal to VirtualAlloc or mmap all the programs memory on startup.
+//       It wouldn't be too much much work at all to replace these L_callocs with arenas.
+//       But also not that necessary unless the code starts doing algorithms on complicated datastructures each frame.
 //
 
 

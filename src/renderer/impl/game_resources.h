@@ -25,13 +25,15 @@ typedef struct ResourceIDs
     uint32_t spot_lights_buffer_rid;
     uint32_t spotlight_shadowmap_index_buffer_rid;
     uint32_t shadowmap_spotlight_camera_buffer_rid;
+    uint32_t point_light_indices_buffer_rid;
+    uint32_t spot_light_indices_buffer_rid;
+    uint32_t cluster_offsets_buffer_rid;
 
     // Window Dependent
     uint32_t swapchain_image_rids[MAX_SWAPCHAIN_IMAGE_COUNT];
     uint32_t depth_buffer_rid;
     uint32_t forward_target_rid;
     uint32_t hdr_color_target_rid;
-    // uint32_t hdr_color_target_pingpong_rid;
     uint32_t ldr_color_target_rid;
 
     uint32_t shadow_map_rids[MAX_SHADOWMAPS];

@@ -129,149 +129,214 @@ void create_startup_resources()
     // Scene Buffer
     // NOTE: One SceneData per renderpass so there's no worrying about synchronisation to update the scene data between renderpasses.
     //       Index scene buffer with the pass_idx!
-    ResourceCreateInfo scene_info = {
-        .buffer_create_info = {
-            .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
-            .size = MAX_PASSES * PaddedSizeForMappedArena(sizeof(SceneData)),
-            .usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT
-                | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT
-                | VK_BUFFER_USAGE_TRANSFER_DST_BIT
-        },
-        .is_buffer_cpu_accessible = 1  // <- Mapped bcuz small data upload is most efficient this way
-    };
-    renderstate.rids.scenes_buffer_rid = FG_CreateResource(
-        "GlobalSceneBuffer", FG_RESOURCE_TYPE_BUFFER, flags, &scene_info
-    );
-    renderstate.scenes_arena = MakeArenaOnBufferResource(renderstate.rids.scenes_buffer_rid);
-
+    {
+        ResourceCreateInfo scene_info = {
+            .buffer_create_info = {
+                .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
+                .size = MAX_PASSES * PaddedSizeForMappedArena(sizeof(SceneData)),
+                .usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT
+                    | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT
+                    | VK_BUFFER_USAGE_TRANSFER_DST_BIT
+            },
+            .is_buffer_cpu_accessible = 1  // <- Mapped bcuz small data upload is most efficient this way
+        };
+        renderstate.rids.scenes_buffer_rid = FG_CreateResource(
+            "GlobalSceneBuffer", FG_RESOURCE_TYPE_BUFFER, flags, &scene_info
+        );
+        renderstate.scenes_arena = MakeArenaOnBufferResource(renderstate.rids.scenes_buffer_rid);
+    }
 
     // Objects Buffer (Mapped so we rapidly upload transforms each frame)
-    ResourceCreateInfo objects_info = {
-        .buffer_create_info = {
-            .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
-            .size = MAX_RENDERED_OBJECTS * PaddedSizeForMappedArena(sizeof(ObjectData)),
-            .usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT
-                | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT
-                | VK_BUFFER_USAGE_TRANSFER_DST_BIT
-        },
-        .is_buffer_cpu_accessible = 1  // <- Hence mapped
-    };
-    renderstate.rids.objects_buffer_rid = FG_CreateResource(
-        "ObjectsBuffer", FG_RESOURCE_TYPE_BUFFER, flags, &objects_info
-    );
-    renderstate.object_transforms = MakeArenaOnBufferResource(renderstate.rids.objects_buffer_rid);
-
+    {
+        ResourceCreateInfo objects_info = {
+            .buffer_create_info = {
+                .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
+                .size = MAX_RENDERED_OBJECTS * PaddedSizeForMappedArena(sizeof(ObjectData)),
+                .usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT
+                    | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT
+                    | VK_BUFFER_USAGE_TRANSFER_DST_BIT
+            },
+            .is_buffer_cpu_accessible = 1  // <- Hence mapped
+        };
+        renderstate.rids.objects_buffer_rid = FG_CreateResource(
+            "ObjectsBuffer", FG_RESOURCE_TYPE_BUFFER, flags, &objects_info
+        );
+        renderstate.object_transforms = MakeArenaOnBufferResource(renderstate.rids.objects_buffer_rid);
+    }
     
     // Joints Buffer (Mapped so we upload to them each frame)
-    const uint32_t MAX_JOINTS_FOR_ALL_OBJECTS = MAX_RENDERED_OBJECTS * 50;
-    ResourceCreateInfo joints_info = {
-        .buffer_create_info = {
-            .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
-            // NOTE: Each objects joint transforms are contiguous. But subsequent objects are pushed with seperate PushToMappedArena calls.
-            // Obviously mat4 is 64 byte aligned so there is technically no padding between adjacent object's joint arrays.
-            // But just to be clear I've included the differences between different object's joint arrays 
-            // (but Padded(mat4)-mat4 = 0 so it cancel out due to 64 byte alignment and 64 byte size of mat4)
-            .size = MAX_JOINTS_FOR_ALL_OBJECTS * sizeof(glm::mat4) + MAX_RENDERED_OBJECTS*(PaddedSizeForMappedArena(sizeof(glm::mat4))-sizeof(glm::mat4)),
-            .usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT
-                | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT
-                | VK_BUFFER_USAGE_TRANSFER_DST_BIT
-        },
-        .is_buffer_cpu_accessible = 1  // <- Hence mapped
-    };
-    renderstate.rids.joints_buffer_rid = FG_CreateResource(
-        "JointsBuffer", FG_RESOURCE_TYPE_BUFFER, flags, &objects_info
-    );
-    renderstate.joint_transforms = MakeArenaOnBufferResource(renderstate.rids.joints_buffer_rid);
-
+    {
+        const uint32_t MAX_JOINTS_FOR_ALL_OBJECTS = MAX_RENDERED_OBJECTS * 50;
+        ResourceCreateInfo joints_info = {
+            .buffer_create_info = {
+                .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
+                // NOTE: Each objects joint transforms are contiguous. But subsequent objects are pushed with seperate PushToMappedArena calls.
+                // Obviously mat4 is 64 byte aligned so there is technically no padding between adjacent object's joint arrays.
+                // But just to be clear I've included the differences between different object's joint arrays 
+                // (but Padded(mat4)-mat4 = 0 so it cancel out due to 64 byte alignment and 64 byte size of mat4)
+                .size = MAX_JOINTS_FOR_ALL_OBJECTS * sizeof(glm::mat4) + MAX_RENDERED_OBJECTS*(PaddedSizeForMappedArena(sizeof(glm::mat4))-sizeof(glm::mat4)),
+                .usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT
+                    | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT
+                    | VK_BUFFER_USAGE_TRANSFER_DST_BIT
+            },
+            .is_buffer_cpu_accessible = 1  // <- Hence mapped
+        };
+        renderstate.rids.joints_buffer_rid = FG_CreateResource(
+            "JointsBuffer", FG_RESOURCE_TYPE_BUFFER, flags, &objects_info
+        );
+        renderstate.joint_transforms = MakeArenaOnBufferResource(renderstate.rids.joints_buffer_rid);
+    }
 
     // Materials SSBO (materials get uploaded on scene change all at once)
-    ResourceCreateInfo mat_info = {
-        .buffer_create_info = {
-            .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
-            .size = sizeof(MaterialData) * MAX_MATERIALS,
-            .usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT
-                   | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT
-                   | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
-        },
-        .is_buffer_cpu_accessible = 1  // <- Material stuff like blend mode is important to be CPU accessable, and we may want to dynamically change materials.
-    };
-    renderstate.rids.materials_buffer_rid = FG_CreateResource(
-        "MaterialBuffer", FG_RESOURCE_TYPE_BUFFER, flags, &mat_info
-    );
+    {
+        ResourceCreateInfo mat_info = {
+            .buffer_create_info = {
+                .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
+                .size = sizeof(MaterialData) * MAX_MATERIALS,
+                .usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT
+                    | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT
+                    | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+            },
+            .is_buffer_cpu_accessible = 1  // <- Material stuff like blend mode is important to be CPU accessable, and we may want to dynamically change materials.
+        };
+        renderstate.rids.materials_buffer_rid = FG_CreateResource(
+            "MaterialBuffer", FG_RESOURCE_TYPE_BUFFER, flags, &mat_info
+        );
+    }
 
     // Light Buffers (Uploaded once per frame all at once) (packed arrays)
-    ResourceCreateInfo lights_header_info = {
-        .buffer_create_info = {
-            .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
-            .size  = sizeof(LightsHeader),
-            .usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT
-                   | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT
-                   | VK_BUFFER_USAGE_TRANSFER_DST_BIT
-        },
-        .is_buffer_cpu_accessible = 1
-    };
-    renderstate.rids.lights_header_buffer_rid = FG_CreateResource(
-        "LightsHeaderBuffer", FG_RESOURCE_TYPE_BUFFER, flags, &lights_header_info
-    );
+    {
+        ResourceCreateInfo lights_header_info = {
+            .buffer_create_info = {
+                .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
+                .size  = sizeof(LightsHeader),
+                .usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT
+                    | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT
+                    | VK_BUFFER_USAGE_TRANSFER_DST_BIT
+            },
+            .is_buffer_cpu_accessible = 1
+        };
+        renderstate.rids.lights_header_buffer_rid = FG_CreateResource(
+            "LightsHeaderBuffer", FG_RESOURCE_TYPE_BUFFER, flags, &lights_header_info
+        );
+    }
+    {
+        ResourceCreateInfo point_lights_info = {
+            .buffer_create_info = {
+                .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
+                .size  = sizeof(PointLight) * MAX_POINTLIGHTS,
+                .usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT
+                    | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT
+                    | VK_BUFFER_USAGE_TRANSFER_DST_BIT
+            },
+            .is_buffer_cpu_accessible = 1
+        };
+        renderstate.rids.point_lights_buffer_rid = FG_CreateResource(
+            "PointLightsBuffer", FG_RESOURCE_TYPE_BUFFER, flags, &point_lights_info
+        );
+    }
+    {
+        ResourceCreateInfo spot_lights_info = {
+            .buffer_create_info = {
+                .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
+                .size  = sizeof(SpotLight) * MAX_SPOTLIGHTS,
+                .usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT
+                    | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT
+                    | VK_BUFFER_USAGE_TRANSFER_DST_BIT
+            },
+            .is_buffer_cpu_accessible = 1
+        };
+        renderstate.rids.spot_lights_buffer_rid = FG_CreateResource(
+            "SpotLightsBuffer", FG_RESOURCE_TYPE_BUFFER, flags, &spot_lights_info
+        );
+    }
+    // SpotLight Shadow Map Index Buffer
+    // I.e. Per spotlight, what's it's shadow map index (-1 if it doesn't have one)
+    {
+        ResourceCreateInfo spot_light_shadow_map_index_buf_info = {
+            .buffer_create_info = {
+                .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
+                .size  = sizeof(int) * MAX_SPOTLIGHTS,
+                .usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT
+                    | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT
+                    | VK_BUFFER_USAGE_TRANSFER_DST_BIT
+            },
+            .is_buffer_cpu_accessible = 1
+        };
+        renderstate.rids.spotlight_shadowmap_index_buffer_rid = FG_CreateResource(
+            "SpotLightShadowMapIndexBuffer", FG_RESOURCE_TYPE_BUFFER, flags, &spot_light_shadow_map_index_buf_info
+        );
+    }
 
-    ResourceCreateInfo point_lights_info = {
-        .buffer_create_info = {
-            .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
-            .size  = sizeof(PointLight) * MAX_POINTLIGHTS,
-            .usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT
-                   | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT
-                   | VK_BUFFER_USAGE_TRANSFER_DST_BIT
-        },
-        .is_buffer_cpu_accessible = 1
-    };
-    renderstate.rids.point_lights_buffer_rid = FG_CreateResource(
-        "PointLightsBuffer", FG_RESOURCE_TYPE_BUFFER, flags, &point_lights_info
-    );
+    // Shadow Map SpotLight Cameras Buffer
+    // The shadow map cameras for recomputing the fragment from the shadows perspective
+    // within the fragment shader.
+    {
+        ResourceCreateInfo shadowmap_spotlight_camera_buf_info = {
+            .buffer_create_info = {
+                .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
+                .size  = sizeof(glm::mat4) * MAX_SHADOWMAPS,
+                .usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT
+                    | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT
+                    | VK_BUFFER_USAGE_TRANSFER_DST_BIT
+            },
+            .is_buffer_cpu_accessible = 1
+        };
+        renderstate.rids.shadowmap_spotlight_camera_buffer_rid = FG_CreateResource(
+            "ShadowMapSpotLightCamerasBuffer", FG_RESOURCE_TYPE_BUFFER, flags, &shadowmap_spotlight_camera_buf_info
+        );
+    }
 
-    ResourceCreateInfo spot_lights_info = {
-        .buffer_create_info = {
-            .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
-            .size  = sizeof(SpotLight) * MAX_SPOTLIGHTS,
-            .usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT
-                   | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT
-                   | VK_BUFFER_USAGE_TRANSFER_DST_BIT
-        },
-        .is_buffer_cpu_accessible = 1
-    };
-    renderstate.rids.spot_lights_buffer_rid = FG_CreateResource(
-        "SpotLightsBuffer", FG_RESOURCE_TYPE_BUFFER, flags, &spot_lights_info
-    );
+    // PointLightIndicesBuffer
+    {
+        ResourceCreateInfo point_light_indices_buf_info = {
+            .buffer_create_info = {
+                .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
+                .size  = sizeof(uint32_t) * (MAX_POINTLIGHTS),
+                .usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT
+                    | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT
+                    | VK_BUFFER_USAGE_TRANSFER_DST_BIT
+            },
+            .is_buffer_cpu_accessible = 1
+        };
+        renderstate.rids.point_light_indices_buffer_rid = FG_CreateResource(
+            "PointLightIndicesBuffer", FG_RESOURCE_TYPE_BUFFER, flags, &point_light_indices_buf_info
+        );
+    }
 
-    // SpotLightShadowMapIndexBuffer
-    ResourceCreateInfo spot_light_shadow_map_index_buf_info = {
-        .buffer_create_info = {
-            .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
-            .size  = sizeof(int) * MAX_SPOTLIGHTS,
-            .usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT
-                   | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT
-                   | VK_BUFFER_USAGE_TRANSFER_DST_BIT
-        },
-        .is_buffer_cpu_accessible = 1
-    };
-    renderstate.rids.spotlight_shadowmap_index_buffer_rid = FG_CreateResource(
-        "SpotLightShadowMapIndexBuffer", FG_RESOURCE_TYPE_BUFFER, flags, &spot_light_shadow_map_index_buf_info
-    );
-
-    // ShadowMapSpotLightCamerasBuffer
-    ResourceCreateInfo shadowmap_spotlight_camera_buf_info = {
-        .buffer_create_info = {
-            .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
-            .size  = sizeof(glm::mat4) * MAX_SHADOWMAPS,
-            .usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT
-                   | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT
-                   | VK_BUFFER_USAGE_TRANSFER_DST_BIT
-        },
-        .is_buffer_cpu_accessible = 1
-    };
-    renderstate.rids.shadowmap_spotlight_camera_buffer_rid = FG_CreateResource(
-        "ShadowMapSpotLightCamerasBuffer", FG_RESOURCE_TYPE_BUFFER, flags, &shadowmap_spotlight_camera_buf_info
-    );
-
+    // SpotLightIndicesBuffer
+    {
+        ResourceCreateInfo spot_light_indices_buf_info = {
+            .buffer_create_info = {
+                .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
+                .size  = sizeof(uint32_t) * (MAX_SPOTLIGHTS),
+                .usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT
+                    | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT
+                    | VK_BUFFER_USAGE_TRANSFER_DST_BIT
+            },
+            .is_buffer_cpu_accessible = 1
+        };
+        renderstate.rids.spot_light_indices_buffer_rid = FG_CreateResource(
+            "SpotLightIndicesBuffer", FG_RESOURCE_TYPE_BUFFER, flags, &spot_light_indices_buf_info
+        );
+    }
+    
+    // ClusterOffsetsBuffer
+    {
+        ResourceCreateInfo cluster_offsets_buf_info = {
+            .buffer_create_info = {
+                .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
+                .size  = sizeof(Cluster) * CLUSTER_COUNT,
+                .usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT
+                    | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT
+                    | VK_BUFFER_USAGE_TRANSFER_DST_BIT
+            },
+            .is_buffer_cpu_accessible = 1
+        };
+        renderstate.rids.cluster_offsets_buffer_rid = FG_CreateResource(
+            "ClusterOffsetsBuffer", FG_RESOURCE_TYPE_BUFFER, flags, &cluster_offsets_buf_info
+        );
+    }
 
 #if 0  // NOTE: Keeping in case it's useful for game ui to have quad code lying around
     // TEST QUAD

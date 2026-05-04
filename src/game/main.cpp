@@ -55,11 +55,13 @@ CameraInfo temp_camera()
     if (state[SDL_SCANCODE_Q]) pos -= up  * move_speed;
 
     // --- VIEW MATRIX ---
-    glm::mat4 view = glm::lookAt(pos, pos + forward, up);
+    glm::mat4 view = glm::lookAtRH(pos, pos + forward, up);
 
     return {
         .view = view,
         .position = pos,
+        .near_plane = 0.1f,
+        .far_plane = 100.0f,
         .lens_distortion = -0.025f  // <- Subtle fish eye lens
     };
 }

@@ -50,6 +50,8 @@ typedef struct CameraInfo
     glm::mat4 view;
     // glm::mat4 proj;  // <- Taken from fov setting
     glm::vec3 position;
+    float near_plane;
+    float far_plane;
     float lens_distortion;
 }
 CameraInfo;

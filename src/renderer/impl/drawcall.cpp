@@ -1,5 +1,6 @@
 #include "drawcall.h"
 
+#include "clustered_shading.h"
 #include "materials.h"
 #include "internal_state.h"
 #include "mapped_linear_allocator.h"
@@ -58,6 +59,9 @@ void EndDrawCalls()
     FG_Resource* sl_buf = &renderstate.registry.resources[renderstate.rids.spot_lights_buffer_rid];
     FG_Resource* spotlight_shadowmap_id_buf_res     = &renderstate.registry.resources[renderstate.rids.spotlight_shadowmap_index_buffer_rid];
     FG_Resource* shadowmap_spotlight_camera_buf_res = &renderstate.registry.resources[renderstate.rids.shadowmap_spotlight_camera_buffer_rid];
+    FG_Resource* point_light_indices_buffer_res = &renderstate.registry.resources[renderstate.rids.point_light_indices_buffer_rid];
+    FG_Resource* spot_light_indices_buffer_res = &renderstate.registry.resources[renderstate.rids.spot_light_indices_buffer_rid];
+    FG_Resource* cluster_offsets_buffer_rid = &renderstate.registry.resources[renderstate.rids.cluster_offsets_buffer_rid];
 
     LightsHeader header = {
         .num_point_lights  = renderstate.renderables_arena.num_point_lights,
@@ -65,7 +69,10 @@ void EndDrawCalls()
         .point_lights_ptr  = pl_buf->buffer_gpu_address,
         .spot_lights_ptr   = sl_buf->buffer_gpu_address,
         .spotlight_shadowmap_index_buf_ptr = spotlight_shadowmap_id_buf_res->buffer_gpu_address,
-        .shadowmap_spotlight_camera_buf_ptr = shadowmap_spotlight_camera_buf_res->buffer_gpu_address
+        .shadowmap_spotlight_camera_buf_ptr = shadowmap_spotlight_camera_buf_res->buffer_gpu_address,
+        .point_light_indices_buf_ptr = point_light_indices_buffer_res->buffer_gpu_address,
+        .spot_light_indices_buf_ptr = spot_light_indices_buffer_res->buffer_gpu_address,
+        .cluster_offsets_buf_ptr = cluster_offsets_buffer_rid->buffer_gpu_address,
     };
     
     vmaCopyMemoryToAllocation(renderstate.vma_allocator, &header, lights_header_buf->allocation, 0, sizeof(LightsHeader));
@@ -120,6 +127,9 @@ void EndDrawCalls()
         0,
         sizeof(glm::mat4) * renderstate.num_shadowed_spotlights
     );
+
+    // Create cluster grid, assign lights and upload that grid to the GPU
+    ClusteredShading_CPULightAssignmentToMappedBuffer();
 }
 
 void AddDrawCall(Renderable* r)
@@ -210,6 +220,7 @@ void AddDrawCall(Renderable* r)
 
     TODO: Whilst using glTF we gotta deal with meshes being multiple primitives.
     In the future, when reusing this with a custom format, decide whether this is still a good choice.
+    (vs just allowing multiple mesh components, which would be better to allow mixed material types for one entity).
 */
 
 typedef struct DrawPrimitive

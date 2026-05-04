@@ -93,6 +93,7 @@ typedef struct RenderState
     uint32_t num_shadowed_spotlights;
     uint32_t shadowed_spotlight_indices[MAX_SHADOWMAPS];  // E.g. ..._indices[0] = 12 means spotlight-12 occupies shadowmap-0
     SceneData shadowed_spotlight_scenedatas[MAX_SHADOWMAPS];  // View projection matrices (proj * view)
+    
 
     CameraInfo main_camera;
 

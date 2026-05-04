@@ -559,6 +559,11 @@ void Renderer_Init(const Renderer_InitInfo* info)
         .point_lights =   (PointLight*)L_calloc(MAX_POINTLIGHTS, sizeof(PointLight), &renderstate.main.tt),
         .spot_lights  =    (SpotLight*)L_calloc(MAX_SPOTLIGHTS, sizeof(SpotLight), &renderstate.main.tt),
         .is_spotlight_shadowed = (b32*)L_calloc(MAX_SPOTLIGHTS, sizeof(b32), &renderstate.main.tt),
+
+        // Clustered shading
+        .staging_point_light_indices = (uint32_t*)L_calloc(CLUSTER_COUNT * MAX_POINTLIGHTS, sizeof(uint32_t), &renderstate.main.tt),
+        .staging_spot_light_indices  = (uint32_t*)L_calloc(CLUSTER_COUNT * MAX_SPOTLIGHTS, sizeof(uint32_t), &renderstate.main.tt),
+        .staging_cluster_offsets = (Cluster*)L_calloc(CLUSTER_COUNT, sizeof(Cluster), &renderstate.main.tt),
     };
 
     // Init per frame structures (except for swapchain_image_acquired_semaphore, which is handled by create_or_recreate_swapchain)
@@ -671,10 +676,14 @@ void Renderer_Shutdown()
         vkDestroyFence(renderstate.device, renderstate.frames[i].rendering_complete_fence, NULL);
     }
 
-    L_free(renderstate.renderables_arena.items, &renderstate.main.tt);
-    L_free(renderstate.renderables_arena.point_lights, &renderstate.main.tt);
-    L_free(renderstate.renderables_arena.spot_lights, &renderstate.main.tt);
-    L_free(renderstate.renderables_arena.is_spotlight_shadowed, &renderstate.main.tt);
+    // Free renderables arenas (TODO: I really need a per frame scratch arena instead of all these)
+    L_free(renderstate.renderables_arena.items,                   &renderstate.main.tt);
+    L_free(renderstate.renderables_arena.point_lights,            &renderstate.main.tt);
+    L_free(renderstate.renderables_arena.spot_lights,             &renderstate.main.tt);
+    L_free(renderstate.renderables_arena.is_spotlight_shadowed,   &renderstate.main.tt);
+    L_free(renderstate.renderables_arena.staging_point_light_indices, &renderstate.main.tt);
+    L_free(renderstate.renderables_arena.staging_spot_light_indices,  &renderstate.main.tt);
+    L_free(renderstate.renderables_arena.staging_cluster_offsets,     &renderstate.main.tt);
     DestroyDrawCallCollections();
 
     // Shutdown Pipeline Keying and Frame Graph subsystems
@@ -846,7 +855,7 @@ void Renderer_PushRenderable(Renderable renderable)
 void Renderer_PushLight(C_Light light, glm::vec3 position, glm::vec3 direction, b32 is_shadowed)
 {
     SDL_assert(is_shadowed == (light.type == LIGHT_COMPONENT_SPOTLIGHT) && "Only shadowing spot lights for now");
-#warning TODO: CPU Light assignment to clusters
+
     glm::vec4 pos_and_radius = glm::vec4(position.x, position.y, position.z, light.radius);
     glm::vec4 color_and_intensity = glm::vec4(light.color.x, light.color.y, light.color.z, light.intensity);
 
@@ -987,7 +996,7 @@ void Renderer_DrawFrame(CameraInfo main_camera)
 #ifdef NDEBUG
     else if (acquire_result == VK_TIMEOUT)
     {
-        printf("Timeout occurred. Only waiting one second in debug mode to detect deadlocks/hangs.\n(If you're screen turned off and that caused this crash, don't worry, that won't happen in release mode!\n)");
+        printf("Timeout occurred. Only waiting %d seconds in debug mode to detect deadlocks/hangs.\n(If you're screen turned off and that caused this crash, don't worry, that won't happen in release mode!\n)", (uint64_t)((double)sync_timeout_nanoseconds)/1000000000.0);
     }
 #endif
     VK_CHECK(acquire_result);
