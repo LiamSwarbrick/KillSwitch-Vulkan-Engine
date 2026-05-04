@@ -316,6 +316,9 @@ struct RigidBodyDesc
     // Damping (to extend to linear and angular if i add it)
     float damping = 0.99f; // physics book
 
+    float restitution = 0.5f;
+    float friction = 0.8f;
+
     uint32_t forceLayers = (uint32_t) ForceLayer::Default;
 
     uint8_t bodyLayer = 0U;
@@ -339,6 +342,9 @@ struct RigidBody
     float invMass = 1.0f;
     float gravityScale = 1.0f;
     float damping = 0.99f;
+
+    float restitution = 0.5f;
+    float friction = 0.8f;
 
     // We could add body layer (as in player, enemy, etc, to provide better query options, but idk)
     uint32_t forceLayers = (uint32_t) ForceLayer::Default;
@@ -374,7 +380,7 @@ struct PhysicsCharacter
 
     // Instead of pointer to body, could be RBHandle instead
     RigidBody* body = nullptr;
-
+    
     GroundState groundState = GroundState::InAir;
     glm::vec3 groundNormal = glm::vec3(0.0f, 1.0f, 0.0f); // For a more complex controller, we could have the groundNormal be the gravity's opposite, (normalized)
 

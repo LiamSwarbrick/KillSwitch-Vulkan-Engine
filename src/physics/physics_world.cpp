@@ -269,6 +269,10 @@ RigidBodyHandle PhysicsWorld::addBody(const RigidBodyDesc& desc)
 	body.invMass = desc.isStatic ? 0.0f : (1.0f / desc.mass);
 	body.gravityScale = desc.gravityScale;
 	body.damping = desc.damping;
+
+	body.restitution = desc.restitution;
+	body.friction = desc.friction;
+
 	body.forceLayers = desc.forceLayers;
 	body.bodyLayer = desc.bodyLayer;
 
@@ -742,6 +746,7 @@ void PhysicsWorld::step(float dt)
 	updateBroadPhase();
 	detectCollisions();
 	testPlanes();
+	
 	solve(dt);
 
 	dispatchEvents();
@@ -802,7 +807,7 @@ void PhysicsWorld::detectCollisions()
 	for (const BodyPair& pair : pairs)
 	{
 		if (pair.bodyA->isStatic && pair.bodyB->isStatic) continue;
-		if (pair.bodyA->isKinematic && pair.bodyB->isKinematic) continue; // this should be the case right????
+		if (pair.bodyA->isKinematic && pair.bodyB->isKinematic) continue;
 
 		Contact contact = narrowPhase.testPair(*pair.bodyA, *pair.bodyB, *this);
 		if (contact.isValid())
@@ -828,6 +833,25 @@ void PhysicsWorld::testPlanes()
 void PhysicsWorld::solve(float dt)
 {
 	solver.solve(contacts, dt);
+}
+
+void PhysicsWorld::resetAllCharactersGroundState()
+{
+	for (PhysicsCharacter& c : characters.Data())
+	{
+		c.groundState = PhysicsCharacter::GroundState::InAir;
+	}
+}
+
+void PhysicsWorld::updateAllCharactersGroundState()
+{
+	for (PhysicsCharacter& c : characters.Data())
+	{
+		if (c.groundState != PhysicsCharacter::GroundState::InAir) continue;
+		
+		// TODO: raycast downwards (basically scene.cpp's code for the player movement) 
+		SDL_assert(false && "Need to implement this");
+	}
 }
 
 void PhysicsWorld::dispatchEvents()

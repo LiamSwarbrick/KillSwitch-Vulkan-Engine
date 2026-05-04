@@ -179,6 +179,13 @@ public:
 	void setMaxSteps(int max);
 	int getMaxSteps() const;
 
+
+	// Extra functions for the solver
+	// Before using solve, reset all groundState's to InAir
+	void resetAllCharactersGroundState();
+	// After using solve, resolve groundState using raycast downwards in case we are InAir
+	void updateAllCharactersGroundState();
+
 private:
 	// ------------------------------
 	// MAIN LOGIC
@@ -190,6 +197,7 @@ private:
 	void detectCollisions(); // broadPhase.queryPairs() + narrowPhase.testPair(<pair>)
 	void testPlanes(); // narrowPhase.testPlane(<bodies, planes>)
 	void solve(float dt); // solve interpenetration
+
 
 	// TODO after implementing events
 	void dispatchEvents();
@@ -209,7 +217,7 @@ private:
 	BodyLayerFilter bodyLayerFilter;
 	NarrowPhase narrowPhase;
 	Integrator integrator;
-	Solver solver;
+	Solver solver{ *this };
 	ForceRegistry forceRegistry;
 
 	// --- POOLS (to refactor ECS to remove namespace and move definitions to .cpp)
