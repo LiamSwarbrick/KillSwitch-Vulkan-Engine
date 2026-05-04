@@ -137,8 +137,9 @@ int main(int argc, char *argv[])
     scene.StartUp();
 
     Asset* room_prefab = scene.LoadPrefab("assets/levels/testroom_new.gltf");
-    // Asset* cube_prefab = scene.LoadPrefab("assets/props/simple_cube.gltf");
-    // Asset* sphere_prefab = scene.LoadPrefab("assets/props/simple_sphere.gltf");
+    Asset* playground_prefab = scene.LoadPrefab("assets/levels/playground.gltf");
+    Asset* cube_prefab = scene.LoadPrefab("assets/props/simple_cube.gltf");
+    Asset* sphere_prefab = scene.LoadPrefab("assets/props/simple_sphere.gltf");
     //Asset* capsule_prefab = scene.LoadPrefab("assets/props/zombie.gltf");
     Asset* capsule_prefab = scene.LoadPrefab("assets/props/character_capsule.gltf");
     // TODO: Change the following 2 prefabs so they can be imported (add the boolean "Is ECS Entity" with the new script where it is needed)
@@ -147,14 +148,15 @@ int main(int argc, char *argv[])
     //Asset* animationPrefab = scene.LoadPrefab("assets/animations/cat.gltf");
     
     scene.InstantiatePrefab(room_prefab, glm::vec3(0, 0, 0));
+    scene.InstantiatePrefab(playground_prefab, glm::vec3(0, 0, 0));
     // scene.InstantiatePrefab(cube_prefab, glm::vec3(0, 5.1, 0));
     // scene.InstantiatePrefab(cube_prefab, glm::vec3(3, 4.9, 0));
     
     EntityID playerID = scene.InstantiatePrefab(capsule_prefab, glm::vec3(0, 2, 0.01));
-    // scene.InstantiatePrefab(sphere_prefab, glm::vec3(4.7, 7, 0.1));
-    // scene.InstantiatePrefab(sphere_prefab, glm::vec3(-4.7, 7, -0.1));
-    // scene.InstantiatePrefab(sphere_prefab, glm::vec3(0.1, 7, -4.7));
-    // scene.InstantiatePrefab(sphere_prefab, glm::vec3(-0.1, 7, 4.7));
+     scene.InstantiatePrefab(sphere_prefab, glm::vec3(4.7, 7, 0.1));
+     scene.InstantiatePrefab(sphere_prefab, glm::vec3(-4.7, 7, -0.1));
+     scene.InstantiatePrefab(sphere_prefab, glm::vec3(0.1, 7, -4.7));
+     scene.InstantiatePrefab(sphere_prefab, glm::vec3(-0.1, 7, 4.7));
     // scene.InstantiatePrefab(catPrefab, glm::vec3(0, 0, 0));
     // scene.InstantiatePrefab(animationPrefab, glm::vec3(0, 0, 0));
     // render a second cat
