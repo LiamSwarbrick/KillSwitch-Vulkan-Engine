@@ -31,6 +31,7 @@ void Scene::StartUp()
     m_ecs.RegisterComponent<C_AnimatedMesh>();
     m_ecs.RegisterComponent<C_PlayerInput>();
     m_ecs.RegisterComponent<C_CharacterController>();
+    m_ecs.RegisterComponent<C_RigidBody>();
 
     m_prefabs.clear();
 
@@ -208,6 +209,8 @@ EntityID Scene::InstantiatePrefab(Asset* prefab, glm::vec3 spawnPosition)
                 // TEMPORARY
                 if (importedRigidbody.is_static || importedRigidbody.is_trigger)
                     rbDesc.bodyLayer = (uint8_t) BodyLayer::STATIC;
+                else if(importedRigidbody.is_character)
+                    rbDesc.bodyLayer = (uint8_t)BodyLayer::CHARACTER;
                 else
                     rbDesc.bodyLayer = (uint8_t) BodyLayer::MOVING;
 
@@ -455,6 +458,8 @@ void Scene::UpdatePlayer(float dt)
         glm::vec3 facingDir = glm::normalize(glm::vec3(horizontalMoveDir.x, 0.0f, horizontalMoveDir.z));
         float yawDeg = glm::degrees(atan2f(facingDir.x, facingDir.z));
         rotation = glm::angleAxis(glm::radians(yawDeg), glm::vec3(0.0f, 1.0f, 0.0f));
+
+        transform.matrix = glm::translate(glm::mat4(1.0f), translation) * glm::mat4_cast(rotation) * glm::scale(glm::mat4(1.0f), scale);
     }
     
     // If we are jumping, we need to check IF we touch the floor
@@ -470,26 +475,26 @@ void Scene::UpdatePlayer(float dt)
     {
         // Raycast to update if we are jumping
         // For that, we need the current Character's transform AND shape to find the feet, and then throw a very tiny ray
-        IShape* shape = m_physicsManager.getShape(m_currentPlayer);
-        ShapeType shapeType = shape->getType();
-        if (shapeType != ShapeType::Capsule)
-        {
-            SDL_assert(false && "Character collider (IShape) needs to be of ShapeType::Capsule");
-            return;
-        }
-        CapsuleShape* capsuleShape = static_cast<CapsuleShape*>(shape);
-        
-        Ray feetRay;
-        feetRay.origin = translation; // We will have to add the capsule's halfHeight +(-) radius to get the feet
-        feetRay.direction = glm::vec3(0.0f, -1.0f, 0.0f);
-        feetRay.maxDistance = capsuleShape->halfHeight + capsuleShape->radius + 0.15f; // add a small distance to the halfheight + radius
+        //IShape* shape = m_physicsManager.getShape(m_currentPlayer);
+        //ShapeType shapeType = shape->getType();
+        //if (shapeType != ShapeType::Capsule)
+        //{
+        //    SDL_assert(false && "Character collider (IShape) needs to be of ShapeType::Capsule");
+        //    return;
+        //}
+        //CapsuleShape* capsuleShape = static_cast<CapsuleShape*>(shape);
+        //
+        //Ray feetRay;
+        //feetRay.origin = translation; // We will have to add the capsule's halfHeight +(-) radius to get the feet
+        //feetRay.direction = glm::vec3(0.0f, -1.0f, 0.0f);
+        //feetRay.maxDistance = capsuleShape->halfHeight + capsuleShape->radius + 0.15f; // add a small distance to the halfheight + radius
 
-        QueryFilterExternal filter;
-        filter.bodyToIgnore = m_currentPlayer;
-        filter.hasLayerOfQuery = true;
-        filter.layerOfQuery = (uint8_t)BodyLayer::MOVING;
+        //QueryFilterExternal filter;
+        //filter.bodyToIgnore = m_currentPlayer;
+        //filter.hasLayerOfQuery = true;
+        //filter.layerOfQuery = (uint8_t)BodyLayer::MOVING;
 
-        std::vector<EntityRaycastHit> hits = m_physicsManager.raycastAll(feetRay, filter);
+        //std::vector<EntityRaycastHit> hits = m_physicsManager.raycastAll(feetRay, filter);
 
         if (/*!hits.empty() || */player->groundState == PhysicsCharacter::GroundState::OnGround)
         {
@@ -498,31 +503,53 @@ void Scene::UpdatePlayer(float dt)
         } // If there are hits, we are in the ground
     } // If the jumping cooldown is done, we need to check if we can jump again
 
-    
-    if (!controller.jumping && player->groundState == PhysicsCharacter::GroundState::OnGround)
+
+    if (isMoving)
+    {
+        // Project horizontal velocity to character's slope normal
+        glm::vec3 slopeRight = glm::normalize(glm::cross(horizontalMoveDir, player->groundNormal));
+        glm::vec3 slopeForward = glm::normalize(glm::cross(player->groundNormal, slopeRight));
+
+        if (slopeForward.y > 0.0f) slopeForward.y = 0.0f; // Do this to walk down surfaces correctly.
+        //slopeForward.y = 0.0f;
+
+        controller.velocity = slopeForward * controller.move_speed;
+    }
+    else
     {
         controller.velocity = horizontalMoveDir * controller.move_speed;
+    }
+    
 
-        // Important to add the velocity to the current one, NOT WITH addVelocity cause it would linearly add to it
-        glm::vec3 currentVelocity = m_physicsManager.getVelocity(m_currentPlayer);
-        controller.velocity.y += currentVelocity.y;
+    // Important to add the velocity to the current one, NOT WITH addVelocity cause it would linearly add to it
+    glm::vec3 currentVelocity = m_physicsManager.getVelocity(m_currentPlayer);
+    controller.velocity.y += currentVelocity.y;
+
+    switch (player->groundState)
+    {
+    case PhysicsCharacter::GroundState::OnGround:
+
         m_physicsManager.setVelocity(m_currentPlayer, controller.velocity);
 
         if (input.jump)
         {
+            player->jumping = true; // very important
             controller.jumping = true;
-            controller.jumping_cooldown = 0.1f; // Adjust to avoid multiple-consecutive-frame / jittery jumping
+            controller.jumping_cooldown = 0.2f; // Adjust to avoid multiple-consecutive-frame / jittery jumping
 
             glm::vec3 gravity = m_physicsManager.getGravity();
-            m_physicsManager.addVelocity(m_currentPlayer, -(gravity*0.5f)); // Adjust jump strength as you wish
+            m_physicsManager.addVelocity(m_currentPlayer, -(gravity * 0.5f)); // Adjust jump strength as you wish
         }
-    }
-    else
-    {
-        //controller.velocity += horizontalMoveDir * controller.move_speed;
+
+        break;
+    case PhysicsCharacter::GroundState::OnSteepGround:
+        break;
+    case PhysicsCharacter::GroundState::InAir:
+        break;
+    default:
+        break;
     }
 
-    transform.matrix = glm::translate(glm::mat4(1.0f), translation) * glm::mat4_cast(rotation) * glm::scale(glm::mat4(1.0f), scale);
     //C_AnimatedMesh& animatedMesh = m_ecs.GetComponent<C_AnimatedMesh>(m_currentPlayer);
 }
 
@@ -530,11 +557,23 @@ void Scene::SetBodyCollisionLayers()
 {
     m_physicsManager.setNumLayers(NUM_BODY_LAYERS);
     //m_physicsManager.setLayerPair((uint8_t) BodyLayer::STATIC, (uint8_t) BodyLayer::STATIC, false);
+    // BodyLayers
+    // MOVING VS STATIC && MOVING
+    // CHARACTER VS CHARACTER && MOVING && STATIC
     m_physicsManager.disableLayerPair((uint8_t) BodyLayer::STATIC, (uint8_t) BodyLayer::STATIC);
-    // STATIC VS MOVING
-    // MOVING VS MOVING
-    // WEAPON VS MOVING
-    m_physicsManager.enableLayerPair((uint8_t) BodyLayer::STATIC, (uint8_t) BodyLayer::MOVING);
-    m_physicsManager.enableLayerPair((uint8_t) BodyLayer::MOVING, (uint8_t) BodyLayer::MOVING);
-    m_physicsManager.enableLayerPair((uint8_t) BodyLayer::WEAPON, (uint8_t) BodyLayer::MOVING);
+    m_physicsManager.enableLayerPair((uint8_t)BodyLayer::STATIC, (uint8_t)BodyLayer::MOVING);
+    m_physicsManager.enableLayerPair((uint8_t)BodyLayer::MOVING, (uint8_t)BodyLayer::MOVING);
+    m_physicsManager.enableLayerPair((uint8_t)BodyLayer::CHARACTER, (uint8_t)BodyLayer::CHARACTER);
+    m_physicsManager.enableLayerPair((uint8_t)BodyLayer::CHARACTER, (uint8_t)BodyLayer::MOVING);
+    m_physicsManager.enableLayerPair((uint8_t)BodyLayer::CHARACTER, (uint8_t)BodyLayer::STATIC);
+
+    // Query filter Layers
+    // WEAPON VS MOVING && CHARACTER
+    m_physicsManager.enableLayerPair((uint8_t)BodyLayer::WEAPON, (uint8_t)BodyLayer::MOVING);
+    m_physicsManager.enableLayerPair((uint8_t)BodyLayer::WEAPON, (uint8_t)BodyLayer::MOVING);
+    // AFFECT_ONLY_CHARACTER VS CHARACTER
+    m_physicsManager.enableLayerPair((uint8_t)BodyLayer::AFFECT_ONLY_CHARACTER, (uint8_t)BodyLayer::CHARACTER);
+    // AFFECT_ONLY_STATIC VS STATIC
+    m_physicsManager.enableLayerPair((uint8_t)BodyLayer::AFFECT_ONLY_STATIC, (uint8_t)BodyLayer::STATIC);
+
 }
