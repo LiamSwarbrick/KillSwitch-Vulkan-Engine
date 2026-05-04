@@ -282,6 +282,9 @@ class BaseComponent(bpy.types.PropertyGroup):
             if prop != "rna_type" and prop != "bl_label":
                 layout.prop(self, prop)
 
+class PlayerInput(BaseComponent):
+    bl_label = "PlayerInput"
+
 class HealthComponent(BaseComponent):
     bl_label = "Health"
     max_health: bpy.props.IntProperty(default=200)
@@ -716,7 +719,12 @@ def apply_ecs_to_object(obj, ecs_data):
                         if value & item.value:
                             flags.add(item.identifier)
                     value = flags
-
+                elif prop_meta.identifier == "half_widths":
+                    # Convert from Engine's XZY to Blender's XYZ
+                    print(f"--- Converting HalfWidths of {obj.name}")
+                    value = list(value)  # ensure it's a list
+                    if len(value) == 3:
+                        value = [value[0], value[2], value[1]]  # X,Z,Y
                 elif prop_meta and prop_meta.type == 'FLOAT' and prop_meta.is_array:
                     value = tuple(value)
                     if len(value) == 4 and prop_meta.subtype == 'EULER':
@@ -790,7 +798,7 @@ class EXPORT_OT_level_glb(bpy.types.Operator, ExportHelper):
             filepath=self.filepath,
             
             # Exports separate .gltf, .bin, .png files
-            export_format='GLTF_SEPARATE',
+            export_format='GLTF_SEPARATE',    # NOTE: <- CHANGE THIS WHEN WE WANT GLB to 'GBL'
             export_image_format='AUTO', 
             export_texture_dir='textures', 
             
@@ -799,7 +807,9 @@ class EXPORT_OT_level_glb(bpy.types.Operator, ExportHelper):
             export_extras=True,
             
             # Apply all modifiers before export
-            export_apply=True
+            export_apply=True,
+
+            export_lights=True
         )
         
         self.report({'INFO'}, f"Level exported successfully to {self.filepath}")

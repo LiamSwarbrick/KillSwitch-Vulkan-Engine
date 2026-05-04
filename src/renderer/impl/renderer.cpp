@@ -10,6 +10,17 @@
 
 RenderState renderstate;
 
+// 2d image resource creator for game-side ImGui
+uint32_t create_mipmapped_texture2d_resource(
+    const char*       debug_name,
+    FG_ResourceFlags  flags,
+    const uint8_t*    data,
+    uint64_t          data_size,
+    uint32_t          width,
+    uint32_t          height,
+    VkFormat          format
+);
+
 // STB DS for hash maps (pipeilne hashing), with the main thread alloc tracker.
 void* external_malloc(size_t size) { return L_calloc(1, size, &renderstate.main.tt); }
 void* external_realloc(void* ptr, size_t size) { return L_realloc(ptr, size, &renderstate.main.tt); }
@@ -836,7 +847,7 @@ void Renderer_ChangeScene(Scene_InitInfo new_scene_info)
 void Renderer_PushRenderable(Renderable renderable)
 {
     SDL_assert(renderstate.renderables_arena.items &&
-        renderstate.renderables_arena.num_renderables + 1 < MAX_RENDERED_OBJECTS
+        renderstate.renderables_arena.num_renderables < MAX_RENDERED_OBJECTS
     );
     renderstate.renderables_arena.items[renderstate.renderables_arena.num_renderables++] = renderable;
 }
@@ -847,9 +858,9 @@ void Renderer_PushLight(C_Light light, glm::vec3 position, glm::vec3 direction)
     {
     case LIGHT_COMPONENT_POINTLIGHT:
         {
-            SDL_assert(renderstate.renderables_arena.num_point_lights + 1 < MAX_POINTLIGHTS);
+            SDL_assert(renderstate.renderables_arena.num_point_lights < MAX_POINTLIGHTS);
 
-            glm::vec4 pos_and_radius = glm::vec4(position.x, position.y, position.z, get_light_radius(light.color, light.intensity));
+            glm::vec4 pos_and_radius = glm::vec4(position.x, position.y, position.z, light.radius);
             glm::vec4 color_and_intensity = glm::vec4(light.color.x, light.color.y, light.color.z, light.intensity);
 
             PointLight pl = {};
@@ -862,9 +873,9 @@ void Renderer_PushLight(C_Light light, glm::vec3 position, glm::vec3 direction)
         
     case LIGHT_COMPONENT_SPOTLIGHT:
         {
-            SDL_assert(renderstate.renderables_arena.num_spot_lights + 1 < MAX_SPOTLIGHTS);
+            SDL_assert(renderstate.renderables_arena.num_spot_lights < MAX_SPOTLIGHTS);
 
-            glm::vec4 pos_and_radius = glm::vec4(position.x, position.y, position.z, get_light_radius(light.color, light.intensity));
+            glm::vec4 pos_and_radius = glm::vec4(position.x, position.y, position.z, light.radius);
             glm::vec4 color_and_intensity = glm::vec4(light.color.x, light.color.y, light.color.z, light.intensity);
 
             SpotLight sl = {};
@@ -880,6 +891,58 @@ void Renderer_PushLight(C_Light light, glm::vec3 position, glm::vec3 direction)
         
         default: SDL_assert(0 && "Invalid light type"); abort();
     }
+}
+// Loads a image and creates a GPU resource
+bool Renderer_LoadUITexture(const char* filepath, bool nearest_sampling, Renderer_UITexture* out_texture)
+{
+    if (!out_texture)
+        return false;
+
+    *out_texture = {};
+
+    if (!filepath || !filepath[0])
+        return false;
+
+    stbi_set_flip_vertically_on_load(0); // dont flip. dk if it is redundant
+
+    int width = 0;
+    int height = 0;
+    int channels = 0;
+    uint8_t* data = stbi_load(filepath, &width, &height, &channels, 4); // pass info to stbi to load with RGBA
+    if (!data)
+    {
+        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "Renderer_LoadUITexture: failed to load '%s'", filepath);
+        return false;
+    }
+
+    uint64_t data_size = (uint64_t)width * (uint64_t)height * 4ull;
+    uint32_t rid = create_mipmapped_texture2d_resource(
+        filepath,
+        FG_RESOURCE_FLAGS_ON_STARTUP, 
+        data,
+        data_size,
+        (uint32_t)width,
+        (uint32_t)height,
+        VK_FORMAT_R8G8B8A8_SRGB
+    );
+    stbi_image_free(data);
+
+    FG_Resource* tex_res = &renderstate.registry.resources[rid];
+    VkSampler sampler = renderstate.heap.samplers[
+        nearest_sampling ? FG_SAMPLER_NEAREST_REPEAT : FG_SAMPLER_LINEAR_REPEAT
+    ]; // claude did this choosing between them
+
+    ImTextureID imgui_tex = (ImTextureID)ImGui_ImplVulkan_AddTexture(
+        sampler,
+        tex_res->image.view,
+        VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
+    );
+
+    out_texture->imgui_texture_id = (u64)imgui_tex;
+    out_texture->width = (uint32_t)width;
+    out_texture->height = (uint32_t)height;
+
+    return true;
 }
 
 void Renderer_DrawFrame(CameraInfo main_camera)
@@ -1006,6 +1069,7 @@ void Renderer_DrawFrame(CameraInfo main_camera)
     // TODO (once topological sorting and multiqueue stuff is in, this can be in parallel with the depth prepass)
 
     // Depth prepass
+    FG_Resource* depth_buffer_res = &renderstate.registry.resources[renderstate.rids.depth_buffer_rid];
     RenderPassDesc depth_prepass_desc = {
         .debug_name = "Depth Prepass",
 
@@ -1032,7 +1096,7 @@ void Renderer_DrawFrame(CameraInfo main_camera)
         },
 
         .is_compute = 0,
-        .render_area = { .offset = { 0, 0 }, .extent = renderstate.swapchain_extent },
+        .render_area = { .offset = { 0, 0 }, .extent = { depth_buffer_res->image.extent.width, depth_buffer_res->image.extent.height } },
         
         .execute_callback = DepthPrepass_Execute,
         .user_data = NULL
@@ -1040,6 +1104,7 @@ void Renderer_DrawFrame(CameraInfo main_camera)
     uint32_t depth_prepass = FG_AddPass(depth_prepass_desc);
 
     // Forward Opaque Pass
+    FG_Resource* forward_target_res = &renderstate.registry.resources[renderstate.rids.forward_target_rid];
     RenderPassDesc forward_opaque_desc = {
         .debug_name = "Forward Opaque Pass",
 
@@ -1085,7 +1150,7 @@ void Renderer_DrawFrame(CameraInfo main_camera)
         },
 
         .is_compute = 0,
-        .render_area = { .offset = { 0, 0 }, .extent = renderstate.swapchain_extent },
+        .render_area = { .offset = { 0, 0 }, .extent = { forward_target_res->image.extent.width, forward_target_res->image.extent.height } },
         
         .execute_callback = ForwardOpaque_Execute,
         .user_data = NULL
@@ -1096,11 +1161,11 @@ void Renderer_DrawFrame(CameraInfo main_camera)
     #warning TODO: Add in bloom passes
 
     // PostProcess Tone-mapping and Lens Effect
+    FG_Resource* hdr_color_target_res = &renderstate.registry.resources[renderstate.rids.hdr_color_target_rid];
     FullscreenPass_UserData tonemap_pass_user_data = {
         .shader_id = SHADER_TONEMAP 
     };
-    tonemap_pass_user_data.push_pass.texture_indices[0] = renderstate.registry.resources[renderstate.rids.hdr_color_target_rid].bindless_texture_idx;
-
+    tonemap_pass_user_data.push_pass.texture_indices[0] = hdr_color_target_res->bindless_texture_idx;
     RenderPassDesc tonemap_pass_desc = {
         .debug_name = "Tone Map",
         
@@ -1139,7 +1204,7 @@ void Renderer_DrawFrame(CameraInfo main_camera)
         },
 
         .is_compute = 0,
-        .render_area = { .offset = { 0, 0 }, .extent = renderstate.swapchain_extent },
+        .render_area = { .offset = { 0, 0 }, .extent = { hdr_color_target_res->image.extent.width, hdr_color_target_res->image.extent.height } },
         
         .execute_callback = FullscreenPass_Execute,
         .user_data = &tonemap_pass_user_data
@@ -1192,7 +1257,7 @@ void Renderer_DrawFrame(CameraInfo main_camera)
         },
 
         .is_compute = 0,
-        .render_area = { .offset = { 0, 0 }, .extent = renderstate.swapchain_extent },
+        .render_area = { .offset = { 0, 0 }, .extent = { renderstate.swapchain_extent.width, renderstate.swapchain_extent.height } },
         
         .execute_callback = FullscreenPass_Execute_With_ImGui,
         .user_data = &swapchain_pass_user_data

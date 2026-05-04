@@ -13,7 +13,7 @@
 
 void PhysicsManager::startUp()
 {
-	//bindWorldEvents();
+	bindWorldEvents();
 }
 
 void PhysicsManager::shutDown()
@@ -30,7 +30,12 @@ void PhysicsManager::clear()
 
 RigidBodyHandle PhysicsManager::createBody(EntityID entity, const RigidBodyDesc& desc)
 {
-	assert(entityToHandle.find(entity) == entityToHandle.end() && "Entity already has rigidbody");
+	auto it = entityToHandle.find(entity);
+	if (it != entityToHandle.end())
+	{
+		assert(false && "Entity already has rigidbody");
+	}
+	
 
 	RigidBodyHandle handle = world.addBody(desc);
 
@@ -66,24 +71,115 @@ void PhysicsManager::destroyShape(ShapeHandle handle)
 
 
 
-inline RigidBodyHandle PhysicsManager::getHandle(EntityID entity)
+inline RigidBodyHandle PhysicsManager::getHandle(EntityID entity) const
 {
 	// Can fail but shouldn't if entities are managed properly!
 	auto it = entityToHandle.find(entity);
-	SDL_assert(it == entityToHandle.end() && "Invalid EntityID to RigidBodyHandle");
-	if (it == entityToHandle.end()) return InvalidRigidBodyHandle;
+	
+	if (it == entityToHandle.end())
+	{
+		SDL_assert(false && "Invalid EntityID to RigidBodyHandle");
+		return InvalidRigidBodyHandle;
+	}
 
 	return it->second;
 }
 
-inline EntityID PhysicsManager::getEntityID(RigidBodyHandle handle)
+inline EntityID PhysicsManager::getEntityID(RigidBodyHandle handle) const
 {
 	// Should never fail !!!
 	auto it = handleToEntity.find(handle);
-	SDL_assert(it == handleToEntity.end() && "Invalid RigidBodyHandle to EntityID");
-	if (it == handleToEntity.end()) return NULL_ENTITY;
+
+	if (it == handleToEntity.end())
+	{
+		SDL_assert(false && "Invalid RigidBodyHandle to EntityID");
+		return NULL_ENTITY;
+	}
 
 	return it->second;
+}
+
+inline QueryFilter PhysicsManager::getQueryFilterFromQueryFilterExternal(const QueryFilterExternal& queryFilterExternal) const
+{
+	QueryFilter res;
+	if (queryFilterExternal.bodyToIgnore != NULL_ENTITY) res.bodyToIgnore = getHandle(queryFilterExternal.bodyToIgnore);
+	res.hasLayerOfQuery = queryFilterExternal.hasLayerOfQuery;
+	res.layerOfQuery = queryFilterExternal.layerOfQuery;
+
+	return res;
+}
+
+void PhysicsManager::bindWorldEvents()
+{
+	world.onCollisionEnter = [this](RigidBodyHandle handleA, RigidBodyHandle handleB, const Contact& c)
+		{
+			EntityID a = getEntityID(handleA);
+			EntityID b = getEntityID(handleB);
+
+			if (a != NULL_ENTITY && b != NULL_ENTITY)
+				onCollisionEnter.Invoke({ a, b, c });
+		};
+
+	world.onCollisionStay = [this](RigidBodyHandle handleA, RigidBodyHandle handleB, const Contact& c)
+		{
+			EntityID a = getEntityID(handleA);
+			EntityID b = getEntityID(handleB);
+
+			if (a != NULL_ENTITY && b != NULL_ENTITY)
+				onCollisionStay.Invoke({ a, b, c });
+		};
+
+	world.onCollisionExit = [this](RigidBodyHandle handleA, RigidBodyHandle handleB)
+		{
+			EntityID a = getEntityID(handleA);
+			EntityID b = getEntityID(handleB);
+
+			if (a != NULL_ENTITY && b != NULL_ENTITY)
+				onCollisionExit.Invoke({ a, b });
+		};
+
+	world.onTriggerEnter = [this](RigidBodyHandle handleA, RigidBodyHandle handleB, const Contact& c)
+		{
+			EntityID a = getEntityID(handleA);
+			EntityID b = getEntityID(handleB);
+
+			if (a != NULL_ENTITY && b != NULL_ENTITY)
+				onTriggerEnter.Invoke({ a, b, c });
+		};
+
+	world.onTriggerStay = [this](RigidBodyHandle handleA, RigidBodyHandle handleB, const Contact& c)
+		{
+			EntityID a = getEntityID(handleA);
+			EntityID b = getEntityID(handleB);
+
+			if (a != NULL_ENTITY && b != NULL_ENTITY)
+				onTriggerStay.Invoke({ a, b, c });
+		};
+
+	world.onTriggerExit = [this](RigidBodyHandle handleA, RigidBodyHandle handleB)
+		{
+			EntityID a = getEntityID(handleA);
+			EntityID b = getEntityID(handleB);
+
+			if (a != NULL_ENTITY && b != NULL_ENTITY)
+				onTriggerExit.Invoke({ a, b });
+		};
+
+}
+
+inline EntityRaycastHit PhysicsManager::rayHitToEntityRayHit(const RaycastHit& rayHit) const
+{
+	if (!rayHit.body || !rayHit.isValid()) return { /* Default EntityRaycastHit */ };
+
+	EntityRaycastHit entityRayHit;
+
+	entityRayHit.point = rayHit.point;
+	entityRayHit.normal = rayHit.normal;
+	entityRayHit.t = rayHit.t;
+
+	entityRayHit.entity = getEntityID({ rayHit.body->bodyID });
+
+	return entityRayHit;
 }
 
 const RigidBody* PhysicsManager::getBody(EntityID entity)
@@ -223,12 +319,33 @@ void PhysicsManager::removeForceLayers(EntityID e, uint32_t layers)
 	world.removeForceLayers(handle, layers);
 }
 
+glm::vec3 PhysicsManager::getGravity() const
+{
+	return world.getGravity();
+}
+
 void PhysicsManager::setBodyShape(EntityID e, ShapeHandle shapeHandle)
 {
 	RigidBodyHandle handle = getHandle(e);
 	if (!handle.isValid()) return;
 
 	world.setBodyShape(handle, shapeHandle);
+}
+
+PhysicsCharacter* PhysicsManager::getCharacter(EntityID entity)
+{
+	RigidBodyHandle handle = getHandle(entity);
+	if (!handle.isValid()) return nullptr;
+
+	return world.getCharacter(handle);
+}
+
+void PhysicsManager::setCharacterInfo(EntityID entity, const PhysicsCharacterInfo& info)
+{
+	RigidBodyHandle handle = getHandle(entity);
+	if (!handle.isValid()) return;
+
+	world.setCharacterInfo(handle, info);
 }
 
 
@@ -247,7 +364,10 @@ void PhysicsManager::removeGenerator(IForceGenerator* gen)
 
 void PhysicsManager::addForce(EntityID entity, IForceGenerator* gen)
 {
-	world.addForce(entityToHandle.at(entity), gen);
+	RigidBodyHandle handle = getHandle(entity);
+	if (!handle.isValid()) return;
+
+	world.addForce(handle, gen);
 }
 
 void PhysicsManager::addForce(RigidBodyHandle handle, IForceGenerator* gen)
@@ -265,20 +385,96 @@ void PhysicsManager::removeForce(RigidBodyHandle handle, IForceGenerator* gen)
 	world.removeForce(handle, gen);
 }
 
-EntityRaycastHit PhysicsManager::raycast(const Ray& ray, const QueryFilter& filter) const
+void PhysicsManager::setNumLayers(uint8_t numLayers)
 {
-	
+	world.setNumLayers(numLayers);
 }
 
-std::vector<EntityRaycastHit> PhysicsManager::raycastAll(const Ray& ray, const QueryFilter&) const
+void PhysicsManager::setLayerPair(uint8_t a, uint8_t b, bool shouldCollide)
 {
-
+	world.setLayerPair(a, b, shouldCollide);
 }
 
-// Shape-casting too (might change the input to be ShapeCast or something like that, but for now this, will see when i implement it)
-std::vector<EntityID> PhysicsManager::shapecast(
-	ShapeHandle shape, const glm::vec3& position, const glm::quat& orientation,
-	const QueryFilter& filter) const
+void PhysicsManager::enableLayerPair(uint8_t a, uint8_t b)
 {
+	world.enableLayerPair(a, b);
+}
 
+void PhysicsManager::disableLayerPair(uint8_t a, uint8_t b)
+{
+	world.disableLayerPair(a, b);
+}
+
+PhysicsCharacter::GroundState PhysicsManager::getCharacterGroundState(EntityID e)
+{
+	RigidBodyHandle handle = getHandle(e);
+
+	return world.getCharacterGroundState(handle);
+}
+
+float PhysicsManager::getCharacterMaxWalkableAngle(EntityID e)
+{
+	RigidBodyHandle handle = getHandle(e);
+
+	return world.getCharacterMaxWalkableAngle(handle);
+}
+
+void PhysicsManager::setCharacterMaxWalkableAngle(EntityID e, float maxWalkableAngle)
+{
+	RigidBodyHandle handle = getHandle(e);
+	if (!handle.isValid()) return;
+
+	world.setCharacterMaxWalkableAngle(handle, maxWalkableAngle);
+}
+
+float PhysicsManager::getCharacterStepHeight(EntityID e)
+{
+	RigidBodyHandle handle = getHandle(e);
+
+	return world.getCharacterMaxWalkableAngle(handle);
+}
+
+void PhysicsManager::setCharacterStepHeight(EntityID e, float stepHeight)
+{
+	RigidBodyHandle handle = getHandle(e);
+	if (!handle.isValid()) return;
+
+	world.setCharacterStepHeight(handle, stepHeight);
+}
+
+EntityRaycastHit PhysicsManager::raycast(const Ray& ray, const QueryFilterExternal& filter) const
+{
+	RaycastHit rayHit = world.raycast(ray, getQueryFilterFromQueryFilterExternal(filter));
+
+	return rayHitToEntityRayHit(rayHit);	
+}
+
+std::vector<EntityRaycastHit> PhysicsManager::raycastAll(const Ray& ray, const QueryFilterExternal& filter) const
+{
+	std::vector<EntityRaycastHit> entityRayHits;
+
+	std::vector<RaycastHit> rayHits = world.raycastAll(ray, getQueryFilterFromQueryFilterExternal(filter));
+	entityRayHits.resize(rayHits.size());
+
+	for (size_t i = 0; i < rayHits.size(); i++)
+	{
+		entityRayHits[i] = rayHitToEntityRayHit(rayHits[i]);
+	}
+
+	return entityRayHits;
+}
+
+std::vector<EntityID> PhysicsManager::shapecast(ShapeHandle shape, const glm::vec3& position, const glm::quat& orientation, const QueryFilterExternal& filter) const
+{
+	std::vector<EntityID> entityShapeHits;
+
+	std::vector<RigidBodyHandle> shapeHits = world.shapecast(shape, position, orientation, getQueryFilterFromQueryFilterExternal(filter));
+	entityShapeHits.resize(shapeHits.size());
+
+	for (size_t i = 0; i < shapeHits.size(); i++)
+	{
+		entityShapeHits[i] = getEntityID(shapeHits[i]);
+	}
+
+	return entityShapeHits;
 }

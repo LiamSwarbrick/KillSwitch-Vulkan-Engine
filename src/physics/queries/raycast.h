@@ -11,14 +11,18 @@
 struct Ray
 {
 	glm::vec3 origin;
-	glm::vec3 direction;
+	glm::vec3 direction; // Direction vector in space, not orientation
+
+	// Important addition to have a maxDistance attribute
 	float maxDistance = std::numeric_limits<float>::max();
 };
+
+struct RigidBody; // Forward declare
 
 struct RaycastHit
 {
 	glm::vec3 point; // o .  world-space
-	glm::vec3 normal; // sufrace normal
+	glm::vec3 normal; // surface normal
 
 	float t = -1.0f;
 	RigidBody* body = nullptr;

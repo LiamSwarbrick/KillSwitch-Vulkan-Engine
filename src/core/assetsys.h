@@ -206,6 +206,9 @@ typedef struct Asset {
     Animation* animations;
     size_t animation_count;
 
+    // Original file path used to load this asset (e.g. assets/levels/testroom_new.gltf).
+    const char* source_path;
+
 } Asset;
 
 

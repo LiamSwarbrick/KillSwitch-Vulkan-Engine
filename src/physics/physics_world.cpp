@@ -6,13 +6,18 @@
 #include "shapes/plane.h"
 
 #include "SDL3/SDL.h"
-#include <vector>
-#include "physics_manager.h"
 
-PhysicsWorld::PhysicsWorld(uint32_t expectedBodies)
+#include <memory>
+#include <vector>
+
+PhysicsWorld::PhysicsWorld(uint8_t numBodyLayers, uint32_t expectedBodies)
 {
+	bodyLayerFilter.StartUp(numBodyLayers);
+	broadPhase = BroadPhase(&bodyLayerFilter);
+
 	bodies.Reserve(expectedBodies);
 	shapes.Reserve(expectedBodies);
+	characters.Reserve(300);
 	planes.Reserve(100);
 	
 	contacts.reserve(expectedBodies * 2);
@@ -161,6 +166,71 @@ void PhysicsWorld::removeForceLayers(RigidBodyHandle r, uint32_t layers)
 	b->forceLayers &= ~layers;
 }
 
+void PhysicsWorld::setNumLayers(uint8_t numLayers)
+{
+	bodyLayerFilter.setNumLayers(numLayers);
+}
+
+void PhysicsWorld::setLayerPair(uint8_t a, uint8_t b, bool shouldCollide)
+{
+	bodyLayerFilter.setLayerPair(a, b, shouldCollide);
+}
+
+void PhysicsWorld::enableLayerPair(uint8_t a, uint8_t b)
+{
+	bodyLayerFilter.enableLayerPair(a, b);
+}
+
+void PhysicsWorld::disableLayerPair(uint8_t a, uint8_t b)
+{
+	bodyLayerFilter.disableLayerPair(a, b);
+}
+
+
+PhysicsCharacter::GroundState PhysicsWorld::getCharacterGroundState(RigidBodyHandle r)
+{
+	PhysicsCharacter* c = getCharacter(r);
+
+	if (c == nullptr) return PhysicsCharacter::GroundState::Undefined;
+
+	return c->groundState;
+}
+
+float PhysicsWorld::getCharacterMaxWalkableAngle(RigidBodyHandle r)
+{
+	PhysicsCharacter* c = getCharacter(r);
+
+	if (c == nullptr) return -1.0f;
+
+	return c->maxWalkableAngle;
+}
+
+void PhysicsWorld::setCharacterMaxWalkableAngle(RigidBodyHandle r, float maxWalkableAngle)
+{
+	PhysicsCharacter* c = getCharacter(r);
+
+	if (c == nullptr) return;
+
+	c->maxWalkableAngle = maxWalkableAngle;
+}
+
+float PhysicsWorld::getCharacterStepHeight(RigidBodyHandle r)
+{
+	PhysicsCharacter* c = getCharacter(r);
+
+	if (c == nullptr) return -1.0f;
+
+	return c->stepHeight;
+}
+
+void PhysicsWorld::setCharacterStepHeight(RigidBodyHandle r, float stepHeight)
+{
+	PhysicsCharacter* c = getCharacter(r);
+
+	if (c == nullptr) return;
+
+	c->stepHeight = stepHeight;
+}
 
 RigidBodyHandle PhysicsWorld::addBody(const RigidBodyDesc& desc)
 {
@@ -199,7 +269,12 @@ RigidBodyHandle PhysicsWorld::addBody(const RigidBodyDesc& desc)
 	body.invMass = desc.isStatic ? 0.0f : (1.0f / desc.mass);
 	body.gravityScale = desc.gravityScale;
 	body.damping = desc.damping;
+
+	body.restitution = desc.restitution;
+	body.friction = desc.friction;
+
 	body.forceLayers = desc.forceLayers;
+	body.bodyLayer = desc.bodyLayer;
 
 	body.shapeHandle = desc.shape;
 
@@ -221,11 +296,18 @@ RigidBodyHandle PhysicsWorld::addBody(const RigidBodyDesc& desc)
 
 	bodies.Set(index, std::move(body));
 
+	RigidBody* bodyPtr = bodies.GetPtr(index);
+
 	// TODO: reminder to insert and remove into broadphase
 	broadPhase.insert(bodies.GetPtr(index));
 
+	// Extra: create character if body.isCharacter
+	if (bodyPtr->isCharacter)
+	{
+		addCharacter(bodyPtr);
+	}
 
-	return RigidBodyHandle{ index };
+	return { index };
 }
 
 void PhysicsWorld::removeBody(RigidBodyHandle handle)
@@ -250,6 +332,12 @@ void PhysicsWorld::removeBody(RigidBodyHandle handle)
 
 	// release shape ref before deleting
 	releaseShape(body->shapeHandle);
+
+	// Before deleting the body, delete the character info if it is a character
+	if (body->isCharacter)
+	{
+		removeCharacter(handle);
+	}
 
 	// SparseSet.Delete() has internal check of a handle.
 	bodies.Delete(handle.index);
@@ -287,6 +375,91 @@ void PhysicsWorld::setBodyShape(RigidBodyHandle bodyHandle, ShapeHandle shapeHan
 	broadPhase.remove(body);
 	calculateAABB(body);
 	broadPhase.insert(body);
+}
+
+PhysicsCharacter* PhysicsWorld::getCharacter(RigidBodyHandle r)
+{
+	CharacterHandle cHandle = getCharacterHandle(r);
+
+	if (!cHandle.isValid()) return nullptr;
+
+	return characters.GetPtr(cHandle);
+}
+
+inline CharacterHandle PhysicsWorld::getCharacterHandle(RigidBodyHandle r)
+{
+	if (!r.isValid()) return InvalidCharacterHandle;
+
+	auto it = bodyToCharacter.find(r);
+
+	if (it == bodyToCharacter.end())
+	{
+		SDL_assert(false && "Invalid RigidBodyHandle to CharacterHandle");
+		return InvalidCharacterHandle;
+	}
+
+	return it->second;
+}
+
+// We could call addCharacter using the handle, but im tired of using Get
+// This is a private method anyway, and we can use body.bodyID for the handle index
+void PhysicsWorld::addCharacter(RigidBody* body)
+{
+	if (body == nullptr) return;
+
+	PhysicsCharacter defaultCharacter;
+	defaultCharacter.body = body;
+
+	// Check the index
+	uint32_t index;
+	if (freeCharacterIndices.size() == 0)
+	{
+		if (characters.Size() == UINT32_MAX)
+		{
+			SDL_assert(false && "RigidBody count has reached its limit, can't insert more");
+		}
+
+		index = characters.Size();
+	}
+	else
+	{
+		index = freeCharacterIndices.back();
+		freeCharacterIndices.pop_back();
+	}
+
+	CharacterHandle cHandle = { index };
+
+	characters.Set(index, std::move(defaultCharacter));
+	bodyToCharacter.insert({ body->bodyID, cHandle });
+}
+
+void PhysicsWorld::removeCharacter(RigidBodyHandle r)
+{
+	if (!r.isValid()) return;
+
+	CharacterHandle cHandle = getCharacterHandle(r);
+
+	if (!cHandle.isValid()) return;
+
+	characters.Delete(r.index);
+	freeCharacterIndices.push_back(r.index);
+	bodyToCharacter.erase(r);
+}
+
+// NOTE: to change the default character info please go into physics/core/types.h and change PhysicsCharacter's default values instead!!!!!!!!
+void PhysicsWorld::setCharacterInfo(RigidBodyHandle r, const PhysicsCharacterInfo& info)
+{
+	PhysicsCharacter* c = getCharacter(r);
+
+	// Comparing info. values to the default values, and setting them if they are not default ones
+	if (info.groundState != PhysicsCharacter::GroundState::Undefined)
+		c->groundState = info.groundState;
+	if (info.groundNormal != glm::vec3(0.0f))
+		c->groundNormal = info.groundNormal;
+	if (info.maxWalkableAngle >= 0.0f)
+		c->maxWalkableAngle = info.maxWalkableAngle;
+	if (info.stepHeight >= 0.0f)
+		c->stepHeight = info.stepHeight;
 }
 
 ShapeHandle PhysicsWorld::createShape(const ShapeDesc& desc)
@@ -463,6 +636,79 @@ void PhysicsWorld::removeForce(RigidBodyHandle handle, IForceGenerator* gen)
 		forceRegistry.removePair(body, gen);
 }
 
+
+RaycastHit PhysicsWorld::raycast(const Ray& ray, const QueryFilter& filter) const
+{
+	std::vector<RaycastHit> hits = raycastAll(ray, filter);
+	if (hits.empty()) return { /* Default (invalid) RaycastHit */ };
+
+	size_t minIdx = 0;
+	float minT = hits[0].t;
+	for (size_t i = 1; i < hits.size(); i++)
+	{
+		if (hits[i].t < minT)
+		{
+			minIdx = i;
+			minT = hits[i].t;
+		}
+	}
+
+	return hits[minIdx];
+}
+
+std::vector<RaycastHit> PhysicsWorld::raycastAll(const Ray& ray, const QueryFilter& filter) const
+{
+	std::vector<RaycastHit> narrowHits;
+	std::vector<RaycastHit> broadHits;
+	broadPhase.queryRay(ray, getQueryFilterInternalFromQueryFilter(filter), broadHits);
+
+	if (broadHits.empty()) return narrowHits;
+
+	for (const RaycastHit& broadHit : broadHits)
+	{
+		// TODO: continue here
+		// We might either skip narrowphase casting, orrr send the raycast information, or just double check using narrowphase
+		RaycastHit hit = narrowPhase.raycast(ray, *broadHit.body, *this);
+		if (hit.isValid())
+		{
+			hit.body = broadHit.body;
+			narrowHits.push_back(hit);
+		}
+	}
+
+	return narrowHits;
+}
+
+std::vector<RigidBodyHandle> PhysicsWorld::shapecast(ShapeHandle shapeHandle, const glm::vec3& position, const glm::quat& orientation, const QueryFilter& filter) const
+{
+	std::vector<RigidBody*> broadHits;
+	std::vector<RigidBodyHandle> hits;
+
+	const IShape* shape = getShape(shapeHandle);
+	// TODO: keep going
+	// Let's create an AABB out of the shape, check on broadphase and then
+	glm::vec3 shapePosition;
+	glm::quat shapeOrientation;
+	narrowPhase.resolveShapeTransform(shape,
+		position, orientation,
+		shapePosition, shapeOrientation);
+
+	AABB aabb = shape->computeAABB(shapePosition, shapeOrientation);
+
+	broadPhase.queryAABB(aabb, getQueryFilterInternalFromQueryFilter(filter), broadHits);
+
+	for (RigidBody* body : broadHits)
+	{
+		if (narrowPhase.testShapeIntersects(shape, shapePosition, shapeOrientation, *body, *this))
+		{
+			hits.push_back({ body->bodyID });
+		}
+	}
+
+	return hits;
+}
+
+
 void PhysicsWorld::setGravity(glm::vec3 g)
 {
 	gravityGen.gravity = g;
@@ -500,7 +746,10 @@ void PhysicsWorld::step(float dt)
 	updateBroadPhase();
 	detectCollisions();
 	testPlanes();
+	
 	solve(dt);
+
+	dispatchEvents();
 }
 
 void PhysicsWorld::applyForces(float dt)
@@ -558,7 +807,7 @@ void PhysicsWorld::detectCollisions()
 	for (const BodyPair& pair : pairs)
 	{
 		if (pair.bodyA->isStatic && pair.bodyB->isStatic) continue;
-		if (pair.bodyA->isKinematic && pair.bodyB->isKinematic) continue; // this should be the case right????
+		if (pair.bodyA->isKinematic && pair.bodyB->isKinematic) continue;
 
 		Contact contact = narrowPhase.testPair(*pair.bodyA, *pair.bodyB, *this);
 		if (contact.isValid())
@@ -586,6 +835,108 @@ void PhysicsWorld::solve(float dt)
 	solver.solve(contacts, dt);
 }
 
+void PhysicsWorld::resetAllCharactersGroundState()
+{
+	for (PhysicsCharacter& c : characters.Data())
+	{
+		c.groundState = PhysicsCharacter::GroundState::InAir;
+	}
+}
+
+void PhysicsWorld::updateAllCharactersGroundState()
+{
+	for (PhysicsCharacter& c : characters.Data())
+	{
+		if (c.groundState != PhysicsCharacter::GroundState::InAir) continue;
+		
+		// TODO: raycast downwards (basically scene.cpp's code for the player movement) 
+		SDL_assert(false && "Need to implement this");
+	}
+}
+
+void PhysicsWorld::dispatchEvents()
+{
+	std::set<BodyPair> currentCollisionPairs;
+	std::set<BodyPair> currentTriggerPairs;
+
+	// --- FILL CURRENT PAIRS ---
+	for (const Contact& c : contacts)
+	{
+		bool trigger = c.bodyA->isTrigger || (c.bodyB && c.bodyB->isTrigger);
+
+		BodyPair pair = BodyPair(c.bodyA, c.bodyB);
+		RigidBodyHandle handleA = { c.bodyA->bodyID };
+		RigidBodyHandle handleB;
+		if (c.bodyB != nullptr)
+			handleB = { c.bodyB->bodyID };
+
+		if (trigger)
+		{
+			bool isStaying = previousTriggerPairs.count(pair) > 0;
+
+			if (isStaying)
+			{
+				if (onTriggerStay) onTriggerStay(handleA, handleB, c);
+			}
+			else
+			{
+				if (onTriggerEnter) onTriggerEnter(handleA, handleB, c);
+			}
+
+			// Finally we add it to the current trigger pairs for the next step
+			currentTriggerPairs.insert(pair);
+		}
+		else
+		{
+			bool isStaying = previousCollisionPairs.count(pair) > 0;
+
+			if (isStaying)
+			{
+				if (onCollisionStay) onCollisionStay(handleA, handleB, c);
+			}
+			else
+			{
+				if (onCollisionEnter) onCollisionEnter(handleA, handleB, c);
+			}
+
+			// Finally we add it to the current collision pairs for the next step
+			currentCollisionPairs.insert(pair);
+		}
+	}
+
+	// --- COLLISION EXIT EVENT ---
+	for (const BodyPair& pair : previousCollisionPairs)
+	{
+		if (currentCollisionPairs.count(pair) == 0)
+		{
+			RigidBodyHandle handleA = { pair.bodyA->bodyID };
+			RigidBodyHandle handleB;
+			if (pair.bodyB != nullptr)
+				handleB = { pair.bodyB->bodyID };
+
+			if (onCollisionExit) onCollisionExit(handleA, handleB);
+		}
+	}
+
+	// --- TRIGGER EXIT EVENT ---
+	for (const BodyPair& pair : previousTriggerPairs)
+	{
+		if (currentTriggerPairs.count(pair) == 0)
+		{
+			RigidBodyHandle handleA = { pair.bodyA->bodyID };
+			RigidBodyHandle handleB;
+			if (pair.bodyB != nullptr)
+				handleB = { pair.bodyB->bodyID };
+
+			if (onTriggerExit) onTriggerExit(handleA, handleB);
+		}
+	}
+
+	// REPLACE CURRENT ONES
+	previousCollisionPairs = currentCollisionPairs;
+	previousTriggerPairs = currentTriggerPairs;
+}
+
 
 void PhysicsWorld::calculateAABB(RigidBody* body)
 {
@@ -599,4 +950,16 @@ void PhysicsWorld::calculateAABB(RigidBody* body)
 			shapePosition, shapeOrientation);
 		body->aabb = shape->computeAABB(shapePosition, shapeOrientation).fattened(0.1f);
 	}
+}
+
+QueryFilterInternal PhysicsWorld::getQueryFilterInternalFromQueryFilter(const QueryFilter& queryFilter) const
+{
+	QueryFilterInternal res;
+
+	if (queryFilter.bodyToIgnore != InvalidRigidBodyHandle)
+		res.bodyToIgnore = getBody(queryFilter.bodyToIgnore);
+	res.hasLayerOfQuery = queryFilter.hasLayerOfQuery;
+	res.layerOfQuery = queryFilter.layerOfQuery;
+
+	return res;
 }

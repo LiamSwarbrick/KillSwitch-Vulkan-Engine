@@ -391,6 +391,8 @@ void LevelGeneration::GenerateGrid(int width, int height, glm::ivec2 start, glm:
 			}
 		}
 
+		int roomsPlaced = 0;
+
 		// Collapsing starting cell
 		int gridIndex = start.y * width + start.x;
 		GridCell& startingCell = grid[gridIndex];
@@ -405,6 +407,7 @@ void LevelGeneration::GenerateGrid(int width, int height, glm::ivec2 start, glm:
 		startingCell.validRooms = { roomChoice };
 		startingCell.validThemes = { startTheme };
 		startingCell.isCollapsed = true;
+		roomsPlaced++;
 
 		// Create and add the starting room to a vector of rooms that need their neighbours updated
 		std::vector<glm::ivec2> updateRooms;
@@ -417,6 +420,10 @@ void LevelGeneration::GenerateGrid(int width, int height, glm::ivec2 start, glm:
 			std::uniform_int_distribution<int> dirDist(2, 5);
 			glm::ivec2 offset = neighbourOffsets[i] * dirDist(rng);
 			glm::ivec2 position = start + offset;
+
+			// Check the new position is within the grid bounds
+			if (position.x < 0 || position.x >= gridWidth || position.y < 0 || position.y >= gridHeight)
+				continue;
 
 			gridIndex = position.y * width + position.x;
 			GridCell& Cell = grid[gridIndex];
@@ -433,13 +440,13 @@ void LevelGeneration::GenerateGrid(int width, int height, glm::ivec2 start, glm:
 			Cell.validRooms = { roomChoice };
 			Cell.validThemes = { randomTheme };
 			Cell.isCollapsed = true;
+			roomsPlaced++;
 			updateRooms.push_back({ position.x, position.y });
 		}
 
 		UpdatePossibilities(updateRooms);
 
 		// Place rooms connected by doors until the room limit is reached
-		int roomsPlaced = 5;
 		while (roomsPlaced < maxRooms)
 		{
 			std::vector<glm::ivec2> leafRooms;
@@ -482,7 +489,7 @@ void LevelGeneration::GenerateGrid(int width, int height, glm::ivec2 start, glm:
 				float weight = palette[roomIndex].weight;
 
 				if (palette[roomIndex].theme == preferredTheme)
-					weight *= 10.0f;
+					weight *= 3.0f;
 
 				weights.push_back(weight);
 			}

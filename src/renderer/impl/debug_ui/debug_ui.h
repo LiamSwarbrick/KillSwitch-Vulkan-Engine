@@ -5,17 +5,34 @@
 #include "ecs_inspector.h"
 #include "framegraph_visualizer.h"
 #include "asset_browser.h"
+#include "camera_panel.h"
+#include "free_cam.h"
+#include "renderer/debug_ui_api.h"
+#include "core/components.h"
+#include <vector>
+#include <array>
 
 namespace DebugUI
 {
     // State of windows in the debug UI
     struct DebugUIState
     {
-        bool show_debug_ui      = false;  // F3 to toggle
+        bool show_debug_ui      = true;   // F3 to toggle
 
-        bool show_ecs_inspector = false;
-        bool show_framegraph    = false;
-        bool show_asset_browser = false;
+        bool show_ecs_inspector = true;
+        bool show_framegraph    = true;
+        bool show_asset_browser = true;
+        bool show_camera        = true;
+
+        DebugUICameraMode camera_mode = DebugUICameraMode::FreeCam;
+        FreeCamState free_cam = {};   // owned here; updated by FreeCam_Update each frame
+
+        // Read-only snapshot pushed from the game-owned in-game camera module.
+        DebugUIInGameCameraSnapshot ingame_camera_snapshot = {};
+
+        // Pending camera edits produced by the camera panel and consumed by game.
+        bool has_pending_camera_edits = false;
+        DebugUICameraEdits pending_camera_edits = {};
 
         // Entity ID 
         uint32_t selected_entity_id = UINT32_MAX;
@@ -23,6 +40,11 @@ namespace DebugUI
         FrameGraphVisualizer fg_viz;
         AssetBrowser         asset_browser;
         Asset*               debug_asset = nullptr;
+        std::vector<Asset*>* asset_list = nullptr;
+
+        // Viewport texture for displaying the 3D scene inside ImGui
+        ImTextureID viewport_imgui_tex    = 0;
+        VkImageView viewport_view_cached  = VK_NULL_HANDLE;
     };
 }
 
@@ -43,6 +65,7 @@ namespace DebugUI
                 state.show_ecs_inspector = true;
                 state.show_framegraph    = true;
                 state.show_asset_browser = true;
+                state.show_camera        = true;
             }
         }
     }
@@ -51,6 +74,12 @@ namespace DebugUI
     inline void DrawDockSpace(DebugUIState& state)
     {
         if (!state.show_debug_ui) return;
+
+        // Cover the live 3D scene with an opaque background so only the Viewport panel shows it
+        ImVec2 display_size = ImGui::GetMainViewport()->Size;
+        ImGui::GetBackgroundDrawList()->AddRectFilled(
+            ImVec2(0.0f, 0.0f), display_size, IM_COL32(30, 30, 30, 255)
+        );
 
         ImGuiDockNodeFlags dockspace_flags = ImGuiDockNodeFlags_PassthruCentralNode;
         ImGuiID dockspace_id = ImGui::DockSpaceOverViewport(0, ImGui::GetMainViewport(), dockspace_flags);
@@ -76,10 +105,10 @@ namespace DebugUI
             ImGuiID bottom_left, bottom_right;
             ImGui::DockBuilderSplitNode(bottom, ImGuiDir_Left, 0.25f, &bottom_left, &bottom_right);
 
-            ImGui::DockBuilderDockWindow("ECS Inspector", top_left);
-            ImGui::DockBuilderDockWindow("Asset Browser", bottom_left);
+            ImGui::DockBuilderDockWindow("Asset Browser", top_left);
+            ImGui::DockBuilderDockWindow("ECS Inspector", bottom_left);
             ImGui::DockBuilderDockWindow("Framegraph", bottom_right);
-            ImGui::DockBuilderDockWindow("##EmptySpace", top_right);
+            ImGui::DockBuilderDockWindow("Viewport", top_right);
 
             ImGui::DockBuilderFinish(dockspace_id);
         }
@@ -118,9 +147,61 @@ namespace DebugUI
         ImGui::SetNextWindowSize(ImVec2(900, 600), ImGuiCond_FirstUseEver);
         if (ImGui::Begin("Asset Browser", &state.show_asset_browser))
         {
-            state.asset_browser.Draw(state.debug_asset);
+            state.asset_browser.Draw(state.asset_list, state.debug_asset);
+            debug_asset_ptr = state.debug_asset;
         }
         ImGui::End();
+    }
+
+    inline void DrawCameraPanel(DebugUIState& state, ECS& ecs)
+    {
+        if (!state.show_debug_ui) return;
+
+        constexpr int k_max_players = 256;
+        std::array<EntityID, k_max_players> player_candidates = {};
+        int player_count = 0;
+
+        ecs.GetView<C_Transform, C_AnimatedMesh>().ForEach([&](EntityID id, C_Transform&, C_AnimatedMesh&)
+        {
+            if (player_count < k_max_players)
+                player_candidates[player_count++] = id;
+        });
+
+        const DebugUI::CameraPanelResult panel_result = DebugUI::DrawCameraPanel(
+            state.show_camera,
+            state.camera_mode,
+            state.free_cam,
+            state.ingame_camera_snapshot.fp_state,
+            state.ingame_camera_snapshot.tp_state,
+            player_candidates.data(),
+            player_count
+        );
+
+        if (panel_result.reset_fp)
+        {
+            state.pending_camera_edits.reset_fp = true;
+            state.has_pending_camera_edits = true;
+        }
+
+        if (panel_result.reset_tp)
+        {
+            state.pending_camera_edits.reset_tp = true;
+            state.has_pending_camera_edits = true;
+        }
+
+        if (panel_result.fp_state_changed)
+        {
+            state.pending_camera_edits.apply_fp_state = true;
+            state.pending_camera_edits.fp_state = panel_result.fp_state;
+            state.has_pending_camera_edits = true;
+        }
+
+        if (panel_result.tp_state_changed)
+        {
+            state.pending_camera_edits.apply_tp_state = true;
+            state.pending_camera_edits.tp_state = panel_result.tp_state;
+            state.has_pending_camera_edits = true;
+        }
     }
 
     // Called after ImGui::NewFrame()
@@ -129,20 +210,41 @@ namespace DebugUI
         HandleInput(state);
         DrawDockSpace(state);
 
-        // Empty viewport
-        if (ImGui::Begin("##EmptySpace",
-            nullptr,
-            ImGuiWindowFlags_NoNav |
-            ImGuiWindowFlags_NoDecoration |
-            ImGuiWindowFlags_NoInputs |
-            ImGuiWindowFlags_NoBackground))
+        // Viewport: shows the 3D scene as a texture when the debug UI is open
+        if (state.show_debug_ui)
         {
-            // Intentionally empty
+            // Sync ImTextureID with the current HDR image view.
+            // The view handle changes after a window resize, so we re-register in that case.
+            FG_Resource& hdr_res = renderstate.registry.resources[renderstate.rids.hdr_color_target_rid];
+            VkImageView cur_view = hdr_res.image.view;
+            if (cur_view != state.viewport_view_cached)
+            {
+                if (state.viewport_imgui_tex)
+                    ImGui_ImplVulkan_RemoveTexture((VkDescriptorSet)state.viewport_imgui_tex);
+                state.viewport_imgui_tex = (ImTextureID)ImGui_ImplVulkan_AddTexture(
+                    renderstate.heap.samplers[FG_SAMPLER_LINEAR_REPEAT],
+                    cur_view,
+                    VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
+                );
+                state.viewport_view_cached = cur_view;
+            }
+
+            ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 0));
+            bool vp_open = ImGui::Begin("Viewport", nullptr,
+                ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
+            ImGui::PopStyleVar();
+            if (vp_open && state.viewport_imgui_tex)
+            {
+                ImVec2 avail = ImGui::GetContentRegionAvail();
+                if (avail.x > 0 && avail.y > 0)
+                    ImGui::Image(state.viewport_imgui_tex, avail);
+            }
+            ImGui::End();
         }
-        ImGui::End();
 
         DrawECSInspector(state, ecs);
         DrawFramegraph(state);
         DrawAssetBrowser(state);
+        DrawCameraPanel(state, ecs);
     }
 }

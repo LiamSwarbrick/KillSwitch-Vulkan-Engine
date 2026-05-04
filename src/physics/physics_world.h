@@ -10,6 +10,8 @@
 
 #include "physics/collision/broadphase/broadphase.h"
 #include "physics/collision/narrowphase/narrowphase.h"
+#include "physics/collision/filters/body_layer_filter.h"
+
 #include "simulation/integrator.h"
 #include "simulation/solver.h"
 #include "simulation/force_registry.h"
@@ -24,15 +26,17 @@
 #include "glm/glm.hpp"
 #include "glm/gtc/quaternion.hpp"
 
+#include <vector>
 #include <set>
 #include <span>
 #include <memory>
+#include <unordered_map>
 
 
 class PhysicsWorld
 {
 public:
-	explicit PhysicsWorld(uint32_t expectedBodies = 1024);
+	explicit PhysicsWorld(uint8_t numBodyLayers = 16U, uint32_t expectedBodies = 1024);
 	~PhysicsWorld();
 
 	// Non-copyable constructors
@@ -59,9 +63,8 @@ public:
 
 
 	// ------------------------------
-	// GETTERS & SETTERS
+	// GETTERS & SETTERS FOR BODIES AND CHARACTER
 	// ------------------------------
-	// setters & getters
 	glm::vec3 getVelocity(RigidBodyHandle r);
 	float getGravityScale(RigidBodyHandle r);
 	uint32_t getForceLayers(RigidBodyHandle r);
@@ -75,6 +78,20 @@ public:
 	void addForceLayers(RigidBodyHandle r, uint32_t layers);
 	void removeForceLayers(RigidBodyHandle r, uint32_t layers);
 
+	// IMPORTANT, FOR CHECKING BODIES IN BROADPHASE
+	void setNumLayers(uint8_t numLayers);
+	void setLayerPair(uint8_t a, uint8_t b, bool shouldCollide);
+	void enableLayerPair(uint8_t a, uint8_t b);
+	void disableLayerPair(uint8_t a, uint8_t b);
+
+	// Characters
+	PhysicsCharacter::GroundState getCharacterGroundState(RigidBodyHandle r);
+	// No point in setting the ground state manually really, its just an indicator, it does not have a purpose inside the solver
+	
+	float getCharacterMaxWalkableAngle(RigidBodyHandle r);
+	void setCharacterMaxWalkableAngle(RigidBodyHandle r, float maxWalkableAngle);
+	float getCharacterStepHeight(RigidBodyHandle r);
+	void setCharacterStepHeight(RigidBodyHandle r, float stepHeight);
 
 	// ------------------------------
 	// BODY MANAGEMENT
@@ -86,6 +103,14 @@ public:
 	const RigidBody* getBody(RigidBodyHandle handle) const;
 	void setBodyShape(RigidBodyHandle handle, ShapeHandle shape);
 
+	PhysicsCharacter* getCharacter(RigidBodyHandle r);
+private:
+	inline CharacterHandle getCharacterHandle(RigidBodyHandle r);
+	void addCharacter(RigidBody* body);
+	void removeCharacter(RigidBodyHandle r);
+
+public:
+	void setCharacterInfo(RigidBodyHandle r, const PhysicsCharacterInfo& info);
 
 	// ------------------------------
 	// SHAPE MANAGEMENT
@@ -123,13 +148,23 @@ public:
 	std::vector<RaycastHit> raycastAll(const Ray& ray, const QueryFilter& filter = {}) const;
 
 	// Shape-casting too (might change the input to be ShapeCast or something like that, but for now this, will see when i implement it)
-	std::vector<EntityID> shapecast(
+	std::vector<RigidBodyHandle> shapecast(
 		ShapeHandle shape, const glm::vec3& position, const glm::quat& orientation,
 		const QueryFilter& filter = {}) const;
 
 	// ------------------------------
-	// EVENTS (TODO)
+	// EVENTS
 	// ------------------------------
+	// These are going to be single subscriber functions.
+	// The one who should subscribe to these is the PhysicsManager, nobody else.
+	// Then the PhysicsManager will be the one to propagate the event (either him, or subscribe these to a global bus)
+	std::function<void(RigidBodyHandle a, RigidBodyHandle b, const Contact& contact)> onCollisionEnter;
+	std::function<void(RigidBodyHandle a, RigidBodyHandle b, const Contact& contact)> onCollisionStay;
+	std::function<void(RigidBodyHandle a, RigidBodyHandle b)> onCollisionExit;
+
+	std::function<void(RigidBodyHandle a, RigidBodyHandle b, const Contact& contact)> onTriggerEnter;
+	std::function<void(RigidBodyHandle a, RigidBodyHandle b, const Contact& contact)> onTriggerStay;
+	std::function<void(RigidBodyHandle a, RigidBodyHandle b)> onTriggerExit;
 
 
 	// ------------------------------
@@ -144,6 +179,13 @@ public:
 	void setMaxSteps(int max);
 	int getMaxSteps() const;
 
+
+	// Extra functions for the solver
+	// Before using solve, reset all groundState's to InAir
+	void resetAllCharactersGroundState();
+	// After using solve, resolve groundState using raycast downwards in case we are InAir
+	void updateAllCharactersGroundState();
+
 private:
 	// ------------------------------
 	// MAIN LOGIC
@@ -156,27 +198,37 @@ private:
 	void testPlanes(); // narrowPhase.testPlane(<bodies, planes>)
 	void solve(float dt); // solve interpenetration
 
+
 	// TODO after implementing events
-	// void dispatchEvents();
+	void dispatchEvents();
 
 private:
 	// Helper for AABB
 	void calculateAABB(RigidBody* body);
+
+	// Helper to translate QueryFilter to QueryFilterInternal
+	QueryFilterInternal getQueryFilterInternalFromQueryFilter(const QueryFilter& queryFilter) const;
 
 	//inline RigidBody& getBody();
 
 private:
 	// --- SYSTEMS ---
 	BroadPhase broadPhase;
+	BodyLayerFilter bodyLayerFilter;
 	NarrowPhase narrowPhase;
 	Integrator integrator;
-	Solver solver;
+	Solver solver{ *this };
 	ForceRegistry forceRegistry;
 
 	// --- POOLS (to refactor ECS to remove namespace and move definitions to .cpp)
 	// Fairly similar to the ECS registry, we will just have a couple sparse sets for shapes (though planes is a little bit overkill)
 	SparseSet<RigidBody> bodies;
 	std::vector<uint32_t> freeBodyIndices;
+
+	SparseSet<PhysicsCharacter> characters;
+	std::vector<uint32_t> freeCharacterIndices;
+
+	std::unordered_map<uint32_t, CharacterHandle> bodyToCharacter;
 
 	// i will use a sparseset of pointers... for polymorphism, even thought we could have a better data structure
 	// a pool would suffice, because we do not worry about cache friendliness when it comes to shapes
@@ -191,7 +243,7 @@ private:
 	void retainShape(ShapeHandle handle);
 	void releaseShape(ShapeHandle handle);
 	void clearShapeRefs(); // Have to free the memory using delete manually
-		
+
 	SparseSet<ShapeRef> shapes;
 	std::vector<uint32_t> freeShapeIndices;
 
@@ -202,7 +254,7 @@ private:
 	// we keep it here with .reserve() so we don't allocate too much in the step.
 	std::vector<Contact> contacts;
 
-	// previous frame. to detect OnEnter, OnStay, OnExit
+	// FOR EVENTS: previous frame. to detect OnEnter, OnStay, OnExit
 	std::set<BodyPair> previousCollisionPairs;
 	std::set<BodyPair> previousTriggerPairs;
 

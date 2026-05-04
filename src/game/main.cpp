@@ -1,67 +1,18 @@
 #include "core/core.h"
+#include "core/input.h"
 #include "renderer/renderer.h"
 #include "renderer/debug_ui_api.h"
 #include "foundations/scene.h"
 #include "core/components.h"
 #include "core/animation.h"
-#include "audio_system.h"
+#include "game_ui.h"
+#include "ingame_cam.h"
+#include "game/foundations/components.h"
+#include "core/audio_system.h"
 
 #include "SDL3/SDL.h"
 #include "SDL3/SDL_main.h"
 #include "foundations/level/LevelGeneration.h"
-
-CameraInfo temp_camera()
-{
-    static glm::vec3 pos = glm::vec3(0.0f, 0.0f, 3.0f);
-
-    // Rotation state
-    static float yaw   = -90.0f;  // Looking down -Z initially
-    static float pitch =  0.0f;
-
-    const bool* state = SDL_GetKeyboardState(NULL);
-
-    float move_speed = 0.05f;
-    float rot_speed  = 1.5f;  // Degrees per frame
-
-    if (state[SDL_SCANCODE_LCTRL]) move_speed *= 20.0f;
-
-    // --- ROTATION (arrow keys) ---
-    if (state[SDL_SCANCODE_LEFT])  yaw   -= rot_speed;
-    if (state[SDL_SCANCODE_RIGHT]) yaw   += rot_speed;
-    if (state[SDL_SCANCODE_UP])    pitch += rot_speed;
-    if (state[SDL_SCANCODE_DOWN])  pitch -= rot_speed;
-
-    // Clamp pitch to avoid flipping
-    if (pitch > 89.0f)  pitch = 89.0f;
-    if (pitch < -89.0f) pitch = -89.0f;
-
-    // --- DIRECTION VECTOR ---
-    glm::vec3 forward;
-    forward.x = cos(glm::radians(yaw)) * cos(glm::radians(pitch));
-    forward.y = sin(glm::radians(pitch));
-    forward.z = sin(glm::radians(yaw)) * cos(glm::radians(pitch));
-    forward = glm::normalize(forward);
-
-    glm::vec3 right = glm::normalize(glm::cross(forward, glm::vec3(0.0f, 1.0f, 0.0f)));
-    glm::vec3 up = glm::vec3(0.0f, 1.0f, 0.0f);
-
-    // --- MOVEMENT (WASD relative to camera) ---
-    if (state[SDL_SCANCODE_W]) pos += forward * move_speed;
-    if (state[SDL_SCANCODE_S]) pos -= forward * move_speed;
-    if (state[SDL_SCANCODE_A]) pos -= right   * move_speed;
-    if (state[SDL_SCANCODE_D]) pos += right   * move_speed;
-    if (state[SDL_SCANCODE_E]) pos += up  * move_speed;
-    if (state[SDL_SCANCODE_Q]) pos -= up  * move_speed;
-
-    // --- VIEW MATRIX ---
-    glm::mat4 view = glm::lookAt(pos, pos + forward, up);
-
-    return {
-        .view = view,
-        .position = pos,
-        .lens_distortion = -0.03f  // <- Subtle fish eye lens
-    };
-}
 
 int main(int argc, char *argv[])
 {
@@ -85,55 +36,70 @@ int main(int argc, char *argv[])
         .enable_validation = enabled_validation_layers,
         .preferred_initial_settings = {  // Will fallback if these aren't possible
             .uncapped_fps = 0,
-            .msaa_sample_count = 4,
+            .msaa_sample_count = 1,
             .fov_y = 50.0f
         }
     };
     Renderer_Init(&renderer_info);
 
-    /*AudioSystem audio_system = AudioSystem_Create((AudioSystemCreateInfo){
+    AudioSystem audio_system = AudioSystem_Create((AudioSystemCreateInfo){
         .debug_name = "GameAudio",
         .initial_capacity = 8,
         .master_volume = 1.0f
     });
     AudioSystem_LogSummary(&audio_system);
 
-    AudioClipHandle startup_music = AudioSystem_LoadClipEx(
+    AudioClipHandle startup_music = AudioSystem_LoadClip(
         &audio_system,
         "startup_music",
-        "All_Sounds_MP3_UNMASTERED2/Low_Winds.mp3",
-        AUDIO_CLIP_CATEGORY_SOUNDTRACK
+        "All_Sounds_MP3_UNMASTERED2/Bad_Signs.mp3"    
     );
-    AudioClipHandle startup_test_sfx = AudioSystem_LoadClipEx(
-        &audio_system,
-        "startup_test_sfx",
-        "All_Sounds_MP3_UNMASTERED2/TV_Static.mp3",
-        AUDIO_CLIP_CATEGORY_SFX
-    );
-
+    // Set up spatial audio for player start position
     if (startup_music != 0)
-    {
-        if (!AudioSystem_PlaySoundtrackLoop(&audio_system, startup_music, 0.80f))
         {
-            SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "AudioSystem: soundtrack loaded but failed to start playback.");
+            AudioSystem_SetClipMinMaxDistance(&audio_system, startup_music, 1.0f, 40.0f);
+            AudioSystem_PlaySpatialLoop(
+                &audio_system,
+                startup_music,
+                1.0f,
+                2.0f, 1.0f, 0.0f
+            );
         }
-    }
-    else
-    {
-        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "AudioSystem: failed to load startup soundtrack.");
-    }
 
-    if (startup_test_sfx != 0)
-    {
-        if (!AudioSystem_PlaySFXOneShot(&audio_system, startup_test_sfx, 1.0f))
-        {
-            SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "AudioSystem: startup test SFX loaded but failed to start playback.");
-        }
-    }
-    else
-    {
-        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "AudioSystem: failed to load startup test SFX.");
-    }*/
+    // AudioClipHandle startup_test_sfx = AudioSystem_LoadClipEx(
+    //     &audio_system,
+    //     "startup_test_sfx",
+    //     "All_Sounds_MP3_UNMASTERED2/TV_Static.mp3",
+    //     AUDIO_CLIP_CATEGORY_SFX
+    // );
+
+    // if (startup_music != 0)
+    // {
+    //     if (!AudioSystem_PlaySoundtrackLoop(&audio_system, startup_music, 0.1f))
+    //     {
+    //         SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "AudioSystem: soundtrack loaded but failed to start playback.");
+    //     }
+    // }
+    // else
+    // {
+    //     SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "AudioSystem: failed to load startup soundtrack.");
+    // }
+
+    // if (startup_test_sfx != 0)
+    // {
+    //     if (!AudioSystem_PlaySFXOneShot(&audio_system, startup_test_sfx, 0.1f))
+    //     {
+    //         SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "AudioSystem: startup test SFX loaded but failed to start playback.");
+    //     }
+    // }
+    // else
+    // {
+    //     SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "AudioSystem: failed to load startup test SFX.");
+    // }
+
+    Input_Init("assets/keybindings.json");
+    GameUI_Init();
+    DebugUI_SetImGuiCallback([](void*){ GameUI_BuildImGui(); }, nullptr);
 
     // Dunno whether this resource manager will end up in the final build, if no one is integrating it due to more important tasks
 
@@ -181,26 +147,28 @@ int main(int argc, char *argv[])
     scene.StartUp();
 
     Asset* room_prefab = scene.LoadPrefab("assets/levels/testroom_new.gltf");
+    Asset* playground_prefab = scene.LoadPrefab("assets/levels/playground.gltf");
     Asset* cube_prefab = scene.LoadPrefab("assets/props/simple_cube.gltf");
     Asset* sphere_prefab = scene.LoadPrefab("assets/props/simple_sphere.gltf");
-    Asset* capsule_prefab = scene.LoadPrefab("assets/props/simple_capsule.gltf");
+    //Asset* capsule_prefab = scene.LoadPrefab("assets/props/zombie.gltf");
+    Asset* capsule_prefab = scene.LoadPrefab("assets/props/character_capsule.gltf");
     // TODO: Change the following 2 prefabs so they can be imported (add the boolean "Is ECS Entity" with the new script where it is needed)
-    Asset* catPrefab = scene.LoadPrefab("assets/animations/scene.gltf");
+    // Asset* catPrefab = scene.LoadPrefab("assets/animations/scene.gltf");
     // Asset* catPrefab = scene.LoadPrefab("assets/animations/flatzombo.gltf");
-    Asset* animationPrefab = scene.LoadPrefab("assets/animations/sceneglb.glb");
+    //Asset* animationPrefab = scene.LoadPrefab("assets/animations/sceneglb.glb");
 
-    scene.InstantiatePrefab(room_prefab, glm::vec3(0, 0, 0), glm::identity<glm::quat>());
-    scene.InstantiatePrefab(cube_prefab, glm::vec3(0, 5.1, 0), glm::identity<glm::quat>());
-    scene.InstantiatePrefab(cube_prefab, glm::vec3(3, 4.9, 0), glm::identity<glm::quat>());
-    scene.InstantiatePrefab(capsule_prefab, glm::vec3(0, 5, 2), glm::identity<glm::quat>());
-    scene.InstantiatePrefab(sphere_prefab, glm::vec3(4.7, 7, 0.1), glm::identity<glm::quat>());
-    scene.InstantiatePrefab(sphere_prefab, glm::vec3(-4.7, 7, -0.1), glm::identity<glm::quat>());
-    scene.InstantiatePrefab(sphere_prefab, glm::vec3(0.1, 7, -4.7), glm::identity<glm::quat>());
-    scene.InstantiatePrefab(sphere_prefab, glm::vec3(-0.1, 7, 4.7), glm::identity<glm::quat>());
-    scene.InstantiatePrefab(catPrefab, glm::vec3(0, 0, 0), glm::identity<glm::quat>());
-    scene.InstantiatePrefab(animationPrefab, glm::vec3(5, 20, 0), glm::identity<glm::quat>());
-    // render a second cat
-    EntityID playerEntity = scene.InstantiatePrefab(catPrefab, glm::vec3(10, 0, 10), glm::identity<glm::quat>());
+    // scene.InstantiatePrefab(room_prefab, glm::vec3(0, 0, 0), glm::identity<glm::quat>());
+    // scene.InstantiatePrefab(cube_prefab, glm::vec3(0, 5.1, 0), glm::identity<glm::quat>());
+    // scene.InstantiatePrefab(cube_prefab, glm::vec3(3, 4.9, 0), glm::identity<glm::quat>());
+    // scene.InstantiatePrefab(capsule_prefab, glm::vec3(0, 5, 2), glm::identity<glm::quat>());
+    // scene.InstantiatePrefab(sphere_prefab, glm::vec3(4.7, 7, 0.1), glm::identity<glm::quat>());
+    // scene.InstantiatePrefab(sphere_prefab, glm::vec3(-4.7, 7, -0.1), glm::identity<glm::quat>());
+    // scene.InstantiatePrefab(sphere_prefab, glm::vec3(0.1, 7, -4.7), glm::identity<glm::quat>());
+    // scene.InstantiatePrefab(sphere_prefab, glm::vec3(-0.1, 7, 4.7), glm::identity<glm::quat>());
+    // scene.InstantiatePrefab(catPrefab, glm::vec3(0, 0, 0), glm::identity<glm::quat>());
+    // scene.InstantiatePrefab(animationPrefab, glm::vec3(5, 20, 0), glm::identity<glm::quat>());
+    // // render a second cat
+    // EntityID playerEntity = scene.InstantiatePrefab(catPrefab, glm::vec3(10, 0, 10), glm::identity<glm::quat>());
 
 
     LevelGeneration generator;
@@ -256,16 +224,34 @@ int main(int argc, char *argv[])
     roomAssets.push_back(scene.LoadPrefab("assets/levels/1_Open_2_Door_North_Wall_Inside_Room.gltf"));
     roomAssets.push_back(scene.LoadPrefab("assets/levels/1_Open_2_Door_East_Wall_Inside_Room.gltf"));
     generator.BuildPalette(roomAssets);
-    generator.GenerateGrid(13, 13, glm::ivec2({ 6,6 }), glm::ivec2({ 6,6 }), ((DOOR << NORTH) + (DOOR << EAST) + (DOOR << SOUTH) + (DOOR << WEST)), INSIDE, 25);
+    generator.GenerateGrid(13, 13, glm::ivec2({ 6,6 }), glm::ivec2({ 6,6 }), ((DOOR << NORTH) + (DOOR << EAST) + (DOOR << SOUTH) + (DOOR << WEST)), OUTSIDE, 25);
     generator.InstantiateLevel(&scene);
 
 
+    //Asset* animationPrefab = scene.LoadPrefab("assets/animations/cat.gltf");
+    
+    scene.InstantiatePrefab(room_prefab, glm::vec3(0, 0, 0));
+    scene.InstantiatePrefab(playground_prefab, glm::vec3(0, 0, 0));
+    // scene.InstantiatePrefab(cube_prefab, glm::vec3(0, 5.1, 0));
+    // scene.InstantiatePrefab(cube_prefab, glm::vec3(3, 4.9, 0));
+    
+    EntityID playerID = scene.InstantiatePrefab(capsule_prefab, glm::vec3(0, 2, 0.01));
+     scene.InstantiatePrefab(sphere_prefab, glm::vec3(4.7, 7, 0.1));
+     scene.InstantiatePrefab(sphere_prefab, glm::vec3(-4.7, 7, -0.1));
+     scene.InstantiatePrefab(sphere_prefab, glm::vec3(0.1, 7, -4.7));
+     scene.InstantiatePrefab(sphere_prefab, glm::vec3(-0.1, 7, 4.7));
+    // scene.InstantiatePrefab(catPrefab, glm::vec3(0, 0, 0));
+    // scene.InstantiatePrefab(animationPrefab, glm::vec3(0, 0, 0));
+    // render a second cat
+    // EntityID playerEntity = scene.InstantiatePrefab(animationPrefab, glm::vec3(10, 0, 10));
+    scene.SetPlayer(playerID);
     scene.BuildRendererScene();
 
     // TODO: Debug UI is built around the idea of 1 asset at the moment.
     //       This must change with the new scene system that can load many asset prefabs.
     DebugUI_SetECS(&scene.GetECS());
-    DebugUI_SetAsset(animationPrefab);
+    DebugUI_SetAsset(&scene.m_prefabs);
+    InGameCam_Init(&scene.GetECS(), playerID);
 
     bool running = true;
 
@@ -285,51 +271,83 @@ int main(int argc, char *argv[])
         while (SDL_PollEvent(&event))
         {
             if (event.type == SDL_EVENT_QUIT) running = false;
+
             Renderer_ListenToWindowEvent(event);
+            Input_ProcessEvent(event);
         }
 
-        // controller test not ideal at all
+        Input_Update();
+        GameUI_Update();
+
+        // cam toggle logic
+        if (GameUI_GetState() == GameState::Playing && Input_IsActionJustPressed(ACTION_TOGGLE_CAMERA)){InGameCam_ToggleGameplayMode();}
+        // pass debug ui edits
+        DebugUICameraEdits ui_camera_edits = {};
+        if (DebugUI_ConsumeCameraEdits(&ui_camera_edits)){InGameCam_ApplyDebugEdits(ui_camera_edits);}
+        // Only capture mouse while playing (release it on pause), keep relative mouse when debug UI toggled.
+        const bool right_mouse_down = (SDL_GetMouseState(nullptr, nullptr) & SDL_BUTTON_MASK(SDL_BUTTON_RIGHT)) != 0;
+        SDL_SetWindowRelativeMouseMode(window, (GameUI_GetState() == GameState::Playing && !DebugUI_IsOpen()) || (DebugUI_IsOpen() && right_mouse_down));
+
+        // controller test
         const bool* state = SDL_GetKeyboardState(NULL);
-        float speed = 5.0f * dt;
-        glm::vec3 movement(0.0f);
-
-        if (state[SDL_SCANCODE_I]) movement.z -= speed;
-        if (state[SDL_SCANCODE_K]) movement.z += speed;
-
-        if (state[SDL_SCANCODE_J]) movement.x -= speed;
-        if (state[SDL_SCANCODE_L]) movement.x += speed;
-
-        if (glm::length(movement) > 0.0f)
-        {
-            for (uint32_t i = 0; i < catPrefab->node_count; i++)
-            {
-                C_Transform* tf = scene.GetECS().GetComponentPtr<C_Transform>(playerEntity + i);
-                if (tf)
-                {
-                    // Apply movement directly to the world translation (column 3 of the matrix)
-                    tf->matrix[3][0] += movement.x;
-                    tf->matrix[3][1] += movement.y;
-                    tf->matrix[3][2] += movement.z;
-                }
+        scene.GetECS().GetView<C_PlayerInput>().ForEach([&](C_PlayerInput& input) {
+                input.move_forward = state[SDL_SCANCODE_K];
+                input.move_backward = state[SDL_SCANCODE_I];
+                input.move_left = state[SDL_SCANCODE_L];
+                input.move_right = state[SDL_SCANCODE_J];
+                input.jump = state[SDL_SCANCODE_SPACE];
             }
-        }
+        );
+        // Movement always follows camera forward.
+        scene.SetMovementCameraForward(InGameCam_GetMovementForward());
 
         // Game ticks
         scene.Update(dt);
-        //AudioSystem_Update(&audio_system, dt);
+
+        // Update in-game camera
+        InGameCam_Update(dt, GameUI_GetState() == GameState::Playing, DebugUI_IsOpen(), DebugUI_GetCameraMode(), right_mouse_down);
+        // pass camera snapshot to debug UI
+        const InGameCamSnapshot ingame_cam_snapshot = InGameCam_GetSnapshot();
+        DebugUI_SetInGameCameraSnapshot(&ingame_cam_snapshot);
+
+        // update spatial audio with audio position
+        glm::vec3 listener_pos = InGameCam_GetGameplayCamera().position;
+        glm::vec3 listener_forward = glm::normalize(glm::vec3(
+            -InGameCam_GetGameplayCamera().view[0][2],
+            -InGameCam_GetGameplayCamera().view[1][2],
+            -InGameCam_GetGameplayCamera().view[2][2]
+        ));
+        glm::vec3 listener_up = glm::normalize(glm::vec3(
+            InGameCam_GetGameplayCamera().view[0][1],
+            InGameCam_GetGameplayCamera().view[1][1],
+            InGameCam_GetGameplayCamera().view[2][1]
+        ));
+
+        AudioSystem_UpdateSpatialState(
+            &audio_system, 
+            listener_pos.x, listener_pos.y, listener_pos.z, 
+            listener_forward.x, listener_forward.y, listener_forward.z,
+            listener_up.x, listener_up.y, listener_up.z,
+            nullptr, 1
+        );
+
+        AudioSystem_Update(&audio_system, dt);
 
         // Rendering
         uint32_t flags = SDL_GetWindowFlags(window);
         if (!(flags & SDL_WINDOW_MINIMIZED))
         {
             scene.Render();
-            
-            Renderer_DrawFrame(temp_camera());
+
+            Renderer_DrawFrame(DebugUI_IsOpen() ? DebugUI_GetCameraInfo(dt) : InGameCam_GetGameplayCamera());
         }
+        // Quit if requested from any menu
+        if (GameUI_GetState() == GameState::Quitting) running = false;
     }
 
     scene.Shutdown();
-    //AudioSystem_Destroy(&audio_system);
+    AudioSystem_Destroy(&audio_system);
+    Input_Shutdown();
     Renderer_Shutdown();
     Core_Shutdown(window);
 
