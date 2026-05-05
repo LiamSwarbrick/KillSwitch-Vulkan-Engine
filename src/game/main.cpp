@@ -177,10 +177,8 @@ int main(int argc, char *argv[])
     // TODO: Debug UI is built around the idea of 1 asset at the moment.
     //       This must change with the new scene system that can load many asset prefabs.
     DebugUI_SetECS(&scene.GetECS());
-    std::vector<Asset*> debug_assets = { zombie, room_prefab };
-    DebugUI_SetAsset(&debug_assets);
-
-    InGameCam_Init(&scene.GetECS(), playerID);
+    DebugUI_SetAsset(&scene.m_prefabs);
+    InGameCam_Init(&scene.GetECS(), &scene.GetPhysicsManager(), playerID);
 
     bool running = true;
 
@@ -234,7 +232,7 @@ int main(int argc, char *argv[])
         scene.Update(dt);
 
         // Update in-game camera
-        InGameCam_Update(dt, GameUI_GetState() == GameState::Playing, DebugUI_IsOpen(), DebugUI_GetCameraMode(), right_mouse_down);
+        InGameCam_Update(dt, GameUI_GetState() == GameState::Playing, DebugUI_IsOpen(), right_mouse_down, DebugUI_GetCameraMode());
         // pass camera snapshot to debug UI
         const InGameCamSnapshot ingame_cam_snapshot = InGameCam_GetSnapshot();
         DebugUI_SetInGameCameraSnapshot(&ingame_cam_snapshot);

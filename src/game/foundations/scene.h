@@ -47,6 +47,7 @@ public:
     void BuildRendererScene();
 
     ECS& GetECS() { return m_ecs; };
+    PhysicsManager& GetPhysicsManager() { return m_physicsManager; }
 
     void Update(float dt);
     void Render();
