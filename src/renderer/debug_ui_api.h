@@ -25,7 +25,7 @@ struct FPCamState
 struct TPCamState
 {
 	EntityID  bound_entity    = NULL_ENTITY;
-	float     target_height   = 1.50f;
+	float     target_height   = 1.4f;
 	float     distance        = 1.00f;
 	float     yaw             = -90.0f;
 	float     pitch           = -15.0f;
