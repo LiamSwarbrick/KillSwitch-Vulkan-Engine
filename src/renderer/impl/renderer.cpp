@@ -1066,7 +1066,7 @@ void Renderer_DrawFrame(CameraInfo main_camera)
 
                     .layout = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL,
                     .access = VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
-                    .stage  = VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT,
+                    .stage  = VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_2_LATE_FRAGMENT_TESTS_BIT,
                     .queue_family_index = renderstate.queue_family_indices.graphics_family,
 
                     .load_op = VK_ATTACHMENT_LOAD_OP_CLEAR,
@@ -1203,8 +1203,9 @@ void Renderer_DrawFrame(CameraInfo main_camera)
     // TODO: forward_transparent_desc = forward_opaque_pass_desc;
     // then modify some of the attachments e.g. load_op and execute_callback
     
-    // Bloom
+    // Bloom brightness extraction
     // TODO
+
 
     // PostProcess Tone-mapping and Lens Effect
     FG_Resource* hdr_color_target_res = &renderstate.registry.resources[renderstate.rids.hdr_color_target_rid];
@@ -1359,7 +1360,7 @@ void Renderer_DrawFrame(CameraInfo main_camera)
     renderstate.currently_bound_pipeline = VK_NULL_HANDLE;  // <- Each time we start recording cmd bufs, the bound pipeline is reset
     VK_CHECK(vkBeginCommandBuffer(gcmd, &graphics_cmd_begin_info));
     {
-        // TODO: Do I need to sync host writes even though I'm flushing vma allocations
+        // TODO: Do I need to sync host writes even though I'm flushing allocations?
         // VkMemoryBarrier2 barrier = {
         //     .sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER_2,
         //     .srcStageMask  = VK_PIPELINE_STAGE_2_HOST_BIT,
@@ -1382,8 +1383,6 @@ void Renderer_DrawFrame(CameraInfo main_camera)
 
     //
     // End of graphics commands recording
-
-    
 
     // Reset renderables arena head for next frame
     renderstate.renderables_arena.num_renderables = 0;

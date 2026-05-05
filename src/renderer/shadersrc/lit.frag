@@ -169,9 +169,6 @@ void main()
         base_color.rgb *= mix(1.0, 1.5, sat_factor);
     }
     
-    // Shadow maps?
-    // TODO
-
     // Lighting
     vec3 N = normalize(world_normal);
     vec3 V = normalize(scene.cam_position - world_pos);
@@ -277,7 +274,7 @@ void main()
             // SHADOW MAPPING
             mat4 spotlight_view_proj = shadow_map_sl_cameras.shadowmap_spotlight_viewproj[spotlight_shadowmap_index];
             vec4 shadow_coord = spotlight_view_proj * vec4(world_pos, 1.0);
-            shadow_coord.z -= 0.0002 * shadow_coord.w;  // Prevent shadow acne with a small bias (beware of peter panning)
+            shadow_coord.z -= 0.00025 * shadow_coord.w;  // Prevent shadow acne with a small bias (beware of peter panning)
 
             // NDC [-1,1] to [0,1]
             shadow_coord.xy = 0.5 * (shadow_coord.xy + shadow_coord.w);
@@ -351,7 +348,7 @@ void main()
     // Fog
     lit_rgb = apply_dithered_fog(
         lit_rgb,
-        view_pos.z,
+        -view_pos.z,
         dith_threshold
     );
 

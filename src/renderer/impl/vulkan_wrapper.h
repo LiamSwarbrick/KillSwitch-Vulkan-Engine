@@ -8,6 +8,7 @@ const char* vklayer_result_to_string(VkResult result);
 void vklayer_print_queueflagbits(VkQueueFlagBits flags);
 void vklayer_print_memoryheapflagbits(VkMemoryHeapFlags flags);
 void vklayer_print_memorypropertyflagbits(VkMemoryPropertyFlags flags);
+void vklayer_print_pipelinestageflags2(VkPipelineStageFlags2 flags);
 
 #define VK_CHECK(x)                                                         \
 do                                                                          \

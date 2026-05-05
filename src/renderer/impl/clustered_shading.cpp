@@ -46,6 +46,8 @@ static inline b32 compute_light_cluster_bounds(
     {
         // AABB Projection to screen
         // NOTE: Handle the near plane properly, you can't project things behind the near plane
+        //       So get the right/left/top/bottom/front/back points of the light's sphere
+        //       which we'll then clamp the  of the light to the near plane
         glm::vec3 points[6] = {
             light_view_pos + glm::vec3( r,  0,  0),
             light_view_pos + glm::vec3(-r,  0,  0),
@@ -54,7 +56,7 @@ static inline b32 compute_light_cluster_bounds(
             light_view_pos + glm::vec3( 0,  0,  r),
             light_view_pos + glm::vec3( 0,  0, -r)
         };
-
+        
         glm::vec2 min_ndc = glm::vec2( 1e10f);
         glm::vec2 max_ndc = glm::vec2(-1e10f);
 
