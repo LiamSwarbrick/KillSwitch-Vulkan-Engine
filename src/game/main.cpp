@@ -162,7 +162,7 @@ int main(int argc, char *argv[])
     // scene.InstantiatePrefab(cube_prefab, glm::vec3(0, 5.1, 0));
     // scene.InstantiatePrefab(cube_prefab, glm::vec3(3, 4.9, 0));
     
-    EntityID playerID = scene.InstantiatePrefab(capsule_prefab, glm::vec3(0, 0, 0.01));
+    EntityID playerID = scene.InstantiatePrefab(zombie, glm::vec3(0, 0, 0.01));
     // scene.InstantiatePrefab(sphere_prefab, glm::vec3(4.7, 7, 0.1));
     // scene.InstantiatePrefab(sphere_prefab, glm::vec3(-4.7, 7, -0.1));
     // scene.InstantiatePrefab(sphere_prefab, glm::vec3(0.1, 7, -4.7));
@@ -177,9 +177,8 @@ int main(int argc, char *argv[])
     // TODO: Debug UI is built around the idea of 1 asset at the moment.
     //       This must change with the new scene system that can load many asset prefabs.
     DebugUI_SetECS(&scene.GetECS());
-    DebugUI_SetAsset(&scene.m_prefabs); // this reads all prefabs in scene.
-
-    InGameCam_Init(&scene.GetECS(), playerID);
+    DebugUI_SetAsset(&scene.m_prefabs);
+    InGameCam_Init(&scene.GetECS(), &scene.GetPhysicsManager(), playerID);
 
     bool running = true;
 
@@ -233,7 +232,7 @@ int main(int argc, char *argv[])
         scene.Update(dt);
 
         // Update in-game camera
-        InGameCam_Update(dt, GameUI_GetState() == GameState::Playing, DebugUI_IsOpen(), DebugUI_GetCameraMode(), right_mouse_down);
+        InGameCam_Update(dt, GameUI_GetState() == GameState::Playing, DebugUI_IsOpen(), right_mouse_down, DebugUI_GetCameraMode());
         // pass camera snapshot to debug UI
         const InGameCamSnapshot ingame_cam_snapshot = InGameCam_GetSnapshot();
         DebugUI_SetInGameCameraSnapshot(&ingame_cam_snapshot);
