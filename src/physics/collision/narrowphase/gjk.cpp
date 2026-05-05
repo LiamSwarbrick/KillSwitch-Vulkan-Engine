@@ -217,12 +217,21 @@ void gjk_fillResultWithClosestPointAndDistance(GJKResult& gjk)
 	// Instead of this we could probably take the 2 latest points, but checking 4 points is no biggie
 	gjk_findClosestPointIndexes(gjk.simplex, idxA, idxB);
 
-	// Closest point on A and B are on simplex[idxA]
-	gjk.closestPointOnA = gjk.simplex[idxA].supportA;
-	gjk.closestPointOnB = gjk.simplex[idxA].supportB;
+	// edge case where we exit on the first iteration
+	if (idxB == -1)
+	{
+		gjk.closestPointOnA = gjk.simplex[0].supportA;
+		gjk.closestPointOnB = gjk.simplex[0].supportB;
+		gjk.distance = glm::length(gjk.simplex[0].point);
+		gjk.distanceDirection = glm::normalize(gjk.simplex[0].point);
+
+		return;
+	}
 
 	// To get the distance, simply get the closest point of a segment to a point
 	// Project the vector AO to AB and that's the distance
+	// POSSIBLE EDGE CASE?: we're working in 3D so the closest point might be perpendicular to the plane of the 3 closest points, 
+	// if innacurate please transform to trilinear interpolation (barycentric)
 	glm::vec3 a = gjk.simplex[idxA].point;
 	glm::vec3 b = gjk.simplex[idxB].point;
 
@@ -234,10 +243,19 @@ void gjk_fillResultWithClosestPointAndDistance(GJKResult& gjk)
 	
 	t = std::clamp(t, 0.0f, 1.0f); // clamping t so it clamps at the segment ab
 
-	glm::vec3 closestPoint = a + t * ab;
+	glm::vec3 closestPoint = a + t * ab; // = (1-t) * a + t * b
 
 	// Distance is the length of the closestPoint to the origin
 	gjk.distance = glm::length(closestPoint);
+
+	// lets try something extra and find the direction of the 2 closest points
+	glm::vec3 closestA = (1-t) * gjk.simplex[idxA].supportA + t * gjk.simplex[idxB].supportA;
+	glm::vec3 closestB = (1-t) * gjk.simplex[idxA].supportB + t * gjk.simplex[idxB].supportB;
+	
+	gjk.closestPointOnA = closestA;
+	gjk.closestPointOnB = closestB;
+	
+	gjk.distanceDirection = glm::normalize(closestB - closestA);
 }
 
 GJKResult gjk_runGJK(const IShape* shapeA, const glm::vec3& posA, const glm::quat& oriA, const IShape* shapeB, const glm::vec3& posB, const glm::quat& oriB)
@@ -266,6 +284,10 @@ GJKResult gjk_runGJK(const IShape* shapeA, const glm::vec3& posA, const glm::qua
 		{
 			result.intersecting = false;
 
+			if (result.simplex.size == 1)
+			{
+				result.simplex.add(supportPoint);
+			}
 			gjk_fillResultWithClosestPointAndDistance(result);
 			return result;
 		}
