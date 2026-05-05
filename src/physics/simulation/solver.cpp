@@ -287,7 +287,7 @@ bool Solver::trySnapDown(PhysicsCharacter& character, RigidBody& body, float dt)
 
         ray.origin = body.position;
         //ray.origin.y -= characterHeight;
-        ray.direction = -world.UP_VECTOR; // Might have to change for -character.groundNormal (we will see)
+        //ray.direction = -world.UP_VECTOR; // Might have to change for -character.groundNormal (we will see)
         ray.direction = -character.groundNormal;
         ray.maxDistance = character.stepHeight;
 

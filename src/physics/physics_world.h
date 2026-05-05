@@ -7,6 +7,7 @@
 #include "core/ecs/sparse_set.h"
 
 #include "physics/core/types.h"
+#include "physics/core/physics_settings.h"
 
 #include "physics/collision/broadphase/broadphase.h"
 #include "physics/collision/narrowphase/narrowphase.h"
@@ -262,9 +263,9 @@ private:
 
 	// --- SETTINGS ---
 	GravityGenerator gravityGen; // default gravity
-	float fixedStep = 1.0f / 120.0f;
+	float fixedStep = g_PhysicsSettings.fixedStepDuration;
 	float stepAccumulator = 0.0f;
-	int maxSteps = 4;
+	int maxSteps = g_PhysicsSettings.maxIterationSteps;
 
 	glm::vec3 UP_VECTOR = glm::vec3(0.0f, 1.0f, 0.0f);
 };

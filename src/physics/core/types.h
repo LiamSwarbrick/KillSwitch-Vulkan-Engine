@@ -305,8 +305,8 @@ DEFINE_ENUM_CLASS_BITWISE_OPERATORS(ForceLayer);
 // Descriptor to create RigidBodies via PhysicsManager.createBody()
 struct RigidBodyDesc
 {
-    glm::vec3 position = glm::vec3{};
-    glm::quat orientation = glm::quat{1.0f, 0.0f, 0.0f, 0.0f}; // glm::quat_identity()
+    glm::vec3 position = glm::vec3(0.0f);
+    glm::quat orientation = glm::identity<glm::quat>(); // glm::quat_identity()
 
     // IShape must be created first using physicsWorld.createShape (or physicsManager to delegate...)
     ShapeHandle shape = InvalidShapeHandle;
@@ -333,19 +333,19 @@ struct RigidBodyDesc
 
 struct RigidBody
 {
-    glm::vec3 position = glm::vec3{ 0.0f };
-    glm::quat orientation = glm::quat{ 1.0f, 0.0f, 0.0f, 0.0f };
+    glm::vec3 position = glm::vec3(0.0f);
+    glm::quat orientation = glm::identity<glm::quat>();
 
-    glm::vec3 velocity = glm::vec3{ 0.0f };
-    glm::vec3 forceAccumulator = glm::vec3{ 0.0f };
+    glm::vec3 velocity = glm::vec3(0.0f);
+    glm::vec3 forceAccumulator = glm::vec3(0.0f);
 
     float mass = 1.0f;
     float invMass = 1.0f;
     float gravityScale = 1.0f;
     float damping = 0.99f;
 
-    float restitution = 0.5f;
-    float friction = 0.8f;
+    float restitution = 0.5f; // Might move it to global PhysicsSettings for now, but different Bodies would need this (ice, or other surfaces)
+    float friction = 0.8f; // Might move it to global PhysicsSettingsfor now, but different Bodies would need this (ice, or other surfaces)
 
     // We could add body layer (as in player, enemy, etc, to provide better query options, but idk)
     uint32_t forceLayers = (uint32_t) ForceLayer::Default;
@@ -362,6 +362,7 @@ struct RigidBody
     bool isTrigger = false;
 
     // No sleep system yet
+    float sleepTimer = 0.0f;
     bool sleeping = false;
 
     AABB aabb; // maintained by broadphase
