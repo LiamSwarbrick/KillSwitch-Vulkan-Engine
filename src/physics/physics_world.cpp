@@ -722,7 +722,7 @@ ShapecastHit PhysicsWorld::shapecast(const Ray& ray, ShapeHandle shape, const gl
 		const IShape* targetShape = getShape(body->shapeHandle);
 
 		glm::vec3 targetPosition; glm::quat targetOrientation;
-		narrowPhase.resolveShapeTransform(queryShape, body->position, body->orientation, targetPosition, targetOrientation);
+		narrowPhase.resolveShapeTransform(targetShape, body->position, body->orientation, targetPosition, targetOrientation);
 		
 		ShapecastHit hit = narrowPhase.shapecast(ray, queryShape, shapePosition, shapeOrientation, targetShape, targetPosition, targetOrientation);
 
