@@ -4,6 +4,9 @@
 #include "core/input.h"
 #include "core/input_actions.h"
 #include "foundations/components.h"
+#include "physics/physics_manager.h"
+#include "game/foundations/body_layer_collisions.h"
+#include <vector>
 
 #include "glm/gtc/matrix_transform.hpp"
 
@@ -12,6 +15,8 @@
 namespace
 {
     ECS* s_ecs = nullptr;
+    PhysicsManager* s_physics = nullptr;
+    InGameCamRaycast s_raycast_settings = {};
 
     FPCamState s_fp_cam = {};
     TPCamState s_tp_cam = {};
@@ -23,10 +28,22 @@ namespace
 
     glm::vec3 s_movement_forward = glm::vec3(0.0f, 0.0f, -1.0f);
 
-    bool s_initialized = false;
+    bool  s_initialized = false;
+    float s_occlusion_distance = 4.0f;
 
     constexpr float MOUSE_SENSITIVITY  = 0.10f;
     constexpr float GAMEPAD_LOOK_SPEED = 120.0f;
+    constexpr float OCCLUSION_MIN_DISTANCE = 0.80f;
+    constexpr float OCCLUSION_HIT_PADDING = 0.12f;
+    constexpr float CAM_PULLING_SPEED = 35.0f;
+    constexpr float CAM_PUSHING_SPEED = 12.0f;
+
+    float SmoothExp(float current, float target, float dt, float speed)
+    {
+        if (dt <= 0.0f || speed <= 0.0f) return target;
+        float alpha = 1.0f - expf(-speed * dt);
+        return glm::mix(current, target, glm::clamp(alpha, 0.0f, 1.0f));
+    }
 
     void FPCam_SyncFovFromRenderer(FPCamState& cam)
     {
@@ -194,12 +211,56 @@ namespace
             cam.target = player_pos + glm::vec3(0.0f, cam.target_height, 0.0f);
         }
 
-        cam.pos = cam.target - cam.forward * cam.distance;
+        float desired_distance = glm::max(cam.distance, OCCLUSION_MIN_DISTANCE);
+        float target_distance = desired_distance;
 
-        return CameraInfo{
-            .view            = glm::lookAt(cam.pos, cam.target, glm::vec3(0.0f, 1.0f, 0.0f)),
-            .position        = cam.pos,
-            .lens_distortion = 0.0f
+        if (s_physics)
+        {
+            Ray ray = {};
+            ray.origin = cam.target;
+            ray.direction = glm::normalize(-cam.forward);
+            ray.maxDistance = desired_distance;
+
+            QueryFilterExternal filter = {};
+            filter.bodyToIgnore = cam.bound_entity; // ignore the player
+            filter.hasLayerOfQuery = s_raycast_settings.layered_query;
+            filter.layerOfQuery = s_raycast_settings.layer;
+
+            std::vector<EntityRaycastHit> hits = s_physics->raycastAll(ray, filter);
+
+            float nearest_t = desired_distance;
+            for (const EntityRaycastHit& hit : hits)
+            {
+                if (!hit.isValid()) continue;
+                if (hit.entity == cam.bound_entity) continue;
+                if (hit.t >= 0.0f && hit.t < nearest_t)
+                    nearest_t = hit.t;
+            }
+
+            if (nearest_t < desired_distance)
+            {
+                target_distance = glm::clamp(
+                    nearest_t - OCCLUSION_HIT_PADDING,
+                    OCCLUSION_MIN_DISTANCE,
+                    desired_distance
+                );
+            }
+        }
+
+        // remained for only static
+        (void)s_raycast_settings.only_static;
+
+        float speed = (target_distance < s_occlusion_distance)
+            ? CAM_PULLING_SPEED
+            : CAM_PUSHING_SPEED;
+
+        s_occlusion_distance = SmoothExp(s_occlusion_distance, target_distance, dt, speed);
+        cam.pos = cam.target - cam.forward * s_occlusion_distance;
+
+                return CameraInfo{
+                    .view            = glm::lookAt(cam.pos, cam.target, glm::vec3(0.0f, 1.0f, 0.0f)),
+                    .position        = cam.pos,
+                    .lens_distortion = 0.0f
         };
     }
 
@@ -210,9 +271,14 @@ namespace
     }
 }
 
-void InGameCam_Init(ECS* ecs, EntityID player_id)
+void InGameCam_Init(ECS* ecs, PhysicsManager* physics, EntityID player_id, InGameCamRaycast raycast_settings)
 {
     s_ecs = ecs;
+    s_physics = physics;
+    s_raycast_settings = raycast_settings;
+    s_raycast_settings.layered_query = true;
+    s_raycast_settings.layer = (uint8_t)BodyLayer::MOVING;
+    s_raycast_settings.only_static = false; // reserved
 
     s_fp_cam = FPCamState{};
     s_tp_cam = TPCamState{};
@@ -220,6 +286,7 @@ void InGameCam_Init(ECS* ecs, EntityID player_id)
     s_tp_camera = CameraInfo{};
     s_movement_forward = glm::vec3(0.0f, 0.0f, -1.0f);
     s_gameplay_mode = InGameCamGameplayMode::TPCam;
+    s_occlusion_distance = s_tp_cam.distance;
 
     if (player_id != NULL_ENTITY)
     {
@@ -238,7 +305,7 @@ void InGameCam_Init(ECS* ecs, EntityID player_id)
     s_initialized = true;
 }
 
-void InGameCam_Update(float dt, bool is_playing, bool debug_ui_open, DebugUICameraMode debug_camera_mode, bool right_mouse_down)
+void InGameCam_Update(float dt, bool is_playing, bool debug_ui_open, bool right_mouse_down, DebugUICameraMode debug_camera_mode)
 {
     if (!s_initialized) return;
 
@@ -329,6 +396,9 @@ void InGameCam_ApplyDebugEdits(const InGameCamDebugEdits& edits)
 
     if (edits.apply_tp_state)
         s_tp_cam = edits.tp_state;
+    
+    if (edits.reset_tp || edits.apply_tp_state)
+        s_occlusion_distance = glm::max(s_tp_cam.distance, OCCLUSION_MIN_DISTANCE);
 
     const bool gameplay_fp_active = s_gameplay_mode == InGameCamGameplayMode::FPCam;
     const bool gameplay_tp_active = !gameplay_fp_active;
