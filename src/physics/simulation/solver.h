@@ -28,6 +28,7 @@ private:
 	// Will be turned into full impulse solver for non-character bodies
 	void resolveVelocities(const ExtendedContact& contact, float dt);
 
+	void prepareCharacters(float dt);
 	void resolveCharacter(PhysicsCharacter& character, RigidBody& body, float dt);
 	// Step Up will let Characters climb low obstacles if moving. Obstacle height defined in PhysicsCharacter::stepHeight
 	// Good for climbing stairs if they are done using steps instead of a ramp

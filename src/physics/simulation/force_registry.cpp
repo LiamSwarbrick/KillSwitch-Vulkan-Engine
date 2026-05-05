@@ -23,6 +23,8 @@ void ForceRegistry::removeGenerator(IForceGenerator* gen)
 
 void ForceRegistry::addPair(RigidBody* body, IForceGenerator* gen)
 {
+	// When adding a pair (should do when we enter a magnetic trap or something, make sure to wake the body up so it can apply the force)
+	body->wakeUp();
 	pairedGenerators.push_back({ body, gen });
 }
 
@@ -68,7 +70,7 @@ void ForceRegistry::applyAll(std::vector<RigidBody>& bodies, float dt)
 {
 	for (RigidBody& body : bodies)
 	{
-		if (body.isStatic) continue;
+		if (body.sleeping || body.isStatic || body.isTrigger || body.isKinematic) continue;
 
 		for (IForceGenerator* gen : globalGenerators)
 		{
@@ -79,11 +81,12 @@ void ForceRegistry::applyAll(std::vector<RigidBody>& bodies, float dt)
 
 	for (PairedEntry& entry : pairedGenerators)
 	{
-		if (entry.body->isStatic) continue;
+		RigidBody& body = *entry.body;
+		if (body.sleeping || body.isStatic || body.isTrigger || body.isKinematic) continue;
 		// We skip the check of 
 		// 
 		// , because its a pair
-		entry.generator->apply(*entry.body, dt);
+		entry.generator->apply(body, dt);
 	}
 
 }

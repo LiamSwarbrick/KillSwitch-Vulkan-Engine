@@ -27,23 +27,15 @@ struct Solver::ExtendedContact
 void Solver::solve(const std::vector<Contact>& contacts, float dt)
 {
     // Before solving contacts, prepare characters for extra logic
-    for (PhysicsCharacter& c : world.characters.Data())
-    {
-        RigidBody* b = c.body;
-        c.groundState = PhysicsCharacter::GroundState::InAir;
-        c.groundNormal = world.UP_VECTOR;
-
-        // Store the position and velocity before resolving contacts of players, that way we can work out step-ups
-        c.preSolvingPosition = b->position;
-        c.preSolvingVelocity = b->velocity;
-        c.lastNonWalkableNormalContact = { 0.0f, 1.0f, 0.0f };
-    }
+    prepareCharacters(dt);
 
 	for (const Contact& contact : contacts)
 	{
         RigidBody* a = contact.bodyA;
         RigidBody* b = contact.bodyB;   // may be null for plane contacts (we do NOT have planes at all at the current version)
 
+        if (a->sleeping) a->wakeUp();
+        if (b && b->sleeping) b->wakeUp();
         // if any of the bodies are triggers we skip resolving interpenetration
         if (a->isTrigger || (b && b->isTrigger)) continue;
 
@@ -59,12 +51,14 @@ void Solver::solve(const std::vector<Contact>& contacts, float dt)
         resolveVelocities(extendedContact, dt);
 	}
 
+    // Resolving the character's position
     for (PhysicsCharacter& c : world.characters.Data())
     {
         RigidBody* b = c.body;
         //tryStepUp(c, *b, dt);
         trySnapDown(c, *b, dt);
     }
+
 
 }
 
@@ -260,6 +254,21 @@ void Solver::resolveVelocities(const ExtendedContact& contact, float dt)
             b->velocity -= frictionImpulse * b->invMass;
     }
     
+}
+
+void Solver::prepareCharacters(float dt)
+{
+    for (PhysicsCharacter& c : world.characters.Data())
+    {
+        RigidBody* b = c.body;
+        c.groundState = PhysicsCharacter::GroundState::InAir;
+        c.groundNormal = world.UP_VECTOR;
+
+        // Store the position and velocity before resolving contacts of players, that way we can work out step-ups
+        c.preSolvingPosition = b->position;
+        c.preSolvingVelocity = b->velocity;
+        c.lastNonWalkableNormalContact = glm::vec3(0.0f, 1.0f, 0.0f);
+    }
 }
 
 void Solver::resolveCharacter(PhysicsCharacter& character, RigidBody& body, float dt)

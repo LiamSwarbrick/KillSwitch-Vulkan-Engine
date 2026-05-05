@@ -9,6 +9,7 @@
 
 #include <memory>
 #include <vector>
+#include <cmath>
 
 PhysicsWorld::PhysicsWorld(uint8_t numBodyLayers, uint32_t expectedBodies)
 {
@@ -125,17 +126,26 @@ ShapeHandle PhysicsWorld::getShapeHandle(RigidBodyHandle r)
 	return b->shapeHandle;
 }
 
-void PhysicsWorld::setVelocity(RigidBodyHandle r, glm::vec3 velocity)
+void PhysicsWorld::teleportBody(RigidBodyHandle r, const glm::vec3& worldPosition)
 {
 	RigidBody* b = getBody(r);
 	if (!b) return;
+	teleportBodyRaw(b, worldPosition);
+}
+
+void PhysicsWorld::setVelocity(RigidBodyHandle r, const glm::vec3& velocity)
+{
+	RigidBody* b = getBody(r);
+	if (!b) return;
+	b->wakeUp();
 	b->velocity = velocity;
 }
 
-void PhysicsWorld::addVelocity(RigidBodyHandle r, glm::vec3 velocity)
+void PhysicsWorld::addVelocity(RigidBodyHandle r, const glm::vec3& velocity)
 {
 	RigidBody* b = getBody(r);
 	if (!b) return;
+	b->wakeUp();
 	b->velocity += velocity;
 }
 
@@ -211,6 +221,7 @@ void PhysicsWorld::setCharacterMaxWalkableAngle(RigidBodyHandle r, float maxWalk
 
 	if (c == nullptr) return;
 
+	// Unsure if i should wake up the body here (i probably should cause if we change it and we're in a slope, the body will remain s
 	c->maxWalkableAngle = maxWalkableAngle;
 }
 
@@ -280,13 +291,15 @@ RigidBodyHandle PhysicsWorld::addBody(const RigidBodyDesc& desc)
 
 	body.isStatic = desc.isStatic;
 	body.isKinematic = desc.isKinematic;
+	body.isDynamic = desc.isDynamic;
+
 	body.isCharacter = desc.isCharacter;
 	body.isTrigger = desc.isTrigger;
 
 	// vERY IMPORTANT
 	body.bodyID = index;
 
-	// Unused as we are not putting bodies to sleep for now
+	// USED but leave at default values
 	body.sleeping = false;
 
 	calculateAABB(&body);
@@ -800,13 +813,14 @@ int PhysicsWorld::getMaxSteps() const
 
 void PhysicsWorld::step(float dt)
 {
-	applyForces(dt);
-	integrate(dt);
-	updateBroadPhase();
-	detectCollisions();
-	testPlanes();
+	applyForces(dt); // applies all global and paired forces
+	integrate(dt); // integrates velocity and position
+	updateBroadPhase(); // updates broadphase based on the new positions of the moving bodies
+	detectCollisions(); // detects collisions at broadphase and narrowphase, fills contacts later resolved in solve()
+	testPlanes(); // (not using planes) 
 	
-	solve(dt);
+	solve(dt); // solves contacts (extra functionality for characters)
+	updateSleep(dt); // updates the sleep on moving bodies
 
 	dispatchEvents();
 }
@@ -831,7 +845,7 @@ void PhysicsWorld::updateBroadPhase()
 
 	for (RigidBody& body : bodies.Data())
 	{
-		if (body.isStatic) continue;
+		if (body.sleeping || body.isStatic || body.isTrigger) continue;
 
 		// Not calling calculateAABB(&body) because we're not fattening the newAABB
 		IShape* shape = getShape(body.shapeHandle);
@@ -880,7 +894,7 @@ void PhysicsWorld::testPlanes()
 	{
 		for (const RigidBody& body : bodies.Data())
 		{
-			if (body.isStatic) continue;
+			if (body.sleeping || body.isStatic || body.isKinematic || body.isTrigger) continue;
 
 			Contact contact = narrowPhase.testPlane(body, plane, *this);
 			if (contact.isValid())
@@ -892,6 +906,30 @@ void PhysicsWorld::testPlanes()
 void PhysicsWorld::solve(float dt)
 {
 	solver.solve(contacts, dt);
+}
+
+void PhysicsWorld::updateSleep(float dt)
+{
+	for (RigidBody& body : bodies.Data())
+	{
+		if (body.sleeping || body.isStatic || body.isKinematic || body.isTrigger) continue;
+
+		float kineticEnergy = 0.5f * body.mass * glm::dot(body.velocity, body.velocity); // velocity squared, we can just square the threshold
+		float bias = 1.0f - std::pow(g_PhysicsSettings.sleepBiasRate, dt);
+
+		body.accumulatedEnergy = (1.0f - bias) * body.accumulatedEnergy + bias * kineticEnergy;
+
+		if (body.accumulatedEnergy < g_PhysicsSettings.energyThreshold)
+			body.sleepTimer += dt;
+		else
+			body.sleepTimer = 0.0f;
+
+		if (body.sleepTimer > g_PhysicsSettings.sleepTimeRequired)
+		{
+			body.sleeping = true;
+			body.velocity = glm::vec3(0.0f);
+		}
+	}
 }
 
 
@@ -1003,4 +1041,10 @@ QueryFilterInternal PhysicsWorld::getQueryFilterInternalFromQueryFilter(const Qu
 	res.layerOfQuery = queryFilter.layerOfQuery;
 
 	return res;
+}
+
+void PhysicsWorld::teleportBodyRaw(RigidBody* body, const glm::vec3& worldPosition)
+{
+	body->wakeUp();
+	body->position = worldPosition; // not doing extra checks at the moment because i do NOT have time, but should probably check for collisions (if it's a valid place to teleport)
 }

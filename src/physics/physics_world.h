@@ -74,8 +74,9 @@ public:
 	ShapeHandle getShapeHandle(RigidBodyHandle r);
 	IShape* getShape(RigidBodyHandle r); // extra
 
-	void setVelocity(RigidBodyHandle r, glm::vec3 velocity);
-	void addVelocity(RigidBodyHandle r, glm::vec3 velocity);
+	void teleportBody(RigidBodyHandle r, const glm::vec3& worldPosition);
+	void setVelocity(RigidBodyHandle r, const glm::vec3& velocity);
+	void addVelocity(RigidBodyHandle r, const glm::vec3& velocity);
 	void setGravityScale(RigidBodyHandle r, float scale);
 	void setForceLayers(RigidBodyHandle r, uint32_t layers);
 	void addForceLayers(RigidBodyHandle r, uint32_t layers);
@@ -200,7 +201,7 @@ private:
 	void detectCollisions(); // broadPhase.queryPairs() + narrowPhase.testPair(<pair>)
 	void testPlanes(); // narrowPhase.testPlane(<bodies, planes>)
 	void solve(float dt); // solve interpenetration
-
+	void updateSleep(float dt);
 
 	// TODO after implementing events
 	void dispatchEvents();
@@ -213,6 +214,7 @@ private:
 	QueryFilterInternal getQueryFilterInternalFromQueryFilter(const QueryFilter& queryFilter) const;
 
 	//inline RigidBody& getBody();
+	void teleportBodyRaw(RigidBody* body, const glm::vec3& worldPos);
 
 private:
 	// --- SYSTEMS ---

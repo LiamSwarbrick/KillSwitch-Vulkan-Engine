@@ -288,7 +288,15 @@ IShape* PhysicsManager::getShape(EntityID e)
 	return world.getShape(handle);
 }
 
-void PhysicsManager::setVelocity(EntityID e, glm::vec3 velocity)
+void PhysicsManager::teleportBody(EntityID e, const glm::vec3& worldPosition)
+{
+	RigidBodyHandle handle = getHandle(e);
+	if (!handle.isValid()) return;
+
+	world.teleportBody(handle, worldPosition);
+}
+
+void PhysicsManager::setVelocity(EntityID e, const glm::vec3& velocity)
 {
 	RigidBodyHandle handle = getHandle(e);
 	if (!handle.isValid()) return;
@@ -296,7 +304,7 @@ void PhysicsManager::setVelocity(EntityID e, glm::vec3 velocity)
 	world.setVelocity(handle, velocity);
 }
 
-void PhysicsManager::addVelocity(EntityID e, glm::vec3 velocity)
+void PhysicsManager::addVelocity(EntityID e, const glm::vec3& velocity)
 {
 	RigidBodyHandle handle = getHandle(e);
 	if (!handle.isValid()) return;
