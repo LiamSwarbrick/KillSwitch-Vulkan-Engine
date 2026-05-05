@@ -256,7 +256,16 @@ namespace
         if (bound_transform)
         {
             glm::vec3 player_pos = glm::vec3(bound_transform->matrix[3]);
-            cam.target = player_pos + glm::vec3(0.0f, cam.target_height, 0.0f);
+            float height = cam.target_height;
+            if (s_ecs->Has<C_RigidBody>(cam.bound_entity) && s_physics)
+            {
+                IShape* genShape = s_physics->getShape(cam.bound_entity);
+                height = genShape->getHeight(); // for character_capsule.gltf = 2m
+
+                height = height * 0.5f * 0.7f; // tweak this
+                player_pos.y += genShape->localOffset.y;
+            }
+            cam.target = player_pos + glm::vec3(0.0f, height, 0.0f);
         }
 
         float desired_distance = glm::max(cam.distance, OCCLUSION_MIN_DISTANCE);
