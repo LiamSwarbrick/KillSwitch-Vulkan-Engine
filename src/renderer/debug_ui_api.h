@@ -26,13 +26,13 @@ struct TPCamState
 {
 	EntityID  bound_entity    = NULL_ENTITY;
 	float     target_height   = 1.50f;
-	float     distance        = 4.00f;
+	float     distance        = 1.00f;
 	float     yaw             = -90.0f;
 	float     pitch           = -15.0f;
 	float     fov_deg         = 2864.8f;
 	bool      fov_initialized = false;
 
-	glm::vec3 pos             = { 0.0f, 2.0f, 4.0f };
+	glm::vec3 pos             = { 0.0f, 2.0f, 1.0f };
 	glm::vec3 target          = { 0.0f, 1.5f, 0.0f };
 	glm::vec3 forward         = { 0.0f, 0.0f, -1.0f };
 };

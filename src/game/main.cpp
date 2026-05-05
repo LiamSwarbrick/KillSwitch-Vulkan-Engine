@@ -273,6 +273,7 @@ int main(int argc, char *argv[])
     }
 
     scene.Shutdown();
+    InGameCam_Shutdown();
     AudioSystem_Destroy(&audio_system);
     Input_Shutdown();
     Renderer_Shutdown();
