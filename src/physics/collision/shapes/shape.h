@@ -25,6 +25,7 @@ public:
 	// at a given world-space position and orientation
 	virtual AABB computeAABB(glm::vec3 position, glm::quat orientation) const = 0;
 	virtual RaycastHit intersectsRay(const Ray& ray, const glm::vec3& position, const glm::quat& orientation) const = 0;
+	virtual float getHeight() const = 0;
 
 public:
 	glm::vec3 localOffset = glm::vec3(0.0f);

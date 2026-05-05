@@ -201,17 +201,35 @@ EntityID Scene::InstantiatePrefab(Asset* prefab, glm::vec3 spawnPosition)
                 rbDesc.restitution = 0.0f;
                 rbDesc.friction = 0.2f;
                 rbDesc.forceLayers = importedRigidbody.force_layers;
+
+                // Important bit
+                bool isSomething = false;
+
+                SDL_assert(!(isSomething && importedRigidbody.is_static) && "RigidBody cannot be 2 'isSomething' at the same time");
+                isSomething = isSomething || importedRigidbody.is_static;
                 rbDesc.isStatic = importedRigidbody.is_static;
+
+                SDL_assert(!(isSomething && importedRigidbody.is_kinematic) && "RigidBody cannot be 2 'isSomething' at the same time");
+                isSomething = isSomething || importedRigidbody.is_kinematic;
                 rbDesc.isKinematic = importedRigidbody.is_kinematic;
+
+                SDL_assert(!(isSomething && importedRigidbody.is_character) && "RigidBody cannot be 2 'isSomething' at the same time");
+                isSomething = isSomething || importedRigidbody.is_character;
                 rbDesc.isCharacter = importedRigidbody.is_character;
+
+                SDL_assert(!(isSomething && importedRigidbody.is_trigger) && "RigidBody cannot be 2 'isSomething' at the same time");
+                isSomething = isSomething || importedRigidbody.is_trigger;
                 rbDesc.isTrigger = importedRigidbody.is_trigger;
 
-                // TEMPORARY
+                if(!isSomething)
+                    rbDesc.isDynamic = !isSomething; // if we are nothing (from the importedRigidbody) then we are dynamic;
+
+                // TEMPORARY automated body layers if they are not in the script
                 if (importedRigidbody.is_static || importedRigidbody.is_trigger)
                     rbDesc.bodyLayer = (uint8_t) BodyLayer::STATIC;
                 else if(importedRigidbody.is_character)
                     rbDesc.bodyLayer = (uint8_t)BodyLayer::CHARACTER;
-                else
+                else // dynamic or kinematic bodies
                     rbDesc.bodyLayer = (uint8_t) BodyLayer::MOVING;
 
                 rbDesc.shape = shapeHandle;
@@ -230,7 +248,7 @@ EntityID Scene::InstantiatePrefab(Asset* prefab, glm::vec3 spawnPosition)
             {
                 m_ecs.AddComponent<C_PlayerInput>(eID, {});
                 m_ecs.AddComponent<C_CharacterController>(eID, {
-                    .move_speed = 0.3f
+                    /*.move_speed = 0.3f*/
                 });
             }
 
@@ -598,9 +616,13 @@ void Scene::SetBodyCollisionLayers()
     // WEAPON VS MOVING && CHARACTER
     m_physicsManager.enableLayerPair((uint8_t)BodyLayer::WEAPON, (uint8_t)BodyLayer::MOVING);
     m_physicsManager.enableLayerPair((uint8_t)BodyLayer::WEAPON, (uint8_t)BodyLayer::MOVING);
-    // AFFECT_ONLY_CHARACTER VS CHARACTER
+    // AFFECT_ONLY_CHARACTER VS CHARACTER (for zombie attacks)?
     m_physicsManager.enableLayerPair((uint8_t)BodyLayer::AFFECT_ONLY_CHARACTER, (uint8_t)BodyLayer::CHARACTER);
     // AFFECT_ONLY_STATIC VS STATIC
     m_physicsManager.enableLayerPair((uint8_t)BodyLayer::AFFECT_ONLY_STATIC, (uint8_t)BodyLayer::STATIC);
+
+    // AFFECT_NOT_CHARACTER VS STATIC VS MOVING (for camera shapecasting
+    m_physicsManager.enableLayerPair((uint8_t)BodyLayer::AFFECT_NOT_CHARACTER, (uint8_t)BodyLayer::STATIC);
+    m_physicsManager.enableLayerPair((uint8_t)BodyLayer::AFFECT_NOT_CHARACTER, (uint8_t)BodyLayer::MOVING);
 
 }

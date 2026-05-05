@@ -5,6 +5,8 @@
 
 #include "core/utils/enum_bitmask.h"
 
+#include "physics_settings.h"
+
 #include "glm/glm.hpp"
 #include "glm/gtc/quaternion.hpp"
 
@@ -327,14 +329,17 @@ struct RigidBodyDesc
     // RigidBody type
     bool isStatic = false;
     bool isKinematic = false;
-    bool isCharacter = false;
-    bool isTrigger = false;
+    bool isDynamic = false; // adding this so its easier to do !isDynamic than isStatic || isKinematic || isTrigger
+
+    bool isCharacter = false; // extra rotation locked on Y for physics (when angular momentum is added)
+    bool isTrigger = false; // isTrigger will be treated as isStatic with NO collision resolution
 };
 
 struct RigidBody
 {
-    glm::vec3 position = glm::vec3(0.0f);
-    glm::quat orientation = glm::identity<glm::quat>();
+    glm::vec3 position = glm::vec3(0.0f); // managed by ECS, imported via PhysicsManager, modified via PhysicsWorld, exported to ECS again
+    glm::quat orientation = glm::identity<glm::quat>(); // managed by ECS, imported via PhysicsManager, modified via PhysicsWorld, exported to ECS again
+
 
     glm::vec3 velocity = glm::vec3(0.0f);
     glm::vec3 forceAccumulator = glm::vec3(0.0f);
@@ -356,14 +361,26 @@ struct RigidBody
 
     ShapeHandle shapeHandle; // get shape via physicsWorld.getShape()
 
+    // Out of the next block "isX" please choose only 1, not doing an enum now cause it is too much changing for everything
     bool isStatic = false;
     bool isKinematic = false;
-    bool isCharacter = false; // rotation locked for physics
-    bool isTrigger = false;
+    bool isDynamic = false; // adding this so its easier to do !isDynamic than isStatic || isKinematic || isTrigger
 
+    bool isCharacter = false; // extra rotation locked on Y for physics (when angular momentum is added)
+    bool isTrigger = false; // isTrigger will be treated as isStatic with NO collision resolution
+
+    // DO NOT add these in the script
     // No sleep system yet
     float sleepTimer = 0.0f;
+    float accumulatedEnergy = g_PhysicsSettings.initialEnergy; // smoothed using g_PhysicsSettings
     bool sleeping = false;
+
+    void wakeUp()
+    {
+        sleepTimer = 0.0f;
+        accumulatedEnergy = g_PhysicsSettings.initialEnergy;
+        sleeping = false;
+    }
 
     AABB aabb; // maintained by broadphase
 

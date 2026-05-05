@@ -21,7 +21,7 @@ namespace
         bool only_static = false; // reserved
 
         bool shapecast = false;
-        float shapecast_radius = 1.0f;
+        float shapecast_radius = 0.1f;
         float shapecast_padding = 0.05f;
     };
     InGameCamOcclusionDetectSettings s_occlusion_settings = {};
@@ -351,7 +351,7 @@ void InGameCam_Init(ECS* ecs, PhysicsManager* physics, EntityID player_id)
     s_physics = physics;
 
     s_occlusion_settings.layered_query = true;
-    s_occlusion_settings.layer = (uint8_t)BodyLayer::MOVING;
+    s_occlusion_settings.layer = (uint8_t)BodyLayer::AFFECT_NOT_CHARACTER;
     s_occlusion_settings.shapecast = true;
 
     CreateCameraProbeShape();
