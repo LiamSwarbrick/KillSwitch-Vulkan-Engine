@@ -162,7 +162,7 @@ int main(int argc, char *argv[])
     // scene.InstantiatePrefab(cube_prefab, glm::vec3(0, 5.1, 0));
     // scene.InstantiatePrefab(cube_prefab, glm::vec3(3, 4.9, 0));
     
-    EntityID playerID = scene.InstantiatePrefab(zombie, glm::vec3(0, 0.1, 0.01));
+    EntityID playerID = scene.InstantiatePrefab(zombie, glm::vec3(0, 0, 0.01));
     // scene.InstantiatePrefab(sphere_prefab, glm::vec3(4.7, 7, 0.1));
     // scene.InstantiatePrefab(sphere_prefab, glm::vec3(-4.7, 7, -0.1));
     // scene.InstantiatePrefab(sphere_prefab, glm::vec3(0.1, 7, -4.7));
@@ -177,22 +177,10 @@ int main(int argc, char *argv[])
     // TODO: Debug UI is built around the idea of 1 asset at the moment.
     //       This must change with the new scene system that can load many asset prefabs.
     DebugUI_SetECS(&scene.GetECS());
-    DebugUI_SetAsset(zombie);
+    std::vector<Asset*> debug_assets = { zombie, room_prefab };
+    DebugUI_SetAsset(&debug_assets);
 
-    // Game owns FP/TP camera state; seed both from Debug UI state once at startup.
-    FPCamState game_fp_cam = {};
-    if (const FPCamState* initial_fp_cam = DebugUI_GetFPCamState()) 
-    {
-        game_fp_cam = *initial_fp_cam;
-        game_fp_cam.bound_entity = playerID;
-    }
-
-    TPCamState game_tp_cam = {};
-    if (const TPCamState* initial_tp_cam = DebugUI_GetTPCamState())
-    {
-        game_tp_cam = *initial_tp_cam;
-        game_tp_cam.bound_entity = playerID;
-    }
+    InGameCam_Init(&scene.GetECS(), playerID);
 
     bool running = true;
 
