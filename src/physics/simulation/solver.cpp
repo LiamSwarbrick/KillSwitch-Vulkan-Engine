@@ -1,4 +1,4 @@
-#include "solver.h"
+﻿#include "solver.h"
 
 #include "physics/physics_world.h"
 
@@ -31,10 +31,12 @@ void Solver::solve(const std::vector<Contact>& contacts, float dt)
     {
         RigidBody* b = c.body;
         c.groundState = PhysicsCharacter::GroundState::InAir;
+        c.groundNormal = world.UP_VECTOR;
 
         // Store the position and velocity before resolving contacts of players, that way we can work out step-ups
-        c.prePosition = b->position;
-        c.preVelocity = b->velocity;
+        c.preSolvingPosition = b->position;
+        c.preSolvingVelocity = b->velocity;
+        c.lastNonWalkableNormalContact = { 0.0f, 1.0f, 0.0f };
     }
 
 	for (const Contact& contact : contacts)
@@ -61,7 +63,7 @@ void Solver::solve(const std::vector<Contact>& contacts, float dt)
     {
         RigidBody* b = c.body;
         //tryStepUp(c, *b, dt);
-        tryStepDown(c, *b, dt);
+        trySnapDown(c, *b, dt);
     }
 
 }
@@ -90,6 +92,8 @@ void Solver::FillExtendedContact(const Contact& contact, ExtendedContact& outExt
 
         outExtContact.isWalkableA = slopeAngle <= outExtContact.charA->maxWalkableAngle;
 
+        if (!outExtContact.isWalkableA) outExtContact.charA->lastNonWalkableNormalContact = contact.normal;
+
         // if the slope is walkable, correct only on the character's groundNormal axis
         if (outExtContact.isWalkableA)
         {
@@ -107,7 +111,7 @@ void Solver::FillExtendedContact(const Contact& contact, ExtendedContact& outExt
 
             // If upAlongNormal is close or less than 0, we are InAir,
             // If it is bigger than 0, we are in a slope
-
+            outExtContact.charA->groundNormal = world.UP_VECTOR;
             // We should probably change F_EPSILON to a custom value, to detect walls properly maybe
             if (upAlongNormal > WALL_NORMAL_Y)
                 outExtContact.charA->groundState = PhysicsCharacter::GroundState::OnSteepGround;
@@ -124,6 +128,8 @@ void Solver::FillExtendedContact(const Contact& contact, ExtendedContact& outExt
 
         float slopeAngle = glm::acos(upAlongNormal);
         outExtContact.isWalkableB = slopeAngle <= outExtContact.charB->maxWalkableAngle;
+
+        if (!outExtContact.isWalkableB) outExtContact.charB->lastNonWalkableNormalContact = -contact.normal;
 
         // if the slope is walkable, correct only on the character's groundNormal axis
         if (outExtContact.isWalkableB)
@@ -142,7 +148,7 @@ void Solver::FillExtendedContact(const Contact& contact, ExtendedContact& outExt
 
             // If upAlongNormal is close or less than 0, we are InAir,
             // If it is bigger than 0, we are in a slope
-
+            outExtContact.charB->groundNormal = world.UP_VECTOR;
             // We should probably change F_EPSILON to a custom value, to detect walls properly maybe
             if (upAlongNormal > WALL_NORMAL_Y)
                 outExtContact.charB->groundState = PhysicsCharacter::GroundState::OnSteepGround;
@@ -266,11 +272,10 @@ bool Solver::tryStepUp(PhysicsCharacter& character, RigidBody& body, float dt)
     return true;
 }
 
-bool Solver::tryStepDown(PhysicsCharacter& character, RigidBody& body, float dt)
+bool Solver::trySnapDown(PhysicsCharacter& character, RigidBody& body, float dt)
 {
     if (character.groundState == PhysicsCharacter::GroundState::InAir && !character.jumping)
     {
-        RaycastHit hit;
         QueryFilter filter;
         filter.bodyToIgnore = { body.bodyID };
 
@@ -281,13 +286,15 @@ bool Solver::tryStepDown(PhysicsCharacter& character, RigidBody& body, float dt)
         Ray ray;
 
         ray.origin = body.position;
-        ray.origin.y -= characterHeight;
+        //ray.origin.y -= characterHeight;
         ray.direction = -world.UP_VECTOR; // Might have to change for -character.groundNormal (we will see)
+        ray.direction = -character.groundNormal;
         ray.maxDistance = character.stepHeight;
+
 
         // CURRENTLY DOESN'T WORK WITH RAYCAST, IMPLEMENT RAYCAST AND SWITCH TO THAT
         // Basically it jitters because it doesn't take into account the shape, just ray
-        hit = world.raycast(ray, filter);
+        ShapecastHit hit = world.shapecast(ray, body.shapeHandle, glm::identity<glm::quat>(), filter);
         if (hit.isValid())
         {
             float upAlongNormal = glm::dot(hit.normal, world.UP_VECTOR);
@@ -303,7 +310,7 @@ bool Solver::tryStepDown(PhysicsCharacter& character, RigidBody& body, float dt)
             }
             else
             {
-                body.position = hit.point + characterHeight;
+                body.position = body.position - world.UP_VECTOR * hit.t;
                 body.velocity.y = 0.0f; // Testing
                 character.groundNormal = world.UP_VECTOR;
                 character.groundState = PhysicsCharacter::GroundState::OnSteepGround;

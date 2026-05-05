@@ -9,6 +9,7 @@
 #include "glm/gtc/quaternion.hpp"
 
 #include "physics/queries/raycast.h"
+#include "physics/queries/shapecast.h"
 
 
 // For floats
@@ -385,16 +386,16 @@ struct PhysicsCharacter
     glm::vec3 groundNormal = glm::vec3(0.0f, 1.0f, 0.0f); // use character's groundNormal to project the horizontal velocity before applying, that way we would get a much smoother movement
 
     float maxWalkableAngle = glm::radians(50.0f); // Maximum angle compared to groundNormal that makes it able to snap-walk on tilted/uneven terrain
-    float stepHeight = 0.4f; // Allows to climb / drop 
+    float stepHeight = 0.3f; // Max height allowed for climbing/dropping-from steps or other obstacles
 
     // TO BE SET GAME-SIDE to true, it defaults to false on collision to ground
     bool jumping = true; // Extra logic to make snap-down correctly, 
 
     // This to do step ups and downs properly
     // Basically position and velocity before solving the contacts
-    glm::vec3 lastNonWalkableNormalContact{};
-    glm::vec3 prePosition{};
-    glm::vec3 preVelocity{};
+    glm::vec3 lastNonWalkableNormalContact = glm::vec3(0.0f, 1.0f, 0.0f);
+    glm::vec3 preSolvingPosition{};
+    glm::vec3 preSolvingVelocity{};
 };
 
 struct PhysicsCharacterInfo

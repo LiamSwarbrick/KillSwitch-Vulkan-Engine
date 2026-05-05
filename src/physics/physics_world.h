@@ -149,6 +149,11 @@ public:
 
 	std::vector<RaycastHit> raycastAll(const Ray& ray, const QueryFilter& filter = {}) const;
 
+	// Shape intersect the shape along the ray (using Conservative Advancement), targetting the optionalTargetBody or the first Body the raycast hits
+	ShapecastHit shapecast(
+		const Ray& ray, ShapeHandle shape, const glm::quat& orientation, 
+		const QueryFilter& filter = {}) const;
+
 	// Shape - intersecting
 	std::vector<RigidBodyHandle> shapeIntersects(
 		ShapeHandle shape, const glm::vec3& position, const glm::quat& orientation,

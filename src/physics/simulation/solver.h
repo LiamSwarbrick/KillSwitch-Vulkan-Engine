@@ -32,8 +32,8 @@ private:
 	// Step Up will let Characters climb low obstacles if moving. Obstacle height defined in PhysicsCharacter::stepHeight
 	// Good for climbing stairs if they are done using steps instead of a ramp
 	bool tryStepUp(PhysicsCharacter& character, RigidBody& body, float dt);
-	// Step Down will make Characters snap down stair 
-	bool tryStepDown(PhysicsCharacter& character, RigidBody& body, float dt);
+	// Snap Down will make Characters snap down stairs or other obstacles
+	bool trySnapDown(PhysicsCharacter& character, RigidBody& body, float dt);
 
 private:
 	PhysicsWorld& world;
