@@ -625,11 +625,11 @@ def serialize_ecs(obj):
                 # Convert from Blender's XYZ to engine's XZY
                 value = list(value)  # ensure it's a list
                 if len(value) == 3:
-                    value = [value[0], value[2], value[1]]  # X,Z,Y
+                    value = [value[0], value[2], value[1]]  # X,Z,-Y
             if prop.identifier == "collider_position_offset":
                 value = list(value)  # ensure it's a list
                 if len(value) == 3:
-                    value = [value[0], -value[2], value[1]]  # X,Z,Y
+                    value = [value[0], value[2], -value[1]]  # X,Z,Y
 
             print(f"      Property {prop.identifier}: {value}")
 
@@ -725,6 +725,10 @@ def apply_ecs_to_object(obj, ecs_data):
                     value = list(value)  # ensure it's a list
                     if len(value) == 3:
                         value = [value[0], value[2], value[1]]  # X,Z,Y
+                elif prop_meta.identifier == "collider_position_offset":
+                    value = list(value)  # ensure it's a list
+                    if len(value) == 3:
+                        value = [value[0], -value[2], value[1]]  # X,-Z,Y
                 elif prop_meta and prop_meta.type == 'FLOAT' and prop_meta.is_array:
                     value = tuple(value)
                     if len(value) == 4 and prop_meta.subtype == 'EULER':

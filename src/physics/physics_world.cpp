@@ -269,6 +269,10 @@ RigidBodyHandle PhysicsWorld::addBody(const RigidBodyDesc& desc)
 	body.invMass = desc.isStatic ? 0.0f : (1.0f / desc.mass);
 	body.gravityScale = desc.gravityScale;
 	body.damping = desc.damping;
+
+	body.restitution = desc.restitution;
+	body.friction = desc.friction;
+
 	body.forceLayers = desc.forceLayers;
 	body.bodyLayer = desc.bodyLayer;
 
@@ -675,7 +679,66 @@ std::vector<RaycastHit> PhysicsWorld::raycastAll(const Ray& ray, const QueryFilt
 	return narrowHits;
 }
 
-std::vector<RigidBodyHandle> PhysicsWorld::shapecast(ShapeHandle shapeHandle, const glm::vec3& position, const glm::quat& orientation, const QueryFilter& filter) const
+ShapecastHit PhysicsWorld::shapecast(const Ray& ray, ShapeHandle shape, const glm::quat& orientation, const QueryFilter& filter) const
+{
+	
+	//RigidBody* target = nullptr;
+	//if (optionalTargetBody.isValid())
+	//{
+	//	target = getBody(optionalTargetBody);
+	//}
+	//else
+	//{
+	//	RaycastHit rayHit = raycast(ray, filter);
+	//	if (!rayHit.isValid()) return ShapecastHit::none();
+
+	//	target = rayHit.body;
+	//}
+	//if (!target) return ShapecastHit::none();
+
+	const IShape* queryShape = getShape(shape);
+	if (!queryShape) return ShapecastHit::none();
+
+	glm::vec3 shapePosition; glm::quat shapeOrientation;
+	narrowPhase.resolveShapeTransform(queryShape, ray.origin, orientation, shapePosition, shapeOrientation);
+
+	// ----
+	// Broadphase of the calculated swept AABB from start to finish to get all candidates, then check 1 by 1
+	// ---
+	AABB aabbStart = queryShape->computeAABB(shapePosition, shapeOrientation);
+	AABB aabbEnd = queryShape->computeAABB(shapePosition + ray.direction * ray.maxDistance, shapeOrientation);
+
+	AABB sweptAABB = AABB::merge(aabbStart, aabbEnd);
+
+	QueryFilterInternal filterInternal = getQueryFilterInternalFromQueryFilter(filter);
+
+	std::vector<RigidBody*> candidates;
+	broadPhase.queryAABB(sweptAABB, filterInternal, candidates);
+
+	ShapecastHit closest{};
+
+	for (RigidBody* body : candidates)
+	{
+		const IShape* targetShape = getShape(body->shapeHandle);
+
+		glm::vec3 targetPosition; glm::quat targetOrientation;
+		narrowPhase.resolveShapeTransform(targetShape, body->position, body->orientation, targetPosition, targetOrientation);
+		
+		ShapecastHit hit = narrowPhase.shapecast(ray, queryShape, shapePosition, shapeOrientation, targetShape, targetPosition, targetOrientation);
+
+		if (!hit.isValid()) continue;
+
+		hit.body = body; // important bit
+
+		if (!closest.isValid() || hit.t < closest.t)
+			closest = hit;
+	}
+
+
+	return closest;
+}
+
+std::vector<RigidBodyHandle> PhysicsWorld::shapeIntersects(ShapeHandle shapeHandle, const glm::vec3& position, const glm::quat& orientation, const QueryFilter& filter) const
 {
 	std::vector<RigidBody*> broadHits;
 	std::vector<RigidBodyHandle> hits;
@@ -742,6 +805,7 @@ void PhysicsWorld::step(float dt)
 	updateBroadPhase();
 	detectCollisions();
 	testPlanes();
+	
 	solve(dt);
 
 	dispatchEvents();
@@ -802,7 +866,7 @@ void PhysicsWorld::detectCollisions()
 	for (const BodyPair& pair : pairs)
 	{
 		if (pair.bodyA->isStatic && pair.bodyB->isStatic) continue;
-		if (pair.bodyA->isKinematic && pair.bodyB->isKinematic) continue; // this should be the case right????
+		if (pair.bodyA->isKinematic && pair.bodyB->isKinematic) continue;
 
 		Contact contact = narrowPhase.testPair(*pair.bodyA, *pair.bodyB, *this);
 		if (contact.isValid())
@@ -829,6 +893,7 @@ void PhysicsWorld::solve(float dt)
 {
 	solver.solve(contacts, dt);
 }
+
 
 void PhysicsWorld::dispatchEvents()
 {

@@ -23,6 +23,7 @@
     X(CAMERA_DOWN,   "camera_down")   \
     X(CAMERA_LEFT,   "camera_left")   \
     X(CAMERA_RIGHT,  "camera_right")  \
+    X(TOGGLE_CAMERA, "toggle_camera") \
     /* Gameplay */         \
     X(INTERACT,      "interact")      \
     X(ATTACK,        "attack")        \

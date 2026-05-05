@@ -5,6 +5,7 @@
 #include "core/assetsys.h"
 #include "renderer/renderer.h"   // CameraInfo
 #include "glm/glm.hpp"
+#include <vector>
 
 // Shared game/debug FP camera state.
 struct FPCamState
@@ -57,7 +58,7 @@ inline void TPCam_ResetToDefault(TPCamState& cam)
 }
 
 void DebugUI_SetECS(ECS* ecs);
-void DebugUI_SetAsset(Asset* asset);
+void DebugUI_SetAsset(std::vector<Asset*>* prefabs);
 
 // Optional callback: called between ImGui::NewFrame() and ImGui::Render()
 // Game code can set this to build its own ImGui UI
@@ -70,26 +71,37 @@ bool DebugUI_IsOpen();
 void DebugUI_SetCameraMode(DebugUICameraMode mode);
 DebugUICameraMode DebugUI_GetCameraMode();
 
-// Gameplay camera mode is used when debug UI is hidden (FP/TP only).
-void DebugUI_SetGameplayCameraMode(DebugUICameraMode mode);
-DebugUICameraMode DebugUI_GetGameplayCameraMode();
+// Camera snapshot pushed from game-owned camera system.
+struct DebugUIInGameCameraSnapshot
+{
+	bool              valid = false;
+	DebugUICameraMode gameplay_camera_mode = DebugUICameraMode::TPCam;
 
-// Game pushes/pulls FP camera state so debug UI can display and edit it.
-void DebugUI_SetFPCamState(const FPCamState* state);
-const FPCamState* DebugUI_GetFPCamState();
+	FPCamState        fp_state = {};
+	TPCamState        tp_state = {};
 
-// Game pushes/pulls TP camera state so debug UI can display and edit it.
-void DebugUI_SetTPCamState(const TPCamState* state);
-const TPCamState* DebugUI_GetTPCamState();
+	CameraInfo        fp_camera = {};
+	CameraInfo        tp_camera = {};
+	bool              has_fp_camera = false;
+	bool              has_tp_camera = false;
+};
 
-// Game pushes the resolved FP camera each frame; debug UI may choose to use it.
-void DebugUI_SetFPCamCameraInfo(const CameraInfo* camera);
+// Camera edit commands emitted by debug UI and consumed by game camera system.
+struct DebugUICameraEdits
+{
+	bool      apply_fp_state = false;
+	FPCamState fp_state = {};
+	bool      apply_tp_state = false;
+	TPCamState tp_state = {};
+	bool      reset_fp = false;
+	bool      reset_tp = false;
+};
 
-// Game pushes the resolved TP camera each frame; debug UI may choose to use it.
-void DebugUI_SetTPCamCameraInfo(const CameraInfo* camera);
+void DebugUI_SetInGameCameraSnapshot(const DebugUIInGameCameraSnapshot* snapshot);
+bool DebugUI_ConsumeCameraEdits(DebugUICameraEdits* out_edits);
 
 // Resolve and return the active camera for this frame.
-// Game should push FP/TP camera state/info each frame before calling this.
+// Uses game snapshot for FP/TP and debug-owned free cam for FreeCam mode.
 CameraInfo DebugUI_GetCameraInfo(float dt);
 
 #endif  // DEBUG_UI_API_H

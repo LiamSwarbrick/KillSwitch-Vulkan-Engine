@@ -9,7 +9,7 @@
 #include "free_cam.h"
 #include "renderer/debug_ui_api.h"
 #include "core/components.h"
-
+#include <vector>
 #include <array>
 
 namespace DebugUI
@@ -24,15 +24,15 @@ namespace DebugUI
         bool show_asset_browser = true;
         bool show_camera        = true;
 
-        DebugUICameraMode camera_mode  = DebugUICameraMode::FreeCam;
-        DebugUICameraMode gameplay_camera_mode = DebugUICameraMode::TPCam;
-        FreeCamState free_cam   = {};   // owned here; updated by FreeCam_Update each frame
-        FPCamState fp_cam       = {};   // synced with game-owned FP cam state
-        TPCamState tp_cam       = {};   // synced with game-owned TP cam state
-        CameraInfo fp_camera    = {};   // synced with game-owned FP camera output
-        CameraInfo tp_camera    = {};   // synced with game-owned TP camera output
-        bool has_fp_camera      = false;
-        bool has_tp_camera      = false;
+        DebugUICameraMode camera_mode = DebugUICameraMode::FreeCam;
+        FreeCamState free_cam = {};   // owned here; updated by FreeCam_Update each frame
+
+        // Read-only snapshot pushed from the game-owned in-game camera module.
+        DebugUIInGameCameraSnapshot ingame_camera_snapshot = {};
+
+        // Pending camera edits produced by the camera panel and consumed by game.
+        bool has_pending_camera_edits = false;
+        DebugUICameraEdits pending_camera_edits = {};
 
         // Entity ID 
         uint32_t selected_entity_id = UINT32_MAX;
@@ -40,6 +40,7 @@ namespace DebugUI
         FrameGraphVisualizer fg_viz;
         AssetBrowser         asset_browser;
         Asset*               debug_asset = nullptr;
+        std::vector<Asset*>* asset_list = nullptr;
 
         // Viewport texture for displaying the 3D scene inside ImGui
         ImTextureID viewport_imgui_tex    = 0;
@@ -104,8 +105,8 @@ namespace DebugUI
             ImGuiID bottom_left, bottom_right;
             ImGui::DockBuilderSplitNode(bottom, ImGuiDir_Left, 0.25f, &bottom_left, &bottom_right);
 
-            ImGui::DockBuilderDockWindow("ECS Inspector", top_left);
-            ImGui::DockBuilderDockWindow("Asset Browser", bottom_left);
+            ImGui::DockBuilderDockWindow("Asset Browser", top_left);
+            ImGui::DockBuilderDockWindow("ECS Inspector", bottom_left);
             ImGui::DockBuilderDockWindow("Framegraph", bottom_right);
             ImGui::DockBuilderDockWindow("Viewport", top_right);
 
@@ -146,7 +147,8 @@ namespace DebugUI
         ImGui::SetNextWindowSize(ImVec2(900, 600), ImGuiCond_FirstUseEver);
         if (ImGui::Begin("Asset Browser", &state.show_asset_browser))
         {
-            state.asset_browser.Draw(state.debug_asset);
+            state.asset_browser.Draw(state.asset_list, state.debug_asset);
+            debug_asset_ptr = state.debug_asset;
         }
         ImGui::End();
     }
@@ -165,15 +167,41 @@ namespace DebugUI
                 player_candidates[player_count++] = id;
         });
 
-        DebugUI::DrawCameraPanel(
+        const DebugUI::CameraPanelResult panel_result = DebugUI::DrawCameraPanel(
             state.show_camera,
             state.camera_mode,
             state.free_cam,
-            state.fp_cam,
-            state.tp_cam,
+            state.ingame_camera_snapshot.fp_state,
+            state.ingame_camera_snapshot.tp_state,
             player_candidates.data(),
             player_count
         );
+
+        if (panel_result.reset_fp)
+        {
+            state.pending_camera_edits.reset_fp = true;
+            state.has_pending_camera_edits = true;
+        }
+
+        if (panel_result.reset_tp)
+        {
+            state.pending_camera_edits.reset_tp = true;
+            state.has_pending_camera_edits = true;
+        }
+
+        if (panel_result.fp_state_changed)
+        {
+            state.pending_camera_edits.apply_fp_state = true;
+            state.pending_camera_edits.fp_state = panel_result.fp_state;
+            state.has_pending_camera_edits = true;
+        }
+
+        if (panel_result.tp_state_changed)
+        {
+            state.pending_camera_edits.apply_tp_state = true;
+            state.pending_camera_edits.tp_state = panel_result.tp_state;
+            state.has_pending_camera_edits = true;
+        }
     }
 
     // Called after ImGui::NewFrame()

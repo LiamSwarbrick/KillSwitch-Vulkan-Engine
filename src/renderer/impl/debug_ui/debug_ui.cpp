@@ -10,10 +10,19 @@ void DebugUI_SetECS(ECS* ecs)
     debug_ecs_ptr = ecs;
 }
 
-void DebugUI_SetAsset(Asset* asset)
+void DebugUI_SetAsset(std::vector<Asset*>* prefabs)
 {
-    debug_asset_ptr = asset;
-    debug_ui_state.debug_asset = asset;
+    debug_ui_state.asset_list = prefabs;
+
+    if (prefabs == nullptr || prefabs->empty())
+    {
+        debug_asset_ptr = nullptr;
+        debug_ui_state.debug_asset = nullptr;
+        return;
+    }
+
+    debug_asset_ptr = (*prefabs)[0];
+    debug_ui_state.debug_asset = (*prefabs)[0];
 }
 
 void DebugUI_SetImGuiCallback(DebugUI_ImGuiBuildCallback callback, void* user_data)
@@ -37,95 +46,68 @@ DebugUICameraMode DebugUI_GetCameraMode()
     return debug_ui_state.camera_mode;
 }
 
-void DebugUI_SetGameplayCameraMode(DebugUICameraMode mode)
+void DebugUI_SetInGameCameraSnapshot(const DebugUIInGameCameraSnapshot* snapshot)
 {
-    // Gameplay camera mode only supports FP/TP.
-    debug_ui_state.gameplay_camera_mode =
-        (mode == DebugUICameraMode::FPCam) ? DebugUICameraMode::FPCam : DebugUICameraMode::TPCam;
-}
-
-DebugUICameraMode DebugUI_GetGameplayCameraMode()
-{
-    return debug_ui_state.gameplay_camera_mode;
-}
-
-void DebugUI_SetFPCamState(const FPCamState* state)
-{
-    if (!state) return;
-    debug_ui_state.fp_cam = *state;
-}
-
-const FPCamState* DebugUI_GetFPCamState()
-{
-    return &debug_ui_state.fp_cam;
-}
-
-void DebugUI_SetTPCamState(const TPCamState* state)
-{
-    if (!state) return;
-    debug_ui_state.tp_cam = *state;
-}
-
-const TPCamState* DebugUI_GetTPCamState()
-{
-    return &debug_ui_state.tp_cam;
-}
-
-void DebugUI_SetFPCamCameraInfo(const CameraInfo* camera)
-{
-    if (!camera)
+    if (!snapshot)
     {
-        debug_ui_state.has_fp_camera = false;
+        debug_ui_state.ingame_camera_snapshot = DebugUIInGameCameraSnapshot{};
         return;
     }
 
-    debug_ui_state.fp_camera = *camera;
-    debug_ui_state.has_fp_camera = true;
+    debug_ui_state.ingame_camera_snapshot = *snapshot;
 }
 
-void DebugUI_SetTPCamCameraInfo(const CameraInfo* camera)
+bool DebugUI_ConsumeCameraEdits(DebugUICameraEdits* out_edits)
 {
-    if (!camera)
-    {
-        debug_ui_state.has_tp_camera = false;
-        return;
-    }
+    if (!debug_ui_state.has_pending_camera_edits)
+        return false;
 
-    debug_ui_state.tp_camera = *camera;
-    debug_ui_state.has_tp_camera = true;
+    if (out_edits)
+        *out_edits = debug_ui_state.pending_camera_edits;
+
+    debug_ui_state.pending_camera_edits = DebugUICameraEdits{};
+    debug_ui_state.has_pending_camera_edits = false;
+    return true;
 }
 
 CameraInfo DebugUI_GetCameraInfo(float dt)
 {
+    const DebugUIInGameCameraSnapshot& snapshot = debug_ui_state.ingame_camera_snapshot;
+
     // Gameplay camera follows dedicated gameplay mode (FP/TP) when debug UI is hidden.
     if (!debug_ui_state.show_debug_ui)
     {
-        switch (debug_ui_state.gameplay_camera_mode)
+        if (snapshot.valid)
         {
-            case DebugUICameraMode::FPCam:
-                if (debug_ui_state.has_fp_camera)
-                    return debug_ui_state.fp_camera;
-                return DebugUI::FreeCam_Update(debug_ui_state.free_cam, dt);
+            switch (snapshot.gameplay_camera_mode)
+            {
+                case DebugUICameraMode::FPCam:
+                    if (snapshot.has_fp_camera)
+                        return snapshot.fp_camera;
+                    break;
 
-            case DebugUICameraMode::TPCam:
-            default:
-                if (debug_ui_state.has_tp_camera)
-                    return debug_ui_state.tp_camera;
-                return DebugUI::FreeCam_Update(debug_ui_state.free_cam, dt);
+                case DebugUICameraMode::TPCam:
+                default:
+                    if (snapshot.has_tp_camera)
+                        return snapshot.tp_camera;
+                    break;
+            }
         }
+
+        return DebugUI::FreeCam_Update(debug_ui_state.free_cam, dt);
     }
 
     // Debug mode defaults to free cam, but can be switched in Camera panel.
     switch (debug_ui_state.camera_mode)
     {
         case DebugUICameraMode::FPCam:
-            if (debug_ui_state.has_fp_camera)
-                return debug_ui_state.fp_camera;
+            if (snapshot.valid && snapshot.has_fp_camera)
+                return snapshot.fp_camera;
             return DebugUI::FreeCam_Update(debug_ui_state.free_cam, dt);
 
         case DebugUICameraMode::TPCam:
-            if (debug_ui_state.has_tp_camera)
-                return debug_ui_state.tp_camera;
+            if (snapshot.valid && snapshot.has_tp_camera)
+                return snapshot.tp_camera;
             return DebugUI::FreeCam_Update(debug_ui_state.free_cam, dt);
 
         case DebugUICameraMode::FreeCam:

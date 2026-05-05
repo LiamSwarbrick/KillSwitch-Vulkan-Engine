@@ -7,7 +7,6 @@
 
 #include <limits>
 
-
 struct Ray
 {
 	glm::vec3 origin;

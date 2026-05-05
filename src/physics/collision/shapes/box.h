@@ -32,7 +32,12 @@ public:
 		// Project the box (OBB) axis into world axis
 		// AABB' half-sizes on each world axis will be: ...
 		// ... sum of projected OBB half-sizes
-		glm::vec3 worldHalfSizes = orientation * halfWidths;
+        // Instead of using the quaternion, lets use the hack of getting the absolute value of the rotation matrix elements
+        glm::mat3 rot = glm::mat3_cast(orientation);
+
+        glm::mat3 absRot = glm::mat3(glm::abs(rot[0]), glm::abs(rot[1]), glm::abs(rot[2]));
+
+        glm::vec3 worldHalfSizes = absRot * halfWidths;
 
 		return AABB(position - worldHalfSizes, position + worldHalfSizes);
 	}

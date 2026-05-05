@@ -116,6 +116,8 @@ Asset* load_asset(const char* filename) {
 		return NULL;
 	}
 
+	asset->source_path = duplicate_string(filename);
+
 	// Set counts
 	asset->mesh_count = data->meshes_count;
 	asset->material_count = data->materials_count + 1; // always a default material
@@ -602,6 +604,8 @@ void free_asset(Asset* asset) {
 		if (anim->channels) free(anim->channels);
 	}
 	if (asset->animations) free(asset->animations);
+
+	free((void*)asset->source_path);
 
 	free(asset);
 }
