@@ -7,16 +7,20 @@ void DepthMapPass_Execute(VkCommandBuffer cmd, uint32_t pass_idx)
 {
     RenderPassDesc* desc = &renderstate.framegraph.passes[pass_idx];
     DepthPass_UserData* user_data = (DepthPass_UserData*)desc->user_data;
+    RingBufferedRIDs* ring = &renderstate.rids.ring[renderstate.frame_in_flight];
 
     uint64_t scene_ptr = 0;
     {
         // Scene data stored in userdata field of depth pass
-        scene_ptr = PushToMappedArena(&renderstate.scenes_arena, &user_data->scene_data, sizeof(SceneData));
+        scene_ptr = PushToMappedArena(&ring->scenes_arena, &user_data->scene_data, sizeof(SceneData));
     }
     
     PushConstant_PassHeader push_pass = {};  // No inputs, so doesn't care use push constant's upper bytes
 
     ResetDrawArena();
+
+    // Read material data of GPU (TODO: Rework material system this is really shitty)
+    MaterialData* mapped_materials = (MaterialData*)renderstate.registry.resources[renderstate.rids.materials_buffer_rid].buffer.mapped_data;
 
     const uint32_t shader_id = SHADER_DEPTH;
     for (uint32_t i = 0; i < renderstate.drawcalls_collection.array[shader_id].drawcall_count; ++i)
@@ -26,7 +30,7 @@ void DepthMapPass_Execute(VkCommandBuffer cmd, uint32_t pass_idx)
         for (uint32_t p = 0; p < drawcall.renderable->mesh_prefab.mesh_rids.primitive_count; ++p)
         {
             PrimitiveRIDs* prim = &drawcall.renderable->mesh_prefab.mesh_rids.primitives[p];
-            MaterialData* mat = &((MaterialData*)renderstate.registry.resources[renderstate.rids.materials_buffer_rid].buffer.mapped_data)[prim->material_index];
+            MaterialData* mat = &mapped_materials[prim->material_index];
 
             // Skip alpha blend or masked geometry (masked skipped because of Alpha2Coverage)
             if (mat->blend_mode == BLEND_MODE_BLEND)

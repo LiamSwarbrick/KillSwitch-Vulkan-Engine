@@ -7,18 +7,22 @@ void ForwardOpaque_Execute(VkCommandBuffer cmd, uint32_t pass_idx)
 {
     RenderPassDesc* desc = &renderstate.framegraph.passes[pass_idx];
     ForwardPass_UserData* user_data = (ForwardPass_UserData*)desc->user_data;
+    RingBufferedRIDs* ring = &renderstate.rids.ring[renderstate.frame_in_flight];
 
     uint64_t scene_ptr = 0;
     {
         VkExtent3D extents = renderstate.registry.resources[renderstate.rids.hdr_color_target_rid].image.extent;
         SceneData scene_data = MakeSceneData(renderstate.main_camera, (VkExtent2D){ extents.width, extents.height });
-        scene_ptr = PushToMappedArena(&renderstate.scenes_arena, &scene_data, sizeof(SceneData));
+        scene_ptr = PushToMappedArena(&ring->scenes_arena, &scene_data, sizeof(SceneData));
     }
 
     uint32_t forward_shaders[] = { SHADER_UNLIT, SHADER_LIT, SHADER_OUTLINE };
     PushConstant_PassHeader push_pass = user_data->push_pass;
 
     ResetDrawArena();
+
+    // Read material data of GPU (TODO: Rework material system this is really shitty)
+    MaterialData* mapped_materials = (MaterialData*)renderstate.registry.resources[renderstate.rids.materials_buffer_rid].buffer.mapped_data;
     
     // For each shader s, drawcall i, primitive p:
     //     PushDrawPrimitive()
@@ -32,7 +36,7 @@ void ForwardOpaque_Execute(VkCommandBuffer cmd, uint32_t pass_idx)
             for (uint32_t p = 0; p < drawcall.renderable->mesh_prefab.mesh_rids.primitive_count; ++p)
             {
                 PrimitiveRIDs* prim = &drawcall.renderable->mesh_prefab.mesh_rids.primitives[p];
-                MaterialData* mat = &((MaterialData*)renderstate.registry.resources[renderstate.rids.materials_buffer_rid].buffer.mapped_data)[prim->material_index];
+                MaterialData* mat = &mapped_materials[prim->material_index];
 
                 PipelineKey key = {
                     .pipeline_type  = PK_PIPELINE_TYPE_GRAPHICS,

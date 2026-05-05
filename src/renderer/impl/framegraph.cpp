@@ -529,7 +529,8 @@ uint32_t add_resource_to_registry_and_heap(const char* debug_name, FG_ResourceTy
     memset(res, 0, sizeof(FG_Resource));
 
     // Set shared fields
-    strncpy(res->debug_name, debug_name, sizeof(res->debug_name));
+    snprintf(res->debug_name, sizeof(res->debug_name), "%s-%d", debug_name, renderstate.registry.resource_count);  // <- Add id to end of name to differentiate if they have the same name
+    // strncpy(res->debug_name, debug_name, sizeof(res->debug_name));
     res->type = type;
     res->flags = flags;
     res->allocation = resource_info.allocation;

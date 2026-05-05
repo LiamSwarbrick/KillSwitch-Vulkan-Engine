@@ -25,7 +25,9 @@ typedef struct RenderState
     SDL_Window* window;
     b32 using_validation_layers;
     b32 program_caused_vulkan_validation_layer_errors;
-    u64 frame_number;
+    uint64_t frame_number;
+    uint32_t frame_in_flight;
+
 
     Renderer_Settings settings;
     VkSampleCountFlagBits multisampling_count_flag;  // NOTE: Vulkan version of msaa setting stored outside settings struct to avoid exposing Vulkan API to game module
@@ -53,7 +55,7 @@ typedef struct RenderState
     VkFormat    swapchain_image_format;
     VkExtent2D  swapchain_extent;
     VkImageUsageFlags swapchain_usage;
-    u32         swapchain_image_count;
+    uint32_t    swapchain_image_count;
     VkImage     swapchain_images[MAX_SWAPCHAIN_IMAGE_COUNT];
     VkImageView swapchain_image_views[MAX_SWAPCHAIN_IMAGE_COUNT];
     VkSemaphore swapchain_image_rendering_complete_semaphores[MAX_SWAPCHAIN_IMAGE_COUNT];
@@ -74,12 +76,6 @@ typedef struct RenderState
     PipelineEntry* pipeline_map;          // Recreated only when swapchain format changes (so never under most circumstances)
     ShaderRegistry shader_registry;
     ResourceIDs rids;  // IDs into registry, framegraph, or pipeline hash
-
-
-    // Arenas that reset each frame
-    MappedArena scenes_arena;
-    MappedArena object_transforms;
-    MappedArena joint_transforms;
     
     RenderView renderables_arena;  // Renderables array which gets sorted into draw calls by which shaders they use
     DrawCallsPerShader drawcalls_collection;  // Draw Calls are accumulated each frame per shader

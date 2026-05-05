@@ -5,72 +5,100 @@
 #include <glm/glm.hpp>
 #include "renderer/shadersrc/common/shared_buffers.glsl"
 
+
 static inline b32 compute_light_cluster_bounds(
-    // In
     glm::vec3 light_view_pos,
     float     light_radius,
     float     near,
     float     far,
     glm::mat4 proj,
-    float     log_far_over_near,
-
-    // Out
+    float     inv_log_far_over_near,
     int* tile_min_x,  int* tile_max_x,
     int* tile_min_y,  int* tile_max_y,
     int* z_index_min, int* z_index_max)
 {
-    float x = light_view_pos.x;
-    float y = light_view_pos.y;
-    float z = light_view_pos.z;
-    float r = light_radius;
+    // *tile_min_x   = 0;
+    // *tile_min_y   = 0;
+    // *z_index_min  = 0;
+    // *tile_max_x   = CLUSTER_GRID_SIZE_X - 1;
+    // *tile_max_y   = CLUSTER_GRID_SIZE_Y - 1;
+    // *z_index_max  = CLUSTER_GRID_SIZE_Z - 1;
+    // return 1;
 
-    float depth = -z;
-    float min_depth = depth - r;
-    float max_depth = depth + r;
+    float r = light_radius;
+    float z_center = light_view_pos.z;  // NOTE: Right-handed, so Z is negative
 
     // Skip lights fully behind camera (early exit)
     // NOTE: Using right handed view matrix, so z-positive is backwards (and near plane is at -near)
-    if (max_depth <= near) return 0;
-    if (min_depth >= far)  return 0;  // <- Also checking if it's past the far plane
+    if (z_center - r > -near) return 0; 
+    if (z_center + r < -far)  return 0;
 
-    float inv_z = 1.0f / z;
-    float min_x = (x - r) * inv_z;
-    float max_x = (x + r) * inv_z;
-    float min_y = (y - r) * inv_z;
-    float max_y = (y + r) * inv_z;
+    float dist_sq = glm::dot(light_view_pos, light_view_pos);
+    if (dist_sq <= (r * r)) 
+    {
+        // Camera is inside! The light covers the whole screen.
+        *tile_min_x = 0;
+        *tile_max_x = CLUSTER_GRID_SIZE_X - 1;
+        *tile_min_y = 0;
+        *tile_max_y = CLUSTER_GRID_SIZE_Y - 1;
+    }
+    else 
+    {
+        // AABB Projection to screen
+        // NOTE: Handle the near plane properly, you can't project things behind the near plane
+        glm::vec3 points[6] = {
+            light_view_pos + glm::vec3( r,  0,  0),
+            light_view_pos + glm::vec3(-r,  0,  0),
+            light_view_pos + glm::vec3( 0,  r,  0),
+            light_view_pos + glm::vec3( 0, -r,  0),
+            light_view_pos + glm::vec3( 0,  0,  r),
+            light_view_pos + glm::vec3( 0,  0, -r)
+        };
 
-    // Project to screen (NOTE: Assuming just using this part of the proj matrix enough)
-    float proj_x = proj[0][0];
-    float proj_y = proj[1][1];
+        glm::vec2 min_ndc = glm::vec2( 1e10f);
+        glm::vec2 max_ndc = glm::vec2(-1e10f);
 
-    min_x *= proj_x;
-    max_x *= proj_x;
-    min_y *= proj_y;
-    max_y *= proj_y;
+        for (int i = 0; i < 6; i++)
+        {
+            glm::vec4 clip_pos = proj * glm::vec4(points[i], 1.0f);
+            
+            // If a point is behind the near plane, we can't just project it.
+            // Solve this with clamping
 
-    if (min_x > max_x) { float temp = min_x; min_x = max_x; max_x = temp; }
-    if (min_y > max_y) { float temp = min_y; min_y = max_y; max_y = temp; }
+            // Avoid division by zero or negative W
+            float w = glm::max(clip_pos.w, 0.000001f);
+            glm::vec2 ndc = glm::vec2(clip_pos.x, clip_pos.y) / w;
 
-    // Min/Max tile ids that fill this cluster's screenspace AABB
-    *tile_min_x = (int)((min_x * 0.5f + 0.5f) * CLUSTER_GRID_SIZE_X);
-    *tile_max_x = (int)((max_x * 0.5f + 0.5f) * CLUSTER_GRID_SIZE_X);
-    *tile_min_y = (int)((min_y * 0.5f + 0.5f) * CLUSTER_GRID_SIZE_Y);
-    *tile_max_y = (int)((max_y * 0.5f + 0.5f) * CLUSTER_GRID_SIZE_Y);
+            min_ndc = glm::min(min_ndc, ndc);
+            max_ndc = glm::max(max_ndc, ndc);
+        }
 
-    // Min/Max Z slice index
-    min_depth = SDL_max(min_depth, near);
-    max_depth = SDL_min(max_depth, far);
-    float log_min = log(min_depth / near) / log_far_over_near;
-    float log_max = log(max_depth / near) / log_far_over_near;
+        // Map NDC [-1, 1] to UV [0, 1] and clamp
+        float uv_min_x = SDL_clamp(min_ndc.x * 0.5f + 0.5f, 0.0f, 1.0f);
+        float uv_max_x = SDL_clamp(max_ndc.x * 0.5f + 0.5f, 0.0f, 1.0f);
+        float uv_min_y = SDL_clamp(min_ndc.y * 0.5f + 0.5f, 0.0f, 1.0f);
+        float uv_max_y = SDL_clamp(max_ndc.y * 0.5f + 0.5f, 0.0f, 1.0f);
 
-    *z_index_min = (int)(log_min * CLUSTER_GRID_SIZE_Z);
-    *z_index_max = (int)(log_max * CLUSTER_GRID_SIZE_Z);
+        *tile_min_x = (int)(uv_min_x * CLUSTER_GRID_SIZE_X);
+        *tile_max_x = (int)(uv_max_x * CLUSTER_GRID_SIZE_X);
+        *tile_min_y = (int)(uv_min_y * CLUSTER_GRID_SIZE_Y);
+        *tile_max_y = (int)(uv_max_y * CLUSTER_GRID_SIZE_Y);
+    }
 
-    // Clamp so we don't invalidly index our array
-    *tile_min_x  = SDL_clamp(*tile_min_x,  0, CLUSTER_GRID_SIZE_X - 1);
-    *tile_max_x  = SDL_clamp(*tile_max_x,  0, CLUSTER_GRID_SIZE_X - 1);
-    *tile_min_y  = SDL_clamp(*tile_min_y,  0, CLUSTER_GRID_SIZE_Y - 1);
-    *tile_max_y  = SDL_clamp(*tile_max_y,  0, CLUSTER_GRID_SIZE_Y - 1);
+    // Z-bounds
+    // NOTE: View space Z is negative, depth is positive.
+    float min_depth = SDL_max(-(z_center + r), near);
+    float max_depth = SDL_min(-(z_center - r), far);
+
+    // Standard logarithmic binning formula from original paper (keeps clusters cubicly shaped)
+    *z_index_min = (int)(log(min_depth / near) * inv_log_far_over_near * (float)CLUSTER_GRID_SIZE_Z);
+    *z_index_max = (int)(log(max_depth / near) * inv_log_far_over_near * (float)CLUSTER_GRID_SIZE_Z);
+
+    // Final safety clamps for array indexing
+    *tile_min_x = SDL_clamp(*tile_min_x, 0, CLUSTER_GRID_SIZE_X - 1);
+    *tile_max_x = SDL_clamp(*tile_max_x, 0, CLUSTER_GRID_SIZE_X - 1);
+    *tile_min_y = SDL_clamp(*tile_min_y, 0, CLUSTER_GRID_SIZE_Y - 1);
+    *tile_max_y = SDL_clamp(*tile_max_y, 0, CLUSTER_GRID_SIZE_Y - 1);
     *z_index_min = SDL_clamp(*z_index_min, 0, CLUSTER_GRID_SIZE_Z - 1);
     *z_index_max = SDL_clamp(*z_index_max, 0, CLUSTER_GRID_SIZE_Z - 1);
 
@@ -90,11 +118,13 @@ void ClusteredShading_CPULightAssignmentToMappedBuffer()
     glm::mat4 cam_view = renderstate.main_camera.view;
     
     // NOTE: Assuming swapchain's aspect ratio for the projection matrix here:
-    float aspect = (float)renderstate.swapchain_extent.width / (float)renderstate.swapchain_extent.height;
+    float width  = (float)renderstate.swapchain_extent.width;
+    float height = (float)renderstate.swapchain_extent.height;
+    float aspect =  width / height;
     float near   = renderstate.main_camera.near_plane;
     float far    = renderstate.main_camera.far_plane;
-    glm::mat4 cam_proj = MakeProjectionMatrix(renderstate.settings.fov_y, aspect, near, far);
-    float log_far_over_near = log(far / near);
+    glm::mat4 cam_proj = MakeProjectionMatrix(glm::radians(renderstate.settings.fov_y), aspect, near, far);
+    float inv_log_far_over_near = 1.0f / log(far / near);
 
     for (uint32_t i = 0; i < renderstate.renderables_arena.num_point_lights; ++i)
     {
@@ -106,7 +136,7 @@ void ClusteredShading_CPULightAssignmentToMappedBuffer()
         int tile_min_y,  tile_max_y;
         int z_index_min, z_index_max;
 
-        if (!compute_light_cluster_bounds(light_view_pos, light_radius, near, far, cam_proj, log_far_over_near,
+        if (!compute_light_cluster_bounds(light_view_pos, light_radius, near, far, cam_proj, inv_log_far_over_near,
             &tile_min_x, &tile_max_x, &tile_min_y, &tile_max_y, &z_index_min, &z_index_max))
         {
             continue;
@@ -135,7 +165,7 @@ void ClusteredShading_CPULightAssignmentToMappedBuffer()
         int tile_min_y,  tile_max_y;
         int z_index_min, z_index_max;
 
-        if (!compute_light_cluster_bounds(light_view_pos, light_radius, near, far, cam_proj, log_far_over_near,
+        if (!compute_light_cluster_bounds(light_view_pos, light_radius, near, far, cam_proj, inv_log_far_over_near,
             &tile_min_x, &tile_max_x, &tile_min_y, &tile_max_y, &z_index_min, &z_index_max))
         {
             continue;
@@ -156,11 +186,12 @@ void ClusteredShading_CPULightAssignmentToMappedBuffer()
         }
 
     }
-
+    
     // Copy to GPU....
-    FG_Resource* point_light_indices_buffer_res = &renderstate.registry.resources[renderstate.rids.point_light_indices_buffer_rid];
-    FG_Resource* spot_light_indices_buffer_res = &renderstate.registry.resources[renderstate.rids.spot_light_indices_buffer_rid];
-    FG_Resource* cluster_offsets_buffer_res = &renderstate.registry.resources[renderstate.rids.cluster_offsets_buffer_rid];
+    RingBufferedRIDs* ring = &renderstate.rids.ring[renderstate.frame_in_flight];
+    FG_Resource* point_light_indices_buffer_res = &renderstate.registry.resources[ring->point_light_indices_buffer_rid];
+    FG_Resource* spot_light_indices_buffer_res = &renderstate.registry.resources[ring->spot_light_indices_buffer_rid];
+    FG_Resource* cluster_offsets_buffer_res = &renderstate.registry.resources[ring->cluster_offsets_buffer_rid];
 
     uint32_t* mapped_point_light_indices = (uint32_t*)point_light_indices_buffer_res->buffer.mapped_data;
     uint32_t* mapped_spot_light_indices  = (uint32_t*)spot_light_indices_buffer_res->buffer.mapped_data;

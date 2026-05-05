@@ -42,9 +42,10 @@ void BeginDrawCalls()
     }
 
     // Empty object data (e.g. model transforms)
-    ResetMappedArena(&renderstate.scenes_arena);
-    ResetMappedArena(&renderstate.object_transforms);
-    ResetMappedArena(&renderstate.joint_transforms);
+    RingBufferedRIDs* ring = &renderstate.rids.ring[renderstate.frame_in_flight];
+    ResetMappedArena(&ring->scenes_arena);
+    ResetMappedArena(&ring->object_transforms);
+    ResetMappedArena(&ring->joint_transforms);
 
     renderstate.drawcalls_collection.is_currently_adding_drawcalls = 1;
 }
@@ -53,15 +54,17 @@ void EndDrawCalls()
 {
     renderstate.drawcalls_collection.is_currently_adding_drawcalls = 0;
 
+    RingBufferedRIDs* ring = &renderstate.rids.ring[renderstate.frame_in_flight];
+
     // Upload lights
-    FG_Resource* lights_header_buf = &renderstate.registry.resources[renderstate.rids.lights_header_buffer_rid];
-    FG_Resource* pl_buf = &renderstate.registry.resources[renderstate.rids.point_lights_buffer_rid];
-    FG_Resource* sl_buf = &renderstate.registry.resources[renderstate.rids.spot_lights_buffer_rid];
-    FG_Resource* spotlight_shadowmap_id_buf_res     = &renderstate.registry.resources[renderstate.rids.spotlight_shadowmap_index_buffer_rid];
-    FG_Resource* shadowmap_spotlight_camera_buf_res = &renderstate.registry.resources[renderstate.rids.shadowmap_spotlight_camera_buffer_rid];
-    FG_Resource* point_light_indices_buffer_res = &renderstate.registry.resources[renderstate.rids.point_light_indices_buffer_rid];
-    FG_Resource* spot_light_indices_buffer_res = &renderstate.registry.resources[renderstate.rids.spot_light_indices_buffer_rid];
-    FG_Resource* cluster_offsets_buffer_rid = &renderstate.registry.resources[renderstate.rids.cluster_offsets_buffer_rid];
+    FG_Resource* lights_header_buf = &renderstate.registry.resources[ring->lights_header_buffer_rid];
+    FG_Resource* pl_buf = &renderstate.registry.resources[ring->point_lights_buffer_rid];
+    FG_Resource* sl_buf = &renderstate.registry.resources[ring->spot_lights_buffer_rid];
+    FG_Resource* spotlight_shadowmap_id_buf_res     = &renderstate.registry.resources[ring->spotlight_shadowmap_index_buffer_rid];
+    FG_Resource* shadowmap_spotlight_camera_buf_res = &renderstate.registry.resources[ring->shadowmap_spotlight_camera_buffer_rid];
+    FG_Resource* point_light_indices_buffer_res = &renderstate.registry.resources[ring->point_light_indices_buffer_rid];
+    FG_Resource* spot_light_indices_buffer_res = &renderstate.registry.resources[ring->spot_light_indices_buffer_rid];
+    FG_Resource* cluster_offsets_buffer_rid = &renderstate.registry.resources[ring->cluster_offsets_buffer_rid];
 
     LightsHeader header = {
         .num_point_lights  = renderstate.renderables_arena.num_point_lights,
@@ -139,12 +142,14 @@ void AddDrawCall(Renderable* r)
         && "Make sure you are not submitting draw calls outside of Begin/EndDrawCalls()"
     );
 
+    RingBufferedRIDs* ring = &renderstate.rids.ring[renderstate.frame_in_flight];
+
     DrawCall drawcall = {
         .renderable = r,
 
         // Push renderables transform to the mapped buffer and keep the pointer to it in draw calls.
-        .object_ptr = PushToMappedArena(&renderstate.object_transforms, &r->transform, sizeof(r->transform)),
-        .joints_ptr = r->joints ? PushToMappedArena(&renderstate.joint_transforms, r->joints, sizeof(glm::mat4) * r->joint_count) : 0
+        .object_ptr = PushToMappedArena(&ring->object_transforms, &r->transform, sizeof(r->transform)),
+        .joints_ptr = r->joints ? PushToMappedArena(&ring->joint_transforms, r->joints, sizeof(glm::mat4) * r->joint_count) : 0
     };
     
     const MaterialPipelineInfo* const shaders_for_material = &g_material_configs.array[r->mesh_prefab.mat_type];
@@ -307,10 +312,11 @@ void ExecuteDraws(VkCommandBuffer cmd, PushConstant_PassHeader push_pass, uint64
             .pass = push_pass
         };
 
-        // Prepare the draw call part of Push Constants 
+        // Prepare the draw call part of Push Constants
+        RingBufferedRIDs* ring = &renderstate.rids.ring[renderstate.frame_in_flight];
         push.dc.scene_ptr    = scene_ptr;
         push.dc.material_ptr = renderstate.registry.resources[renderstate.rids.materials_buffer_rid].buffer_gpu_address;
-        push.dc.lights_header_ptr  = renderstate.registry.resources[renderstate.rids.lights_header_buffer_rid].buffer_gpu_address;
+        push.dc.lights_header_ptr  = renderstate.registry.resources[ring->lights_header_buffer_rid].buffer_gpu_address;
         push.dc.object_ptr   = draw->dc.object_ptr;
         push.dc.joints_ptr   = draw->dc.joints_ptr;
 

@@ -52,6 +52,12 @@ SceneData MakeSceneData(CameraInfo cam, VkExtent2D extent)
     glm::mat4 view_proj = proj * cam.view;
     glm::uvec2 extent_uvec2 = glm::uvec2(extent.width, extent.height);
 
+    // printf("Projection Matrix\n");
+    // printf("[ %f %f %f %f ]\n", proj[0][0], proj[1][0], proj[2][0], proj[3][0]);
+    // printf("[ %f %f %f %f ]\n", proj[0][1], proj[1][1], proj[2][1], proj[3][1]);
+    // printf("[ %f %f %f %f ]\n", proj[0][2], proj[1][2], proj[2][2], proj[3][2]);
+    // printf("[ %f %f %f %f ]\n\n", proj[0][3], proj[1][3], proj[2][3], proj[3][3]);
+
     SceneData data = {};
     memcpy(data.view, glm::value_ptr(cam.view), sizeof(glm::mat4));
     memcpy(data.proj, glm::value_ptr(proj), sizeof(glm::mat4));
@@ -66,6 +72,7 @@ SceneData MakeSceneData(CameraInfo cam, VkExtent2D extent)
     data.lens_distortion = cam.lens_distortion;
 
     memcpy(data.rendertarget_size, glm::value_ptr(extent_uvec2), sizeof(glm::uvec2));
+    data.inv_log_far_over_near = 1.0f / log(cam.far_plane / cam.near_plane);
 
     return data;
 }

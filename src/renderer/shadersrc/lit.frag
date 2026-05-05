@@ -186,35 +186,32 @@ void main()
     SpotLightShadowMapIndexBuffer sl_shadow_map_indices = SpotLightShadowMapIndexBuffer(header.spotlight_shadowmap_index_buf_ptr);
     ShadowMapSpotLightCamerasBuffer shadow_map_sl_cameras = ShadowMapSpotLightCamerasBuffer(header.shadowmap_spotlight_camera_buf_ptr);
 
-    // Clustered shading
+    // Clustered shading buffers
     PointLightIndicesBuffer pl_indices = PointLightIndicesBuffer(header.point_light_indices_buf_ptr);
     SpotLightIndicesBuffer sl_indices  = SpotLightIndicesBuffer(header.spot_light_indices_buf_ptr);
     ClusterOffsetsBuffer clusters      = ClusterOffsetsBuffer(header.cluster_offsets_buf_ptr);
-    uvec2 pixel = uvec2(gl_FragCoord.xy);
 
-    float fx = float(gl_FragCoord.x) / float(scene.rendertarget_size.x);
-    float fy = float(gl_FragCoord.y) / float(scene.rendertarget_size.y);
-    uint tile_x = uint(fx * CLUSTER_GRID_SIZE_X);
-    uint tile_y = uint(fy * CLUSTER_GRID_SIZE_Y);
+    // Get which 2D tile our fragment is in
+    vec2 screen_uv = gl_FragCoord.xy / vec2(scene.rendertarget_size);
+    uint tile_x = uint(screen_uv.x * float(CLUSTER_GRID_SIZE_X));
+    uint tile_y = uint(screen_uv.y * float(CLUSTER_GRID_SIZE_Y));
 
-    // NOTE: Log scale slicing of Z clusters must match CPU side!
-    float depth = gl_FragCoord.z;
-    float near = scene.near_plane;
-    float far = scene.far_plane;
-    float z_linear = (near * far) / (far - depth * (far - near));
-    float log_z = log(z_linear / scene.near_plane) / log(scene.far_plane / scene.near_plane);
-    uint tile_z = uint(log_z * CLUSTER_GRID_SIZE_Z);
-    
+    vec4 view_pos = scene.view * vec4(world_pos, 1.0);
+    float depth =  -view_pos.z;
+    depth = clamp(depth, scene.near_plane, scene.far_plane);
+
+    // Get z bin (clusters get exponentially bigger away from the camera)
+    float log_z = log(depth / scene.near_plane) * scene.inv_log_far_over_near;
+    uint tile_z = uint(log_z * float(CLUSTER_GRID_SIZE_Z));
+
     tile_x = clamp(tile_x, 0u, CLUSTER_GRID_SIZE_X - 1u);
     tile_y = clamp(tile_y, 0u, CLUSTER_GRID_SIZE_Y - 1u);
     tile_z = clamp(tile_z, 0u, CLUSTER_GRID_SIZE_Z - 1u);
-
+    
     // Fetch cluster
-    uint cluster_index =
-        tile_x +
-        tile_y * CLUSTER_GRID_SIZE_X +
-        tile_z * CLUSTER_GRID_SIZE_X * CLUSTER_GRID_SIZE_Y;
+    uint cluster_index = CLUSTER_INDEX(tile_x, tile_y, tile_z);
     Cluster cluster = clusters.clusters[cluster_index];
+
 
 // #define DEBUG_CLUSTER_VIZ
 #ifdef DEBUG_CLUSTER_VIZ
@@ -354,7 +351,7 @@ void main()
     // Fog
     lit_rgb = apply_dithered_fog(
         lit_rgb,
-        z_linear,
+        view_pos.z,
         dith_threshold
     );
 

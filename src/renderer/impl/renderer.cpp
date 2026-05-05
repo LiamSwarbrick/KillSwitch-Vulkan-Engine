@@ -955,7 +955,7 @@ void Renderer_DrawFrame(CameraInfo main_camera)
     // Latency hiding:
     // Double/triple buffering command buffers allows us to start recording the next
     // frame's command buffer before the GPU has done with the current frame's one.
-    uint32_t frame_in_flight = renderstate.frame_number % NUM_FRAMES_IN_FLIGHT;
+    renderstate.frame_in_flight = renderstate.frame_number % NUM_FRAMES_IN_FLIGHT;
 
     // Wait for rendering to be complete for this frame in flight.
     // NOTE: We don't reset the fence until after we know the swapchain does not need recreating.
@@ -966,7 +966,7 @@ void Renderer_DrawFrame(CameraInfo main_camera)
     // sync_timeout_nanoseconds = 1000000000UL;  // Only wait one second in debug mdoe to detect deadlocks/hangs
     sync_timeout_nanoseconds = 1000000000ULL * 120ULL;  // <- 2 mins in case some pipelines take rediculous amounts of time to build
 #endif
-    VK_CHECK(vkWaitForFences(renderstate.device, 1, &renderstate.frames[frame_in_flight].rendering_complete_fence, VK_TRUE, sync_timeout_nanoseconds));
+    VK_CHECK(vkWaitForFences(renderstate.device, 1, &renderstate.frames[renderstate.frame_in_flight].rendering_complete_fence, VK_TRUE, sync_timeout_nanoseconds));
 
     // Get next swapchain image
     // NOTE: If another frame isn't finished with the swapchain image, the GPU must't execute commands on the next swapchain image.
@@ -977,7 +977,7 @@ void Renderer_DrawFrame(CameraInfo main_camera)
         renderstate.device,
         renderstate.swapchain,
         sync_timeout_nanoseconds,
-        renderstate.frames[frame_in_flight].swapchain_image_acquired_semaphore,
+        renderstate.frames[renderstate.frame_in_flight].swapchain_image_acquired_semaphore,
         VK_NULL_HANDLE,
         &swapchain_image_index
     );
@@ -1003,10 +1003,10 @@ void Renderer_DrawFrame(CameraInfo main_camera)
 
     // Now we can safely reset the rendering complete fence.
     // NOTE: The fence is in place to make sure this frame in flight's graphics commands have finished executing on the GPU.
-    VK_CHECK(vkResetFences(renderstate.device, 1, &renderstate.frames[frame_in_flight].rendering_complete_fence));
+    VK_CHECK(vkResetFences(renderstate.device, 1, &renderstate.frames[renderstate.frame_in_flight].rendering_complete_fence));
     
     // Reset command buffers by resetting the entire pool
-    vkResetCommandPool(renderstate.device, renderstate.frames[frame_in_flight].graphics_command_pool, 0);
+    vkResetCommandPool(renderstate.device, renderstate.frames[renderstate.frame_in_flight].graphics_command_pool, 0);
 
 
 
@@ -1352,13 +1352,29 @@ void Renderer_DrawFrame(CameraInfo main_camera)
         .flags             = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT,
         .pInheritanceInfo  = NULL
     };
-    VkCommandBuffer gcmd = renderstate.frames[frame_in_flight].graphics_command_buffer;
+    VkCommandBuffer gcmd = renderstate.frames[renderstate.frame_in_flight].graphics_command_buffer;
 
     // Begin recording graphics commands
     //
     renderstate.currently_bound_pipeline = VK_NULL_HANDLE;  // <- Each time we start recording cmd bufs, the bound pipeline is reset
     VK_CHECK(vkBeginCommandBuffer(gcmd, &graphics_cmd_begin_info));
     {
+        // TODO: Do I need to sync host writes even though I'm flushing vma allocations
+        // VkMemoryBarrier2 barrier = {
+        //     .sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER_2,
+        //     .srcStageMask  = VK_PIPELINE_STAGE_2_HOST_BIT,
+        //     .srcAccessMask = VK_ACCESS_2_HOST_WRITE_BIT,
+        //     .dstStageMask  = VK_PIPELINE_STAGE_2_ALL_GRAPHICS_BIT |
+        //                     VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+        //     .dstAccessMask = VK_ACCESS_2_SHADER_READ_BIT
+        // };
+        // VkDependencyInfo dep = {
+        //     .sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
+        //     .memoryBarrierCount = 1,
+        //     .pMemoryBarriers = &barrier
+        // };
+        // vkCmdPipelineBarrier2(gcmd, &dep);
+
         FG_CmdRenderFrame(gcmd);
         FG_CmdTransitionSwapchainForPresentation(gcmd, swapchain_image_resource_id);
     }
@@ -1389,7 +1405,7 @@ void Renderer_DrawFrame(CameraInfo main_camera)
     VkSemaphoreSubmitInfo gcmd_wait_info = {
         .sType        = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO,
         .pNext        = NULL,
-        .semaphore    = renderstate.frames[frame_in_flight].swapchain_image_acquired_semaphore,
+        .semaphore    = renderstate.frames[renderstate.frame_in_flight].swapchain_image_acquired_semaphore,
         .value        = 0,  // Ignored if not a timeline semaphore
         .stageMask    = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
         .deviceIndex  = 0
@@ -1409,7 +1425,7 @@ void Renderer_DrawFrame(CameraInfo main_camera)
         .signalSemaphoreInfoCount  = 1,
         .pSignalSemaphoreInfos     = &gcmd_signal_info
     };
-    VK_CHECK(vkQueueSubmit2(renderstate.graphics_queue, 1, &submit_info, renderstate.frames[frame_in_flight].rendering_complete_fence));
+    VK_CHECK(vkQueueSubmit2(renderstate.graphics_queue, 1, &submit_info, renderstate.frames[renderstate.frame_in_flight].rendering_complete_fence));
 
     // Present to screen
     // (after waiting on the rendering complete semaphore so that all drawing is completed first)

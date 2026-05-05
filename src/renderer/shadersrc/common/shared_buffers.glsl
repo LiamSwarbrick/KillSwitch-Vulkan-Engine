@@ -14,7 +14,7 @@
 #define CLUSTER_GRID_SIZE_Y 12
 #define CLUSTER_GRID_SIZE_Z 24
 #define CLUSTER_COUNT (CLUSTER_GRID_SIZE_X * CLUSTER_GRID_SIZE_Y * CLUSTER_GRID_SIZE_Z)
-#define CLUSTER_INDEX(x, y, z) (x + y*CLUSTER_GRID_SIZE_X + z*CLUSTER_GRID_SIZE_X*CLUSTER_GRID_SIZE_Y)
+#define CLUSTER_INDEX(x, y, z) ((x) + (y)*CLUSTER_GRID_SIZE_X + (z)*CLUSTER_GRID_SIZE_X*CLUSTER_GRID_SIZE_Y)
 
 // NOTE: On the C++ side, mat and vec types here are not glm types, they are float arrays defined in shared_types.glsl
 struct SceneData
@@ -32,6 +32,7 @@ struct SceneData
     float lens_distortion;  // Negative = wide-angle (none=0.0, subtle fish-eye=-0.03)
 
     uvec2 rendertarget_size;
+    float inv_log_far_over_near;  // For getting the Z bin in clustered shading (1.0f / log(far / near))
 };
 
 struct ObjectData
