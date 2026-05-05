@@ -272,8 +272,8 @@ int main(int argc, char *argv[])
         if (GameUI_GetState() == GameState::Quitting) running = false;
     }
 
-    scene.Shutdown();
     InGameCam_Shutdown();
+    scene.Shutdown();
     AudioSystem_Destroy(&audio_system);
     Input_Shutdown();
     Renderer_Shutdown();
