@@ -224,7 +224,9 @@ EntityID Scene::InstantiatePrefab(Asset* prefab, glm::vec3 spawnPosition)
             if (components.HasMember("PlayerInput"))
             {
                 m_ecs.AddComponent<C_PlayerInput>(eID, {});
-                m_ecs.AddComponent<C_CharacterController>(eID, {});
+                m_ecs.AddComponent<C_CharacterController>(eID, {
+                    .move_speed = 0.3f
+                });
             }
 
             // -- MESH
@@ -249,7 +251,7 @@ EntityID Scene::InstantiatePrefab(Asset* prefab, glm::vec3 spawnPosition)
 
                     C_AnimatedMesh animMesh{ mesh, prefab };
                     animMesh.joint_count = joint_count;
-                    animMesh.idleAnimationName = "IDLE";
+                    animMesh.idleAnimationName = "idle";
                     animMesh.splitJointName = "SPINE";
                     OnStartAnim(animMesh, animMesh.idleAnimationName); // Start with idle animation by default
                 
@@ -516,6 +518,31 @@ void Scene::UpdatePlayer(float dt)
 
     transform.matrix = glm::translate(glm::mat4(1.0f), translation) * glm::mat4_cast(rotation) * glm::scale(glm::mat4(1.0f), scale);
     //C_AnimatedMesh& animatedMesh = m_ecs.GetComponent<C_AnimatedMesh>(m_currentPlayer);
+
+    // Play animations
+    if (m_ecs.Has<C_AnimatedMesh>(m_currentPlayer))
+    {
+        C_AnimatedMesh& animatedMesh = m_ecs.GetComponent<C_AnimatedMesh>(m_currentPlayer);
+        if (isMoving)
+        {
+            int walkAnimId = GetAnimationIdFromName(animatedMesh, "walk");
+
+            if (walkAnimId != -1 && animatedMesh.lowerBodyLayer.currentAnimation != walkAnimId)
+            {
+                PlayAnim(animatedMesh, animatedMesh.asset->animations[walkAnimId].name, 0.2f);
+                animatedMesh.lowerBodyLayer.isCurrentLooping = true;
+            }
+        }
+        else
+        {
+            int idleAnimId = GetAnimationIdFromName(animatedMesh, animatedMesh.idleAnimationName);
+            if (animatedMesh.lowerBodyLayer.currentAnimation != idleAnimId)
+            {
+                PlayAnim(animatedMesh, animatedMesh.idleAnimationName, 0.2f);
+                animatedMesh.lowerBodyLayer.isCurrentLooping = true;
+            }
+        }
+    }
 }
 
 void Scene::SetBodyCollisionLayers()

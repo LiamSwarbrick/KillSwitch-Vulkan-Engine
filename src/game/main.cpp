@@ -151,6 +151,7 @@ int main(int argc, char *argv[])
     // Asset* sphere_prefab = scene.LoadPrefab("assets/props/simple_sphere.gltf");
     //Asset* capsule_prefab = scene.LoadPrefab("assets/props/zombie.gltf");
     Asset* capsule_prefab = scene.LoadPrefab("assets/props/character_capsule.gltf");
+    Asset* zombie = scene.LoadPrefab("assets/levels/scene.gltf");
     // TODO: Change the following 2 prefabs so they can be imported (add the boolean "Is ECS Entity" with the new script where it is needed)
     // Asset* catPrefab = scene.LoadPrefab("assets/animations/scene.gltf");
     // Asset* catPrefab = scene.LoadPrefab("assets/animations/flatzombo.gltf");
@@ -160,7 +161,7 @@ int main(int argc, char *argv[])
     // scene.InstantiatePrefab(cube_prefab, glm::vec3(0, 5.1, 0));
     // scene.InstantiatePrefab(cube_prefab, glm::vec3(3, 4.9, 0));
     
-    EntityID playerID = scene.InstantiatePrefab(capsule_prefab, glm::vec3(0, 2, 0.01));
+    EntityID playerID = scene.InstantiatePrefab(zombie, glm::vec3(0, 0.1, 0.01));
     // scene.InstantiatePrefab(sphere_prefab, glm::vec3(4.7, 7, 0.1));
     // scene.InstantiatePrefab(sphere_prefab, glm::vec3(-4.7, 7, -0.1));
     // scene.InstantiatePrefab(sphere_prefab, glm::vec3(0.1, 7, -4.7));
@@ -175,7 +176,7 @@ int main(int argc, char *argv[])
     // TODO: Debug UI is built around the idea of 1 asset at the moment.
     //       This must change with the new scene system that can load many asset prefabs.
     DebugUI_SetECS(&scene.GetECS());
-    DebugUI_SetAsset(room_prefab);
+    DebugUI_SetAsset(zombie);
 
     // Game owns FP/TP camera state; seed both from Debug UI state once at startup.
     FPCamState game_fp_cam = {};
