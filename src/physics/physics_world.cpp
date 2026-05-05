@@ -627,6 +627,8 @@ void PhysicsWorld::removePlane(PlaneHandle handle)
 
 void PhysicsWorld::addGenerator(IForceGenerator* gen)
 {
+	// Wake all bodies up cause the new force gen should affect all bodies
+	wakeAllBodies();
 	forceRegistry.addGenerator(gen);
 }
 
@@ -639,7 +641,10 @@ void PhysicsWorld::addForce(RigidBodyHandle handle, IForceGenerator* gen)
 {
 	RigidBody* body = getBody(handle);
 	if (body)
+	{
+		body->wakeUp();
 		forceRegistry.addPair(body, gen);
+	}
 }
 
 void PhysicsWorld::removeForce(RigidBodyHandle handle, IForceGenerator* gen)
@@ -1047,4 +1052,12 @@ void PhysicsWorld::teleportBodyRaw(RigidBody* body, const glm::vec3& worldPositi
 {
 	body->wakeUp();
 	body->position = worldPosition; // not doing extra checks at the moment because i do NOT have time, but should probably check for collisions (if it's a valid place to teleport)
+}
+
+void PhysicsWorld::wakeAllBodies()
+{
+	for (RigidBody& body : bodies.Data())
+	{
+		body.wakeUp();
+	}
 }

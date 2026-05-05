@@ -377,9 +377,12 @@ struct RigidBody
 
     void wakeUp()
     {
-        sleepTimer = 0.0f;
-        accumulatedEnergy = g_PhysicsSettings.initialEnergy;
-        sleeping = false;
+        if (sleeping)
+        {
+            sleepTimer = 0.0f;
+            accumulatedEnergy = g_PhysicsSettings.initialEnergy;
+            sleeping = false;
+        }
     }
 
     AABB aabb; // maintained by broadphase

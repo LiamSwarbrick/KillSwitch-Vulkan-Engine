@@ -215,6 +215,9 @@ private:
 
 	//inline RigidBody& getBody();
 	void teleportBodyRaw(RigidBody* body, const glm::vec3& worldPos);
+	
+	// wake all bodies
+	void wakeAllBodies();
 
 private:
 	// --- SYSTEMS ---

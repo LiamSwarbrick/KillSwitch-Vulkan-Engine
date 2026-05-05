@@ -23,8 +23,6 @@ void ForceRegistry::removeGenerator(IForceGenerator* gen)
 
 void ForceRegistry::addPair(RigidBody* body, IForceGenerator* gen)
 {
-	// When adding a pair (should do when we enter a magnetic trap or something, make sure to wake the body up so it can apply the force)
-	body->wakeUp();
 	pairedGenerators.push_back({ body, gen });
 }
 
