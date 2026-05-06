@@ -51,7 +51,8 @@ void ForwardOpaque_Execute(VkCommandBuffer cmd, uint32_t pass_idx)
                     .blend_mode     = mat->blend_mode,
                     .polygon_mode   = VK_POLYGON_MODE_FILL,
                     .front_face     = VK_FRONT_FACE_COUNTER_CLOCKWISE,
-                    .msaa_samples   = (uint64_t)PK_MultisamplingFlag(renderstate.multisampling_count_flag)
+                    .msaa_samples   = (uint64_t)PK_MultisamplingFlag(renderstate.multisampling_count_flag),
+                    .debug_rendermode = renderstate.debug_rendermode
                 };
 
                 if (shader_id == SHADER_OUTLINE)

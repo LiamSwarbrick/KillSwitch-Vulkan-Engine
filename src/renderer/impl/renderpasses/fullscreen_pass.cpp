@@ -36,7 +36,8 @@ void FullscreenPass_Execute(VkCommandBuffer cmd, uint32_t pass_idx)
         .blend_mode     = BLEND_MODE_OPAQUE,
         .polygon_mode   = VK_POLYGON_MODE_FILL,
         .front_face     = VK_FRONT_FACE_CLOCKWISE,  // <- Fullscreen tri in the shader is clockwise
-        .msaa_samples   = PKEY_MULTISAMPLING_1X     // <- Postprocess pass doesn't use msaa
+        .msaa_samples   = PKEY_MULTISAMPLING_1X,    // <- Postprocess pass doesn't use msaa
+        .debug_rendermode = renderstate.debug_rendermode
     };
 
     ExecuteFullscreenPass(cmd, shader_id, key, user_data->push_pass, scene_ptr);

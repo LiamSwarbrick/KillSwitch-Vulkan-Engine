@@ -49,7 +49,8 @@ void DepthMapPass_Execute(VkCommandBuffer cmd, uint32_t pass_idx)
                 .blend_mode     = mat->blend_mode,
                 .polygon_mode   = VK_POLYGON_MODE_FILL,
                 .front_face     = VK_FRONT_FACE_COUNTER_CLOCKWISE,
-                .msaa_samples   = (uint64_t)user_data->msaa_flag
+                .msaa_samples   = (uint64_t)user_data->msaa_flag,
+                .debug_rendermode = renderstate.debug_rendermode
             };
 
             // TODO: Use sort key

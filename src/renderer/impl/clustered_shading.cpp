@@ -5,7 +5,6 @@
 #include <glm/glm.hpp>
 #include "renderer/shadersrc/common/shared_buffers.glsl"
 
-
 static inline b32 compute_light_cluster_bounds(
     glm::vec3 light_view_pos,
     float     light_radius,
@@ -106,6 +105,7 @@ static inline b32 compute_light_cluster_bounds(
 
     return 1;
 }
+
 
 void ClusteredShading_CPULightAssignmentToMappedBuffer()
 {

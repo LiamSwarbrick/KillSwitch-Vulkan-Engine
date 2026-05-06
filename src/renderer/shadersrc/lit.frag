@@ -210,26 +210,36 @@ void main()
     Cluster cluster = clusters.clusters[cluster_index];
 
 
-// #define DEBUG_CLUSTER_VIZ
-#ifdef DEBUG_CLUSTER_VIZ
-// uint cid = cluster_index;
-// vec3 debugColor = vec3(
-//     float((cid * 97u) % 255u) / 255.0,
-//     float((cid * 57u) % 255u) / 255.0,
-//     float((cid * 23u) % 255u) / 255.0
-// );
-// out_color = vec4(debugColor, 1.0);
-// return;
+    if (DEBUG_RENDERMODE == DEBUG_RENDERMODE_CLUSTERED_SHADING_HEATMAP)
+    {
+        uint light_count = cluster.point_count + cluster.spot_count;
+        float intensity = float(light_count) / 16.0; // tune max expected lights per cluster
+        intensity = clamp(intensity, 0.0, 1.0);
+        vec3 blue = vec3(0.0, 0.0, 1.0);
+        vec3 red  = vec3(1.0, 0.0, 0.0);
+        vec3 debug_color = mix(blue, red, intensity);
+        out_color = vec4(debug_color, 1.0);
+        return;
+    }
+    else if (DEBUG_RENDERMODE == DEBUG_RENDERMODE_CLUSTERED_SHADING_CLUSTERS)
+    {
+        vec3 grid = vec3(
+            float(tile_x) / float(CLUSTER_GRID_SIZE_X),
+            float(tile_y) / float(CLUSTER_GRID_SIZE_Y),
+            float(tile_z) / float(CLUSTER_GRID_SIZE_Z)
+        );
+        out_color = vec4(grid, 1.0);
+        return;
 
-    uint light_count = cluster.point_count + cluster.spot_count;
-    float intensity = float(light_count) / 16.0; // tune max expected lights per cluster
-    intensity = clamp(intensity, 0.0, 1.0);
-    vec3 blue = vec3(0.0, 0.0, 1.0);
-    vec3 red  = vec3(1.0, 0.0, 0.0);
-    vec3 debug_color = mix(blue, red, intensity);
-    out_color = vec4(debug_color, 1.0);
-    return;
-#endif
+        // uint cid = cluster_index;
+        // vec3 debug_color = vec3(
+        //     float((cid * 97u) % 255u) / 255.0,
+        //     float((cid * 57u) % 255u) / 255.0,
+        //     float((cid * 23u) % 255u) / 255.0
+        // );
+        // out_color = vec4(debug_color, 1.0);
+        // return;
+    }
 
 
     // uint point_light_count = min(header.num_point_lights, 32u);
