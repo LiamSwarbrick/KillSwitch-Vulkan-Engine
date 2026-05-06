@@ -334,7 +334,7 @@ void main()
         direct_light += radiance * shadow_factor;
     }
 
-    vec3 ambient = vec3(0.3);
+    vec3 ambient = vec3(0.);
     // vec3 ambient = compute_ambient_light(N);
     vec3 lit_rgb = (direct_light + ambient) * base_color.rgb + emissive_color.rgb;
 
