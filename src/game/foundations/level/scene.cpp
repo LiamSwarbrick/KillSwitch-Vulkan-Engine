@@ -1,6 +1,6 @@
 #include "game/foundations/scene.h"
 #include "game/foundations/components.h"
-#include "game/foundations/body_layer_collisions.h"
+#include "physics/body_layers.h"
 #include "renderer/renderer.h"
 
 // animation update
@@ -225,11 +225,11 @@ EntityID Scene::InstantiatePrefab(Asset* prefab, glm::vec3 spawnPosition)
                     rbDesc.isDynamic = !isSomething; // if we are nothing (from the importedRigidbody) then we are dynamic;
 
                 // TEMPORARY automated body layers if they are not in the script
-                if (importedRigidbody.is_static || importedRigidbody.is_trigger)
+                if (importedRigidbody.is_static || importedRigidbody.is_trigger || importedRigidbody.is_kinematic)
                     rbDesc.bodyLayer = (uint8_t) BodyLayer::STATIC;
                 else if(importedRigidbody.is_character)
                     rbDesc.bodyLayer = (uint8_t)BodyLayer::CHARACTER;
-                else // dynamic or kinematic bodies
+                else // only dynamic bodies, kinematic bodies will be treated in the STATIC layer
                     rbDesc.bodyLayer = (uint8_t) BodyLayer::MOVING;
 
                 rbDesc.shape = shapeHandle;
