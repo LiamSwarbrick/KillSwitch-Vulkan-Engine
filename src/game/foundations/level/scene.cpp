@@ -444,13 +444,13 @@ void Scene::UpdatePlayer(float dt)
     glm::vec3 horizontalMoveDir(0.0f);
 
     if (input.move_forward)
-        horizontalMoveDir += cameraForward;
-    if (input.move_backward)
         horizontalMoveDir -= cameraForward;
+    if (input.move_backward)
+        horizontalMoveDir += cameraForward;
     if (input.move_left)
-        horizontalMoveDir -= cameraRight;
-    if (input.move_right)
         horizontalMoveDir += cameraRight;
+    if (input.move_right)
+        horizontalMoveDir -= cameraRight;
 
     bool isMoving = glm::length(horizontalMoveDir) > 0.0f;
     if (isMoving)
@@ -505,7 +505,8 @@ void Scene::UpdatePlayer(float dt)
         } // If there are hits, we are in the ground
     } // If the jumping cooldown is done, we need to check if we can jump again
 
-
+    // can change it to only run forwards and have other animation for runnign sideways, backwards
+    bool isRunning = input.run && isMoving;
     if (isMoving)
     {
         // Project horizontal velocity to character's slope normal
@@ -515,7 +516,9 @@ void Scene::UpdatePlayer(float dt)
         if (slopeForward.y > 0.0f) slopeForward.y = 0.0f; // Do this to walk down surfaces correctly.
         //slopeForward.y = 0.0f;
 
-        controller.velocity = slopeForward * controller.move_speed;
+        float active_speed = isRunning ? (controller.move_speed * 6.0f) : controller.move_speed; //make it work with new physics
+        
+        controller.velocity = slopeForward * active_speed;
     }
     else
     {
@@ -560,11 +563,12 @@ void Scene::UpdatePlayer(float dt)
         C_AnimatedMesh& animatedMesh = m_ecs.GetComponent<C_AnimatedMesh>(m_currentPlayer);
         if (isMoving)
         {
-            int walkAnimId = GetAnimationIdFromName(animatedMesh, "walk");
+            const char* animStateName = isRunning ? "run" : "walk";
+            int moveAnimId = GetAnimationIdFromName(animatedMesh, animStateName);
 
-            if (walkAnimId != -1 && animatedMesh.lowerBodyLayer.currentAnimation != walkAnimId)
+            if (moveAnimId != -1 && animatedMesh.lowerBodyLayer.currentAnimation != moveAnimId)
             {
-                PlayAnim(animatedMesh, animatedMesh.asset->animations[walkAnimId].name, 0.2f);
+                PlayAnim(animatedMesh, animatedMesh.asset->animations[moveAnimId].name, 0.4f);
                 animatedMesh.lowerBodyLayer.isCurrentLooping = true;
             }
         }
@@ -573,7 +577,7 @@ void Scene::UpdatePlayer(float dt)
             int idleAnimId = GetAnimationIdFromName(animatedMesh, animatedMesh.idleAnimationName);
             if (animatedMesh.lowerBodyLayer.currentAnimation != idleAnimId)
             {
-                PlayAnim(animatedMesh, animatedMesh.idleAnimationName, 0.2f);
+                PlayAnim(animatedMesh, animatedMesh.idleAnimationName, 0.4f);
                 animatedMesh.lowerBodyLayer.isCurrentLooping = true;
             }
         }

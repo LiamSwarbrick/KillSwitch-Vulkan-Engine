@@ -29,6 +29,7 @@ struct C_PlayerInput
 	bool move_left = false;
 	bool move_right = false;
 	bool jump = false;
+	bool run = false;
 };
 
 struct C_AIInput

@@ -151,7 +151,7 @@ int main(int argc, char *argv[])
     Asset* sphere_prefab = scene.LoadPrefab("assets/props/simple_sphere.gltf");
     //Asset* capsule_prefab = scene.LoadPrefab("assets/props/zombie.gltf");
     Asset* capsule_prefab = scene.LoadPrefab("assets/props/character_capsule.gltf");
-    Asset* zombie = scene.LoadPrefab("assets/levels/scene.gltf");
+    Asset* zombie_woman = scene.LoadPrefab("assets/animations/zombie_woman.gltf");
     // TODO: Change the following 2 prefabs so they can be imported (add the boolean "Is ECS Entity" with the new script where it is needed)
     // Asset* catPrefab = scene.LoadPrefab("assets/animations/scene.gltf");
     // Asset* catPrefab = scene.LoadPrefab("assets/animations/flatzombo.gltf");
@@ -162,7 +162,7 @@ int main(int argc, char *argv[])
     // scene.InstantiatePrefab(cube_prefab, glm::vec3(0, 5.1, 0));
     // scene.InstantiatePrefab(cube_prefab, glm::vec3(3, 4.9, 0));
     
-    EntityID playerID = scene.InstantiatePrefab(zombie, glm::vec3(0, 0, 0.01));
+    EntityID playerID = scene.InstantiatePrefab(zombie_woman, glm::vec3(0, 0, 0.01));
     // scene.InstantiatePrefab(sphere_prefab, glm::vec3(4.7, 7, 0.1));
     // scene.InstantiatePrefab(sphere_prefab, glm::vec3(-4.7, 7, -0.1));
     // scene.InstantiatePrefab(sphere_prefab, glm::vec3(0.1, 7, -4.7));
@@ -218,11 +218,12 @@ int main(int argc, char *argv[])
         // controller test
         const bool* state = SDL_GetKeyboardState(NULL);
         scene.GetECS().GetView<C_PlayerInput>().ForEach([&](C_PlayerInput& input) {
-                input.move_forward = state[SDL_SCANCODE_K];
-                input.move_backward = state[SDL_SCANCODE_I];
-                input.move_left = state[SDL_SCANCODE_L];
-                input.move_right = state[SDL_SCANCODE_J];
+                input.move_forward = state[SDL_SCANCODE_I];
+                input.move_backward = state[SDL_SCANCODE_K];
+                input.move_left = state[SDL_SCANCODE_J];
+                input.move_right = state[SDL_SCANCODE_L];
                 input.jump = state[SDL_SCANCODE_SPACE];
+                input.run = state[SDL_SCANCODE_LSHIFT];
             }
         );
         // Movement always follows camera forward.
