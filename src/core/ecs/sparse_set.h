@@ -89,7 +89,12 @@ private:
 public:
     SparseSet()
     {
-        Reserve(2000);
+        /*Reserve(2000);*/
+    }
+
+    SparseSet(uint32_t reserveAmount)
+    {
+        Reserve(reserveAmount);
     }
 
     ~SparseSet() override

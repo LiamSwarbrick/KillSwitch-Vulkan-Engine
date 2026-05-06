@@ -9,6 +9,7 @@
 #include "glm/gtc/quaternion.hpp"
 
 #include <string>
+#include <stdexcept>
 
 
 namespace rj = rapidjson;

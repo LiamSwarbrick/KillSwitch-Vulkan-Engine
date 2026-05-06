@@ -42,8 +42,38 @@ Contact NarrowPhase::testPlane(const RigidBody& a, const PlaneShape& plane, cons
 
 RaycastHit NarrowPhase::raycast(const Ray& ray, const RigidBody& body, const PhysicsWorld& world) const
 {
-	return RaycastHit();
+	const IShape* shape = world.getShape(body.shapeHandle);
+
+	SDL_assert(shape && "Body has null shape");
+	if (!shape) return RaycastHit::none();
+
+	glm::vec3 position; glm::quat orientation;
+
+	resolveShapeTransform(shape, body.position, body.orientation, position, orientation);
+
+	return shape->intersectsRay(ray, position, orientation);
 }
+
+bool NarrowPhase::testShapeIntersects(const IShape* shape, const glm::vec3& shapePosition, const glm::quat& shapeOrientation, const RigidBody& body, const PhysicsWorld& world) const
+{
+	const IShape* shapeB = world.getShape(body.shapeHandle);
+
+	SDL_assert(shapeB && "Body B has null shape");
+
+	glm::vec3 positionB; glm::quat orientationB;
+
+	resolveShapeTransform(shapeB, body.position, body.orientation, positionB, orientationB);
+
+	GJKResult res = gjk_runGJK(shape, shapePosition, shapeOrientation, shapeB, positionB, orientationB);
+
+	return res.intersecting;
+}
+
+ShapecastHit NarrowPhase::shapecast(const Ray& ray, const IShape* queryShape, const glm::vec3& queryPos, const glm::quat& queryOri, const IShape* targetShape, const glm::vec3& targetPos, const glm::quat& targetOri) const
+{
+	return conservativeAdvancement(ray, queryShape, queryPos, queryOri, targetShape, targetPos, targetOri);
+}
+
 
 RaycastHit NarrowPhase::raycastPlane(const Ray& ray, const PlaneShape& plane, const PhysicsWorld& world) const
 {
@@ -168,4 +198,85 @@ RaycastHit NarrowPhase::raycastCapsule(const Ray& ray, const CapsuleShape& capsu
 {
 	// Orientation should be redundant because capsules should be locked in the Y axis
 	return RaycastHit();
+}
+
+ShapecastHit NarrowPhase::conservativeAdvancement(const Ray& ray, const IShape* queryShape, const glm::vec3& queryPos, const glm::quat& queryOri, const IShape* targetShape, const glm::vec3& targetPos, const glm::quat& targetOri) const
+{
+	const float TOLERANCE = 1e-4f;
+	const int MAX_ITERATIONS = 64;
+
+	float t = 0.0f;
+	glm::vec3 currentPos = queryPos; // not using ray.origin cause queryPos could be offset already
+	
+	// Track last safe position in case we overshoot
+	glm::vec3 lastSafePos = queryPos;
+	float lastSafeT = 0.0f;
+	bool hadSafeStep = false;
+
+	for (int iter = 0; iter < MAX_ITERATIONS; iter++)
+	{
+		GJKResult gjk = gjk_runGJK(queryShape, currentPos, queryOri, targetShape, targetPos, targetOri);
+
+		if (gjk.intersecting)
+		{
+			if (t == 0.0f) return ShapecastHit::none(); // Shapes were already intersecting so lets ignore this one
+
+			ShapecastHit hit;
+
+			// Run epa
+			EPAResult epa = epa_runEPA(queryShape, currentPos, queryOri, targetShape, targetPos, targetOri, gjk);
+			
+			// epa.depth should be negligible, otherwise we overshot somehow (don't know how we can do that anyway).
+			// should check depth, and backtrack if we are very far, but for now im just going to return the epa result
+
+			hit.point = epa.point;
+			hit.pointA = epa.pointA;
+			hit.pointB = epa.pointB;
+			hit.normal = epa.normal;
+			hit.t = t;
+			return hit;
+		}
+
+		float separation = gjk.distance;
+
+		if (separation <= TOLERANCE)
+		{
+			// return the hit aswell
+			ShapecastHit hit;
+
+			hit.point = (gjk.closestPointOnA + gjk.closestPointOnB) * 0.5f;
+			hit.pointA = gjk.closestPointOnA;
+			hit.pointB = gjk.closestPointOnB;
+			hit.normal = -gjk.distanceDirection; // hit.normal is B to A, whereas gjk is A to B.
+			hit.t = t;
+
+			return hit;
+		}
+
+		// Unused for now
+		lastSafePos = currentPos;
+		lastSafeT = t;
+		hadSafeStep = true;
+
+		//t += separation; // unsure if this should work 
+		// should probably do this instead
+		float rayProjectedToDistanceDir = glm::dot(ray.direction, gjk.distanceDirection);
+		if (rayProjectedToDistanceDir <= 0.0f) // try F_EPSILON if not converging
+		{
+			// We're not going to hit????
+			// EARLY OUT??
+			// IM IMPROVISIN' BABY
+			return ShapecastHit::none();
+		}
+
+		t += separation * rayProjectedToDistanceDir;
+		currentPos = queryPos + t * ray.direction; // important update as this is what we work with in gjk
+
+		if (t > ray.maxDistance)
+		{
+			return ShapecastHit::none();
+		}
+	}
+
+	return ShapecastHit::none();
 }

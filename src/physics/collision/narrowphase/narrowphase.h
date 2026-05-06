@@ -27,6 +27,13 @@ public:
 
 	// Queries (for later)
 	RaycastHit raycast(const Ray& ray, const RigidBody& body, const PhysicsWorld& world) const;
+	
+	bool testShapeIntersects(const IShape* shape, const glm::vec3& shapePosition, const glm::quat& shapeOrientation, const RigidBody& body, const PhysicsWorld& world) const;
+	
+	ShapecastHit shapecast(
+		const Ray& ray, 
+		const IShape* queryShape, const glm::vec3& queryPos, const glm::quat& queryOri,
+		const IShape* targetShape, const glm::vec3& targetPos, const glm::quat& targetOri) const;
 
 	RaycastHit raycastPlane(const Ray& ray, const PlaneShape& plane, const PhysicsWorld& world) const;
 
@@ -76,6 +83,11 @@ private:
 		const Ray& ray,
 		const CapsuleShape& capsule, const glm::vec3& pos, const glm::quat& ori) const;
 
+	// Conservative Advancement for raycasting
+	ShapecastHit conservativeAdvancement(
+		const Ray& ray,
+		const IShape* queryShape, const glm::vec3& queryPos, const glm::quat& queryOri,
+		const IShape* targetShape, const glm::vec3& targetPos, const glm::quat& targetOri) const;
 };
 
 #endif // !PHYSICS_COLLISION_NARROWPHASE_NARROWPHASE_H

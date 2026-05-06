@@ -2,6 +2,8 @@
 #define PHYSICS_PHYSICS_MANAGER_H
 
 #include "core/ecs.h"
+#include "core/event.h"
+
 #include "physics/core/types.h"
 #include "physics_world.h"
 
@@ -22,6 +24,45 @@ struct EntityRaycastHit
 	bool isValid() const { return entity != NULL_ENTITY; }
 };
 
+struct EntityShapecastHit
+{
+	glm::vec3 point; // o .  world-space
+	glm::vec3 pointA; // worldspace at t
+	glm::vec3 pointB; // worldspace at t
+
+	glm::vec3 normal; // surface normal (so B to A normal)
+
+	float t = -1.0f;
+
+	EntityID entity = NULL_ENTITY;
+	//RigidBody* body = nullptr;
+
+	bool isValid() const { return t >= 0.0f; }
+
+	static EntityShapecastHit none() { return {}; }
+};
+
+struct QueryFilterExternal
+{
+	EntityID bodyToIgnore = NULL_ENTITY; // The entity to ignore, if we are raycasting from the player, put the player entity here
+
+	bool hasLayerOfQuery = false; // True if there is a body layer for querying collisions
+	uint8_t layerOfQuery = 0; // If we are casting on a specific layer, that layer will collide only with the ones that has activated collisions
+};
+
+struct CollisionEnterAndStayArgs
+{
+	EntityID a;
+	EntityID b;
+	const Contact& contact;
+};
+
+struct CollisionExitArgs
+{
+	EntityID a;
+	EntityID b;
+};
+
 class PhysicsManager
 {
 public:
@@ -33,7 +74,6 @@ public:
 
 	void startUp();
 	void shutDown();
-
 
 	// ------------------------------
 	// SCENE/LEVEL MANAGEMENT
@@ -54,6 +94,9 @@ public:
 	void destroyBody(EntityID entity);
 	// do not confuse with setShape(ShapeHandle handle, ShapeDesc);
 	void setBodyShape(EntityID e, ShapeHandle handle);
+
+	PhysicsCharacter* getCharacter(EntityID entity);
+	void setCharacterInfo(EntityID entity, const PhysicsCharacterInfo& info);
 
 	// ------------------------------
 	// SHAPE MANAGEMENT
@@ -88,14 +131,29 @@ public:
 	ShapeHandle getShapeHandle(EntityID e);
 	IShape* getShape(EntityID e); // extra
 
-	void setVelocity(EntityID e, glm::vec3 velocity);
-	void addVelocity(EntityID e, glm::vec3 velocity);
+	// Please do not use teleportBody to MOVE, use it to truly TELEPORT TO A PLACE
+	void teleportBody(EntityID e, const glm::vec3& worldPosition);
+	void setVelocity(EntityID e, const glm::vec3& velocity);
+	void addVelocity(EntityID e, const glm::vec3& velocity);
 	void setGravityScale(EntityID e, float scale);
 	void setForceLayers(EntityID e, uint32_t layers);
 	void addForceLayers(EntityID e, uint32_t layers);
 	void removeForceLayers(EntityID e, uint32_t layers);
-	
 
+	glm::vec3 getGravity() const;
+	
+	// Important, to set the body layer's pairs for the collision matrix
+	void setNumLayers(uint8_t numLayers);
+	void setLayerPair(uint8_t a, uint8_t b, bool shouldCollide);
+	void enableLayerPair(uint8_t a, uint8_t b);
+	void disableLayerPair(uint8_t a, uint8_t b);
+
+	// Characters
+	PhysicsCharacter::GroundState getCharacterGroundState(EntityID e);
+	float getCharacterMaxWalkableAngle(EntityID e);
+	void setCharacterMaxWalkableAngle(EntityID e, float maxWalkableAngle);
+	float getCharacterStepHeight(EntityID e);
+	void setCharacterStepHeight(EntityID e, float stepHeight);
 
 	// ------------------------------
 	// FORCES (REGISTRY)
@@ -115,30 +173,36 @@ public:
 	// ------------------------------
 	// All of these methods basically translate from RigidBody*/RigidBodyHandle to EntityID
 	
-	EntityRaycastHit raycast(const Ray& ray, const QueryFilter& filter = {}) const;
+	EntityRaycastHit raycast(const Ray& ray, const QueryFilterExternal& filter = {}) const;
 
-	std::vector<EntityRaycastHit> raycastAll(const Ray& ray, const QueryFilter& filter = {}) const;
+	std::vector<EntityRaycastHit> raycastAll(const Ray& ray, const QueryFilterExternal& filter = {}) const;
 
-	// Shape-casting too (might change the input to be ShapeCast or something like that, but for now this, will see when i implement it)
-	std::vector<EntityID> shapecast(
+	EntityShapecastHit shapecast(
+		const Ray& ray, ShapeHandle shape, const glm::quat& orientation,
+		const QueryFilterExternal& filter = {}) const;
+
+	// Shape-casting too (might change the input to be shapeIntersects or something like that, but for now this, will see when i implement it)
+	std::vector<EntityID> shapeIntersects(
 		ShapeHandle shape, const glm::vec3& position, const glm::quat& orientation, 
-		const QueryFilter& filter = {}) const;
+		const QueryFilterExternal& filter = {}) const;
 
 	// ------------------------------
-	// EVENTS (planning for the future)
+	// EVENTS
 	// ------------------------------
-	std::function<void(EntityID a, EntityID b, const Contact&)> onCollisionEnter;
-	std::function<void(EntityID a, EntityID b, const Contact&)> onCollisionStay;
-	std::function<void(EntityID a, EntityID b)> onCollisionExit;
+	// Contrary to PhysicsWorld, where we use a single function (1 subscriber only), here we use proper events where other systems can subscribe to. 
+	// If we had a global bus, the physics manager would be the one subscribe the world events there.
+	Event<CollisionEnterAndStayArgs> onCollisionEnter;
+	Event<CollisionEnterAndStayArgs> onCollisionStay;
+	Event<CollisionExitArgs> onCollisionExit;
 
-	std::function<void(EntityID a, EntityID b)> onTriggerEnter;
-	std::function<void(EntityID a, EntityID b)> onTriggerStay;
-	std::function<void(EntityID a, EntityID b)> onTriggerExit;
+	Event<CollisionEnterAndStayArgs> onTriggerEnter;
+	Event<CollisionEnterAndStayArgs> onTriggerStay;
+	Event<CollisionExitArgs> onTriggerExit;
 
 
 private:
-	inline RigidBodyHandle getHandle(EntityID entity);
-	inline EntityID getEntityID(RigidBodyHandle handle);
+	inline RigidBodyHandle getHandle(EntityID entity) const;
+	inline EntityID getEntityID(RigidBodyHandle handle) const;
 
 private:
 	// OK FOR NOW I WILL ONLY HAVE ONE WORLD, cause if i don't, i need all the data above to reference the current world
@@ -165,7 +229,12 @@ private:
 	//EntityID bodyToEntity(RigidBody* body) const;
 
 	// Need this to translate events fired from world to RigidBodyHandle to EntityID
-	//void bindWorldEvents();
+	void bindWorldEvents();
+
+	// Extra little helper
+	inline EntityRaycastHit rayHitToEntityRayHit(const RaycastHit& rayHit) const;
+	inline EntityShapecastHit shapeHitToEntityShapeHit(const ShapecastHit& shapeHit) const;
+	inline QueryFilter getQueryFilterFromQueryFilterExternal(const QueryFilterExternal& queryFilterExternal) const;
 };
 
 #endif // !PHYSICS_PHYSICS_MANAGER_H

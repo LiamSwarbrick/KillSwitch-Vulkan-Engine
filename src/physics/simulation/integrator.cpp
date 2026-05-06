@@ -2,10 +2,8 @@
 
 void Integrator::integrate(RigidBody& body, float dt)
 {
-	if (body.isStatic || body.invMass <= 0.0f) return;
-	if (body.isKinematic) return;
-
-	// No sleep system for now, will check game engine's chapter when i have time
+	// Added sleep
+	if (body.sleeping || body.isStatic || body.isTrigger || body.isKinematic) return;
 
 	applyDamping(body, dt);
 	integrateLinear(body, dt);

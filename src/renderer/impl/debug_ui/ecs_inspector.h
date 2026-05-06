@@ -210,9 +210,13 @@ namespace DebugUI
             MakeDrawEntry<C_RigidBody>(ecs),
         };
 
+        const float spacing = ImGui::GetStyle().ItemSpacing.x;
+        const float total_w = ImGui::GetContentRegionAvail().x;
+        const float pane_w = (total_w - spacing) * 0.5f;
+
         // Left: Entity list
         ImGui::BeginChild("##entity_hierarchy",
-            ImVec2(ImGui::GetContentRegionAvail().x * 0.4f, 0),
+            ImVec2(pane_w, 0),
             ImGuiChildFlags_Borders
         );
         DrawEntityList(ecs, selected_entity_id);
@@ -222,7 +226,7 @@ namespace DebugUI
 
         // Right: Component panel
         ImGui::BeginChild("##component_panel",
-            ImVec2(0, 0),
+            ImVec2(pane_w, 0),
             ImGuiChildFlags_Borders
         );
         ImGui::TextDisabled("Inspector");

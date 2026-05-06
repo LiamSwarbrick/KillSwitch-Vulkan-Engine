@@ -5,8 +5,14 @@
 
 #include "core/utils/enum_bitmask.h"
 
+#include "physics_settings.h"
+
 #include "glm/glm.hpp"
 #include "glm/gtc/quaternion.hpp"
+
+#include "physics/queries/raycast.h"
+#include "physics/queries/shapecast.h"
+
 
 // For floats
 constexpr float F_EPSILON = 1e-6f;
@@ -80,12 +86,71 @@ struct AABB
         return AABB(glm::min(a.min, b.min), glm::max(a.max, b.max));
     }
 
-
-    // TODO: For the future when raycasting
-    bool intersectsRay(glm::vec3& origin, glm::vec3& direction, float maxDistance, float& t)
+    // Returns true when the ray intersects the AABB
+    bool intersectsRay(const Ray& ray, RaycastHit& outHit) const
     {
-        SDL_assert(false && "NEED TO IMPLEMENT!!!");
-        return false;
+        // Slab method, refer to https://education.siggraph.org/static/HyperGraph/raytrace/rtinter3.htm
+
+        float tMin = std::numeric_limits<float>::lowest(); // Change to take into account if origin is inside the AABB
+        float tMax = std::numeric_limits<float>::max();
+
+        // Extra information for raycasthit
+        int entryAxis = -1, exitAxis = -1;
+        float entrySign = 1.0f, exitSign = 1.0f;
+
+        for (int i = 0; i < 3; i++)
+        {
+            if (std::abs(ray.direction[i]) < F_EPSILON)
+            {
+                if (ray.origin[i] < min[i] || ray.origin[i] > max[i])
+                    return false;
+            }
+            else
+            {
+                float invD = 1.0f / ray.direction[i]; // careful with infinite values
+
+                float t0 = (min[i] - ray.origin[i]) * invD;
+                float t1 = (max[i] - ray.origin[i]) * invD;
+
+                float sign = 1.0f;
+                if (t0 > t1)
+                {
+                    std::swap(t0, t1);
+                    sign = -1.0f;
+                }
+
+                //tMin = std::max(tMin, t0);
+                if (t0 > tMin)
+                {
+                    tMin = t0;
+                    entryAxis = i;
+                    entrySign = sign;
+                }
+                if (t1 < tMax)
+                {
+                    tMax = t1;
+                    exitAxis = i;
+                    exitSign = sign;
+                }
+
+                if (tMax < tMin) return false;
+                if (tMax < 0.0f) return false;
+            }
+        }
+
+        bool inside = tMin < 0.0f;
+        float t = inside ? tMax : tMin;
+        if (t < F_EPSILON || t > ray.maxDistance) return false;
+
+        outHit.t = t;
+        outHit.point = ray.origin + ray.direction * t;
+
+        if (inside)
+            outHit.normal[exitAxis] = exitSign;
+        else 
+            outHit.normal[entryAxis] = -entrySign;
+
+        return true;
     }
 };
 
@@ -154,51 +219,64 @@ struct ShapeDesc
     }
 };
 
-struct ShapeHandle
+// Using generic handle because im tired of doing the same handle over and over again
+template <typename T>
+struct PhysicsHandle
 {
     uint32_t index = UINT32_MAX;
 
-    bool isValid() const 
-    { 
-        return index != UINT32_MAX; 
-    }
-
-    bool operator==(const ShapeHandle& o) const 
-    { 
-        return index == o.index; 
-    }
-
-    bool operator!=(const ShapeHandle& o) const
-    {
-        return index != o.index;
-    }
-};
-
-// Identical to ShapeHandle or RigidBodyHandle
-struct PlaneHandle
-{
-    uint32_t index = UINT32_MAX;
 
     bool isValid() const
     {
         return index != UINT32_MAX;
     }
 
-    bool operator==(const PlaneHandle& o) const
+    operator uint32_t() const
+    {
+        return index;
+    }
+
+    operator int() const
+    {
+        return static_cast<int>(index);
+    }
+
+    void operator=(uint32_t value)
+    {
+        index = value;
+    }
+
+    bool operator==(const T& o) const
     {
         return index == o.index;
     }
 
-    bool operator!=(const PlaneHandle& o) const
+    bool operator!=(const T& o) const
     {
         return index != o.index;
     }
 };
 
+struct ShapeHandle : PhysicsHandle<ShapeHandle>
+{
+};
+
+struct PlaneHandle : PhysicsHandle<PlaneHandle>
+{
+};
+
+struct RigidBodyHandle : PhysicsHandle<RigidBodyHandle>
+{
+};
+
+struct CharacterHandle : PhysicsHandle<CharacterHandle>
+{
+};
+
 static constexpr ShapeHandle InvalidShapeHandle = { UINT32_MAX };
 static constexpr PlaneHandle InvalidPlaneHandle = { UINT32_MAX };
-
-
+static constexpr RigidBodyHandle InvalidRigidBodyHandle = { UINT32_MAX };
+static constexpr CharacterHandle InvalidCharacterHandle = { UINT32_MAX };
 
 
 // ------------------
@@ -219,12 +297,18 @@ DEFINE_ENUM_CLASS_BITWISE_OPERATORS(ForceLayer);
 // ------------------
 // RIGIDBODY RELATED
 // ------------------
+//enum InnerBodyLayer : uint8_t
+//{
+//    STATIC = 0,
+//    MOVING,
+//    WEAPONS
+//};
 
 // Descriptor to create RigidBodies via PhysicsManager.createBody()
 struct RigidBodyDesc
 {
-    glm::vec3 position = glm::vec3{};
-    glm::quat orientation = glm::quat{1.0f, 0.0f, 0.0f, 0.0f}; // glm::quat_identity()
+    glm::vec3 position = glm::vec3(0.0f);
+    glm::quat orientation = glm::identity<glm::quat>(); // glm::quat_identity()
 
     // IShape must be created first using physicsWorld.createShape (or physicsManager to delegate...)
     ShapeHandle shape = InvalidShapeHandle;
@@ -235,85 +319,113 @@ struct RigidBodyDesc
     // Damping (to extend to linear and angular if i add it)
     float damping = 0.99f; // physics book
 
+    float restitution = 0.5f;
+    float friction = 0.8f;
+
     uint32_t forceLayers = (uint32_t) ForceLayer::Default;
+
+    uint8_t bodyLayer = 0U;
 
     // RigidBody type
     bool isStatic = false;
     bool isKinematic = false;
-    bool isCharacter = false;
-    bool isTrigger = false;
-};
+    bool isDynamic = false; // adding this so its easier to do !isDynamic than isStatic || isKinematic || isTrigger
 
+    bool isCharacter = false; // extra rotation locked on Y for physics (when angular momentum is added)
+    bool isTrigger = false; // isTrigger will be treated as isStatic with NO collision resolution
+};
 
 struct RigidBody
 {
-    glm::vec3 position = glm::vec3{ 0.0f };
-    glm::quat orientation = glm::quat{ 1.0f, 0.0f, 0.0f, 0.0f };
+    glm::vec3 position = glm::vec3(0.0f); // managed by ECS, imported via PhysicsManager, modified via PhysicsWorld, exported to ECS again
+    glm::quat orientation = glm::identity<glm::quat>(); // managed by ECS, imported via PhysicsManager, modified via PhysicsWorld, exported to ECS again
 
-    glm::vec3 velocity = glm::vec3{ 0.0f };
-    glm::vec3 forceAccumulator = glm::vec3{ 0.0f };
+
+    glm::vec3 velocity = glm::vec3(0.0f);
+    glm::vec3 forceAccumulator = glm::vec3(0.0f);
 
     float mass = 1.0f;
     float invMass = 1.0f;
     float gravityScale = 1.0f;
     float damping = 0.99f;
 
+    float restitution = 0.5f; // Might move it to global PhysicsSettings for now, but different Bodies would need this (ice, or other surfaces)
+    float friction = 0.8f; // Might move it to global PhysicsSettingsfor now, but different Bodies would need this (ice, or other surfaces)
+
     // We could add body layer (as in player, enemy, etc, to provide better query options, but idk)
     uint32_t forceLayers = (uint32_t) ForceLayer::Default;
 
+    // Not the same as force layer, this will enable custom collisions from game code
+    // One object could be "DEBRIS" and other "MOVING" and they would not collide with each other
+    uint8_t bodyLayer = 0U;
+
     ShapeHandle shapeHandle; // get shape via physicsWorld.getShape()
 
+    // Out of the next block "isX" please choose only 1, not doing an enum now cause it is too much changing for everything
     bool isStatic = false;
     bool isKinematic = false;
-    bool isCharacter = false; // rotation locked for physics
-    bool isTrigger = false;
+    bool isDynamic = false; // adding this so its easier to do !isDynamic than isStatic || isKinematic || isTrigger
 
+    bool isCharacter = false; // extra rotation locked on Y for physics (when angular momentum is added)
+    bool isTrigger = false; // isTrigger will be treated as isStatic with NO collision resolution
+
+    // DO NOT add these in the script
     // No sleep system yet
+    float sleepTimer = 0.0f;
+    float accumulatedEnergy = g_PhysicsSettings.initialEnergy; // smoothed using g_PhysicsSettings
     bool sleeping = false;
+
+    void wakeUp()
+    {
+        if (sleeping)
+        {
+            sleepTimer = 0.0f;
+            accumulatedEnergy = g_PhysicsSettings.initialEnergy;
+            sleeping = false;
+        }
+    }
 
     AABB aabb; // maintained by broadphase
 
     uint32_t bodyID; // to backtrack to handle in O(1)
 };
 
-struct RigidBodyHandle
+struct PhysicsCharacter
 {
-    uint32_t index = UINT32_MAX;
-
-    bool isValid() const
+    enum GroundState
     {
-        return index != UINT32_MAX;
-    }
+        OnGround,
+        OnSteepGround,
+        InAir,
+        Undefined // When getting a body that does not have a defined ground state
+    };
 
-    // For automatic casting
-    operator uint32_t() const
-    {
-        return index;
-    }
+    // Instead of pointer to body, could be RBHandle instead
+    RigidBody* body = nullptr;
+    
+    GroundState groundState = GroundState::InAir;
+    glm::vec3 groundNormal = glm::vec3(0.0f, 1.0f, 0.0f); // use character's groundNormal to project the horizontal velocity before applying, that way we would get a much smoother movement
 
-    operator int() const
-    {
-        return static_cast<int>(index);
-    }
+    float maxWalkableAngle = glm::radians(50.0f); // Maximum angle compared to groundNormal that makes it able to snap-walk on tilted/uneven terrain
+    float stepHeight = 0.3f; // Max height allowed for climbing/dropping-from steps or other obstacles
 
-    void operator=(uint32_t value)
-    {
-        index = value;
-    }
+    // TO BE SET GAME-SIDE to true, it defaults to false on collision to ground
+    bool jumping = true; // Extra logic to make snap-down correctly, 
 
-    bool operator==(const RigidBodyHandle& o) const
-    {
-        return index == o.index;
-    }
-
-    bool operator!=(const RigidBodyHandle& o) const
-    {
-        return index != o.index;
-    }
+    // This to do step ups and downs properly
+    // Basically position and velocity before solving the contacts
+    glm::vec3 lastNonWalkableNormalContact = glm::vec3(0.0f, 1.0f, 0.0f);
+    glm::vec3 preSolvingPosition{};
+    glm::vec3 preSolvingVelocity{};
 };
 
-static constexpr RigidBodyHandle InvalidRigidBodyHandle = { UINT32_MAX };
-
+struct PhysicsCharacterInfo
+{
+    PhysicsCharacter::GroundState groundState = PhysicsCharacter::GroundState::Undefined;
+    glm::vec3 groundNormal = glm::vec3(0.0f);
+    float maxWalkableAngle = -1.0f; 
+    float stepHeight = -1.0f;
+};
 
 
 struct BodyPair
@@ -347,6 +459,17 @@ struct BodyPair
     }
 
     bool isValid() const { return bodyA != nullptr; }
+};
+
+// Just in case BodyPair::operator< doesn't work (it has happened before)
+struct BodyPairComparer
+{
+    bool operator()(const BodyPair& a, const BodyPair& b)
+    {
+        if (a.bodyA != b.bodyA)
+            return a.bodyA < b.bodyA;
+        return a.bodyB < b.bodyB;
+    }
 };
 
 

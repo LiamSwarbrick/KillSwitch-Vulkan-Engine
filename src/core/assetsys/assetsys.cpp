@@ -135,20 +135,20 @@ Asset* load_asset(const char* filename) {
 	cgltf_data* data = NULL;
 	cgltf_result result = cgltf_parse_file(&options, filename, &data);
 	if (result != cgltf_result_success) {
-		SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Failed to parse asset: %d\n", result);
+		SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Failed to parse asset '%s': %d\n", filename, result);
 		return NULL;
 	}
 
 	result = cgltf_load_buffers(&options, data, filename);
 	if (result != cgltf_result_success) {
-		SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Failed to load buffers: %d\n", result);
+		SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Failed to load buffers for '%s': %d\n", filename, result);
 		cgltf_free(data);
 		return NULL;
 	}
 
 	result = cgltf_validate(data);
 	if (result != cgltf_result_success) {
-		SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Invalid glTF data: %d\n", result);
+		SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Invalid glTF data in '%s': %d\n", filename, result);
 		cgltf_free(data);
 		return NULL;
 	}
@@ -159,6 +159,8 @@ Asset* load_asset(const char* filename) {
 		cgltf_free(data);
 		return NULL;
 	}
+
+	asset->source_path = duplicate_string(filename);
 
 	// Set counts
 	asset->mesh_count = data->meshes_count;
@@ -527,7 +529,6 @@ Asset* load_asset(const char* filename) {
 			if (prim->joints != NULL) {
 				mesh->vertex_type = VERTEX_TYPE_SKINNED;
 
-				#warning TEMP: SETTING OUTLINE FOR CHARACTERS
 				mesh->mat_type = MAT_LIT_OUTLINE;
 			}
 		}
@@ -661,6 +662,8 @@ void free_asset(Asset* asset) {
 		if (anim->channels) free(anim->channels);
 	}
 	if (asset->animations) free(asset->animations);
+
+	free((void*)asset->source_path);
 
 	free(asset);
 }

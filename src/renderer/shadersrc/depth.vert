@@ -18,7 +18,8 @@ void main()
     fetch_vertex_pos_uv(gl_VertexIndex, vertex_buf_index, v_pos, v_uv);
 
     mat4 model_matrix = compute_model_matrix(vertex_buf_index);
+    vec4 world_pos_homo = model_matrix * vec4(v_pos, 1.0);
 
-    gl_Position = scene.view_proj * model_matrix * vec4(v_pos, 1.0);
+    gl_Position = scene.view_proj * world_pos_homo;
     frag_uv = v_uv;
 }

@@ -10,6 +10,17 @@
 
 RenderState renderstate;
 
+// 2d image resource creator for game-side ImGui
+uint32_t create_mipmapped_texture2d_resource(
+    const char*       debug_name,
+    FG_ResourceFlags  flags,
+    const uint8_t*    data,
+    uint64_t          data_size,
+    uint32_t          width,
+    uint32_t          height,
+    VkFormat          format
+);
+
 // STB DS for hash maps (pipeilne hashing), with the main thread alloc tracker.
 void* external_malloc(size_t size) { return L_calloc(1, size, &renderstate.main.tt); }
 void* external_realloc(void* ptr, size_t size) { return L_realloc(ptr, size, &renderstate.main.tt); }
@@ -893,6 +904,58 @@ void Renderer_PushLight(C_Light light, glm::vec3 position, glm::vec3 direction, 
         default: SDL_assert(0 && "Invalid light type"); abort();
     }
 }
+// Loads a image and creates a GPU resource
+bool Renderer_LoadUITexture(const char* filepath, bool nearest_sampling, Renderer_UITexture* out_texture)
+{
+    if (!out_texture)
+        return false;
+
+    *out_texture = {};
+
+    if (!filepath || !filepath[0])
+        return false;
+
+    stbi_set_flip_vertically_on_load(0); // dont flip. dk if it is redundant
+
+    int width = 0;
+    int height = 0;
+    int channels = 0;
+    uint8_t* data = stbi_load(filepath, &width, &height, &channels, 4); // pass info to stbi to load with RGBA
+    if (!data)
+    {
+        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "Renderer_LoadUITexture: failed to load '%s'", filepath);
+        return false;
+    }
+
+    uint64_t data_size = (uint64_t)width * (uint64_t)height * 4ull;
+    uint32_t rid = create_mipmapped_texture2d_resource(
+        filepath,
+        FG_RESOURCE_FLAGS_ON_STARTUP, 
+        data,
+        data_size,
+        (uint32_t)width,
+        (uint32_t)height,
+        VK_FORMAT_R8G8B8A8_SRGB
+    );
+    stbi_image_free(data);
+
+    FG_Resource* tex_res = &renderstate.registry.resources[rid];
+    VkSampler sampler = renderstate.heap.samplers[
+        nearest_sampling ? FG_SAMPLER_NEAREST_REPEAT : FG_SAMPLER_LINEAR_REPEAT
+    ]; // claude did this choosing between them
+
+    ImTextureID imgui_tex = (ImTextureID)ImGui_ImplVulkan_AddTexture(
+        sampler,
+        tex_res->image.view,
+        VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
+    );
+
+    out_texture->imgui_texture_id = (u64)imgui_tex;
+    out_texture->width = (uint32_t)width;
+    out_texture->height = (uint32_t)height;
+
+    return true;
+}
 
 void Renderer_DrawFrame(CameraInfo main_camera)
 {
@@ -1168,7 +1231,7 @@ void Renderer_DrawFrame(CameraInfo main_camera)
                 .queue_family_index = renderstate.queue_family_indices.graphics_family,
 
                 .load_op = VK_ATTACHMENT_LOAD_OP_LOAD,  // <- LOAD (Do not clear the depth prepass information LOL)
-                .store_op = VK_ATTACHMENT_STORE_OP_DONT_CARE,
+                .store_op = VK_ATTACHMENT_STORE_OP_STORE,
             }
         },
 

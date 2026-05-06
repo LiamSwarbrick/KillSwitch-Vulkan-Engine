@@ -24,15 +24,14 @@ void main()
 
     mat4 model_matrix = compute_model_matrix(vertex_buf_index);
     vec4 world_pos_homo = model_matrix * vec4(v_pos, 1.0);
-
+    
     // NOTE: Because our transforms have scale components, we can't just use the model matrix on the normal
-    mat4 normal_matrix = inverse(transpose(model_matrix));
-    vec4 world_normal_homo = normal_matrix * vec4(v_normal, 0.0);  // NOTE: Assume no scaling
+    mat3 normal_matrix = transpose(inverse(mat3(model_matrix)));  // mat3 because we don't want translation
 
     uv = v_uv;
     color = v_color;
     world_pos = world_pos_homo.xyz;
-    world_normal = world_normal_homo.xyz;
+    world_normal = normalize(normal_matrix * v_normal);
 
     gl_Position = scene.view_proj * world_pos_homo;
 }
