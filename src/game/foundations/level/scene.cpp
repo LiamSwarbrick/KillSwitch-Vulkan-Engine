@@ -299,6 +299,8 @@ EntityID Scene::InstantiatePrefab(Asset* prefab, glm::vec3 spawnPosition)
                     C_StaticMesh staticMesh{ &prefab->meshes[node->mesh_index], prefab };
                     m_ecs.AddComponent<C_StaticMesh>(eID, { staticMesh.mesh, staticMesh.parent_asset });
                 }
+
+                
             } // if (node->mesh_index >= 0)
         } // if has ecs_data
     }
@@ -600,6 +602,47 @@ void Scene::UpdatePlayer(float dt)
             {
                 PlayAnim(animatedMesh, animatedMesh.idleAnimationName, 0.4f);
                 animatedMesh.lowerBodyLayer.isCurrentLooping = true;
+            }
+        }
+    }
+
+    if (m_ecs.Has<C_Weapon>(m_currentPlayer))
+    {
+        C_Weapon& weapon = m_ecs.GetComponent<C_Weapon>(m_currentPlayer);
+        if (weapon.equipped && weapon.weapon_entity != NULL_ENTITY && m_ecs.IsEntityValid(weapon.weapon_entity))
+        {
+            if (!m_ecs.Has<C_Transform>(weapon.weapon_entity))
+                m_ecs.AddComponent<C_Transform>(weapon.weapon_entity, C_Transform{ glm::mat4(1.0f) });
+
+            C_Transform& gunTransform = m_ecs.GetComponent<C_Transform>(weapon.weapon_entity);
+
+            // If an attach bone is set and the player has an animated mesh, snap to bone
+            bool snappedToBone = false;
+            if (weapon.attach_bone_index >= 0 && m_ecs.Has<C_AnimatedMesh>(m_currentPlayer))
+            {
+                C_AnimatedMesh& animated = m_ecs.GetComponent<C_AnimatedMesh>(m_currentPlayer);
+                Asset* asset = animated.asset;
+                int boneIdx = weapon.attach_bone_index;
+
+                if (animated.joint_matrices && asset && asset->skin_count > 0 && asset->skins[0].inverse_bind_matrices)
+                {
+                    // Reconstruct bind matrix (inverse of inverse-bind) and recover model-space joint matrix:
+                    glm::mat4 invBind = glm::make_mat4(asset->skins[0].inverse_bind_matrices + boneIdx * 16);
+                    glm::mat4 bind = glm::inverse(invBind); // bind pose matrix
+
+                    // animated.joint_matrices stores modelJoint * inverseBind, so:
+                    glm::mat4 modelJoint = animated.joint_matrices[boneIdx] * bind;
+
+                    // Convert to world: player's transform * modelJoint
+                    gunTransform.matrix = transform.matrix * modelJoint * weapon.local_transform;
+                    snappedToBone = true;
+                }
+            }
+
+            // Fallback: simple attach to player world transform
+            if (!snappedToBone)
+            {
+                gunTransform.matrix = transform.matrix * weapon.local_transform;
             }
         }
     }

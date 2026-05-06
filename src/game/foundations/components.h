@@ -3,6 +3,7 @@
 
 // INCLUDE ALL MODULE COMPONENTS
 #include "core/components.h"
+#include "core/ecs.h"  
 #include "physics/components.h"
 // #include "renderer/components.h"
 // #include "core/animation/components.h"
@@ -37,6 +38,15 @@ struct C_AIInput
 {
 	glm::vec3 target_position{ 0.0f };
 	bool has_target = false;
+};
+
+struct C_Weapon
+{
+	EntityID weapon_entity = NULL_ENTITY; 
+	glm::mat4 local_transform = glm::mat4(1.0f);
+	bool equipped = false;
+
+	int attach_bone_index = -1;
 };
 
 #endif // !FOUNDATIONS_COMPONENTS_H
