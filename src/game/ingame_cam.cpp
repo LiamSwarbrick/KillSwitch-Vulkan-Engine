@@ -5,7 +5,7 @@
 #include "core/input_actions.h"
 #include "foundations/components.h"
 #include "physics/physics_manager.h"
-#include "game/foundations/body_layer_collisions.h"
+#include "physics/body_layers.h"
 #include <vector>
 
 #include "glm/gtc/matrix_transform.hpp"
