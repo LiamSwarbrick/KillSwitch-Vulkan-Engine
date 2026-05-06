@@ -12,6 +12,7 @@ static inline b32 compute_light_cluster_bounds(
     float     far,
     glm::mat4 proj,
     float     inv_log_far_over_near,
+
     int* tile_min_x,  int* tile_max_x,
     int* tile_min_y,  int* tile_max_y,
     int* z_index_min, int* z_index_max)
@@ -31,6 +32,7 @@ static inline b32 compute_light_cluster_bounds(
     // NOTE: Using right handed view matrix, so z-positive is backwards (and near plane is at -near)
     if (z_center - r > -near) return 0; 
     if (z_center + r < -far)  return 0;
+    
 
     float dist_sq = glm::dot(light_view_pos, light_view_pos);
     if (dist_sq <= (r * r)) 
@@ -103,6 +105,19 @@ static inline b32 compute_light_cluster_bounds(
     *z_index_min = SDL_clamp(*z_index_min, 0, CLUSTER_GRID_SIZE_Z - 1);
     *z_index_max = SDL_clamp(*z_index_max, 0, CLUSTER_GRID_SIZE_Z - 1);
 
+    SDL_assert(!(
+        *tile_min_x >  *tile_max_x ||
+        *tile_min_y >  *tile_max_y ||
+        *z_index_min > *z_index_max)
+    );
+
+    // if (tile_min_x > tile_max_x ||
+    //     tile_min_y > tile_max_y ||
+    //     z_index_min > z_index_max)
+    // {
+    //     return 0;
+    // }
+
     return 1;
 }
 
@@ -113,6 +128,7 @@ void ClusteredShading_CPULightAssignmentToMappedBuffer()
     //       and it should be square shaped on a 16:9 monitor
 
     // Reset cluster staging arenas (no need to reset staging_light_indices arena though)
+    memset(renderstate.renderables_arena.staging_point_light_indices, 0, sizeof(uint32_t) * MAX_POINTLIGHTS * CLUSTER_COUNT);
     memset(renderstate.renderables_arena.staging_cluster_offsets, 0, sizeof(Cluster) * CLUSTER_COUNT);
 
 
@@ -145,12 +161,12 @@ void ClusteredShading_CPULightAssignmentToMappedBuffer()
         }
         
         // Add to each cluster the light affects
-        for (uint32_t z = z_index_min; z <= z_index_max; ++z)
-        for (uint32_t y = tile_min_y;  y <= tile_max_y;  ++y)
-        for (uint32_t x = tile_min_x;  x <= tile_max_x;  ++x)
+        for (int z = z_index_min; z <= z_index_max; ++z)
+        for (int y = tile_min_y;  y <= tile_max_y;  ++y)
+        for (int x = tile_min_x;  x <= tile_max_x;  ++x)
         {
             uint32_t cluster_index = CLUSTER_INDEX(x, y, z);
-
+            
             // Add light to cluster
             uint32_t light_indices_index = renderstate.renderables_arena.staging_cluster_offsets[cluster_index].point_count++;
             renderstate.renderables_arena.staging_point_light_indices[cluster_index * MAX_POINTLIGHTS + light_indices_index] = i;
@@ -176,9 +192,9 @@ void ClusteredShading_CPULightAssignmentToMappedBuffer()
         // TODO: Cone based culling too.
         
         // Add to each cluster the light affects
-        for (uint32_t z = z_index_min; z <= z_index_max; ++z)
-        for (uint32_t y = tile_min_y;  y <= tile_max_y;  ++y)
-        for (uint32_t x = tile_min_x;  x <= tile_max_x;  ++x)
+        for (int z = z_index_min; z <= z_index_max; ++z)
+        for (int y = tile_min_y;  y <= tile_max_y;  ++y)
+        for (int x = tile_min_x;  x <= tile_max_x;  ++x)
         {
             uint32_t cluster_index = CLUSTER_INDEX(x, y, z);
 
@@ -194,6 +210,7 @@ void ClusteredShading_CPULightAssignmentToMappedBuffer()
     FG_Resource* point_light_indices_buffer_res = &renderstate.registry.resources[ring->point_light_indices_buffer_rid];
     FG_Resource* spot_light_indices_buffer_res = &renderstate.registry.resources[ring->spot_light_indices_buffer_rid];
     FG_Resource* cluster_offsets_buffer_res = &renderstate.registry.resources[ring->cluster_offsets_buffer_rid];
+
 
     uint32_t* mapped_point_light_indices = (uint32_t*)point_light_indices_buffer_res->buffer.mapped_data;
     uint32_t* mapped_spot_light_indices  = (uint32_t*)spot_light_indices_buffer_res->buffer.mapped_data;
@@ -217,7 +234,7 @@ void ClusteredShading_CPULightAssignmentToMappedBuffer()
             renderstate.renderables_arena.staging_cluster_offsets[c].point_offset = 0;
             renderstate.renderables_arena.staging_cluster_offsets[c].spot_offset  = 0;
         }
-
+        
         // Copy slices to packed mapped buffer
         Cluster cluster = renderstate.renderables_arena.staging_cluster_offsets[c];
         memcpy(

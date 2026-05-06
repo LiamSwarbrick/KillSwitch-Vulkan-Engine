@@ -61,6 +61,9 @@ namespace DebugUI
         return CameraInfo{
             .view             = glm::lookAt(cam.pos, cam.pos + fwd, up),
             .position         = cam.pos,
+            .near_plane       = 0.1f,
+            .far_plane        = 100.0f,
+            .lens_distortion  = 0.0f
         };
     }
 

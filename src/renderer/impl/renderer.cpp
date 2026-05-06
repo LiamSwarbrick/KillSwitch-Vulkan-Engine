@@ -959,56 +959,6 @@ bool Renderer_LoadUITexture(const char* filepath, bool nearest_sampling, Rendere
 
 void Renderer_DrawFrame(CameraInfo main_camera)
 {
-    /* Sort Drawcalls into arrays per shader
-
-        Example, Renderable r with MAT_PBR_WITH_OUTLINE:
-        r could be added to many different shaders: (pseudocode)
-            renderables_per_shader[SHADER_PBR].append(r);
-            renderables_per_shader[SHADER_OUTLINE].append(r);
-            renderables_per_shader[SHADER_SHADOWMAP].append(r);
-        
-        Importantly, renderables have per frame data like transforms etc.
-        For instance, an outline effect should be togglable in gameplay code. Same with visibility.
-    */
-
-    BeginDrawCalls();
-
-    for (uint32_t i = 0; i < renderstate.renderables_arena.num_renderables; ++i)
-    {
-        AddDrawCall(&renderstate.renderables_arena.items[i]);
-    }
-    
-    // Saturate shadow maps with spotlights
-    // TODO: Use nearest lights or some shit instead of just the first shadowed spotlights we come across
-    renderstate.num_shadowed_spotlights = 0;
-    memset(renderstate.shadowed_spotlight_indices, 0, sizeof(renderstate.shadowed_spotlight_indices));
-    for (uint32_t i = 0; i < renderstate.renderables_arena.num_spot_lights; ++i)
-    {
-        if (renderstate.renderables_arena.is_spotlight_shadowed[i])
-        {
-            renderstate.shadowed_spotlight_indices[renderstate.num_shadowed_spotlights++] = i;
-        }
-
-        if (renderstate.num_shadowed_spotlights == MAX_SHADOWMAPS)
-        {
-            break;
-        }
-    }
-
-    EndDrawCalls();
-
-    
-
-    // Set main camera
-    renderstate.main_camera = main_camera;
-
-
-
-
-
-
-
-
     /*  Get current swapchain image, and wait on sync structures
 
         This happens before building the frame graph, since we need to know
@@ -1019,6 +969,7 @@ void Renderer_DrawFrame(CameraInfo main_camera)
     // Double/triple buffering command buffers allows us to start recording the next
     // frame's command buffer before the GPU has done with the current frame's one.
     renderstate.frame_in_flight = renderstate.frame_number % NUM_FRAMES_IN_FLIGHT;
+    
 
     // Wait for rendering to be complete for this frame in flight.
     // NOTE: We don't reset the fence until after we know the swapchain does not need recreating.
@@ -1070,6 +1021,58 @@ void Renderer_DrawFrame(CameraInfo main_camera)
     
     // Reset command buffers by resetting the entire pool
     vkResetCommandPool(renderstate.device, renderstate.frames[renderstate.frame_in_flight].graphics_command_pool, 0);
+
+
+
+
+
+    /* Sort Drawcalls into arrays per shader
+
+        Example, Renderable r with MAT_PBR_WITH_OUTLINE:
+        r could be added to many different shaders: (pseudocode)
+            renderables_per_shader[SHADER_PBR].append(r);
+            renderables_per_shader[SHADER_OUTLINE].append(r);
+            renderables_per_shader[SHADER_SHADOWMAP].append(r);
+        
+        Importantly, renderables have per frame data like transforms etc.
+        For instance, an outline effect should be togglable in gameplay code. Same with visibility.
+    */
+
+    BeginDrawCalls();
+
+    for (uint32_t i = 0; i < renderstate.renderables_arena.num_renderables; ++i)
+    {
+        AddDrawCall(&renderstate.renderables_arena.items[i]);
+    }
+    
+    // Saturate shadow maps with spotlights
+    // TODO: Use nearest lights or some shit instead of just the first shadowed spotlights we come across
+    renderstate.num_shadowed_spotlights = 0;
+    memset(renderstate.shadowed_spotlight_indices, 0, sizeof(renderstate.shadowed_spotlight_indices));
+    for (uint32_t i = 0; i < renderstate.renderables_arena.num_spot_lights; ++i)
+    {
+        if (renderstate.renderables_arena.is_spotlight_shadowed[i])
+        {
+            renderstate.shadowed_spotlight_indices[renderstate.num_shadowed_spotlights++] = i;
+        }
+
+        if (renderstate.num_shadowed_spotlights == MAX_SHADOWMAPS)
+        {
+            break;
+        }
+    }
+
+    EndDrawCalls();
+
+    
+
+    // Set main camera
+    renderstate.main_camera = main_camera;
+
+
+
+
+
 
 
 

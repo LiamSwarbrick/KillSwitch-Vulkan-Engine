@@ -574,9 +574,6 @@ uint32_t add_resource_to_registry_and_heap(const char* debug_name, FG_ResourceTy
     
     if (type == FG_RESOURCE_TYPE_BUFFER)
     {
-        #ifdef VERBOSE_FRAMEGRAPH_LOGGING
-        printf("Adding BUFFER resource to registry. (" ANSI_CYAN "%s" ANSI_RESET ")\n", res->debug_name);
-        #endif
         res->buffer = resource_info.import_info.buffer;
 
         // Immediately grab the BDA pointer
@@ -586,6 +583,12 @@ uint32_t add_resource_to_registry_and_heap(const char* debug_name, FG_ResourceTy
             .buffer  = res->buffer.handle
         };
         res->buffer_gpu_address = vkGetBufferDeviceAddress(renderstate.device, &address_info);
+
+        #ifdef VERBOSE_FRAMEGRAPH_LOGGING
+        printf("Adding BUFFER resource to registry. (" ANSI_CYAN "%s" ANSI_RESET ", rid=%d, ptr=%p)\n",
+            res->debug_name, id, res->buffer_gpu_address
+        );
+        #endif
     }
     else
     {

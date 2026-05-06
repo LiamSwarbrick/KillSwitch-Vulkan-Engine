@@ -91,7 +91,7 @@ Notably: The motivation section predates the implementation.
 #ifndef RENDERER_FRAMEGRAPH_H
 #define RENDERER_FRAMEGRAPH_H
 
-// #define VERBOSE_FRAMEGRAPH_LOGGING
+#define VERBOSE_FRAMEGRAPH_LOGGING
 // #define VERBOSE_FRAMEGRAPH_BARRIER_LOGGING
 
 // Arbitrary predefined array sizes for simplicity

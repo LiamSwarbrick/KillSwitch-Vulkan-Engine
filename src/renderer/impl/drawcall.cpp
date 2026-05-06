@@ -64,7 +64,7 @@ void EndDrawCalls()
     FG_Resource* shadowmap_spotlight_camera_buf_res = &renderstate.registry.resources[ring->shadowmap_spotlight_camera_buffer_rid];
     FG_Resource* point_light_indices_buffer_res = &renderstate.registry.resources[ring->point_light_indices_buffer_rid];
     FG_Resource* spot_light_indices_buffer_res = &renderstate.registry.resources[ring->spot_light_indices_buffer_rid];
-    FG_Resource* cluster_offsets_buffer_rid = &renderstate.registry.resources[ring->cluster_offsets_buffer_rid];
+    FG_Resource* cluster_offsets_buffer_res = &renderstate.registry.resources[ring->cluster_offsets_buffer_rid];
 
     LightsHeader header = {
         .num_point_lights  = renderstate.renderables_arena.num_point_lights,
@@ -75,7 +75,7 @@ void EndDrawCalls()
         .shadowmap_spotlight_camera_buf_ptr = shadowmap_spotlight_camera_buf_res->buffer_gpu_address,
         .point_light_indices_buf_ptr = point_light_indices_buffer_res->buffer_gpu_address,
         .spot_light_indices_buf_ptr = spot_light_indices_buffer_res->buffer_gpu_address,
-        .cluster_offsets_buf_ptr = cluster_offsets_buffer_rid->buffer_gpu_address,
+        .cluster_offsets_buf_ptr = cluster_offsets_buffer_res->buffer_gpu_address,
     };
     
     vmaCopyMemoryToAllocation(renderstate.vma_allocator, &header, lights_header_buf->allocation, 0, sizeof(LightsHeader));

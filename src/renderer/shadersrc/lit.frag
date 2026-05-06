@@ -195,7 +195,7 @@ void main()
 
     vec4 view_pos = scene.view * vec4(world_pos, 1.0);
     float depth =  -view_pos.z;
-    depth = clamp(depth, scene.near_plane, scene.far_plane);
+    depth = clamp(depth, scene.near_plane + 0.1, scene.far_plane - 0.1);
 
     // Get z bin (clusters get exponentially bigger away from the camera)
     float log_z = log(depth / scene.near_plane) * scene.inv_log_far_over_near;
@@ -241,17 +241,17 @@ void main()
         // return;
     }
 
-
-    // uint point_light_count = min(header.num_point_lights, 32u);
-    // for (uint i = 0; i < point_light_count; ++i)
-    for (uint i = 0; i < cluster.point_count; ++i)
+    const uint max_lights_per_pixel = 16;
+    
+    for (uint i = 0; i < min(cluster.point_count, max_lights_per_pixel); ++i)
     {
         uint light_index = pl_indices.indices[cluster.point_offset + i];
         PointLight pl = pl_buf.point_lights[light_index];
 
         vec3 frag_to_light = pl.pos_and_radius.xyz - world_pos;
         float dist = length(frag_to_light);
-        if (dist > pl.pos_and_radius.w)
+        
+        if (dist >= pl.pos_and_radius.w)
             continue;
         
         vec3 L = normalize(frag_to_light);
@@ -270,15 +270,13 @@ void main()
         direct_light += radiance;
     }
     
-    // uint spot_light_count = min(header.num_spot_lights, 32u);
-    // for (uint i = 0; i < spot_light_count; ++i)
-    for (uint i = 0; i < cluster.spot_count; ++i)
+    for (uint i = 0; i < min(cluster.spot_count, 0); ++i)
     {
         uint light_index = sl_indices.indices[cluster.spot_offset + i];
         SpotLight sl = sl_buf.spot_lights[light_index];
 
         float shadow_factor = 1.0;
-        int spotlight_shadowmap_index = sl_shadow_map_indices.spotlight_shadowmap_index[i];
+        int spotlight_shadowmap_index = sl_shadow_map_indices.spotlight_shadowmap_index[i];  // One slot per light, with -1 set when spotlight i does not have a shadowmap
         if (spotlight_shadowmap_index >= 0)  // If shadow map is available for this light
         {
             // SHADOW MAPPING
@@ -299,7 +297,8 @@ void main()
 
         vec3 frag_to_light = sl.pos_and_radius.xyz - world_pos;
         float dist = length(frag_to_light);
-        if (dist > sl.pos_and_radius.w)
+        
+        if (dist >= sl.pos_and_radius.w)
             continue;
 
         vec3 L = normalize(frag_to_light);
@@ -334,7 +333,7 @@ void main()
         direct_light += radiance * shadow_factor;
     }
 
-    vec3 ambient = vec3(0.);
+    vec3 ambient = vec3(0.00);
     // vec3 ambient = compute_ambient_light(N);
     vec3 lit_rgb = (direct_light + ambient) * base_color.rgb + emissive_color.rgb;
 
