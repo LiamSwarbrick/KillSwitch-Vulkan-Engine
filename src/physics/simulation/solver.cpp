@@ -51,16 +51,7 @@ void Solver::solve(const std::vector<Contact>& contacts, float dt)
         resolveVelocities(extendedContact, dt);
 	}
 
-    // Resolving the character's position
-    for (PhysicsCharacter& c : world.characters.Data())
-    {
-        RigidBody* b = c.body;
-        if (b->sleeping) continue;
-        //tryStepUp(c, *b, dt);
-        trySnapDown(c, *b, dt);
-    }
-
-
+    resolveCharactersExtended(dt);
 }
 
 void Solver::FillExtendedContact(const Contact& contact, ExtendedContact& outExtContact, float dt)
@@ -87,7 +78,12 @@ void Solver::FillExtendedContact(const Contact& contact, ExtendedContact& outExt
 
         outExtContact.isWalkableA = slopeAngle <= outExtContact.charA->maxWalkableAngle;
 
-        if (!outExtContact.isWalkableA) outExtContact.charA->lastNonWalkableNormalContact = contact.normal;
+        if (!outExtContact.isWalkableA)
+        {
+            outExtContact.charA->lastNonWalkableNormalContact = contact.normal;
+            // We also need to reset our baseVelocity (do not reset if we jump, we want to keep the momentum of the kinematic object if we jump)
+            outExtContact.charA->baseVelocity = glm::vec3(0.0f);
+        }
 
         // if the slope is walkable, correct only on the character's groundNormal axis
         if (outExtContact.isWalkableA)
@@ -98,6 +94,12 @@ void Solver::FillExtendedContact(const Contact& contact, ExtendedContact& outExt
             outExtContact.charA->groundNormal = contact.normal; // Changing to contact.normal so the player can move properly game-side
             // setting the contact.normal to be UP_VECTOR so the contact resolution allows the player to stand on edges and other rigidbodies without pushing them horizontally (unless slope too much)
             outExtContact.normal = world.UP_VECTOR;
+
+            // Check if the other walkable contact is kinematic and adhere to it 
+            if (contact.bodyB && contact.bodyB->isKinematic)
+                outExtContact.charA->baseVelocity= contact.bodyB->velocity;
+            else
+                outExtContact.charA->baseVelocity = glm::vec3(0.0f);
         }
         else if (outExtContact.charA->groundState != PhysicsCharacter::GroundState::OnGround)
         {
@@ -124,7 +126,13 @@ void Solver::FillExtendedContact(const Contact& contact, ExtendedContact& outExt
         float slopeAngle = glm::acos(upAlongNormal);
         outExtContact.isWalkableB = slopeAngle <= outExtContact.charB->maxWalkableAngle;
 
-        if (!outExtContact.isWalkableB) outExtContact.charB->lastNonWalkableNormalContact = -contact.normal;
+        if (!outExtContact.isWalkableB)
+        {
+            outExtContact.charB->lastNonWalkableNormalContact = -contact.normal;
+            // We also need to reset our baseVelocity (do not reset if we jump, we want to keep the momentum of the kinematic object if we jump)
+            // Only reset on a non-walkable contact 
+            outExtContact.charB->baseVelocity = glm::vec3(0.0f);
+        }
 
         // if the slope is walkable, correct only on the character's groundNormal axis
         if (outExtContact.isWalkableB)
@@ -135,6 +143,12 @@ void Solver::FillExtendedContact(const Contact& contact, ExtendedContact& outExt
             outExtContact.charB->groundNormal = -contact.normal; // Changing to contact.normal so the player can move properly game-side
             // setting the contact.normal to be -UP_VECTOR so the contact resolution allows the player to stand on edges and other rigidbodies without pushing them horizontally (unless slope too much)
             outExtContact.normal = -world.UP_VECTOR;
+
+            // Check if the other walkable contact is kinematic and adhere to it 
+            if (contact.bodyA->isKinematic)
+                outExtContact.charB->baseVelocity = contact.bodyA->velocity;
+            else
+                outExtContact.charB->baseVelocity = glm::vec3(0.0f);
         }
         else if (outExtContact.charB->groundState != PhysicsCharacter::GroundState::OnGround)
         {
@@ -263,73 +277,275 @@ void Solver::prepareCharacters(float dt)
     {
         RigidBody* b = c.body;
         if (b->sleeping) continue;
-        c.groundState = PhysicsCharacter::GroundState::InAir;
+        c.lastFrameGroundState = c.groundState;
         c.groundNormal = world.UP_VECTOR;
 
         // Store the position and velocity before resolving contacts of players, that way we can work out step-ups
         c.preSolvingPosition = b->position;
         c.preSolvingVelocity = b->velocity;
-        c.lastNonWalkableNormalContact = glm::vec3(0.0f, 1.0f, 0.0f);
+        c.lastNonWalkableNormalContact = glm::vec3(0.0f); // storing 0,0,0
+
+        c.groundState = PhysicsCharacter::GroundState::InAir;
     }
 }
 
-void Solver::resolveCharacter(PhysicsCharacter& character, RigidBody& body, float dt)
+void Solver::resolveCharactersExtended(float dt)
 {
+    // Resolving the character's position
+    for (PhysicsCharacter& c : world.characters.Data())
+    {
+        RigidBody* b = c.body;
+        if (b->sleeping) continue;
+        if(!tryStepUp(c, *b, dt))
+            trySnapDown(c, *b, dt); // Only snap down if we have not stepped up, because stepping up makes us snap down to the step.
+
+        b->velocity = c.baseVelocity + b->velocity; // important we only add baseVelocity once per solve
+        // IMPORTANT: this is not going to work, assuming we only run 1 step per in-game character update, the character is just going to override the velocity
+        // First fix that comes to mind is: to, for characters, use setCharacterVelocity, so it sets a character::inputVelocity instead, that way we will preserve last frame's speed? idk.
+        // TODO: To take into account later when i test kinematic objects properly
+    }
 }
 
 bool Solver::tryStepUp(PhysicsCharacter& character, RigidBody& body, float dt)
 {
+    if (character.groundState != PhysicsCharacter::GroundState::OnGround) return false;
 
-    return true;
-}
+    // If we were on Ground contact, let's check if last blocking normal is not 0,0,0 (meaning we were blocked)
+    if (character.lastNonWalkableNormalContact == glm::vec3(0.0f)) return false;
 
-bool Solver::trySnapDown(PhysicsCharacter& character, RigidBody& body, float dt)
-{
-    if (character.groundState == PhysicsCharacter::GroundState::InAir && !character.jumping)
+    glm::vec3 desiredHorizontalVelocity = glm::vec3(character.preSolvingVelocity.x, 0.0f, character.preSolvingVelocity.z);
+    float currentForwardLength = glm::length(desiredHorizontalVelocity) * dt;
+    const float LENGTH_TOLERANCE = 0.01f;
+    if (currentForwardLength <= LENGTH_TOLERANCE) return false;
+    
+    // Here now we can try to step-up
+    bool steppedUp = false;
+
+    // Before shapecasting our way up, we need to precalculate some positions
+    // we have to back-track the position before the integration step
+    glm::vec3 preIntegratedPosition = character.preSolvingPosition - character.preSolvingVelocity * dt;
+    
+    glm::vec3 desiredDirection = glm::normalize(desiredHorizontalVelocity);
+    
+    glm::vec3 desiredPosition = character.preSolvingPosition;
+
+    // Shape of the character
+    ShapeHandle shape = body.shapeHandle;
+
+    // Quick fix for small steps, instead of velocity*dt, we can try character radius to never be unable to climb stairs
+    IShape* shapePtr = world.getShape(body.shapeHandle);
+    CapsuleShape* capsule = static_cast<CapsuleShape*>(shapePtr);
+    float desiredForwardLength = std::max(currentForwardLength, capsule->radius);
+
+    QueryFilter filter = {
+        .bodyToIgnore = { body.bodyID }
+        // We could use a filter (even though they are defined at game-side)
+        // I might change the definition of game-side to engine-side but a separate class
+    }; 
+
+
+    // shapecast up to check if we have room.
+    ShapecastHit hit;
+    Ray upRay = {
+        .origin = preIntegratedPosition,
+        .direction = world.UP_VECTOR,
+        .maxDistance = character.stepHeight
+    };
+    glm::quat orientation = glm::identity<glm::quat>();
+
+    hit = world.shapecast(upRay, shape, orientation, filter);
+    // if there is no hit we can move fully, otherwise we could try moving UP to the hit.
+    float distanceTravelled = 1.0f;
+    if (hit.isValid())
+        distanceTravelled = hit.t;
+
+
+    // shapecast in the desired direction
+    Ray forwardRay = {
+        .origin = upRay.origin + upRay.direction * upRay.maxDistance * distanceTravelled,
+        .direction = desiredDirection,
+        .maxDistance = desiredForwardLength
+    };
+
+    hit = world.shapecast(forwardRay, shape, orientation, filter);
+    distanceTravelled = 1.0f;
+
+    bool extraShapecastDiagonally = false;
+    // If there is a hit, check the normal of the contact, and if it is NOT walkable then return false
+    if (hit.isValid())
     {
-        QueryFilter filter;
-        filter.bodyToIgnore = { body.bodyID };
+        distanceTravelled = hit.t;
 
-        IShape* ishape = world.getShape(body.shapeHandle);
-        CapsuleShape* capsule = static_cast<CapsuleShape*>(ishape);
-        float characterHeight = capsule->halfHeight + capsule->radius;
-        
-        Ray ray;
+        float upAlongNormal = glm::dot(hit.normal, world.UP_VECTOR);
+        float slopeAngle = glm::acos(upAlongNormal);
+        bool isWalkable = slopeAngle <= character.maxWalkableAngle;
 
-        ray.origin = body.position;
-        //ray.origin.y -= characterHeight;
-        //ray.direction = -world.UP_VECTOR; // Might have to change for -character.groundNormal (we will see)
-        ray.direction = -character.groundNormal;
-        ray.maxDistance = character.stepHeight;
+        if (isWalkable)
+        {
+            // If it is walkable, we teleport there and then skip the snap down
+            body.position = forwardRay.origin + forwardRay.direction * forwardRay.maxDistance * hit.t;
+            body.velocity.y = 0.0f; // Testing
+            character.groundNormal = hit.normal;
+            character.groundState = PhysicsCharacter::GroundState::OnGround;
+            character.jumping = false;
 
+            if (hit.body->isKinematic)
+                character.baseVelocity = hit.body->velocity;
 
-        // CURRENTLY DOESN'T WORK WITH RAYCAST, IMPLEMENT RAYCAST AND SWITCH TO THAT
-        // Basically it jitters because it doesn't take into account the shape, just ray
-        ShapecastHit hit = world.shapecast(ray, body.shapeHandle, glm::identity<glm::quat>(), filter);
+            return true;
+        }
+        else
+        {
+            // we could have hit some ceiling or a next step which would make us not keep going.
+            // in that case do an extra shapecast, and if that fails then we should NOT move
+
+            // we could also take into account the distance travelled, and simply substract a bit to the distanceTravelled and try snapping down from there.
+            // will try a diagonal shapecast for now
+            extraShapecastDiagonally = true;
+        }
+    }
+
+    // extra shapecast diagonally, changing forward ray's direction and maxDistance
+    if (extraShapecastDiagonally)
+    {
+        glm::vec3 newPos = forwardRay.direction * forwardRay.maxDistance - (world.UP_VECTOR * character.stepHeight);
+        forwardRay.direction = glm::normalize(newPos);
+        forwardRay.maxDistance = glm::length(newPos);
+
+        hit = world.shapecast(forwardRay, shape, orientation, filter);
         if (hit.isValid())
         {
+            distanceTravelled = hit.t;
+
             float upAlongNormal = glm::dot(hit.normal, world.UP_VECTOR);
             float slopeAngle = glm::acos(upAlongNormal);
+            bool isWalkable = slopeAngle <= character.maxWalkableAngle;
 
-            if (slopeAngle <= character.maxWalkableAngle)
+            if (isWalkable)
             {
-                body.position = body.position - world.UP_VECTOR * hit.t;
+                // If it is walkable, we teleport there and then skip the snap down
+                body.position = forwardRay.origin + forwardRay.direction * forwardRay.maxDistance * hit.t;
                 body.velocity.y = 0.0f; // Testing
                 character.groundNormal = hit.normal;
                 character.groundState = PhysicsCharacter::GroundState::OnGround;
                 character.jumping = false;
+
+                if (hit.body->isKinematic)
+                    character.baseVelocity = hit.body->velocity;
+
+                return true;
             }
             else
             {
-                body.position = body.position - world.UP_VECTOR * hit.t;
-                body.velocity.y = 0.0f; // Testing
-                character.groundNormal = world.UP_VECTOR;
-                character.groundState = PhysicsCharacter::GroundState::OnSteepGround;
+                return false;
             }
+        }
+        else
+        {
+            // Very weird case (we should have hit at least the floor)
+            return false;
         }
     }
 
+    // snap down again IFF we are able to go MAX DISTANCE FORWARD
+    Ray downRay = {
+        .origin = forwardRay.origin + forwardRay.direction * forwardRay.maxDistance * distanceTravelled,
+        .direction = -world.UP_VECTOR,
+        .maxDistance = character.stepHeight
+    };
+    hit = world.shapecast(downRay, shape, orientation, filter);
+    if (hit.isValid())
+    {
+        distanceTravelled = hit.t;
+
+        float upAlongNormal = glm::dot(hit.normal, world.UP_VECTOR);
+        float slopeAngle = glm::acos(upAlongNormal);
+        bool isWalkable = slopeAngle <= character.maxWalkableAngle;
+
+        if (isWalkable)
+        {
+            // If it is walkable, we teleport there and then skip the snap down
+            body.position = downRay.origin + downRay.direction * downRay.maxDistance * hit.t;
+            body.velocity.y = 0.0f; // Testing
+            character.groundNormal = hit.normal;
+            character.groundState = PhysicsCharacter::GroundState::OnGround;
+            character.jumping = false;
+
+            if (hit.body->isKinematic)
+                character.baseVelocity = hit.body->velocity;
+
+            return true;
+        }
+        else
+        {
+            return false;
+        }
+    }
+    else
+    {
+        // We should always hit the floor, return false
+        return false;
+    }
+
     return false;
+}
+
+bool Solver::trySnapDown(PhysicsCharacter& character, RigidBody& body, float dt)
+{
+    if (character.lastFrameGroundState == PhysicsCharacter::InAir ||
+        character.groundState != PhysicsCharacter::GroundState::InAir ||
+        character.jumping) 
+        return false;
+
+
+    bool snappedDown = false;
+    
+    QueryFilter filter;
+    filter.bodyToIgnore = { body.bodyID };
+
+    IShape* ishape = world.getShape(body.shapeHandle);
+    CapsuleShape* capsule = static_cast<CapsuleShape*>(ishape);
+    float characterHeight = capsule->halfHeight + capsule->radius;
+        
+    Ray ray;
+
+    ray.origin = body.position;
+    //ray.origin.y -= characterHeight;
+    //ray.direction = -world.UP_VECTOR; // Might have to change for -character.groundNormal (we will see)
+    ray.direction = -character.groundNormal;
+    ray.maxDistance = character.stepHeight;
+
+    // Shapecast into the floor
+    ShapecastHit hit = world.shapecast(ray, body.shapeHandle, glm::identity<glm::quat>(), filter);
+    if (hit.isValid())
+    {
+        float upAlongNormal = glm::dot(hit.normal, world.UP_VECTOR);
+        float slopeAngle = glm::acos(upAlongNormal);
+
+        snappedDown = true;
+
+        if (slopeAngle <= character.maxWalkableAngle)
+        {
+            body.position = body.position - world.UP_VECTOR * hit.t;
+            body.velocity.y = 0.0f; // Testing
+            character.groundNormal = hit.normal;
+            character.groundState = PhysicsCharacter::GroundState::OnGround;
+            character.jumping = false;
+
+            if (hit.body->isKinematic)
+                character.baseVelocity = hit.body->velocity;
+        }
+        else
+        {
+            body.position = body.position - world.UP_VECTOR * hit.t;
+            body.velocity.y = 0.0f; // Testing
+            character.groundNormal = world.UP_VECTOR;
+            character.groundState = PhysicsCharacter::GroundState::OnSteepGround;
+        }
+    }
+    
+
+    return snappedDown;
 }
 
 

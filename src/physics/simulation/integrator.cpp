@@ -8,12 +8,10 @@ void Integrator::integrate(RigidBody& body, float dt)
 	applyDamping(body, dt);
 	integrateLinear(body, dt);
 	normalizeOrientation(body);
-	clampVelocities(body);
 }
 
 inline void Integrator::applyDamping(RigidBody& body, float dt)
 {
-	// we could go for exponential decay, but we'll do linear for now
 	body.velocity *= std::pow(body.damping, dt);
 }
 
@@ -22,7 +20,10 @@ inline void Integrator::integrateLinear(RigidBody& body, float dt)
 	glm::vec3 acceleration = body.forceAccumulator * body.invMass;
 
 	// Semi-implicit euler
+	// Add acceleration to the body's velocity
 	body.velocity += acceleration * dt;
+	clampVelocities(body);
+
 	body.position += body.velocity * dt;
 
 	body.forceAccumulator = glm::vec3(0.0f);

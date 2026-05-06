@@ -277,7 +277,7 @@ RigidBodyHandle PhysicsWorld::addBody(const RigidBodyDesc& desc)
 	body.velocity = glm::vec3(0.0f);
 	body.forceAccumulator = glm::vec3(0.0f);
 	body.mass = desc.mass;
-	body.invMass = desc.isStatic ? 0.0f : (1.0f / desc.mass);
+	body.invMass = (desc.isStatic || desc.isKinematic) ? 0.0f : (1.0f / desc.mass);
 	body.gravityScale = desc.gravityScale;
 	body.damping = desc.damping;
 

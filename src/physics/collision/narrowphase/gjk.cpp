@@ -219,7 +219,6 @@ bool gjk_doSimplex(Simplex& simplex, glm::vec3& direction)
 void gjk_fillResultWithClosestPointAndDistance(GJKResult& gjk)
 {
 	// When exiting from here, we need to assume the last element added is the closest to the origin (or tied in distance with others) 
-	// edge case where we exit on the first iteration
 	if (gjk.simplex.size == 1)
 	{
 		gjk.closestPointOnA = gjk.simplex[0].supportA;
@@ -231,8 +230,8 @@ void gjk_fillResultWithClosestPointAndDistance(GJKResult& gjk)
 	}
 	else if (gjk.simplex.size == 2)
 	{
-		// Assume closest point is A (last point added), but it doesn't matter cause if we exited on 2 it should mean the ...
-		// search direction was on the direction normal to the segment, meaning we should NOT EVEN CLAMP THE VALUE
+		// Last point added is A, if we exit on a segment, it means the origin is inside the segment,
+		// and the search direction was on the direction normal to the segment
 		glm::vec3 a = gjk.simplex[1].point;
 		glm::vec3 b = gjk.simplex[0].point;
 
@@ -244,7 +243,7 @@ void gjk_fillResultWithClosestPointAndDistance(GJKResult& gjk)
 
 		SDL_assert((t <= 1.0f && t >= 0.0f) && "t falls off range from (0,1), meaning i was wrong tf");
 
-		t = std::clamp(t, 0.0f, 1.0f); // clamping t so it clamps at the segment ab
+		//t = std::clamp(t, 0.0f, 1.0f); // clamping t so it clamps at the segment ab
 
 		glm::vec3 closestPoint = a + t * ab; // = (1-t) * a + t * b
 

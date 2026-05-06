@@ -29,7 +29,7 @@ private:
 	void resolveVelocities(const ExtendedContact& contact, float dt);
 
 	void prepareCharacters(float dt);
-	void resolveCharacter(PhysicsCharacter& character, RigidBody& body, float dt);
+	void resolveCharactersExtended(float dt);
 	// Step Up will let Characters climb low obstacles if moving. Obstacle height defined in PhysicsCharacter::stepHeight
 	// Good for climbing stairs if they are done using steps instead of a ramp
 	bool tryStepUp(PhysicsCharacter& character, RigidBody& body, float dt);

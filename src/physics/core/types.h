@@ -404,19 +404,22 @@ struct PhysicsCharacter
     RigidBody* body = nullptr;
     
     GroundState groundState = GroundState::InAir;
+    GroundState lastFrameGroundState = GroundState::InAir;
     glm::vec3 groundNormal = glm::vec3(0.0f, 1.0f, 0.0f); // use character's groundNormal to project the horizontal velocity before applying, that way we would get a much smoother movement
 
+    glm::vec3 baseVelocity = glm::vec3(0.0f); // In case of contact with kinematic objects, we need to store this speed
+
     float maxWalkableAngle = glm::radians(50.0f); // Maximum angle compared to groundNormal that makes it able to snap-walk on tilted/uneven terrain
-    float stepHeight = 0.3f; // Max height allowed for climbing/dropping-from steps or other obstacles
+    float stepHeight = 0.4f; // Max height allowed for climbing/dropping-from steps or other obstacles
 
     // TO BE SET GAME-SIDE to true, it defaults to false on collision to ground
     bool jumping = true; // Extra logic to make snap-down correctly, 
 
     // This to do step ups and downs properly
     // Basically position and velocity before solving the contacts
-    glm::vec3 lastNonWalkableNormalContact = glm::vec3(0.0f, 1.0f, 0.0f);
-    glm::vec3 preSolvingPosition{};
-    glm::vec3 preSolvingVelocity{};
+    glm::vec3 lastNonWalkableNormalContact = glm::vec3(0.0f); // instead of storing if we were blocked last frame, we can store the normal to give us more information (we might not even use the extra info)
+    glm::vec3 preSolvingPosition{}; // the origin of the step-up
+    glm::vec3 preSolvingVelocity{}; // basically desired movement for the step-up
 };
 
 struct PhysicsCharacterInfo
