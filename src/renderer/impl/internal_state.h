@@ -92,7 +92,7 @@ typedef struct RenderState
     
 
     CameraInfo main_camera;
-    uint debug_rendermode;  // As per shared_constants.glsl
+    uint32_t debug_rendermode;  // As per shared_constants.glsl
 
     // Renderer execution state:
     VkPipeline currently_bound_pipeline;  // Used to avoid  vkCmdBindPipeline call if it's already bound
