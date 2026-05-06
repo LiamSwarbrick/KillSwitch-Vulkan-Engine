@@ -27,6 +27,7 @@
     /* Gameplay */         \
     X(INTERACT,      "interact")      \
     X(ATTACK,        "attack")        \
+    X(AIM,           "aim")           \
     /* UI / System */      \
     X(PAUSE,         "pause")         \
     X(DEBUG_TOGGLE,  "debug_toggle")

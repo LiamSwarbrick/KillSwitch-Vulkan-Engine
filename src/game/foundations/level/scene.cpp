@@ -524,7 +524,7 @@ void Scene::UpdatePlayer(float dt)
     } // If the jumping cooldown is done, we need to check if we can jump again
 
     // can change it to only run forwards and have other animation for runnign sideways, backwards
-    bool isRunning = input.run && isMoving;
+    bool isRunning = input.run && isMoving && !input.aim;
     if (isMoving)
     {
         // Project horizontal velocity to character's slope normal
@@ -534,7 +534,9 @@ void Scene::UpdatePlayer(float dt)
         if (slopeForward.y > 0.0f) slopeForward.y = 0.0f; // Do this to walk down surfaces correctly.
         //slopeForward.y = 0.0f;
 
-        float active_speed = isRunning ? (controller.move_speed * 6.0f) : controller.move_speed; //make it work with new physics
+        // slow down when aiming
+        float aim_modifier = input.aim ? 0.4f : 1.0f;
+        float active_speed = isRunning ? (controller.move_speed * 4.0f) : (controller.move_speed * aim_modifier); //make it work with new physics
         
         controller.velocity = slopeForward * active_speed;
     }

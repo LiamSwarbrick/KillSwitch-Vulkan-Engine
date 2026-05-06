@@ -216,14 +216,14 @@ int main(int argc, char *argv[])
         SDL_SetWindowRelativeMouseMode(window, (GameUI_GetState() == GameState::Playing && !DebugUI_IsOpen()) || (DebugUI_IsOpen() && right_mouse_down));
 
         // controller test
-        const bool* state = SDL_GetKeyboardState(NULL);
         scene.GetECS().GetView<C_PlayerInput>().ForEach([&](C_PlayerInput& input) {
-                input.move_forward = state[SDL_SCANCODE_I];
-                input.move_backward = state[SDL_SCANCODE_K];
-                input.move_left = state[SDL_SCANCODE_J];
-                input.move_right = state[SDL_SCANCODE_L];
-                input.jump = state[SDL_SCANCODE_SPACE];
-                input.run = state[SDL_SCANCODE_LSHIFT];
+            input.move_forward = Input_IsActionPressed(ACTION_MOVE_FORWARD);
+            input.move_backward = Input_IsActionPressed(ACTION_MOVE_BACKWARD);
+            input.move_left = Input_IsActionPressed(ACTION_MOVE_LEFT);
+            input.move_right = Input_IsActionPressed(ACTION_MOVE_RIGHT);
+            input.jump = Input_IsActionPressed(ACTION_JUMP);
+            input.run = Input_IsActionPressed(ACTION_SPRINT);
+            input.aim = Input_IsActionPressed(ACTION_AIM);
             }
         );
         // Movement always follows camera forward.
