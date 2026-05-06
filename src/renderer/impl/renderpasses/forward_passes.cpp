@@ -6,18 +6,23 @@
 void ForwardOpaque_Execute(VkCommandBuffer cmd, uint32_t pass_idx)
 {
     RenderPassDesc* desc = &renderstate.framegraph.passes[pass_idx];
+    ForwardPass_UserData* user_data = (ForwardPass_UserData*)desc->user_data;
+    RingBufferedRIDs* ring = &renderstate.rids.ring[renderstate.frame_in_flight];
 
     uint64_t scene_ptr = 0;
     {
         VkExtent3D extents = renderstate.registry.resources[renderstate.rids.hdr_color_target_rid].image.extent;
         SceneData scene_data = MakeSceneData(renderstate.main_camera, (VkExtent2D){ extents.width, extents.height });
-        scene_ptr = PushToMappedArena(&renderstate.scenes_arena, &scene_data, sizeof(SceneData));
+        scene_ptr = PushToMappedArena(&ring->scenes_arena, &scene_data, sizeof(SceneData));
     }
 
     uint32_t forward_shaders[] = { SHADER_UNLIT, SHADER_LIT, SHADER_OUTLINE };
-    PushConstant_PassHeader push_pass = {};  // Unused
+    PushConstant_PassHeader push_pass = user_data->push_pass;
 
     ResetDrawArena();
+
+    // Read material data of GPU (TODO: Rework material system this is really shitty)
+    MaterialData* mapped_materials = (MaterialData*)renderstate.registry.resources[renderstate.rids.materials_buffer_rid].buffer.mapped_data;
     
     // For each shader s, drawcall i, primitive p:
     //     PushDrawPrimitive()
@@ -31,7 +36,7 @@ void ForwardOpaque_Execute(VkCommandBuffer cmd, uint32_t pass_idx)
             for (uint32_t p = 0; p < drawcall.renderable->mesh_prefab.mesh_rids.primitive_count; ++p)
             {
                 PrimitiveRIDs* prim = &drawcall.renderable->mesh_prefab.mesh_rids.primitives[p];
-                MaterialData* mat = &((MaterialData*)renderstate.registry.resources[renderstate.rids.materials_buffer_rid].buffer.mapped_data)[prim->material_index];
+                MaterialData* mat = &mapped_materials[prim->material_index];
 
                 PipelineKey key = {
                     .pipeline_type  = PK_PIPELINE_TYPE_GRAPHICS,
@@ -39,14 +44,15 @@ void ForwardOpaque_Execute(VkCommandBuffer cmd, uint32_t pass_idx)
                     .pass_idx       = pass_idx,
                     .vertex_type    = (uint64_t)drawcall.renderable->mesh_prefab.vertex_type,
                     .depth_test     = 1,
-                    .depth_write    = 1,  // Still depth writing because of geometry not included in prepass
+                    .depth_write    = 1,
                     .depth_op       = VK_COMPARE_OP_LESS_OR_EQUAL,  // <- Equal prolly good bcuz of invariant gl_Position in shaders
                     .stencil_mode   = 0,
                     .cull_mode      = VK_CULL_MODE_BACK_BIT,
                     .blend_mode     = mat->blend_mode,
                     .polygon_mode   = VK_POLYGON_MODE_FILL,
                     .front_face     = VK_FRONT_FACE_COUNTER_CLOCKWISE,
-                    .msaa_samples   = (uint64_t)PK_MultisamplingFlag(renderstate.multisampling_count_flag)
+                    .msaa_samples   = (uint64_t)PK_MultisamplingFlag(renderstate.multisampling_count_flag),
+                    .debug_rendermode = renderstate.debug_rendermode
                 };
 
                 if (shader_id == SHADER_OUTLINE)

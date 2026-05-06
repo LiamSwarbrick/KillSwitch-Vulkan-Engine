@@ -34,12 +34,24 @@ int main(int argc, char *argv[])
         .window = window,
         .enable_validation = enabled_validation_layers,
         .preferred_initial_settings = {  // Will fallback if these aren't possible
-            .uncapped_fps = 0,
-            .msaa_sample_count = 1,
+            .uncapped_fps = 0,  // NOTE: <- Enable when gathering FPS metrics
+            .msaa_sample_count = 4,
             .fov_y = 50.0f
         }
     };
     Renderer_Init(&renderer_info);
+
+    #if 0  // Just an example of settings API usage
+    // Set 4xMSAA if available
+    if (Renderer_GetSettingsCapabilities().max_msaa_samples >= 4)
+    {
+        SDL_Log("Enabling 4xMSAA");
+        Renderer_Settings settings = Renderer_GetSettings();
+        settings.msaa_sample_count = 4;
+        Renderer_ChangeSettings(settings);
+    }
+    #endif
+
 
     AudioSystem audio_system = AudioSystem_Create((AudioSystemCreateInfo){
         .debug_name = "GameAudio",
@@ -101,7 +113,6 @@ int main(int argc, char *argv[])
     DebugUI_SetImGuiCallback([](void*){ GameUI_BuildImGui(); }, nullptr);
 
     // Dunno whether this resource manager will end up in the final build, if no one is integrating it due to more important tasks
-
     // ResourceManager resource_manager = ResourceManager_Create((ResourceManagerCreateInfo){
     //     .debug_name = "GameAssets",
     //     .initial_capacity = 32
@@ -109,7 +120,7 @@ int main(int argc, char *argv[])
 
     // ResourceHandle boot_vert = ResourceManager_RequestBinary(
     //     &resource_manager,
-    //     RESOURCE_TYPE_SHADER_BYTECODE,
+//     RESOURCE_TYPE_SHADER_BYTECODE,
     //     RESOURCE_RESIDENCY_BOOT,
     //     "shader.unlit.vert",
     //     "shaderspv/unlit.vert.spv"
@@ -125,15 +136,6 @@ int main(int argc, char *argv[])
 
     // (void)boot_vert;
     // (void)boot_frag;
-
-    // Set 4xMSAA to test settings API
-    if (Renderer_GetSettingsCapabilities().max_msaa_samples >= 4)
-    {
-        Renderer_Settings settings = Renderer_GetSettings();
-        settings.msaa_sample_count = 4;
-        Renderer_ChangeSettings(settings);
-    }
-
     
     /* LOADING NOTES
        Realistically, the splash screen assets would load first, then the main menu assets
@@ -151,18 +153,18 @@ int main(int argc, char *argv[])
     Asset* sphere_prefab = scene.LoadPrefab("assets/props/simple_sphere.gltf");
     //Asset* capsule_prefab = scene.LoadPrefab("assets/props/zombie.gltf");
     Asset* capsule_prefab = scene.LoadPrefab("assets/props/character_capsule.gltf");
-    Asset* zombie = scene.LoadPrefab("assets/levels/scene.gltf");
+    Asset* zombie_woman = scene.LoadPrefab("assets/animations/zombie_woman.gltf");
     // TODO: Change the following 2 prefabs so they can be imported (add the boolean "Is ECS Entity" with the new script where it is needed)
-    // Asset* catPrefab = scene.LoadPrefab("assets/animations/scene.gltf");
+    // Asset* catPrefab = scene.LoadPrefab("assets/animations/zomboUntitled.gltf");
     // Asset* catPrefab = scene.LoadPrefab("assets/animations/flatzombo.gltf");
     //Asset* animationPrefab = scene.LoadPrefab("assets/animations/cat.gltf");
     
-    scene.InstantiatePrefab(room_prefab, glm::vec3(0, 0, 0));
-    scene.InstantiatePrefab(playground_prefab, glm::vec3(0, 0, 0));
+    scene.InstantiatePrefab(room_prefab, glm::vec3(0, 0, 0), glm::identity<glm::quat>());
+    scene.InstantiatePrefab(playground_prefab, glm::vec3(0, 0, 0), glm::identity<glm::quat>());
     // scene.InstantiatePrefab(cube_prefab, glm::vec3(0, 5.1, 0));
     // scene.InstantiatePrefab(cube_prefab, glm::vec3(3, 4.9, 0));
     
-    EntityID playerID = scene.InstantiatePrefab(zombie, glm::vec3(0, 0, 0.01));
+    EntityID playerID = scene.InstantiatePrefab(zombie_woman, glm::vec3(0, 0, 0.01), glm::identity<glm::quat>());
     // scene.InstantiatePrefab(sphere_prefab, glm::vec3(4.7, 7, 0.1));
     // scene.InstantiatePrefab(sphere_prefab, glm::vec3(-4.7, 7, -0.1));
     // scene.InstantiatePrefab(sphere_prefab, glm::vec3(0.1, 7, -4.7));
@@ -191,7 +193,24 @@ int main(int argc, char *argv[])
         uint64_t current_time = SDL_GetTicksNS();
         float dt = (float)(current_time - last_time) / 1000000000.0f;
         last_time = current_time;
-        if (dt > 0.1f) dt = 0.1f;   
+        if (dt > 0.1f) dt = 0.1f;
+
+        static double frame_time_accumulation = 0.0;
+        static int num_frames_accumulated = 0;
+        frame_time_accumulation += (double)dt;
+        ++num_frames_accumulated;
+        if (num_frames_accumulated >= 30)
+        {
+            double fps = (double)num_frames_accumulated / frame_time_accumulation;
+            
+            // Append average FPS to window title
+            char new_window_title[256] = {};
+            snprintf(new_window_title, sizeof(new_window_title), "%s | FPS=%f", title, fps);
+            SDL_SetWindowTitle(window, new_window_title);
+
+            frame_time_accumulation = 0.0;
+            num_frames_accumulated = 0;
+        }
 
         // Event Loop
         SDL_Event event;
@@ -216,13 +235,14 @@ int main(int argc, char *argv[])
         SDL_SetWindowRelativeMouseMode(window, (GameUI_GetState() == GameState::Playing && !DebugUI_IsOpen()) || (DebugUI_IsOpen() && right_mouse_down));
 
         // controller test
-        const bool* state = SDL_GetKeyboardState(NULL);
         scene.GetECS().GetView<C_PlayerInput>().ForEach([&](C_PlayerInput& input) {
-                input.move_forward = state[SDL_SCANCODE_K];
-                input.move_backward = state[SDL_SCANCODE_I];
-                input.move_left = state[SDL_SCANCODE_L];
-                input.move_right = state[SDL_SCANCODE_J];
-                input.jump = state[SDL_SCANCODE_SPACE];
+            input.move_forward = Input_IsActionPressed(ACTION_MOVE_FORWARD);
+            input.move_backward = Input_IsActionPressed(ACTION_MOVE_BACKWARD);
+            input.move_left = Input_IsActionPressed(ACTION_MOVE_LEFT);
+            input.move_right = Input_IsActionPressed(ACTION_MOVE_RIGHT);
+            input.jump = Input_IsActionPressed(ACTION_JUMP);
+            input.run = Input_IsActionPressed(ACTION_SPRINT);
+            input.aim = Input_IsActionPressed(ACTION_AIM);
             }
         );
         // Movement always follows camera forward.

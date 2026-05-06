@@ -38,6 +38,9 @@ namespace
     InGameCamGameplayMode s_gameplay_mode = InGameCamGameplayMode::TPCam;
 
     glm::vec3 s_movement_forward = glm::vec3(0.0f, 0.0f, -1.0f);
+    const float near_plane = 0.1f;
+    const float far_plane  = 100.0f;
+    const float default_lens_distortion = -0.025f;
 
     bool  s_initialized = false;
     float s_occlusion_distance = s_tp_cam.distance;
@@ -203,7 +206,9 @@ namespace
         return CameraInfo{
             .view            = glm::lookAt(cam.pos, cam.pos + cam.forward, glm::vec3(0.0f, 1.0f, 0.0f)),
             .position        = cam.pos,
-            .lens_distortion = 0.0f
+            .near_plane      = near_plane,
+            .far_plane       = far_plane,
+            .lens_distortion = default_lens_distortion
         };
     }
     // tpcam pos at target + forward * distance with offset, with occlusion detection
@@ -333,7 +338,9 @@ namespace
         return CameraInfo{
                     .view            = glm::lookAt(cam.pos, aim_target, glm::vec3(0.0f, 1.0f, 0.0f)),
                     .position        = cam.pos,
-                    .lens_distortion = 0.0f
+                    .near_plane      = near_plane,
+                    .far_plane       = far_plane,
+                    .lens_distortion = default_lens_distortion
         };
     }
 
