@@ -131,8 +131,10 @@ public:
 	ShapeHandle getShapeHandle(EntityID e);
 	IShape* getShape(EntityID e); // extra
 
-	void setVelocity(EntityID e, glm::vec3 velocity);
-	void addVelocity(EntityID e, glm::vec3 velocity);
+	// Please do not use teleportBody to MOVE, use it to truly TELEPORT TO A PLACE
+	void teleportBody(EntityID e, const glm::vec3& worldPosition);
+	void setVelocity(EntityID e, const glm::vec3& velocity);
+	void addVelocity(EntityID e, const glm::vec3& velocity);
 	void setGravityScale(EntityID e, float scale);
 	void setForceLayers(EntityID e, uint32_t layers);
 	void addForceLayers(EntityID e, uint32_t layers);

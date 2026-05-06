@@ -14,14 +14,9 @@ enum class InGameCamGameplayMode
 
 using InGameCamDebugEdits = DebugUICameraEdits;
 using InGameCamSnapshot = DebugUIInGameCameraSnapshot;
-struct InGameCamRaycast
-{
-    bool layered_query = true;
-    uint8_t layer = 0;
-    bool only_static = false;
-};
 
-void InGameCam_Init(ECS* ecs, PhysicsManager* physics, EntityID player_id, InGameCamRaycast raycast_settings = {});
+void InGameCam_Init(ECS* ecs, PhysicsManager* physics, EntityID player_id);
+void InGameCam_Shutdown();
 void InGameCam_Update(
     float dt, bool is_playing, bool debug_ui_open, bool right_mouse_down,
     DebugUICameraMode debug_camera_mode

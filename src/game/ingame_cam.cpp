@@ -14,9 +14,20 @@
 
 namespace
 {
+    struct InGameCamOcclusionDetectSettings
+    {
+        bool layered_query = true;
+        uint8_t layer = 0;
+        bool only_static = false; // reserved
+
+        bool shapecast = false;
+        float shapecast_radius = 0.1f;
+        float shapecast_padding = 0.05f;
+    };
+    InGameCamOcclusionDetectSettings s_occlusion_settings = {};
     ECS* s_ecs = nullptr;
+
     PhysicsManager* s_physics = nullptr;
-    InGameCamRaycast s_raycast_settings = {};
 
     FPCamState s_fp_cam = {};
     TPCamState s_tp_cam = {};
@@ -29,7 +40,8 @@ namespace
     glm::vec3 s_movement_forward = glm::vec3(0.0f, 0.0f, -1.0f);
 
     bool  s_initialized = false;
-    float s_occlusion_distance = 4.0f;
+    float s_occlusion_distance = s_tp_cam.distance;
+    ShapeHandle s_camera_probe_shape = InvalidShapeHandle;
 
     constexpr float MOUSE_SENSITIVITY  = 0.10f;
     constexpr float GAMEPAD_LOOK_SPEED = 120.0f;
@@ -37,7 +49,9 @@ namespace
     constexpr float OCCLUSION_HIT_PADDING = 0.12f;
     constexpr float CAM_PULLING_SPEED = 35.0f;
     constexpr float CAM_PUSHING_SPEED = 12.0f;
+    constexpr float TP_SHOULDER_OFFSET = 0.4f;
 
+    // Smooth function for cam to adjust distance
     float SmoothExp(float current, float target, float dt, float speed)
     {
         if (dt <= 0.0f || speed <= 0.0f) return target;
@@ -45,6 +59,33 @@ namespace
         return glm::mix(current, target, glm::clamp(alpha, 0.0f, 1.0f));
     }
 
+    // Helper to destroy and recreate the camera probe shape when settings change
+    void DestroyCameraProbeShape()
+    {
+        if (s_physics && s_camera_probe_shape.isValid())
+        {
+            s_physics->destroyShape(s_camera_probe_shape);
+        }
+        s_camera_probe_shape = InvalidShapeHandle;
+    }
+
+    void CreateCameraProbeShape()
+    {
+        DestroyCameraProbeShape();
+
+        if (!s_physics || !s_occlusion_settings.shapecast) return;
+
+        const float probe_radius = glm::max(0.01f, s_occlusion_settings.shapecast_radius);
+
+        ShapeDesc probe_desc = ShapeDesc::makeSphere(probe_radius);
+        probe_desc.localOffset = glm::vec3(0.0f);
+        probe_desc.localOrientation = glm::quat(1.0f, 0.0f, 0.0f, 0.0f);
+
+        s_camera_probe_shape = s_physics->createShape(probe_desc);
+    }
+
+
+    // get fov from renderer and set to cam state
     void FPCam_SyncFovFromRenderer(FPCamState& cam)
     {
         if (cam.fov_initialized) return;
@@ -54,6 +95,7 @@ namespace
         cam.fov_initialized = true;
     }
 
+    // apply cam state's fov to renderer
     void FPCam_ApplyFovToRenderer(const FPCamState& cam)
     {
         if (!cam.fov_initialized) return;
@@ -89,6 +131,7 @@ namespace
         }
     }
 
+    // find first player entity
     EntityID FindFirstBindablePlayer(ECS* ecs)
     {
         if (!ecs) return NULL_ENTITY;
@@ -103,13 +146,15 @@ namespace
         return found;
     }
 
+    // Cam update
+    // fpcam pos at eye_height
     CameraInfo UpdateFPCamera(FPCamState& cam, float dt, bool allow_look_input, bool apply_fov_to_renderer)
     {
         FPCam_SyncFovFromRenderer(cam);
         if (apply_fov_to_renderer)
             FPCam_ApplyFovToRenderer(cam);
 
-        if (allow_look_input)
+        if (allow_look_input) // input allow in playstate, avoid input conflict
         {
             float mouse_dx = 0.0f;
             float mouse_dy = 0.0f;
@@ -124,15 +169,17 @@ namespace
                 * GAMEPAD_LOOK_SPEED * dt;
         }
 
-        if (cam.pitch > 89.0f) cam.pitch = 89.0f;
+        if (cam.pitch > 89.0f) cam.pitch = 89.0f; // cam pitch limit
         if (cam.pitch < -89.0f) cam.pitch = -89.0f;
 
+        // calculate forward from yaw/pitch
         glm::vec3 forward;
         forward.x = cosf(glm::radians(cam.yaw)) * cosf(glm::radians(cam.pitch));
         forward.y = sinf(glm::radians(cam.pitch));
         forward.z = sinf(glm::radians(cam.yaw)) * cosf(glm::radians(cam.pitch));
         cam.forward = glm::normalize(forward);
 
+        // find bound entity transform
         C_Transform* bound_transform = nullptr;
         if (s_ecs && cam.bound_entity != NULL_ENTITY)
             bound_transform = s_ecs->GetComponentPtr<C_Transform>(cam.bound_entity);
@@ -149,8 +196,8 @@ namespace
 
         if (bound_transform)
         {
-            glm::vec3 player_pos = glm::vec3(bound_transform->matrix[3]);
-            cam.pos = player_pos + glm::vec3(0.0f, cam.eye_height, 0.0f);
+            glm::vec3 player_pos = glm::vec3(bound_transform->matrix[3]); 
+            cam.pos = player_pos + glm::vec3(0.0f, cam.eye_height, 0.0f); // set cam pos to player pos + eye height
         }
 
         return CameraInfo{
@@ -159,7 +206,7 @@ namespace
             .lens_distortion = 0.0f
         };
     }
-
+    // tpcam pos at target + forward * distance with offset, with occlusion detection
     CameraInfo UpdateTPCamera(TPCamState& cam, float dt, bool allow_look_input, bool apply_fov_to_renderer)
     {
         TPCam_SyncFovFromRenderer(cam);
@@ -183,14 +230,15 @@ namespace
 
         if (cam.pitch > 80.0f) cam.pitch = 80.0f;
         if (cam.pitch < -80.0f) cam.pitch = -80.0f;
-        if (cam.distance < 0.5f) cam.distance = 0.5f;
+        if (cam.distance < 0.5f) cam.distance = 0.5f; // cam distance limit
 
+        // compute forward from yaw/pitch
         glm::vec3 forward;
         forward.x = cosf(glm::radians(cam.yaw)) * cosf(glm::radians(cam.pitch));
         forward.y = sinf(glm::radians(cam.pitch));
         forward.z = sinf(glm::radians(cam.yaw)) * cosf(glm::radians(cam.pitch));
         cam.forward = glm::normalize(forward);
-
+        // find bound entity transform
         C_Transform* bound_transform = nullptr;
         if (s_ecs && cam.bound_entity != NULL_ENTITY)
             bound_transform = s_ecs->GetComponentPtr<C_Transform>(cam.bound_entity);
@@ -208,57 +256,82 @@ namespace
         if (bound_transform)
         {
             glm::vec3 player_pos = glm::vec3(bound_transform->matrix[3]);
-            cam.target = player_pos + glm::vec3(0.0f, cam.target_height, 0.0f);
+            float height = cam.target_height;
+            if (s_ecs->Has<C_RigidBody>(cam.bound_entity) && s_physics)
+            {
+                IShape* genShape = s_physics->getShape(cam.bound_entity);
+                height = genShape->getHeight(); // for character_capsule.gltf = 2m
+
+                height = height * 0.5f * 0.7f; // tweak this
+                player_pos.y += genShape->localOffset.y;
+            }
+            cam.target = player_pos + glm::vec3(0.0f, height, 0.0f);
         }
 
         float desired_distance = glm::max(cam.distance, OCCLUSION_MIN_DISTANCE);
         float target_distance = desired_distance;
-
+        // occlusion detection
         if (s_physics)
         {
             Ray ray = {};
-            ray.origin = cam.target;
+            ray.origin = cam.target + glm::normalize(glm::cross(cam.forward, glm::vec3(0.0f, 1.0f, 0.0f))) * TP_SHOULDER_OFFSET;
             ray.direction = glm::normalize(-cam.forward);
             ray.maxDistance = desired_distance;
 
             QueryFilterExternal filter = {};
             filter.bodyToIgnore = cam.bound_entity; // ignore the player
-            filter.hasLayerOfQuery = s_raycast_settings.layered_query;
-            filter.layerOfQuery = s_raycast_settings.layer;
+            filter.hasLayerOfQuery = s_occlusion_settings.layered_query;
+            filter.layerOfQuery = s_occlusion_settings.layer;
 
-            std::vector<EntityRaycastHit> hits = s_physics->raycastAll(ray, filter);
-
-            float nearest_t = desired_distance;
-            for (const EntityRaycastHit& hit : hits)
+            // raycast: line-of-sight constraint
+            float distance_by_ray = desired_distance;
             {
-                if (!hit.isValid()) continue;
-                if (hit.entity == cam.bound_entity) continue;
-                if (hit.t >= 0.0f && hit.t < nearest_t)
-                    nearest_t = hit.t;
+                std::vector<EntityRaycastHit> hits = s_physics->raycastAll(ray, filter);
+                float nearest_t = desired_distance;
+                for (const EntityRaycastHit& hit : hits)
+                {
+                    if (!hit.isValid()) continue;
+                    if (hit.entity == cam.bound_entity) continue;
+                    if (hit.t >= 0.0f && hit.t < nearest_t)
+                        nearest_t = hit.t;
+                }
+                if (nearest_t < desired_distance)
+                    distance_by_ray = glm::clamp(nearest_t - OCCLUSION_HIT_PADDING,
+                                                 OCCLUSION_MIN_DISTANCE, desired_distance);
             }
 
-            if (nearest_t < desired_distance)
+            // shapecast: camera sphere volume constraint
+            float distance_by_shape = desired_distance;
+            if (s_occlusion_settings.shapecast && s_camera_probe_shape.isValid())
             {
-                target_distance = glm::clamp(
-                    nearest_t - OCCLUSION_HIT_PADDING,
-                    OCCLUSION_MIN_DISTANCE,
-                    desired_distance
-                );
+                EntityShapecastHit sc_hit = s_physics->shapecast(
+                    ray, s_camera_probe_shape, glm::quat(1.0f, 0.0f, 0.0f, 0.0f), filter);
+
+                if (sc_hit.isValid() && sc_hit.entity != cam.bound_entity)
+                    distance_by_shape = glm::clamp(
+                        sc_hit.t - s_occlusion_settings.shapecast_padding,
+                        OCCLUSION_MIN_DISTANCE, desired_distance);
             }
+
+            target_distance = glm::min(distance_by_ray, distance_by_shape);
         }
 
-        // remained for only static
-        (void)s_raycast_settings.only_static;
-
+        // remained for only static 
+        (void)s_occlusion_settings.only_static;
+        // speed of camera adjustment
         float speed = (target_distance < s_occlusion_distance)
             ? CAM_PULLING_SPEED
             : CAM_PUSHING_SPEED;
 
         s_occlusion_distance = SmoothExp(s_occlusion_distance, target_distance, dt, speed);
-        cam.pos = cam.target - cam.forward * s_occlusion_distance;
+        // offset computation for overshoulder effect
+        const glm::vec3 up = glm::vec3(0.0f, 1.0f, 0.0f);
+        const glm::vec3 right = glm::normalize(glm::cross(cam.forward, up));
+        cam.pos = cam.target - cam.forward * s_occlusion_distance + right * TP_SHOULDER_OFFSET;
 
-                return CameraInfo{
-                    .view            = glm::lookAt(cam.pos, cam.target, glm::vec3(0.0f, 1.0f, 0.0f)),
+        glm::vec3 aim_target = cam.target + right * TP_SHOULDER_OFFSET;
+        return CameraInfo{
+                    .view            = glm::lookAt(cam.pos, aim_target, glm::vec3(0.0f, 1.0f, 0.0f)),
                     .position        = cam.pos,
                     .lens_distortion = 0.0f
         };
@@ -271,14 +344,17 @@ namespace
     }
 }
 
-void InGameCam_Init(ECS* ecs, PhysicsManager* physics, EntityID player_id, InGameCamRaycast raycast_settings)
+void InGameCam_Init(ECS* ecs, PhysicsManager* physics, EntityID player_id)
 {
+
     s_ecs = ecs;
     s_physics = physics;
-    s_raycast_settings = raycast_settings;
-    s_raycast_settings.layered_query = true;
-    s_raycast_settings.layer = (uint8_t)BodyLayer::MOVING;
-    s_raycast_settings.only_static = false; // reserved
+
+    s_occlusion_settings.layered_query = true;
+    s_occlusion_settings.layer = (uint8_t)BodyLayer::AFFECT_NOT_CHARACTER;
+    s_occlusion_settings.shapecast = true;
+
+    CreateCameraProbeShape();
 
     s_fp_cam = FPCamState{};
     s_tp_cam = TPCamState{};
@@ -371,6 +447,15 @@ void InGameCam_ToggleGameplayMode()
             : InGameCamGameplayMode::FPCam;
 
     InGameCam_SetGameplayMode(next_mode);
+}
+
+void InGameCam_Shutdown()
+{
+    DestroyCameraProbeShape();
+
+    s_ecs = nullptr;
+    s_physics = nullptr;
+    s_initialized = false;
 }
 
 void InGameCam_ApplyDebugEdits(const InGameCamDebugEdits& edits)

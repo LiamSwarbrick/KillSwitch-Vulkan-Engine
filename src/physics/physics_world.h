@@ -7,6 +7,7 @@
 #include "core/ecs/sparse_set.h"
 
 #include "physics/core/types.h"
+#include "physics/core/physics_settings.h"
 
 #include "physics/collision/broadphase/broadphase.h"
 #include "physics/collision/narrowphase/narrowphase.h"
@@ -73,8 +74,9 @@ public:
 	ShapeHandle getShapeHandle(RigidBodyHandle r);
 	IShape* getShape(RigidBodyHandle r); // extra
 
-	void setVelocity(RigidBodyHandle r, glm::vec3 velocity);
-	void addVelocity(RigidBodyHandle r, glm::vec3 velocity);
+	void teleportBody(RigidBodyHandle r, const glm::vec3& worldPosition);
+	void setVelocity(RigidBodyHandle r, const glm::vec3& velocity);
+	void addVelocity(RigidBodyHandle r, const glm::vec3& velocity);
 	void setGravityScale(RigidBodyHandle r, float scale);
 	void setForceLayers(RigidBodyHandle r, uint32_t layers);
 	void addForceLayers(RigidBodyHandle r, uint32_t layers);
@@ -199,7 +201,7 @@ private:
 	void detectCollisions(); // broadPhase.queryPairs() + narrowPhase.testPair(<pair>)
 	void testPlanes(); // narrowPhase.testPlane(<bodies, planes>)
 	void solve(float dt); // solve interpenetration
-
+	void updateSleep(float dt);
 
 	// TODO after implementing events
 	void dispatchEvents();
@@ -212,6 +214,10 @@ private:
 	QueryFilterInternal getQueryFilterInternalFromQueryFilter(const QueryFilter& queryFilter) const;
 
 	//inline RigidBody& getBody();
+	void teleportBodyRaw(RigidBody* body, const glm::vec3& worldPos);
+	
+	// wake all bodies
+	void wakeAllBodies();
 
 private:
 	// --- SYSTEMS ---
@@ -262,9 +268,9 @@ private:
 
 	// --- SETTINGS ---
 	GravityGenerator gravityGen; // default gravity
-	float fixedStep = 1.0f / 120.0f;
+	float fixedStep = g_PhysicsSettings.fixedStepDuration;
 	float stepAccumulator = 0.0f;
-	int maxSteps = 4;
+	int maxSteps = g_PhysicsSettings.maxIterationSteps;
 
 	glm::vec3 UP_VECTOR = glm::vec3(0.0f, 1.0f, 0.0f);
 };

@@ -65,15 +65,14 @@ void BroadPhase::queryPairs(std::vector<BodyPair>& outPairs) const
 			RigidBody* a = bodies[i];
 			RigidBody* b = bodies[j];
 
-			if (a->isStatic && b->isStatic) continue;
+			// Not including isTrigger here cause we can spawn a trigger that is going to apply a force on a sleeping body 
+			// and that SHOULD BE A CONTACT
+			bool skipA = a->isStatic || a->sleeping;
+			bool skipB = b->isStatic || b->sleeping;
+			if (skipA && skipB) continue;
 			if (a->isTrigger && b->isTrigger) continue;
 			if (!bodyLayerFilter->shouldCollide(a->bodyLayer, b->bodyLayer)) continue;
 
-			if ((a->position.y < 1.5f && b->position.y == 0.0f)
-				|| (b->position.y < 1.5f && a->position.y == 0.0f))
-			{
-				SDL_assert(true);
-			}
 
 			if (a->aabb.overlaps(b->aabb))
 				outPairs.push_back({ a, b });

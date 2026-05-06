@@ -78,6 +78,11 @@ public:
 		return hit;
 	}
 
+	float getHeight() const override
+	{
+		return radius * 2.0f;
+	}
+
 };
 
 #endif // !PHYSICS_SHAPES_SPHERE_H

@@ -68,7 +68,7 @@ void ForceRegistry::applyAll(std::vector<RigidBody>& bodies, float dt)
 {
 	for (RigidBody& body : bodies)
 	{
-		if (body.isStatic) continue;
+		if (body.sleeping || body.isStatic || body.isTrigger || body.isKinematic) continue;
 
 		for (IForceGenerator* gen : globalGenerators)
 		{
@@ -79,11 +79,12 @@ void ForceRegistry::applyAll(std::vector<RigidBody>& bodies, float dt)
 
 	for (PairedEntry& entry : pairedGenerators)
 	{
-		if (entry.body->isStatic) continue;
+		RigidBody& body = *entry.body;
+		if (body.sleeping || body.isStatic || body.isTrigger || body.isKinematic) continue;
 		// We skip the check of 
 		// 
 		// , because its a pair
-		entry.generator->apply(*entry.body, dt);
+		entry.generator->apply(body, dt);
 	}
 
 }

@@ -101,6 +101,11 @@ public:
         return RaycastHit::none();
 	}
 
+    float getHeight() const override
+    {
+        return radius * 2.0f + halfHeight * 2.0f;
+    }
+
 };
 
 #endif // !PHYSICS_SHAPES_CAPSULE_H

@@ -38,6 +38,11 @@ public:
 		return RaycastHit::none();
 	}
 
+	float getHeight() const override
+	{
+		SDL_assert(false && "Not implemented, not using plane shapes");
+		return 0.0f;
+	}
 };
 
 #endif // !PHYSICS_SHAPES_PLANE_H
