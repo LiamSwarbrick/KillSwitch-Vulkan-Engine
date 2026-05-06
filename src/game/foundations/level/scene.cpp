@@ -549,7 +549,8 @@ void Scene::UpdatePlayer(float dt)
     {
     case PhysicsCharacter::GroundState::OnGround:
 
-        m_physicsManager.setVelocity(m_currentPlayer, controller.velocity);
+        if(!(!isMoving && currentVelocity.x == 0.0f && currentVelocity.z == 0.0f))
+            m_physicsManager.setVelocity(m_currentPlayer, controller.velocity);
 
         if (input.jump)
         {

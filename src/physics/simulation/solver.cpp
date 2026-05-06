@@ -55,6 +55,7 @@ void Solver::solve(const std::vector<Contact>& contacts, float dt)
     for (PhysicsCharacter& c : world.characters.Data())
     {
         RigidBody* b = c.body;
+        if (b->sleeping) continue;
         //tryStepUp(c, *b, dt);
         trySnapDown(c, *b, dt);
     }
@@ -261,6 +262,7 @@ void Solver::prepareCharacters(float dt)
     for (PhysicsCharacter& c : world.characters.Data())
     {
         RigidBody* b = c.body;
+        if (b->sleeping) continue;
         c.groundState = PhysicsCharacter::GroundState::InAir;
         c.groundNormal = world.UP_VECTOR;
 
