@@ -6,11 +6,11 @@
 
 #include "glm/glm.hpp"
 
-class IShape
+class Shape
 {
 public:
 
-	virtual ~IShape() = default;
+	virtual ~Shape() = default;
 
 	ShapeType getType() const { return type; }
 
@@ -39,7 +39,7 @@ public:
 
 protected:
 	// explicit so we choose when to call it from child classes
-	explicit IShape(ShapeType t) : type(t) {}
+	explicit Shape(ShapeType t) : type(t) {}
 
 private:
 	ShapeType type;

@@ -298,7 +298,7 @@ namespace
             float height = cam.target_height;
             if (s_ecs->Has<C_RigidBody>(cam.bound_entity) && s_physics)
             {
-                IShape* genShape = s_physics->getShape(cam.bound_entity);
+                Shape* genShape = s_physics->getShape(cam.bound_entity);
                 height = genShape->getHeight(); // for character_capsule.gltf = 2m
 
                 height = height * 0.5f * 0.7f; // tweak this

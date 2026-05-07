@@ -28,24 +28,24 @@ public:
 	// Queries (for later)
 	RaycastHit raycast(const Ray& ray, const RigidBody& body, const PhysicsWorld& world) const;
 	
-	bool testShapeIntersects(const IShape* shape, const glm::vec3& shapePosition, const glm::quat& shapeOrientation, const RigidBody& body, const PhysicsWorld& world) const;
+	bool testShapeIntersects(const Shape* shape, const glm::vec3& shapePosition, const glm::quat& shapeOrientation, const RigidBody& body, const PhysicsWorld& world) const;
 	
 	ShapecastHit shapecast(
 		const Ray& ray, 
-		const IShape* queryShape, const glm::vec3& queryPos, const glm::quat& queryOri,
-		const IShape* targetShape, const glm::vec3& targetPos, const glm::quat& targetOri) const;
+		const Shape* queryShape, const glm::vec3& queryPos, const glm::quat& queryOri,
+		const Shape* targetShape, const glm::vec3& targetPos, const glm::quat& targetOri) const;
 
 	RaycastHit raycastPlane(const Ray& ray, const PlaneShape& plane, const PhysicsWorld& world) const;
 
 	// Helper to transform shapes's pos and ori in case the shape has offset
-	void resolveShapeTransform(const IShape* shape,
+	void resolveShapeTransform(const Shape* shape,
 		const glm::vec3& bodyPosition, const glm::quat& bodyOrientation,
 		glm::vec3& outPosition, glm::quat& outOrientation) const;
 
 private:
 	Contact dispatch(
-		const IShape* shapeA, const glm::vec3& posA, const glm::quat& oriA,
-		const IShape* shapeB, const glm::vec3& posB, const glm::quat& oriB) const;
+		const Shape* shapeA, const glm::vec3& posA, const glm::quat& oriA,
+		const Shape* shapeB, const glm::vec3& posB, const glm::quat& oriB) const;
 
 	// Analytic paths
 	Contact testSphereSphere(
@@ -65,8 +65,8 @@ private:
 		const PlaneShape& plane) const;
 
 	Contact testGJK_EPA(
-		const IShape* shapeA, const glm::vec3& posA, const glm::quat& oriA,
-		const IShape* shapeB, const glm::vec3& posB, const glm::quat& oriB) const;
+		const Shape* shapeA, const glm::vec3& posA, const glm::quat& oriA,
+		const Shape* shapeB, const glm::vec3& posB, const glm::quat& oriB) const;
 
 
 	// For queries (in the future but defined already
@@ -86,8 +86,8 @@ private:
 	// Conservative Advancement for raycasting
 	ShapecastHit conservativeAdvancement(
 		const Ray& ray,
-		const IShape* queryShape, const glm::vec3& queryPos, const glm::quat& queryOri,
-		const IShape* targetShape, const glm::vec3& targetPos, const glm::quat& targetOri) const;
+		const Shape* queryShape, const glm::vec3& queryPos, const glm::quat& queryOri,
+		const Shape* targetShape, const glm::vec3& targetPos, const glm::quat& targetOri) const;
 };
 
 #endif // !PHYSICS_COLLISION_NARROWPHASE_NARROWPHASE_H

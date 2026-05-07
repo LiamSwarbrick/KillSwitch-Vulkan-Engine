@@ -349,7 +349,7 @@ bool Solver::tryStepUp(PhysicsCharacter& character, RigidBody& body, float dt)
     ShapecastHit hit;
 
     // Quick fix for small steps, instead of velocity*dt, we can try character radius to never be unable to climb stairs
-    IShape* shapePtr = world.getShape(body.shapeHandle);
+    Shape* shapePtr = world.getShape(body.shapeHandle);
     CapsuleShape* capsule = static_cast<CapsuleShape*>(shapePtr);
     //float desiredForwardLength = std::max(currentForwardLength, capsule->radius);
     float desiredForwardLength = currentForwardLength;
@@ -551,8 +551,8 @@ bool Solver::trySnapDown(PhysicsCharacter& character, RigidBody& body, float dt)
     filter.bodyToIgnore = { body.bodyID };
     glm::quat orientation = glm::identity<glm::quat>();
 
-    IShape* ishape = world.getShape(body.shapeHandle);
-    CapsuleShape* capsule = static_cast<CapsuleShape*>(ishape);
+    Shape* shape = world.getShape(body.shapeHandle);
+    CapsuleShape* capsule = static_cast<CapsuleShape*>(shape);
     float characterHeight = capsule->halfHeight + capsule->radius;
 
     glm::vec3 desiredHorizontalVelocity = glm::vec3(character.preSolvingVelocity.x, 0.0f, character.preSolvingVelocity.z);

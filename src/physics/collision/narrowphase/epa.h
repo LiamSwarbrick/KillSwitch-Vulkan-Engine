@@ -16,8 +16,8 @@ struct EPAResult
 };
 
 EPAResult epa_runEPA(
-	const IShape* shapeA, const glm::vec3& posA, const glm::quat& oriA,
-	const IShape* shapeB, const glm::vec3& posB, const glm::quat& oriB,
+	const Shape* shapeA, const glm::vec3& posA, const glm::quat& oriA,
+	const Shape* shapeB, const glm::vec3& posB, const glm::quat& oriB,
 	GJKResult& result
 );
 
