@@ -7,7 +7,7 @@
 
 #include "glm/glm.hpp"
 
-class CapsuleShape : public IShape
+class CapsuleShape : public Shape
 {
 public:
 	float radius;
@@ -15,7 +15,7 @@ public:
 
 public:
 	explicit CapsuleShape(float radius, float halfHeight)
-		: IShape(ShapeType::Capsule), radius(radius), halfHeight(halfHeight)
+		: Shape(ShapeType::Capsule), radius(radius), halfHeight(halfHeight)
 	{
 	}
 

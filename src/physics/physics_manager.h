@@ -131,7 +131,7 @@ public:
 	float getGravityScale(EntityID e);
 	uint32_t getForceLayers(EntityID e);
 	ShapeHandle getShapeHandle(EntityID e);
-	IShape* getShape(EntityID e); // extra
+	Shape* getShape(EntityID e); // extra
 
 	// Please do not use teleportBody to MOVE, use it to truly TELEPORT TO A PLACE
 	void teleportBody(EntityID e, const glm::vec3& worldPosition);
