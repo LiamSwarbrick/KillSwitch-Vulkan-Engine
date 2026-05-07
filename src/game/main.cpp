@@ -9,6 +9,7 @@
 #include "ingame_cam.h"
 #include "game/foundations/components.h"
 #include "core/audio_system.h"
+#include "physics/body_layers.h"
 
 #include "SDL3/SDL.h"
 #include "SDL3/SDL_main.h"
@@ -238,6 +239,33 @@ int main(int argc, char *argv[])
         // pass debug ui edits
         DebugUICameraEdits ui_camera_edits = {};
         if (DebugUI_ConsumeCameraEdits(&ui_camera_edits)){InGameCam_ApplyDebugEdits(ui_camera_edits);}
+        // raycast attack at center of screen
+        if (GameUI_GetState() == GameState::Playing &&
+            Input_IsActionJustPressed(ACTION_ATTACK) && Input_IsActionPressed(ACTION_AIM))
+        {
+            const CameraInfo& cam = InGameCam_GetGameplayCamera();
+
+            Ray ray = {};
+            ray.origin = cam.position;
+            ray.direction = glm::normalize(glm::vec3(
+                -cam.view[0][2],
+                -cam.view[1][2],
+                -cam.view[2][2]
+            )); // Forward vector of the camera
+            ray.maxDistance = 100.0f; 
+
+            QueryFilterExternal filter = {};
+            filter.bodyToIgnore = playerID; 
+            filter.hasLayerOfQuery = true;
+            filter.layerOfQuery = (uint8_t)BodyLayer::WEAPON; 
+
+            EntityRaycastHit hit = scene.GetPhysicsManager().raycast(ray, filter);
+            if (hit.isValid())
+            {
+                // TODO: Apply damage to hit entity, spawn hit effects, etc.
+                SDL_Log("Raycast hit entity %u at point (%f, %f, %f)", hit.entity, hit.point.x, hit.point.y, hit.point.z);
+            }
+        }
         // Only capture mouse while playing (release it on pause), keep relative mouse when debug UI toggled.
         const bool right_mouse_down = (SDL_GetMouseState(nullptr, nullptr) & SDL_BUTTON_MASK(SDL_BUTTON_RIGHT)) != 0;
         SDL_SetWindowRelativeMouseMode(window, (GameUI_GetState() == GameState::Playing && !DebugUI_IsOpen()) || (DebugUI_IsOpen() && right_mouse_down));
