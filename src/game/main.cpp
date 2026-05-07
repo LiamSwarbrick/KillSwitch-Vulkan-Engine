@@ -173,8 +173,8 @@ int main(int argc, char *argv[])
     // EntityID playerEntity = scene.InstantiatePrefab(animationPrefab, glm::vec3(10, 0, 10));
 
     //making gun
-    //Asset* gun_prefab = scene.LoadPrefab("assets/props/colt.gltf"); 
-    //EntityID gunID = scene.InstantiatePrefab(gun_prefab, glm::vec3(0, 0, 0));
+    Asset* gun_prefab = scene.LoadPrefab("assets/props/colt.gltf"); 
+    EntityID gunID = scene.InstantiatePrefab(gun_prefab, glm::vec3(0, 0, 0));
     // making gun
 
     scene.SetPlayer(playerID);

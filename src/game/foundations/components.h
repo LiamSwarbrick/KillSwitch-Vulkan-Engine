@@ -14,7 +14,7 @@
 struct C_CharacterController
 {
 	glm::vec3 velocity{ 0.0f };
-	float move_speed = 3.0f;
+	float move_speed = 0.3f;
 
 	glm::vec3 target_position{ 0.0f };
 	bool jumping = false;
@@ -46,7 +46,7 @@ struct C_Weapon
 	glm::mat4 local_transform = glm::mat4(1.0f);
 	bool equipped = false;
 
-	int attach_bone_index = -1;
+	const char* attach_bone_name;
 };
 
 #endif // !FOUNDATIONS_COMPONENTS_H
