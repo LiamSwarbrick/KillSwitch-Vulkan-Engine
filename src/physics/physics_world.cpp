@@ -837,6 +837,16 @@ void PhysicsWorld::applyForces(float dt)
 
 void PhysicsWorld::integrate(float dt)
 {
+	// Before we integrate the bodies, add the baseVelocity from the characters to their respective bodies
+	// BECAUSE WE ARE ASSUMING FOR CHARACTERS, GAME-SIDE UPDATES SETS THE SPEED EVERY FRAME
+	for (PhysicsCharacter& c : characters.Data())
+	{
+		if (!c.body) continue;
+
+		c.body->velocity += c.baseVelocity;
+	}
+	// Now the forces should be ready to be added to the bodies' velocities
+
 	for (RigidBody& body : bodies.Data())
 	{
 		integrator.integrate(body, dt);
