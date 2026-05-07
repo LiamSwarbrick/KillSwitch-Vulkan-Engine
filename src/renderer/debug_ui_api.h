@@ -27,6 +27,7 @@ struct TPCamState
 	EntityID  bound_entity    = NULL_ENTITY;
 	float     target_height   = 1.4f;
 	float     distance        = 1.00f;
+	float     follow_lag_sec  = 0.10f;
 	float     yaw             = -90.0f;
 	float     pitch           = -15.0f;
 	float     fov_deg         = 2864.8f;

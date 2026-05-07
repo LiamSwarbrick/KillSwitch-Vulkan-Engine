@@ -38,11 +38,14 @@ namespace
     InGameCamGameplayMode s_gameplay_mode = InGameCamGameplayMode::TPCam;
 
     glm::vec3 s_movement_forward = glm::vec3(0.0f, 0.0f, -1.0f);
+    glm::vec3 s_tp_follow_target = glm::vec3(0.0f);
+    EntityID s_tp_follow_target_entity = NULL_ENTITY;
     const float near_plane = 0.1f;
     const float far_plane  = 100.0f;
     const float default_lens_distortion = -0.025f;
 
     bool  s_initialized = false;
+    bool  s_tp_follow_target_initialized = false;
     float s_occlusion_distance = s_tp_cam.distance;
     float s_base_fov = TPCamState{}.fov_deg;
     ShapeHandle s_camera_probe_shape = InvalidShapeHandle;
@@ -54,6 +57,7 @@ namespace
     constexpr float CAM_PULLING_SPEED = 35.0f;
     constexpr float CAM_PUSHING_SPEED = 12.0f;
     constexpr float TP_SHOULDER_OFFSET = 0.4f;
+    constexpr float TP_FOLLOW_SNAP_DISTANCE = 4.0f;
     constexpr float AIM_FOV_OFFSET = 700.0f;
 
     // Smooth function for cam
@@ -62,6 +66,20 @@ namespace
         if (dt <= 0.0f || speed <= 0.0f) return target;
         float alpha = 1.0f - expf(-speed * dt);
         return glm::mix(current, target, glm::clamp(alpha, 0.0f, 1.0f));
+    }
+
+    glm::vec3 SmoothExpVec3(const glm::vec3& current, const glm::vec3& target, float dt, float speed)
+    {
+        if (dt <= 0.0f || speed <= 0.0f) return target;
+        float alpha = 1.0f - expf(-speed * dt);
+        return glm::mix(current, target, glm::clamp(alpha, 0.0f, 1.0f));
+    }
+
+    void ResetTPCamFollowTarget()
+    {
+        s_tp_follow_target = glm::vec3(0.0f);
+        s_tp_follow_target_entity = NULL_ENTITY;
+        s_tp_follow_target_initialized = false;
     }
 
     // Helper to destroy and recreate the camera probe shape when settings change
@@ -260,6 +278,13 @@ namespace
             }
         }
 
+        bool is_aiming = false;
+        if (s_ecs && cam.bound_entity != NULL_ENTITY)
+        {
+            if (const C_PlayerInput* input = s_ecs->GetComponentPtr<C_PlayerInput>(cam.bound_entity))
+                is_aiming = input->aim;
+        }
+
         if (bound_transform)
         {
             glm::vec3 player_pos = glm::vec3(bound_transform->matrix[3]);
@@ -272,7 +297,43 @@ namespace
                 height = height * 0.5f * 0.7f; // tweak this
                 player_pos.y += genShape->localOffset.y;
             }
-            cam.target = player_pos + glm::vec3(0.0f, height, 0.0f);
+
+            const glm::vec3 desired_target = player_pos + glm::vec3(0.0f, height, 0.0f);
+            if (is_aiming)
+            {
+                s_tp_follow_target = desired_target;
+                s_tp_follow_target_entity = cam.bound_entity;
+                s_tp_follow_target_initialized = true;
+            }
+            else
+            {
+                const glm::vec3 target_delta = desired_target - s_tp_follow_target;
+                const bool snap_follow_target =
+                    !s_tp_follow_target_initialized ||
+                    s_tp_follow_target_entity != cam.bound_entity ||
+                    glm::dot(target_delta, target_delta) >=
+                        (TP_FOLLOW_SNAP_DISTANCE * TP_FOLLOW_SNAP_DISTANCE);
+
+                if (snap_follow_target)
+                {
+                    s_tp_follow_target = desired_target;
+                    s_tp_follow_target_entity = cam.bound_entity;
+                    s_tp_follow_target_initialized = true;
+                }
+                else
+                {
+                    const float follow_speed =
+                        (cam.follow_lag_sec <= 0.0f) ? 0.0f : (1.0f / cam.follow_lag_sec);
+                    s_tp_follow_target = SmoothExpVec3(
+                        s_tp_follow_target,
+                        desired_target,
+                        dt,
+                        follow_speed
+                    );
+                }
+            }
+
+            cam.target = s_tp_follow_target;
         }
 
         float desired_distance = glm::max(cam.distance, OCCLUSION_MIN_DISTANCE);
@@ -337,13 +398,6 @@ namespace
         cam.pos = cam.target - cam.forward * s_occlusion_distance + right * TP_SHOULDER_OFFSET;
 
         // Aiming offset and FOV change
-        bool is_aiming = false;
-        if (s_ecs && cam.bound_entity != NULL_ENTITY)
-        {
-            if (const C_PlayerInput* input = s_ecs->GetComponentPtr<C_PlayerInput>(cam.bound_entity))
-                is_aiming = input->aim;
-        }
-
         const float target_aim_offset = is_aiming ? (TP_SHOULDER_OFFSET + 0.08f) : TP_SHOULDER_OFFSET;
         const float aimed_fov = glm::max(40.0f, s_base_fov - AIM_FOV_OFFSET);
         const float target_fov = is_aiming ? aimed_fov : s_base_fov;
@@ -391,6 +445,7 @@ void InGameCam_Init(ECS* ecs, PhysicsManager* physics, EntityID player_id)
     s_tp_camera = CameraInfo{};
     s_movement_forward = glm::vec3(0.0f, 0.0f, -1.0f);
     s_gameplay_mode = InGameCamGameplayMode::TPCam;
+    ResetTPCamFollowTarget();
     s_occlusion_distance = s_tp_cam.distance;
     s_base_fov = s_tp_cam.fov_deg;
 
@@ -482,6 +537,7 @@ void InGameCam_ToggleGameplayMode()
 void InGameCam_Shutdown()
 {
     DestroyCameraProbeShape();
+    ResetTPCamFollowTarget();
 
     s_ecs = nullptr;
     s_physics = nullptr;
@@ -504,6 +560,7 @@ void InGameCam_ApplyDebugEdits(const InGameCamDebugEdits& edits)
         const EntityID keep_bound = s_tp_cam.bound_entity;
         TPCam_ResetToDefault(s_tp_cam);
         s_tp_cam.bound_entity = keep_bound;
+        ResetTPCamFollowTarget();
         s_base_fov = edits.tp_state.fov_deg;
     }
 
@@ -515,7 +572,10 @@ void InGameCam_ApplyDebugEdits(const InGameCamDebugEdits& edits)
         s_base_fov = edits.tp_state.fov_deg;
     
     if (edits.reset_tp || edits.apply_tp_state)
+    {
+        ResetTPCamFollowTarget();
         s_occlusion_distance = glm::max(s_tp_cam.distance, OCCLUSION_MIN_DISTANCE);
+    }
 
     const bool gameplay_fp_active = s_gameplay_mode == InGameCamGameplayMode::FPCam;
     const bool gameplay_tp_active = !gameplay_fp_active;
