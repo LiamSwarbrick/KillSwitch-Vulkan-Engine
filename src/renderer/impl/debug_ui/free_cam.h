@@ -47,16 +47,16 @@ namespace DebugUI
         glm::vec3 right = glm::normalize(glm::cross(fwd, glm::vec3(0.0f, 1.0f, 0.0f)));
         glm::vec3 up    = glm::vec3(0.0f, 1.0f, 0.0f);
 
-        // Move: WASD + E/Q, Shift to sprint
+        // Move: IJKL + O/U, Shift to sprint
         float speed = MOVE_SPEED * dt;
         if (io.KeyShift) speed *= SPRINT_MULT;
 
-        if (ImGui::IsKeyDown(ImGuiKey_W)) cam.pos += fwd   * speed;
-        if (ImGui::IsKeyDown(ImGuiKey_S)) cam.pos -= fwd   * speed;
-        if (ImGui::IsKeyDown(ImGuiKey_A)) cam.pos -= right * speed;
-        if (ImGui::IsKeyDown(ImGuiKey_D)) cam.pos += right * speed;
-        if (ImGui::IsKeyDown(ImGuiKey_E)) cam.pos += up    * speed;
-        if (ImGui::IsKeyDown(ImGuiKey_Q)) cam.pos -= up    * speed;
+        if (ImGui::IsKeyDown(ImGuiKey_I)) cam.pos += fwd   * speed;
+        if (ImGui::IsKeyDown(ImGuiKey_K)) cam.pos -= fwd   * speed;
+        if (ImGui::IsKeyDown(ImGuiKey_J)) cam.pos -= right * speed;
+        if (ImGui::IsKeyDown(ImGuiKey_L)) cam.pos += right * speed;
+        if (ImGui::IsKeyDown(ImGuiKey_O)) cam.pos += up    * speed;
+        if (ImGui::IsKeyDown(ImGuiKey_U)) cam.pos -= up    * speed;
 
         return CameraInfo{
             .view             = glm::lookAt(cam.pos, cam.pos + fwd, up),

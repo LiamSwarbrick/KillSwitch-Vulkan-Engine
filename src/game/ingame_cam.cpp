@@ -17,7 +17,7 @@ namespace
     struct InGameCamOcclusionDetectSettings
     {
         bool layered_query = true;
-        uint8_t layer = 0;
+        uint8_t layer = (int8_t)BodyLayer::AFFECT_ONLY_STATIC;
         bool only_static = false; // reserved
 
         bool shapecast = false;
