@@ -67,16 +67,16 @@ int main(int argc, char *argv[])
         "All_Sounds_MP3_UNMASTERED2/Bad_Signs.mp3"    
     );
     // Set up spatial audio for player start position
-    if (startup_music != 0)
-        {
-            AudioSystem_SetClipMinMaxDistance(&audio_system, startup_music, 1.0f, 40.0f);
-            AudioSystem_PlaySpatialLoop(
-                &audio_system,
-                startup_music,
-                1.0f,
-                2.0f, 1.0f, 0.0f
-            );
-        }
+    // if (startup_music != 0)
+    //     {
+    //         AudioSystem_SetClipMinMaxDistance(&audio_system, startup_music, 1.0f, 40.0f);
+    //         AudioSystem_PlaySpatialLoop(
+    //             &audio_system,
+    //             startup_music,
+    //             1.0f,
+    //             2.0f, 1.0f, 0.0f
+    //         );
+    //     }
 
     // AudioClipHandle startup_test_sfx = AudioSystem_LoadClipEx(
     //     &audio_system,
@@ -200,7 +200,7 @@ int main(int argc, char *argv[])
     {
 		// delta time calculation for testing
         uint64_t current_time = SDL_GetTicksNS();
-        float dt = (float)(current_time - last_time) / 1000000000.0f;
+        float dt = (float)((double)(current_time - last_time) / 1000000000.0);
         last_time = current_time;
         if (dt > 0.1f) dt = 0.1f;
 
