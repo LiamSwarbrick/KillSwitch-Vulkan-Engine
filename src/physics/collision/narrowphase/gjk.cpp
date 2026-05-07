@@ -297,10 +297,6 @@ void gjk_fillResultWithClosestPointAndDistance(GJKResult& gjk)
 
 		gjk.distanceDirection = glm::normalize(closestB - closestA);
 	}
-	else
-	{
-		SDL_assert(false && "ok it should not be possible (with the current implementation) to return false and have a tetrahedron");
-	}
 	
 }
 
