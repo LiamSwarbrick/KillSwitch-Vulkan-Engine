@@ -14,7 +14,7 @@
 struct C_CharacterController
 {
 	glm::vec3 velocity{ 0.0f };
-	float move_speed = 0.3f;
+	float move_speed = 5.3f;
 
 	glm::vec3 target_position{ 0.0f };
 	bool jumping = false;

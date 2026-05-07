@@ -477,8 +477,8 @@ void create_window_dependent_resources()
     );
 
     // Shadow maps
-    const uint32_t shadow_map_width  = 512;  // NOTE: Our program should run on super low end hardware
-    const uint32_t shadow_map_height = 512;  //       So keeping shadow maps small for now.
+    const uint32_t shadow_map_width  = 1024;  // NOTE: Our program should run on super low end hardware
+    const uint32_t shadow_map_height = 1024;  //       So keeping shadow maps small for now.
     for (uint32_t i = 0; i < MAX_SHADOWMAPS; ++i)
     {
         char res_name[64] = {};

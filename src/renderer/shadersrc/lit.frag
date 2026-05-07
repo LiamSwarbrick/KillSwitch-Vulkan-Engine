@@ -270,7 +270,7 @@ void main()
         direct_light += radiance;
     }
     
-    for (uint i = 0; i < min(cluster.spot_count, 0); ++i)
+    for (uint i = 0; i < min(cluster.spot_count, max_lights_per_pixel); ++i)
     {
         uint light_index = sl_indices.indices[cluster.spot_offset + i];
         SpotLight sl = sl_buf.spot_lights[light_index];

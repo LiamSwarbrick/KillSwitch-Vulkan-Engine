@@ -200,7 +200,7 @@ int main(int argc, char *argv[])
     {
 		// delta time calculation for testing
         uint64_t current_time = SDL_GetTicksNS();
-        float dt = (float)(current_time - last_time) / 1000000000.0f;
+        float dt = (float)((double)(current_time - last_time) / 1000000000.0);
         last_time = current_time;
         if (dt > 0.1f) dt = 0.1f;
 
