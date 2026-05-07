@@ -783,6 +783,7 @@ def prepare_lights_for_export():
         light["engine_color"] = [light.color[0], light.color[1], light.color[2]]
 
         light["engine_intensity"] = light.energy
+        light["engine_radius"] = light.cutoff_distance
 
         # if light.type == 'POINT':
         radius = light.shadow_soft_size
@@ -856,6 +857,18 @@ class EXPORT_OT_level_glb(bpy.types.Operator, ExportHelper):
         return {'FINISHED'}
 
 
+def restore_light_radius_after_import():
+    for obj in bpy.data.objects:
+        if obj.type != 'LIGHT':
+            continue
+
+        light = obj.data
+
+        if "engine_radius" in light:
+            light.cutoff_distance = light["engine_radius"]
+            light.shadow_soft_size = light["engine_radius"]
+
+
 class IMPORT_OT_level_glb(bpy.types.Operator, ImportHelper):
     bl_idname = "import.level_glb"
     bl_label = "Import Level (.glb/.gltf)"
@@ -869,6 +882,7 @@ class IMPORT_OT_level_glb(bpy.types.Operator, ImportHelper):
     def execute(self, context):
         # Import the glTF file
         bpy.ops.import_scene.gltf(filepath=self.filepath)
+        restore_light_radius_after_import()
 
         # Rebuild ECS from extras
         import_ecs_from_scene()
