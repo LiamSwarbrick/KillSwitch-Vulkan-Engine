@@ -46,6 +46,16 @@ static inline b32 compute_light_cluster_bounds(
     else 
     {
         // AABB Projection to screen
+        // glm::vec3 min_v = light_view_pos - glm::vec3(r);
+        // glm::vec3 max_v = light_view_pos + glm::vec3(r);
+
+        // glm::vec3 corners[8] = {
+        //     {min_v.x, min_v.y, min_v.z}, {max_v.x, min_v.y, min_v.z},
+        //     {min_v.x, max_v.y, min_v.z}, {max_v.x, max_v.y, min_v.z},
+        //     {min_v.x, min_v.y, max_v.z}, {max_v.x, min_v.y, max_v.z},
+        //     {min_v.x, max_v.y, max_v.z}, {max_v.x, max_v.y, max_v.z}
+        // };
+
         // NOTE: Handle the near plane properly, you can't project things behind the near plane
         //       So get the right/left/top/bottom/front/back points of the light's sphere
         //       which we'll then clamp the  of the light to the near plane
@@ -77,10 +87,10 @@ static inline b32 compute_light_cluster_bounds(
         }
 
         // Map NDC [-1, 1] to UV [0, 1] and clamp
-        float uv_min_x = SDL_clamp(min_ndc.x * 0.5f + 0.5f, 0.0f, 1.0f);
-        float uv_max_x = SDL_clamp(max_ndc.x * 0.5f + 0.5f, 0.0f, 1.0f);
-        float uv_min_y = SDL_clamp(min_ndc.y * 0.5f + 0.5f, 0.0f, 1.0f);
-        float uv_max_y = SDL_clamp(max_ndc.y * 0.5f + 0.5f, 0.0f, 1.0f);
+        float uv_min_x = SDL_clamp(min_ndc.x * 0.5f + 0.5f, 0.0f, 0.9999f);
+        float uv_max_x = SDL_clamp(max_ndc.x * 0.5f + 0.5f, 0.0f, 0.9999f);
+        float uv_min_y = SDL_clamp(min_ndc.y * 0.5f + 0.5f, 0.0f, 0.9999f);
+        float uv_max_y = SDL_clamp(max_ndc.y * 0.5f + 0.5f, 0.0f, 0.9999f);
 
         *tile_min_x = (int)(uv_min_x * CLUSTER_GRID_SIZE_X);
         *tile_max_x = (int)(uv_max_x * CLUSTER_GRID_SIZE_X);
@@ -94,8 +104,8 @@ static inline b32 compute_light_cluster_bounds(
     float max_depth = SDL_min(-(z_center - r), far);
 
     // Standard logarithmic binning formula from original paper (keeps clusters cubicly shaped)
-    *z_index_min = (int)(log(min_depth / near) * inv_log_far_over_near * (float)CLUSTER_GRID_SIZE_Z);
-    *z_index_max = (int)(log(max_depth / near) * inv_log_far_over_near * (float)CLUSTER_GRID_SIZE_Z);
+    *z_index_min = (int)floorf(logf(min_depth / near) * inv_log_far_over_near * (float)CLUSTER_GRID_SIZE_Z);
+    *z_index_max = (int)floorf(logf(max_depth / near) * inv_log_far_over_near * (float)CLUSTER_GRID_SIZE_Z);
 
     // Final safety clamps for array indexing
     *tile_min_x = SDL_clamp(*tile_min_x, 0, CLUSTER_GRID_SIZE_X - 1);
@@ -105,18 +115,11 @@ static inline b32 compute_light_cluster_bounds(
     *z_index_min = SDL_clamp(*z_index_min, 0, CLUSTER_GRID_SIZE_Z - 1);
     *z_index_max = SDL_clamp(*z_index_max, 0, CLUSTER_GRID_SIZE_Z - 1);
 
-    SDL_assert(!(
-        *tile_min_x >  *tile_max_x ||
-        *tile_min_y >  *tile_max_y ||
-        *z_index_min > *z_index_max)
-    );
-
-    // if (tile_min_x > tile_max_x ||
-    //     tile_min_y > tile_max_y ||
-    //     z_index_min > z_index_max)
-    // {
-    //     return 0;
-    // }
+    // SDL_assert(!(
+    //     *tile_min_x >  *tile_max_x ||
+    //     *tile_min_y >  *tile_max_y ||
+    //     *z_index_min > *z_index_max)
+    // );
 
     return 1;
 }

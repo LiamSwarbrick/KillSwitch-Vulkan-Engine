@@ -195,7 +195,7 @@ void main()
 
     vec4 view_pos = scene.view * vec4(world_pos, 1.0);
     float depth =  -view_pos.z;
-    depth = clamp(depth, scene.near_plane + 0.1, scene.far_plane - 0.1);
+    depth = clamp(depth, scene.near_plane, scene.far_plane);
 
     // Get z bin (clusters get exponentially bigger away from the camera)
     float log_z = log(depth / scene.near_plane) * scene.inv_log_far_over_near;
@@ -241,7 +241,7 @@ void main()
         // return;
     }
 
-    const uint max_lights_per_pixel = 16;
+    const uint max_lights_per_pixel = 64;
     
     for (uint i = 0; i < min(cluster.point_count, max_lights_per_pixel); ++i)
     {
