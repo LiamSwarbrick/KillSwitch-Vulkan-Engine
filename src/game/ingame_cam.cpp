@@ -44,6 +44,7 @@ namespace
 
     bool  s_initialized = false;
     float s_occlusion_distance = s_tp_cam.distance;
+    float s_base_fov = TPCamState{}.fov_deg;
     ShapeHandle s_camera_probe_shape = InvalidShapeHandle;
 
     constexpr float MOUSE_SENSITIVITY  = 0.10f;
@@ -53,8 +54,9 @@ namespace
     constexpr float CAM_PULLING_SPEED = 35.0f;
     constexpr float CAM_PUSHING_SPEED = 12.0f;
     constexpr float TP_SHOULDER_OFFSET = 0.4f;
+    constexpr float AIM_FOV_OFFSET = 700.0f;
 
-    // Smooth function for cam to adjust distance
+    // Smooth function for cam
     float SmoothExp(float current, float target, float dt, float speed)
     {
         if (dt <= 0.0f || speed <= 0.0f) return target;
@@ -321,20 +323,40 @@ namespace
             target_distance = glm::min(distance_by_ray, distance_by_shape);
         }
 
-        // remained for only static 
-        (void)s_occlusion_settings.only_static;
+        
         // speed of camera adjustment
         float speed = (target_distance < s_occlusion_distance)
             ? CAM_PULLING_SPEED
             : CAM_PUSHING_SPEED;
 
         s_occlusion_distance = SmoothExp(s_occlusion_distance, target_distance, dt, speed);
+
         // offset computation for overshoulder effect
         const glm::vec3 up = glm::vec3(0.0f, 1.0f, 0.0f);
         const glm::vec3 right = glm::normalize(glm::cross(cam.forward, up));
         cam.pos = cam.target - cam.forward * s_occlusion_distance + right * TP_SHOULDER_OFFSET;
 
-        glm::vec3 aim_target = cam.target + right * TP_SHOULDER_OFFSET;
+        // Aiming offset and FOV change
+        bool is_aiming = false;
+        if (s_ecs && cam.bound_entity != NULL_ENTITY)
+        {
+            if (const C_PlayerInput* input = s_ecs->GetComponentPtr<C_PlayerInput>(cam.bound_entity))
+                is_aiming = input->aim;
+        }
+
+        const float target_aim_offset = is_aiming ? (TP_SHOULDER_OFFSET + 0.08f) : TP_SHOULDER_OFFSET;
+        const float aimed_fov = glm::max(40.0f, s_base_fov - AIM_FOV_OFFSET);
+        const float target_fov = is_aiming ? aimed_fov : s_base_fov;
+
+        // Smooth shoulder aim offset
+        static float SHOULDER_OFFSET = TP_SHOULDER_OFFSET;
+        SHOULDER_OFFSET = SmoothExp(SHOULDER_OFFSET, target_aim_offset, dt, 2.0f);
+
+        // Smooth FOV
+        cam.fov_deg = SmoothExp(cam.fov_deg, target_fov, dt, 2.0f);
+        cam.fov_initialized = true;
+
+        glm::vec3 aim_target = cam.target + right * SHOULDER_OFFSET;
         return CameraInfo{
                     .view            = glm::lookAt(cam.pos, aim_target, glm::vec3(0.0f, 1.0f, 0.0f)),
                     .position        = cam.pos,
@@ -370,6 +392,7 @@ void InGameCam_Init(ECS* ecs, PhysicsManager* physics, EntityID player_id)
     s_movement_forward = glm::vec3(0.0f, 0.0f, -1.0f);
     s_gameplay_mode = InGameCamGameplayMode::TPCam;
     s_occlusion_distance = s_tp_cam.distance;
+    s_base_fov = s_tp_cam.fov_deg;
 
     if (player_id != NULL_ENTITY)
     {
@@ -481,6 +504,7 @@ void InGameCam_ApplyDebugEdits(const InGameCamDebugEdits& edits)
         const EntityID keep_bound = s_tp_cam.bound_entity;
         TPCam_ResetToDefault(s_tp_cam);
         s_tp_cam.bound_entity = keep_bound;
+        s_base_fov = edits.tp_state.fov_deg;
     }
 
     if (edits.apply_fp_state)
@@ -488,6 +512,7 @@ void InGameCam_ApplyDebugEdits(const InGameCamDebugEdits& edits)
 
     if (edits.apply_tp_state)
         s_tp_cam = edits.tp_state;
+        s_base_fov = edits.tp_state.fov_deg;
     
     if (edits.reset_tp || edits.apply_tp_state)
         s_occlusion_distance = glm::max(s_tp_cam.distance, OCCLUSION_MIN_DISTANCE);
