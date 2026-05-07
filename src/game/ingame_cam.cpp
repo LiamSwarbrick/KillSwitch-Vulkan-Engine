@@ -40,6 +40,7 @@ namespace
     glm::vec3 s_movement_forward = glm::vec3(0.0f, 0.0f, -1.0f);
     glm::vec3 s_tp_follow_target = glm::vec3(0.0f);
     EntityID s_tp_follow_target_entity = NULL_ENTITY;
+    float s_tp_shoulder_side_blend = 1.0f;
     const float near_plane = 0.1f;
     const float far_plane  = 100.0f;
     const float default_lens_distortion = -0.025f;
@@ -58,6 +59,7 @@ namespace
     constexpr float CAM_PUSHING_SPEED = 12.0f;
     constexpr float TP_SHOULDER_OFFSET = 0.4f;
     constexpr float TP_FOLLOW_SNAP_DISTANCE = 4.0f;
+    constexpr float TP_SHOULDER_BLEND_SPEED = 12.0f;
     constexpr float AIM_FOV_OFFSET = 700.0f;
 
     // Smooth function for cam
@@ -67,7 +69,7 @@ namespace
         float alpha = 1.0f - expf(-speed * dt);
         return glm::mix(current, target, glm::clamp(alpha, 0.0f, 1.0f));
     }
-
+    // Smooth function for cam (vec3 version)
     glm::vec3 SmoothExpVec3(const glm::vec3& current, const glm::vec3& target, float dt, float speed)
     {
         if (dt <= 0.0f || speed <= 0.0f) return target;
@@ -80,6 +82,11 @@ namespace
         s_tp_follow_target = glm::vec3(0.0f);
         s_tp_follow_target_entity = NULL_ENTITY;
         s_tp_follow_target_initialized = false;
+    }
+    // helper to reset shoulder blend when toggling shoulder side
+    void ResetTPCamShoulderBlend()
+    {
+        s_tp_shoulder_side_blend = s_tp_cam.shoulder_side_change ? -1.0f : 1.0f;
     }
 
     // Helper to destroy and recreate the camera probe shape when settings change
@@ -231,7 +238,7 @@ namespace
             .lens_distortion = default_lens_distortion
         };
     }
-    // tpcam pos at target + forward * distance with offset, with occlusion detection
+    // tpcam pos at target + forward * distance with offset, with occlusion detection, smooth following, aim downsight and shoulder toggle
     CameraInfo UpdateTPCamera(TPCamState& cam, float dt, bool allow_look_input, bool apply_fov_to_renderer)
     {
         TPCam_SyncFovFromRenderer(cam);
@@ -246,7 +253,7 @@ namespace
 
             cam.yaw += mouse_dx * MOUSE_SENSITIVITY;
             cam.pitch -= mouse_dy * MOUSE_SENSITIVITY;
-
+            // gamepad input
             cam.yaw += (Input_GetActionValue(ACTION_CAMERA_RIGHT) - Input_GetActionValue(ACTION_CAMERA_LEFT))
                 * GAMEPAD_LOOK_SPEED * dt;
             cam.pitch += (Input_GetActionValue(ACTION_CAMERA_UP) - Input_GetActionValue(ACTION_CAMERA_DOWN))
@@ -286,7 +293,7 @@ namespace
         }
 
         if (bound_transform)
-        {
+        {   // calculate desired target pos
             glm::vec3 player_pos = glm::vec3(bound_transform->matrix[3]);
             float height = cam.target_height;
             if (s_ecs->Has<C_RigidBody>(cam.bound_entity) && s_physics)
@@ -297,7 +304,7 @@ namespace
                 height = height * 0.5f * 0.7f; // tweak this
                 player_pos.y += genShape->localOffset.y;
             }
-
+            // target pos computation
             const glm::vec3 desired_target = player_pos + glm::vec3(0.0f, height, 0.0f);
             if (is_aiming)
             {
@@ -308,7 +315,7 @@ namespace
             else
             {
                 const glm::vec3 target_delta = desired_target - s_tp_follow_target;
-                const bool snap_follow_target =
+                const bool snap_follow_target = // snap when not initialized
                     !s_tp_follow_target_initialized ||
                     s_tp_follow_target_entity != cam.bound_entity ||
                     glm::dot(target_delta, target_delta) >=
@@ -336,13 +343,26 @@ namespace
             cam.target = s_tp_follow_target;
         }
 
+        const glm::vec3 up = glm::vec3(0.0f, 1.0f, 0.0f);
+        const glm::vec3 right = glm::normalize(glm::cross(cam.forward, up));
+
+        const float target_shoulder_sign = s_tp_cam.shoulder_side_change ? -1.0f : 1.0f; // target shoulder side: left or right
+        s_tp_shoulder_side_blend = SmoothExp(
+            s_tp_shoulder_side_blend,
+            target_shoulder_sign,
+            dt,
+            TP_SHOULDER_BLEND_SPEED
+        );
+
+        const float shoulder_offset = TP_SHOULDER_OFFSET * s_tp_shoulder_side_blend;
+
         float desired_distance = glm::max(cam.distance, OCCLUSION_MIN_DISTANCE);
         float target_distance = desired_distance;
         // occlusion detection
         if (s_physics)
         {
             Ray ray = {};
-            ray.origin = cam.target + glm::normalize(glm::cross(cam.forward, glm::vec3(0.0f, 1.0f, 0.0f))) * TP_SHOULDER_OFFSET;
+            ray.origin = cam.target + right * shoulder_offset; // ray origin at target with shoulder offset
             ray.direction = glm::normalize(-cam.forward);
             ray.maxDistance = desired_distance;
 
@@ -392,10 +412,8 @@ namespace
 
         s_occlusion_distance = SmoothExp(s_occlusion_distance, target_distance, dt, speed);
 
-        // offset computation for overshoulder effect
-        const glm::vec3 up = glm::vec3(0.0f, 1.0f, 0.0f);
-        const glm::vec3 right = glm::normalize(glm::cross(cam.forward, up));
-        cam.pos = cam.target - cam.forward * s_occlusion_distance + right * TP_SHOULDER_OFFSET;
+        // offset computation
+        cam.pos = cam.target - cam.forward * s_occlusion_distance + right * shoulder_offset;
 
         // Aiming offset and FOV change
         const float target_aim_offset = is_aiming ? (TP_SHOULDER_OFFSET + 0.08f) : TP_SHOULDER_OFFSET;
@@ -410,7 +428,7 @@ namespace
         cam.fov_deg = SmoothExp(cam.fov_deg, target_fov, dt, 2.0f);
         cam.fov_initialized = true;
 
-        glm::vec3 aim_target = cam.target + right * SHOULDER_OFFSET;
+        glm::vec3 aim_target = cam.target + right * (SHOULDER_OFFSET * s_tp_shoulder_side_blend);
         return CameraInfo{
                     .view            = glm::lookAt(cam.pos, aim_target, glm::vec3(0.0f, 1.0f, 0.0f)),
                     .position        = cam.pos,
@@ -446,6 +464,7 @@ void InGameCam_Init(ECS* ecs, PhysicsManager* physics, EntityID player_id)
     s_movement_forward = glm::vec3(0.0f, 0.0f, -1.0f);
     s_gameplay_mode = InGameCamGameplayMode::TPCam;
     ResetTPCamFollowTarget();
+    ResetTPCamShoulderBlend();
     s_occlusion_distance = s_tp_cam.distance;
     s_base_fov = s_tp_cam.fov_deg;
 
@@ -534,6 +553,11 @@ void InGameCam_ToggleGameplayMode()
     InGameCam_SetGameplayMode(next_mode);
 }
 
+void InGameCam_ToggleShoulder()
+{
+    s_tp_cam.shoulder_side_change = !s_tp_cam.shoulder_side_change;
+}
+
 void InGameCam_Shutdown()
 {
     DestroyCameraProbeShape();
@@ -561,6 +585,7 @@ void InGameCam_ApplyDebugEdits(const InGameCamDebugEdits& edits)
         TPCam_ResetToDefault(s_tp_cam);
         s_tp_cam.bound_entity = keep_bound;
         ResetTPCamFollowTarget();
+        ResetTPCamShoulderBlend();
         s_base_fov = edits.tp_state.fov_deg;
     }
 
@@ -568,8 +593,10 @@ void InGameCam_ApplyDebugEdits(const InGameCamDebugEdits& edits)
         s_fp_cam = edits.fp_state;
 
     if (edits.apply_tp_state)
-        s_tp_cam = edits.tp_state;
-        s_base_fov = edits.tp_state.fov_deg;
+        {
+            s_tp_cam = edits.tp_state;
+            s_base_fov = edits.tp_state.fov_deg;
+        }
     
     if (edits.reset_tp || edits.apply_tp_state)
     {

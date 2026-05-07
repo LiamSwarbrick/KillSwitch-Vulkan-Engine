@@ -32,6 +32,7 @@ struct TPCamState
 	float     pitch           = -15.0f;
 	float     fov_deg         = 2864.8f;
 	bool      fov_initialized = false;
+	bool	  shoulder_side_change = false;
 
 	glm::vec3 pos             = { 0.0f, 2.0f, 1.0f };
 	glm::vec3 target          = { 0.0f, 1.5f, 0.0f };
