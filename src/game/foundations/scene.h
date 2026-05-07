@@ -30,6 +30,7 @@ public:
 private:
     //bool LoadAsset(const char* fileName);
     bool FreeAsset(Asset* asset);
+    
 
 public:
     Scene() {}
@@ -42,7 +43,7 @@ public:
     Asset* LoadPrefab(const char* fileName);
     // converts prefab into an entity with a given position
     // return ID of first node
-    EntityID InstantiatePrefab(Asset* prefab, glm::vec3 position);
+    EntityID InstantiatePrefab(Asset* prefab, glm::vec3 spawnPosition, glm::quat spawnRotation = glm::identity<glm::quat>());
     // collects all renderables and initializes the renderer scene
     void BuildRendererScene();
 

@@ -15,13 +15,31 @@ typedef struct FullscreenPass_UserData
 }
 FullscreenPass_UserData;
 
+typedef struct DepthPass_UserData
+{
+    SceneData scene_data;
+    PipelineKeyMultisamplingBits msaa_flag;
+}
+DepthPass_UserData;
+
+typedef struct ForwardPass_UserData
+{
+    PushConstant_PassHeader push_pass;
+
+    // In forward pass execute, uplaod
+    uint32_t num_shadowed_spotlights;
+    uint32_t shadowed_spotlight_indices[MAX_SHADOWMAPS];
+}
+ForwardPass_UserData;
 
 glm::mat4 MakeProjectionMatrix(float fov_y_radians, float aspect, float near, float far);
+SceneData MakeSpotLightSceneData(SpotLight spotlight, VkExtent2D extent);
 SceneData MakeSceneData(CameraInfo cam, VkExtent2D extents);
 
 void FullscreenPass_Execute(VkCommandBuffer cmd, uint32_t pass_idx);
 void FullscreenPass_Execute_With_ImGui(VkCommandBuffer cmd, uint32_t pass_idx);
 
+void DepthMapPass_Execute(VkCommandBuffer cmd, uint32_t pass_idx);
 void DepthPrepass_Execute(VkCommandBuffer cmd,  uint32_t pass_idx);
 void ForwardOpaque_Execute(VkCommandBuffer cmd, uint32_t pass_idx);
 

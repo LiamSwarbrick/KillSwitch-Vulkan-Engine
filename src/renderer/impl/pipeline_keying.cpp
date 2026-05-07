@@ -28,7 +28,7 @@ PipelineKeyMultisamplingBits PK_MultisamplingFlag(VkSampleCountFlagBits sample_c
         case (VK_SAMPLE_COUNT_2_BIT): return PKEY_MULTISAMPLING_2X;
         case (VK_SAMPLE_COUNT_4_BIT): return PKEY_MULTISAMPLING_4X;
         case (VK_SAMPLE_COUNT_8_BIT): return PKEY_MULTISAMPLING_8X;
-        default: SDL_assert(0);
+        default: SDL_assert(0); abort();
     }
 }
 
@@ -99,13 +99,16 @@ VkPipeline create_graphics_pipeline(PipelineKey key)
 
     // Shader specialization constants
     SpecializationData spec_values = {};
-    spec_values.vertex_type = key.vertex_type;
-    spec_values.blend_mode = key.blend_mode;
-    spec_values.msaa_sample_count = renderstate.multisampling_count_flag;
-
+    spec_values.vertex_type       = key.vertex_type;
+    spec_values.blend_mode        = key.blend_mode;
+    spec_values.msaa_sample_count = key.msaa_samples;
+    spec_values.debug_rendermode  = key.debug_rendermode;
+    
     VkSpecializationMapEntry spec_entries[] = {
         { 0, offsetof(SpecializationData, vertex_type), sizeof(uint32_t) },
-        { 1, offsetof(SpecializationData, blend_mode),  sizeof(uint32_t) }
+        { 1, offsetof(SpecializationData, blend_mode),  sizeof(uint32_t) },
+        { 2, offsetof(SpecializationData, msaa_sample_count), sizeof(uint32_t) },
+        { 3, offsetof(SpecializationData, debug_rendermode),  sizeof(uint32_t) }
     };
 
     VkSpecializationInfo spec_info = {

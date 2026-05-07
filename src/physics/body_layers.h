@@ -1,4 +1,5 @@
-#ifndef FOUNDATIONS_BODY_LAYER_COLLISIONS_H
+#ifndef PHYSICS_COLLISION_FILTERS_BODY_LAYERS_H
+#define PHYSICS_COLLISION_FILTERS_BODY_LAYERS_H
 
 #include <cstdint>
 
@@ -19,5 +20,5 @@ enum class BodyLayer : uint8_t
 	AFFECT_NOT_CHARACTER, // Affect moving and static, but not characters (for the camera);
 };
 
-#endif // !FOUNDATIONS_BODY_LAYER_COLLISIONS_H
 
+#endif // !PHYSICS_COLLISION_FILTERS_BODY_LAYERS_H

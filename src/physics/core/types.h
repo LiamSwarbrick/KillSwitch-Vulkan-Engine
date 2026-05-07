@@ -407,7 +407,13 @@ struct PhysicsCharacter
     GroundState lastFrameGroundState = GroundState::InAir;
     glm::vec3 groundNormal = glm::vec3(0.0f, 1.0f, 0.0f); // use character's groundNormal to project the horizontal velocity before applying, that way we would get a much smoother movement
 
+    // DO NOT MODIFY GAME-SIDE (or maybe idk, you should move body.velocity)
     glm::vec3 baseVelocity = glm::vec3(0.0f); // In case of contact with kinematic objects, we need to store this speed
+    // QoL for getting the relative (non-base) velocity of the character. (use in the game-controller)
+    glm::vec3 getRelativeVelocity() const
+    {
+        return body->velocity - baseVelocity;
+    }
 
     float maxWalkableAngle = glm::radians(50.0f); // Maximum angle compared to groundNormal that makes it able to snap-walk on tilted/uneven terrain
     float stepHeight = 0.4f; // Max height allowed for climbing/dropping-from steps or other obstacles

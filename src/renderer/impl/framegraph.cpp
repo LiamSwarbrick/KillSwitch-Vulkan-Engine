@@ -189,21 +189,45 @@ void fg_apply_barriers(VkCommandBuffer cmd, RenderPassDesc* pass)
     uint32_t img_count = 0;
     uint32_t buf_count = 0;
 
+    #ifdef VERBOSE_FRAMEGRAPH_BARRIER_LOGGING
+    printf("Applying barriers for pass: %s\n", pass->debug_name);
+    #endif
+
     // Transition INPUTS
     for (uint32_t i = 0; i < pass->input_count; i++)
     {
         PassResourceUsage* usage = &pass->inputs[i];
         FG_Resource* res = &renderstate.registry.resources[usage->rid];
+
+        #ifdef VERBOSE_FRAMEGRAPH_BARRIER_LOGGING
+        printf(" - Image %p before input res=%s: stage=", res->image.handle, res->debug_name);
+        vklayer_print_pipelinestageflags2(res->current_stage);
+        #endif
+
         fg_add_barrier(res, usage, image_barriers, &img_count, buffer_barriers, &buf_count);
+
+        #ifdef VERBOSE_FRAMEGRAPH_BARRIER_LOGGING
+        printf("   Image %p before input res=%s: stage=", res->image.handle, res->debug_name);
+        vklayer_print_pipelinestageflags2(res->current_stage);
+        #endif
     }
 
     // Transition OUTPUTS
     for (uint32_t i = 0; i < pass->output_count; i++)
     {
         FG_Resource* res = &renderstate.registry.resources[pass->outputs[i].rid];
-        // printf("(pass=%s)\n  before attachment rid=%d: stage=%zu\n", pass->debug_name, pass->outputs[i].rid, res->current_stage);
+
+        #ifdef VERBOSE_FRAMEGRAPH_BARRIER_LOGGING
+        printf(" - Image %p before output attachment res=%s: stage=", res->image.handle, res->debug_name);
+        vklayer_print_pipelinestageflags2(res->current_stage);
+        #endif
+        
         fg_add_barrier(res, &pass->outputs[i], image_barriers, &img_count, buffer_barriers, &buf_count);
-        // printf("  after attachment rid=%d: stage=%zu\n", pass->outputs[i].rid, res->current_stage);
+
+        #ifdef VERBOSE_FRAMEGRAPH_BARRIER_LOGGING
+        printf("   Image %p after output attachment res=%s: stage=", res->image.handle, res->debug_name);
+        vklayer_print_pipelinestageflags2(res->current_stage);
+        #endif
 
         // MSAA Resolved Attachment
         uint32_t resolve_rid = pass->outputs[i].resolve_rid;
@@ -212,9 +236,18 @@ void fg_apply_barriers(VkCommandBuffer cmd, RenderPassDesc* pass)
             FG_Resource* resolved_res = &renderstate.registry.resources[resolve_rid];
             PassResourceUsage resolve_usage = pass->outputs[i];
             resolve_usage.rid = pass->outputs[i].resolve_rid;
-            // printf("  before Resolve attachment rid=%d: stage=%zu\n", resolve_rid, resolved_res->current_stage);
+
+            #ifdef VERBOSE_FRAMEGRAPH_BARRIER_LOGGING
+            printf(" - Image %p before Resolve attachment res=%s: stage=", resolved_res->image.handle, resolved_res->debug_name);
+            vklayer_print_pipelinestageflags2(resolved_res->current_stage);
+            #endif
+
             fg_add_barrier(resolved_res, &resolve_usage, image_barriers, &img_count, buffer_barriers, &buf_count);
-            // printf("  after Resolve attachment rid=%d: stage=%zu\n", resolve_rid, resolved_res->current_stage);
+
+            #ifdef VERBOSE_FRAMEGRAPH_BARRIER_LOGGING
+            printf("   Image %p after Resolve attachment res=%s: stage=", resolved_res->image.handle, resolved_res->debug_name);
+            vklayer_print_pipelinestageflags2(resolved_res->current_stage);
+            #endif
         }
     }
 
@@ -244,7 +277,7 @@ void fg_execute_pass(uint32_t pass_idx, VkCommandBuffer cmd)
     FrameGraph* fg = &renderstate.framegraph;
     RenderPassDesc* pass = &fg->passes[pass_idx];
     fg_apply_barriers(cmd, pass);
-    
+
     if (pass->is_compute)
     {
         // Compute passes don't use vkCmdBeginRendering
@@ -529,7 +562,8 @@ uint32_t add_resource_to_registry_and_heap(const char* debug_name, FG_ResourceTy
     memset(res, 0, sizeof(FG_Resource));
 
     // Set shared fields
-    strncpy(res->debug_name, debug_name, sizeof(res->debug_name));
+    snprintf(res->debug_name, sizeof(res->debug_name), "%s-%d", debug_name, renderstate.registry.resource_count);  // <- Add id to end of name to differentiate if they have the same name
+    // strncpy(res->debug_name, debug_name, sizeof(res->debug_name));
     res->type = type;
     res->flags = flags;
     res->allocation = resource_info.allocation;
@@ -540,9 +574,6 @@ uint32_t add_resource_to_registry_and_heap(const char* debug_name, FG_ResourceTy
     
     if (type == FG_RESOURCE_TYPE_BUFFER)
     {
-        #ifdef VERBOSE_FRAMEGRAPH_LOGGING
-        printf("Adding BUFFER resource to registry. (" ANSI_CYAN "%s" ANSI_RESET ")\n", res->debug_name);
-        #endif
         res->buffer = resource_info.import_info.buffer;
 
         // Immediately grab the BDA pointer
@@ -552,6 +583,12 @@ uint32_t add_resource_to_registry_and_heap(const char* debug_name, FG_ResourceTy
             .buffer  = res->buffer.handle
         };
         res->buffer_gpu_address = vkGetBufferDeviceAddress(renderstate.device, &address_info);
+
+        #ifdef VERBOSE_FRAMEGRAPH_LOGGING
+        printf("Adding BUFFER resource to registry. (" ANSI_CYAN "%s" ANSI_RESET ", rid=%d, ptr=%p)\n",
+            res->debug_name, id, res->buffer_gpu_address
+        );
+        #endif
     }
     else
     {
@@ -1246,13 +1283,13 @@ void bindless_heap_create_all_samplers()
                     .minFilter         = VK_FILTER_LINEAR,
 
                     // Must clamp to border opaque white so that stuff outside the shadow map is considered unshadowed.
-                    .mipmapMode        = VK_SAMPLER_MIPMAP_MODE_LINEAR,
-                    .addressModeU      = VK_SAMPLER_ADDRESS_MODE_REPEAT,
-                    .addressModeV      = VK_SAMPLER_ADDRESS_MODE_REPEAT,
-                    .addressModeW      = VK_SAMPLER_ADDRESS_MODE_REPEAT,
+                    .mipmapMode        = VK_SAMPLER_MIPMAP_MODE_NEAREST,
+                    .addressModeU      = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER,
+                    .addressModeV      = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER,
+                    .addressModeW      = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER,
                     .mipLodBias        = 0.0f,
                     .anisotropyEnable  = VK_FALSE,
-                    .maxAnisotropy     = 0,
+                    .maxAnisotropy     = 0.0f,
 
                     // Hardware shadow comparison
                     .compareEnable     = VK_TRUE,

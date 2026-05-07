@@ -567,8 +567,14 @@ void Renderer_Init(const Renderer_InitInfo* info)
 
         .num_point_lights = 0,
         .num_spot_lights = 0,
-        .point_lights = (PointLight*)L_calloc(MAX_POINTLIGHTS, sizeof(PointLight), &renderstate.main.tt),
-        .spot_lights  =  (SpotLight*)L_calloc(MAX_SPOTLIGHTS, sizeof(SpotLight), &renderstate.main.tt)
+        .point_lights =   (PointLight*)L_calloc(MAX_POINTLIGHTS, sizeof(PointLight), &renderstate.main.tt),
+        .spot_lights  =    (SpotLight*)L_calloc(MAX_SPOTLIGHTS, sizeof(SpotLight), &renderstate.main.tt),
+        .is_spotlight_shadowed = (b32*)L_calloc(MAX_SPOTLIGHTS, sizeof(b32), &renderstate.main.tt),
+
+        // Clustered shading
+        .staging_point_light_indices = (uint32_t*)L_calloc(CLUSTER_COUNT * MAX_POINTLIGHTS, sizeof(uint32_t), &renderstate.main.tt),
+        .staging_spot_light_indices  = (uint32_t*)L_calloc(CLUSTER_COUNT * MAX_SPOTLIGHTS, sizeof(uint32_t), &renderstate.main.tt),
+        .staging_cluster_offsets = (Cluster*)L_calloc(CLUSTER_COUNT, sizeof(Cluster), &renderstate.main.tt),
     };
 
     // Init per frame structures (except for swapchain_image_acquired_semaphore, which is handled by create_or_recreate_swapchain)
@@ -681,9 +687,14 @@ void Renderer_Shutdown()
         vkDestroyFence(renderstate.device, renderstate.frames[i].rendering_complete_fence, NULL);
     }
 
-    L_free(renderstate.renderables_arena.items, &renderstate.main.tt);
-    L_free(renderstate.renderables_arena.point_lights, &renderstate.main.tt);
-    L_free(renderstate.renderables_arena.spot_lights, &renderstate.main.tt);
+    // Free renderables arenas (TODO: I really need a per frame scratch arena instead of all these)
+    L_free(renderstate.renderables_arena.items,                   &renderstate.main.tt);
+    L_free(renderstate.renderables_arena.point_lights,            &renderstate.main.tt);
+    L_free(renderstate.renderables_arena.spot_lights,             &renderstate.main.tt);
+    L_free(renderstate.renderables_arena.is_spotlight_shadowed,   &renderstate.main.tt);
+    L_free(renderstate.renderables_arena.staging_point_light_indices, &renderstate.main.tt);
+    L_free(renderstate.renderables_arena.staging_spot_light_indices,  &renderstate.main.tt);
+    L_free(renderstate.renderables_arena.staging_cluster_offsets,     &renderstate.main.tt);
     DestroyDrawCallCollections();
 
     // Shutdown Pipeline Keying and Frame Graph subsystems
@@ -852,16 +863,18 @@ void Renderer_PushRenderable(Renderable renderable)
     renderstate.renderables_arena.items[renderstate.renderables_arena.num_renderables++] = renderable;
 }
 
-void Renderer_PushLight(C_Light light, glm::vec3 position, glm::vec3 direction)
+void Renderer_PushLight(C_Light light, glm::vec3 position, glm::vec3 direction, b32 is_shadowed)
 {
+    SDL_assert(is_shadowed == (light.type == LIGHT_COMPONENT_SPOTLIGHT) && "Only shadowing spot lights for now");
+
+    glm::vec4 pos_and_radius = glm::vec4(position.x, position.y, position.z, light.radius);
+    glm::vec4 color_and_intensity = glm::vec4(light.color.x, light.color.y, light.color.z, light.intensity);
+
     switch (light.type)
     {
     case LIGHT_COMPONENT_POINTLIGHT:
         {
             SDL_assert(renderstate.renderables_arena.num_point_lights < MAX_POINTLIGHTS);
-
-            glm::vec4 pos_and_radius = glm::vec4(position.x, position.y, position.z, light.radius);
-            glm::vec4 color_and_intensity = glm::vec4(light.color.x, light.color.y, light.color.z, light.intensity);
 
             PointLight pl = {};
             memcpy(&pl.pos_and_radius, glm::value_ptr(pos_and_radius), sizeof(glm::vec4));
@@ -875,9 +888,6 @@ void Renderer_PushLight(C_Light light, glm::vec3 position, glm::vec3 direction)
         {
             SDL_assert(renderstate.renderables_arena.num_spot_lights < MAX_SPOTLIGHTS);
 
-            glm::vec4 pos_and_radius = glm::vec4(position.x, position.y, position.z, light.radius);
-            glm::vec4 color_and_intensity = glm::vec4(light.color.x, light.color.y, light.color.z, light.intensity);
-
             SpotLight sl = {};
             memcpy(&sl.pos_and_radius, glm::value_ptr(pos_and_radius), sizeof(glm::vec4));
             memcpy(&sl.color_and_intensity, glm::value_ptr(color_and_intensity), sizeof(glm::vec4));
@@ -885,7 +895,9 @@ void Renderer_PushLight(C_Light light, glm::vec3 position, glm::vec3 direction)
             sl.inner_cone_angle = light.spot_inner_cone_angle;
             sl.outer_cone_angle = light.spot_outer_cone_angle;
 
-            renderstate.renderables_arena.spot_lights[renderstate.renderables_arena.num_spot_lights++] = sl;
+            renderstate.renderables_arena.spot_lights[renderstate.renderables_arena.num_spot_lights] = sl;
+            renderstate.renderables_arena.is_spotlight_shadowed[renderstate.renderables_arena.num_spot_lights] = is_shadowed;
+            ++renderstate.renderables_arena.num_spot_lights;
         }
         break;
         
@@ -956,7 +968,8 @@ void Renderer_DrawFrame(CameraInfo main_camera)
     // Latency hiding:
     // Double/triple buffering command buffers allows us to start recording the next
     // frame's command buffer before the GPU has done with the current frame's one.
-    uint32_t frame_in_flight = renderstate.frame_number % NUM_FRAMES_IN_FLIGHT;
+    renderstate.frame_in_flight = renderstate.frame_number % NUM_FRAMES_IN_FLIGHT;
+    
 
     // Wait for rendering to be complete for this frame in flight.
     // NOTE: We don't reset the fence until after we know the swapchain does not need recreating.
@@ -967,7 +980,7 @@ void Renderer_DrawFrame(CameraInfo main_camera)
     // sync_timeout_nanoseconds = 1000000000UL;  // Only wait one second in debug mdoe to detect deadlocks/hangs
     sync_timeout_nanoseconds = 1000000000ULL * 120ULL;  // <- 2 mins in case some pipelines take rediculous amounts of time to build
 #endif
-    VK_CHECK(vkWaitForFences(renderstate.device, 1, &renderstate.frames[frame_in_flight].rendering_complete_fence, VK_TRUE, sync_timeout_nanoseconds));
+    VK_CHECK(vkWaitForFences(renderstate.device, 1, &renderstate.frames[renderstate.frame_in_flight].rendering_complete_fence, VK_TRUE, sync_timeout_nanoseconds));
 
     // Get next swapchain image
     // NOTE: If another frame isn't finished with the swapchain image, the GPU must't execute commands on the next swapchain image.
@@ -978,7 +991,7 @@ void Renderer_DrawFrame(CameraInfo main_camera)
         renderstate.device,
         renderstate.swapchain,
         sync_timeout_nanoseconds,
-        renderstate.frames[frame_in_flight].swapchain_image_acquired_semaphore,
+        renderstate.frames[renderstate.frame_in_flight].swapchain_image_acquired_semaphore,
         VK_NULL_HANDLE,
         &swapchain_image_index
     );
@@ -997,17 +1010,18 @@ void Renderer_DrawFrame(CameraInfo main_camera)
 #ifdef NDEBUG
     else if (acquire_result == VK_TIMEOUT)
     {
-        printf("Timeout occurred. Only waiting one second in debug mode to detect deadlocks/hangs.\n(If you're screen turned off and that caused this crash, don't worry, that won't happen in release mode!\n)");
+        printf("Timeout occurred. Only waiting %d seconds in debug mode to detect deadlocks/hangs.\n(If you're screen turned off and that caused this crash, don't worry, that won't happen in release mode!\n)", (uint64_t)((double)sync_timeout_nanoseconds)/1000000000.0);
     }
 #endif
     VK_CHECK(acquire_result);
 
     // Now we can safely reset the rendering complete fence.
     // NOTE: The fence is in place to make sure this frame in flight's graphics commands have finished executing on the GPU.
-    VK_CHECK(vkResetFences(renderstate.device, 1, &renderstate.frames[frame_in_flight].rendering_complete_fence));
+    VK_CHECK(vkResetFences(renderstate.device, 1, &renderstate.frames[renderstate.frame_in_flight].rendering_complete_fence));
     
     // Reset command buffers by resetting the entire pool
-    vkResetCommandPool(renderstate.device, renderstate.frames[frame_in_flight].graphics_command_pool, 0);
+    vkResetCommandPool(renderstate.device, renderstate.frames[renderstate.frame_in_flight].graphics_command_pool, 0);
+
 
 
 
@@ -1030,25 +1044,45 @@ void Renderer_DrawFrame(CameraInfo main_camera)
     {
         AddDrawCall(&renderstate.renderables_arena.items[i]);
     }
+    
+    // Saturate shadow maps with spotlights
+    // TODO: Use nearest lights or some shit instead of just the first shadowed spotlights we come across
+    renderstate.num_shadowed_spotlights = 0;
+    memset(renderstate.shadowed_spotlight_indices, 0, sizeof(renderstate.shadowed_spotlight_indices));
+    for (uint32_t i = 0; i < renderstate.renderables_arena.num_spot_lights; ++i)
+    {
+        if (renderstate.renderables_arena.is_spotlight_shadowed[i])
+        {
+            renderstate.shadowed_spotlight_indices[renderstate.num_shadowed_spotlights++] = i;
+        }
+
+        if (renderstate.num_shadowed_spotlights == MAX_SHADOWMAPS)
+        {
+            break;
+        }
+    }
 
     EndDrawCalls();
 
     
-    // Reset renderables arena head for next frame
-    renderstate.renderables_arena.num_renderables = 0;
-    renderstate.renderables_arena.num_point_lights = 0;
-    renderstate.renderables_arena.num_spot_lights = 0;
 
     // Set main camera
     renderstate.main_camera = main_camera;
 
 
+
+
+
+
+
+
+
+
+
     /*  Build FrameGraph
 
-        Queries game state to know which renderpasses to use.
-        E.g. game.wearing_pyrovision_goggles would use swap the renderpass
-        that renders flame particles as fire, to a renderpass that makes them bubbles
-        or some shit.
+        Can vary the framegraph each frame based on game state to know which renderpasses to use.
+        E.g. bloom enabled vs disabled, or things far less trivial than that.
     */
 
     FG_Empty();
@@ -1065,15 +1099,69 @@ void Renderer_DrawFrame(CameraInfo main_camera)
 
     b32 use_msaa = renderstate.multisampling_count_flag > VK_SAMPLE_COUNT_1_BIT;
 
+    // TODO: Once topological sorting and multiqueue stuff is in, shadowmaps can be in parallel with the depth prepass (multiqueue shit).
+
+
     // Shadowmap pass
-    // TODO (once topological sorting and multiqueue stuff is in, this can be in parallel with the depth prepass)
+    DepthPass_UserData shadowmap_user_datas[MAX_SHADOWMAPS] = {};  // Must be declared up here to not go out of scope
+    uint32_t shadowmap_pass_ids[MAX_SHADOWMAPS] = {};
+    memset(shadowmap_pass_ids, UINT32_MAX, sizeof(shadowmap_pass_ids));
+
+    for (uint32_t shadowmap_i = 0; shadowmap_i < renderstate.num_shadowed_spotlights; ++shadowmap_i)
+    {
+        uint32_t shadowmap_rid = renderstate.rids.shadow_map_rids[shadowmap_i];
+        FG_Resource* shadowmap_res = &renderstate.registry.resources[shadowmap_rid];
+        
+        SpotLight spotlight = renderstate.renderables_arena.spot_lights[renderstate.shadowed_spotlight_indices[shadowmap_i]];
+        shadowmap_user_datas[shadowmap_i].scene_data = renderstate.shadowed_spotlight_scenedatas[shadowmap_i];
+        shadowmap_user_datas[shadowmap_i].msaa_flag = PK_MultisamplingFlag(VK_SAMPLE_COUNT_1_BIT);
+
+        RenderPassDesc shadowmap_desc = {
+            .debug_name = {},  // Set below with snprintf
+
+            .input_count = 0,
+            .inputs = {},
+            .output_count = 1,
+            .outputs = {
+                {
+                    .rid = shadowmap_rid,
+                    .usage_flags = FG_USAGE_DEPTH,
+
+                    .resolve_rid  = UINT32_MAX,
+                    .resolve_mode = VK_RESOLVE_MODE_NONE,
+
+                    .layout = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL,
+                    .access = VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
+                    .stage  = VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_2_LATE_FRAGMENT_TESTS_BIT,
+                    .queue_family_index = renderstate.queue_family_indices.graphics_family,
+
+                    .load_op = VK_ATTACHMENT_LOAD_OP_CLEAR,
+                    .store_op = VK_ATTACHMENT_STORE_OP_STORE,
+                    .clear_value = { .depthStencil = { 1.0f, 0 } }
+                }
+            },
+
+            .is_compute = 0,
+            .render_area = { .offset = { 0, 0 }, .extent = { shadowmap_res->image.extent.width, shadowmap_res->image.extent.height } },
+            
+            .execute_callback = DepthMapPass_Execute,
+            .user_data = &shadowmap_user_datas[shadowmap_i]
+        };
+        snprintf(shadowmap_desc.debug_name, sizeof(shadowmap_desc.debug_name), "Shadow Map Pass %d", shadowmap_i);
+        shadowmap_pass_ids[shadowmap_i] = FG_AddPass(shadowmap_desc);
+    }
 
     // Depth prepass
     FG_Resource* depth_buffer_res = &renderstate.registry.resources[renderstate.rids.depth_buffer_rid];
+    DepthPass_UserData depth_prepass_user_data = {
+        MakeSceneData(renderstate.main_camera, (VkExtent2D){ depth_buffer_res->image.extent.width, depth_buffer_res->image.extent.height }),
+        PK_MultisamplingFlag(renderstate.multisampling_count_flag)
+    };
     RenderPassDesc depth_prepass_desc = {
         .debug_name = "Depth Prepass",
 
-        .input_count = {},
+        .input_count = 0,
+        .inputs = {},
         .output_count = 1,
         .outputs = {
             {
@@ -1098,8 +1186,8 @@ void Renderer_DrawFrame(CameraInfo main_camera)
         .is_compute = 0,
         .render_area = { .offset = { 0, 0 }, .extent = { depth_buffer_res->image.extent.width, depth_buffer_res->image.extent.height } },
         
-        .execute_callback = DepthPrepass_Execute,
-        .user_data = NULL
+        .execute_callback = DepthMapPass_Execute,
+        .user_data = &depth_prepass_user_data
     };
     uint32_t depth_prepass = FG_AddPass(depth_prepass_desc);
 
@@ -1108,7 +1196,8 @@ void Renderer_DrawFrame(CameraInfo main_camera)
     RenderPassDesc forward_opaque_desc = {
         .debug_name = "Forward Opaque Pass",
 
-        .input_count = {},
+        .input_count = renderstate.num_shadowed_spotlights,
+        .inputs = {},  // Shadowmap inputs set below
         .output_count = 2,
         .outputs = {
 
@@ -1145,7 +1234,7 @@ void Renderer_DrawFrame(CameraInfo main_camera)
                 .queue_family_index = renderstate.queue_family_indices.graphics_family,
 
                 .load_op = VK_ATTACHMENT_LOAD_OP_LOAD,  // <- LOAD (Do not clear the depth prepass information LOL)
-                .store_op = VK_ATTACHMENT_STORE_OP_DONT_CARE,
+                .store_op = VK_ATTACHMENT_STORE_OP_STORE,
             }
         },
 
@@ -1153,12 +1242,36 @@ void Renderer_DrawFrame(CameraInfo main_camera)
         .render_area = { .offset = { 0, 0 }, .extent = { forward_target_res->image.extent.width, forward_target_res->image.extent.height } },
         
         .execute_callback = ForwardOpaque_Execute,
-        .user_data = NULL
     };
+
+    // Set input shadowmaps for forward pass
+    ForwardPass_UserData forward_user_data = {};
+    for (uint32_t i = 0; i < renderstate.num_shadowed_spotlights; ++i)
+    {
+        forward_opaque_desc.inputs[i] = (PassResourceUsage){
+            .rid = renderstate.rids.shadow_map_rids[i],
+            .usage_flags = FG_USAGE_SAMPLED,
+
+            .layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+            .access = VK_ACCESS_2_SHADER_READ_BIT,
+            .stage  = VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
+            .queue_family_index = renderstate.queue_family_indices.graphics_family
+        };
+
+        // Set texture index to sample shadow map in the shader
+        FG_Resource* shadow_map_i_res = &renderstate.registry.resources[renderstate.rids.shadow_map_rids[i]];
+        forward_user_data.push_pass.texture_indices[i] = shadow_map_i_res->bindless_texture_idx;
+    }
+    forward_opaque_desc.user_data = (ForwardPass_UserData*)&forward_user_data;
     uint32_t forward_opaque_pass = FG_AddPass(forward_opaque_desc);
+
+    // Transparent pass (alpha blended, back to front or Order Independant Transparancy)
+    // TODO: forward_transparent_desc = forward_opaque_pass_desc;
+    // then modify some of the attachments e.g. load_op and execute_callback
     
-    // Bloom
-    #warning TODO: Add in bloom passes
+    // Bloom brightness extraction
+    // TODO
+
 
     // PostProcess Tone-mapping and Lens Effect
     FG_Resource* hdr_color_target_res = &renderstate.registry.resources[renderstate.rids.hdr_color_target_rid];
@@ -1267,6 +1380,7 @@ void Renderer_DrawFrame(CameraInfo main_camera)
 
 
 
+
     /*
         Build and Render ImGUI Frame
         - Doing this after the framegraph is built so we can visualize the framegraph too!
@@ -1287,14 +1401,14 @@ void Renderer_DrawFrame(CameraInfo main_camera)
     
 
 
+
+
     /*  Execute FrameGraph
 
-        Gathers renderables from game state, based on flags, provides each
-        pass their drawlists e.g. renderable with rig and unlit material would
-        go to that specific pass.
-
-        OR I can leave each execute callback to gather their relevant items themselves,
-        which is probably easier
+        Calls the execute callback of renderpasses in the framegraph in order.
+        TODO: Multiqueue, multithreaded support.
+        TODO: Topological sorting, and other optimisations that are easy now that
+              a framegraph is in place.
     
     */
 
@@ -1305,13 +1419,29 @@ void Renderer_DrawFrame(CameraInfo main_camera)
         .flags             = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT,
         .pInheritanceInfo  = NULL
     };
-    VkCommandBuffer gcmd = renderstate.frames[frame_in_flight].graphics_command_buffer;
+    VkCommandBuffer gcmd = renderstate.frames[renderstate.frame_in_flight].graphics_command_buffer;
 
     // Begin recording graphics commands
     //
     renderstate.currently_bound_pipeline = VK_NULL_HANDLE;  // <- Each time we start recording cmd bufs, the bound pipeline is reset
     VK_CHECK(vkBeginCommandBuffer(gcmd, &graphics_cmd_begin_info));
     {
+        // TODO: Do I need to sync host writes even though I'm flushing allocations?
+        // VkMemoryBarrier2 barrier = {
+        //     .sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER_2,
+        //     .srcStageMask  = VK_PIPELINE_STAGE_2_HOST_BIT,
+        //     .srcAccessMask = VK_ACCESS_2_HOST_WRITE_BIT,
+        //     .dstStageMask  = VK_PIPELINE_STAGE_2_ALL_GRAPHICS_BIT |
+        //                     VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+        //     .dstAccessMask = VK_ACCESS_2_SHADER_READ_BIT
+        // };
+        // VkDependencyInfo dep = {
+        //     .sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
+        //     .memoryBarrierCount = 1,
+        //     .pMemoryBarriers = &barrier
+        // };
+        // vkCmdPipelineBarrier2(gcmd, &dep);
+
         FG_CmdRenderFrame(gcmd);
         FG_CmdTransitionSwapchainForPresentation(gcmd, swapchain_image_resource_id);
     }
@@ -1320,7 +1450,10 @@ void Renderer_DrawFrame(CameraInfo main_camera)
     //
     // End of graphics commands recording
 
-    
+    // Reset renderables arena head for next frame
+    renderstate.renderables_arena.num_renderables = 0;
+    renderstate.renderables_arena.num_point_lights = 0;
+    renderstate.renderables_arena.num_spot_lights = 0;
 
 
 
@@ -1337,7 +1470,7 @@ void Renderer_DrawFrame(CameraInfo main_camera)
     VkSemaphoreSubmitInfo gcmd_wait_info = {
         .sType        = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO,
         .pNext        = NULL,
-        .semaphore    = renderstate.frames[frame_in_flight].swapchain_image_acquired_semaphore,
+        .semaphore    = renderstate.frames[renderstate.frame_in_flight].swapchain_image_acquired_semaphore,
         .value        = 0,  // Ignored if not a timeline semaphore
         .stageMask    = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
         .deviceIndex  = 0
@@ -1357,7 +1490,7 @@ void Renderer_DrawFrame(CameraInfo main_camera)
         .signalSemaphoreInfoCount  = 1,
         .pSignalSemaphoreInfos     = &gcmd_signal_info
     };
-    VK_CHECK(vkQueueSubmit2(renderstate.graphics_queue, 1, &submit_info, renderstate.frames[frame_in_flight].rendering_complete_fence));
+    VK_CHECK(vkQueueSubmit2(renderstate.graphics_queue, 1, &submit_info, renderstate.frames[renderstate.frame_in_flight].rendering_complete_fence));
 
     // Present to screen
     // (after waiting on the rendering complete semaphore so that all drawing is completed first)

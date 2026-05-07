@@ -1,6 +1,6 @@
 #include "game/foundations/scene.h"
 #include "game/foundations/components.h"
-#include "game/foundations/body_layer_collisions.h"
+#include "physics/body_layers.h"
 #include "renderer/renderer.h"
 
 // animation update
@@ -84,9 +84,12 @@ Asset* Scene::LoadPrefab(const char* fileName)
     return asset;
 }
 
-EntityID Scene::InstantiatePrefab(Asset* prefab, glm::vec3 spawnPosition)
+EntityID Scene::InstantiatePrefab(Asset* prefab, glm::vec3 spawnPosition, glm::quat spawnRotation)
 {
     if (!prefab) return MAX_ENTITIES; // or any other invalid ID
+
+    // Root transform for the whole asset
+    glm::mat4 rootMatrix = glm::translate(glm::mat4(1.0f), spawnPosition) * glm::mat4_cast(spawnRotation);
 
     uint64_t start_time = SDL_GetTicksNS();
 
@@ -108,7 +111,48 @@ EntityID Scene::InstantiatePrefab(Asset* prefab, glm::vec3 spawnPosition)
             }
         }
 
-        if (has_ecs_data)
+        // Finding local positions/rotations and combining with root transforms
+        C_Transform t;
+        glm::vec3 localPosition = glm::vec3(node->translation[0], node->translation[1], node->translation[2]);
+        glm::quat localRotation = glm::quat(node->rotation[3], node->rotation[0], node->rotation[1], node->rotation[2]);
+        glm::mat4 localTransform = glm::translate(glm::mat4(1.0f), localPosition) * glm::mat4_cast(localRotation);
+        t.matrix = rootMatrix * localTransform;
+
+        if (node->light_index >= 0)
+        {
+            // LIGHT SOURCE ENTITY (just a transform and light properties)
+            EntityID eID = m_ecs.CreateEntity((node->name) ? (node->name) : "");
+            if (rootEntity == MAX_ENTITIES) rootEntity = eID;
+
+            // ---------------
+            // -- TRANSFORM --
+            // ---------------
+            m_ecs.AddComponent<C_Transform>(eID, { t.matrix });
+
+            // ------------------
+            // -- LIGHT SOURCE --
+            // ------------------
+            SDL_assert(node->light_index < prefab->light_count);
+            Light light_data = prefab->lights[node->light_index];
+            LightComponentType light_type;
+            switch (light_data.type)
+            {
+                case 2: light_type = LIGHT_COMPONENT_POINTLIGHT; break;
+                case 3: light_type = LIGHT_COMPONENT_SPOTLIGHT; break;
+                default: SDL_assert(0 && "Unimplemented light type detected (directional/area lights not implemented yet).");
+            }
+            
+            SDL_assert(light_data.range >= 0.0f && "Make sure in Blender to set the custom distance of the light, otherwise no culling can occurr");
+            m_ecs.AddComponent<C_Light>(eID, {
+                .type = light_type,
+                .color = glm::vec3(light_data.color[0], light_data.color[1], light_data.color[2]),
+                .intensity = light_data.intensity,
+                .radius = light_data.range,
+                .spot_inner_cone_angle = light_data.spot_inner_cone_angle,
+                .spot_outer_cone_angle = light_data.spot_outer_cone_angle
+            });
+        }
+        else if (has_ecs_data)
         { // if has ecs_data
             EntityID eID = m_ecs.CreateEntity((node->name) ? (node->name) : "");
             if (rootEntity == MAX_ENTITIES) rootEntity = eID;
@@ -116,38 +160,7 @@ EntityID Scene::InstantiatePrefab(Asset* prefab, glm::vec3 spawnPosition)
             // ---------------
             // -- TRANSFORM --
             // ---------------
-            C_Transform t;
-            glm::vec3 position = glm::vec3(node->translation[0], node->translation[1], node->translation[2]) + spawnPosition;
-            glm::quat rotation = glm::quat(node->rotation[3], node->rotation[0], node->rotation[1], node->rotation[2]);
-            t.matrix = glm::translate(glm::mat4(1.0f), position) * glm::mat4(rotation);
             m_ecs.AddComponent<C_Transform>(eID, { t.matrix });
-
-            // ------------------
-            // -- LIGHT SOURCE --
-            // ------------------
-            if (node->light_index >= 0)
-            {
-                SDL_assert(node->light_index < prefab->light_count);
-                Light light_data = prefab->lights[node->light_index];
-                LightComponentType light_type;
-                switch (light_data.type)
-                {
-                    case 2: light_type = LIGHT_COMPONENT_POINTLIGHT; break;
-                    case 3: light_type = LIGHT_COMPONENT_SPOTLIGHT; break;
-                    default: SDL_assert(0 && "Unimplemented light type detected (directional/area lights not implemented yet).");
-                }
-                
-                SDL_assert(light_data.range >= 0.0f && "Make sure in Blender to set the custom distance of the light, otherwise no culling can occurr");
-                m_ecs.AddComponent<C_Light>(eID, {
-                    .type = light_type,
-                    .color = glm::vec3(light_data.color[0], light_data.color[1], light_data.color[2]),//glm::vec3(0.7f, 0.7f, 1.0f),
-                    .intensity = light_data.intensity,
-                    .radius = light_data.range,
-                    .spot_inner_cone_angle = light_data.spot_inner_cone_angle,
-                    .spot_outer_cone_angle = light_data.spot_outer_cone_angle
-                });
-            }
-
 
 
             // 2. And put the "_ecs" value in the following
@@ -194,8 +207,8 @@ EntityID Scene::InstantiatePrefab(Asset* prefab, glm::vec3 spawnPosition)
 
                 RigidBodyDesc rbDesc;
 
-                rbDesc.position = position; // from the transform
-                rbDesc.orientation = rotation; // from the transform
+                rbDesc.position = localPosition; // from the transform
+                rbDesc.orientation = localRotation; // from the transform
                 rbDesc.mass = importedRigidbody.mass;
                 rbDesc.gravityScale = importedRigidbody.gravity_scale;
                 rbDesc.damping = importedRigidbody.damping;
@@ -226,11 +239,11 @@ EntityID Scene::InstantiatePrefab(Asset* prefab, glm::vec3 spawnPosition)
                     rbDesc.isDynamic = !isSomething; // if we are nothing (from the importedRigidbody) then we are dynamic;
 
                 // TEMPORARY automated body layers if they are not in the script
-                if (importedRigidbody.is_static || importedRigidbody.is_trigger)
+                if (importedRigidbody.is_static || importedRigidbody.is_trigger || importedRigidbody.is_kinematic)
                     rbDesc.bodyLayer = (uint8_t) BodyLayer::STATIC;
                 else if(importedRigidbody.is_character)
                     rbDesc.bodyLayer = (uint8_t)BodyLayer::CHARACTER;
-                else // dynamic or kinematic bodies
+                else // only dynamic bodies, kinematic bodies will be treated in the STATIC layer
                     rbDesc.bodyLayer = (uint8_t) BodyLayer::MOVING;
 
                 rbDesc.shape = shapeHandle;
@@ -395,8 +408,9 @@ void Scene::Render()
     {
         glm::vec3 position = glm::vec3(transform.matrix[3]);
         glm::quat rotation = glm::quat_cast(transform.matrix);
-        glm::vec3 direction = rotation * glm::vec3(0.0f, 0.0f, 1.0f);
-        Renderer_PushLight(light, position, direction);
+        glm::vec3 direction = rotation * glm::vec3(0.0f, 0.0f, -1.0f);
+        b32 is_shadowed = light.type == LIGHT_COMPONENT_SPOTLIGHT;
+        Renderer_PushLight(light, position, direction, is_shadowed);
     });
 
     m_ecs.GetView<C_Transform, C_StaticMesh>().ForEach([&](C_Transform& transform, C_StaticMesh& mesh)

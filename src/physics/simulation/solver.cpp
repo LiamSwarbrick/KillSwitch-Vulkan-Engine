@@ -178,6 +178,7 @@ inline void Solver::resolveInterpenetration(const ExtendedContact& contact, floa
     glm::vec3 correction = contact.normal * contact.depth / contact.totalInvMass;
 
     // Push bodyA out proportional to its inverse mass
+    // redundant bc if static or kinematic, invMass = 0 so the position wouldn't change
     if (!a->isStatic && !a->isKinematic)
     {
         if (contact.isWalkableA)
@@ -282,7 +283,7 @@ void Solver::prepareCharacters(float dt)
 
         // Store the position and velocity before resolving contacts of players, that way we can work out step-ups
         c.preSolvingPosition = b->position;
-        c.preSolvingVelocity = b->velocity;
+        c.preSolvingVelocity = c.getRelativeVelocity();
         c.lastNonWalkableNormalContact = glm::vec3(0.0f); // storing 0,0,0
 
         c.groundState = PhysicsCharacter::GroundState::InAir;
@@ -296,10 +297,15 @@ void Solver::resolveCharactersExtended(float dt)
     {
         RigidBody* b = c.body;
         if (b->sleeping) continue;
+
+        // glm::vec3 desiredHorizontalVelocity = glm::vec3(c.preSolvingVelocity.x, 0.0f, c.preSolvingVelocity.z);
+        // float currentForwardLength = glm::length(desiredHorizontalVelocity) * dt;
+        // const float LENGTH_TOLERANCE = 0.01f;
+        // if (currentForwardLength <= LENGTH_TOLERANCE) continue;
+
         if(!tryStepUp(c, *b, dt))
             trySnapDown(c, *b, dt); // Only snap down if we have not stepped up, because stepping up makes us snap down to the step.
 
-        b->velocity = c.baseVelocity + b->velocity; // important we only add baseVelocity once per solve
         // IMPORTANT: this is not going to work, assuming we only run 1 step per in-game character update, the character is just going to override the velocity
         // First fix that comes to mind is: to, for characters, use setCharacterVelocity, so it sets a character::inputVelocity instead, that way we will preserve last frame's speed? idk.
         // TODO: To take into account later when i test kinematic objects properly
@@ -332,32 +338,60 @@ bool Solver::tryStepUp(PhysicsCharacter& character, RigidBody& body, float dt)
     // Shape of the character
     ShapeHandle shape = body.shapeHandle;
 
-    // Quick fix for small steps, instead of velocity*dt, we can try character radius to never be unable to climb stairs
-    IShape* shapePtr = world.getShape(body.shapeHandle);
-    CapsuleShape* capsule = static_cast<CapsuleShape*>(shapePtr);
-    float desiredForwardLength = std::max(currentForwardLength, capsule->radius);
-
+    
     QueryFilter filter = {
         .bodyToIgnore = { body.bodyID }
         // We could use a filter (even though they are defined at game-side)
         // I might change the definition of game-side to engine-side but a separate class
     }; 
+    glm::quat orientation = glm::identity<glm::quat>();
 
+    ShapecastHit hit;
+
+    // Quick fix for small steps, instead of velocity*dt, we can try character radius to never be unable to climb stairs
+    IShape* shapePtr = world.getShape(body.shapeHandle);
+    CapsuleShape* capsule = static_cast<CapsuleShape*>(shapePtr);
+    //float desiredForwardLength = std::max(currentForwardLength, capsule->radius);
+    float desiredForwardLength = currentForwardLength;
+    
+    // MORE ELABORATE FIX: shapecast to the front, get hit.pointA,
+    // get pointA to center of object, thats the effective distance we have to move forward to go up the stair (we could also check with the hit.normal to increase distance and fully go up the stair)
+    // 
+    // distance detect ray
+    Ray ddRay = {
+        .origin = preIntegratedPosition,
+        .direction = desiredDirection,
+        .maxDistance = currentForwardLength + 0.01f,
+    };
+    hit = world.shapecast(ddRay, shape, orientation, filter);
+    if (hit.isValid())
+    {
+        glm::vec3 projectedPosition = ddRay.origin + ddRay.direction * ddRay.maxDistance * hit.t;
+        glm::vec3 projectedDifferenceToGo = projectedPosition - hit.pointA;
+        projectedDifferenceToGo.y = 0.0f;
+        float projectedDistanceToGo = glm::length(projectedDifferenceToGo) + 0.01f; // smol padding
+
+        desiredForwardLength = std::max(desiredForwardLength, projectedDistanceToGo);
+    }
+    else
+    {
+        SDL_assert(false && "We should be colliding wtf :sob:");
+        desiredForwardLength = std::max(desiredForwardLength, capsule->radius);
+    }
 
     // shapecast up to check if we have room.
-    ShapecastHit hit;
     Ray upRay = {
         .origin = preIntegratedPosition,
         .direction = world.UP_VECTOR,
         .maxDistance = character.stepHeight
     };
-    glm::quat orientation = glm::identity<glm::quat>();
 
     hit = world.shapecast(upRay, shape, orientation, filter);
     // if there is no hit we can move fully, otherwise we could try moving UP to the hit.
     float distanceTravelled = 1.0f;
     if (hit.isValid())
         distanceTravelled = hit.t;
+
 
 
     // shapecast in the desired direction
@@ -391,6 +425,8 @@ bool Solver::tryStepUp(PhysicsCharacter& character, RigidBody& body, float dt)
 
             if (hit.body->isKinematic)
                 character.baseVelocity = hit.body->velocity;
+            else
+                character.baseVelocity = glm::vec3(0.0f);
 
             return true;
         }
@@ -432,6 +468,8 @@ bool Solver::tryStepUp(PhysicsCharacter& character, RigidBody& body, float dt)
 
                 if (hit.body->isKinematic)
                     character.baseVelocity = hit.body->velocity;
+                else
+                    character.baseVelocity = glm::vec3(0.0f);
 
                 return true;
             }
@@ -473,6 +511,8 @@ bool Solver::tryStepUp(PhysicsCharacter& character, RigidBody& body, float dt)
 
             if (hit.body->isKinematic)
                 character.baseVelocity = hit.body->velocity;
+            else
+                character.baseVelocity = glm::vec3(0.0f);
 
             return true;
         }
@@ -490,6 +530,8 @@ bool Solver::tryStepUp(PhysicsCharacter& character, RigidBody& body, float dt)
     return false;
 }
 
+
+
 bool Solver::trySnapDown(PhysicsCharacter& character, RigidBody& body, float dt)
 {
     if (character.lastFrameGroundState == PhysicsCharacter::InAir ||
@@ -497,26 +539,35 @@ bool Solver::trySnapDown(PhysicsCharacter& character, RigidBody& body, float dt)
         character.jumping) 
         return false;
 
-
+    
     bool snappedDown = false;
     
     QueryFilter filter;
     filter.bodyToIgnore = { body.bodyID };
+    glm::quat orientation = glm::identity<glm::quat>();
 
     IShape* ishape = world.getShape(body.shapeHandle);
     CapsuleShape* capsule = static_cast<CapsuleShape*>(ishape);
     float characterHeight = capsule->halfHeight + capsule->radius;
-        
-    Ray ray;
 
-    ray.origin = body.position;
-    //ray.origin.y -= characterHeight;
-    //ray.direction = -world.UP_VECTOR; // Might have to change for -character.groundNormal (we will see)
-    ray.direction = -character.groundNormal;
-    ray.maxDistance = character.stepHeight;
+    glm::vec3 desiredHorizontalVelocity = glm::vec3(character.preSolvingVelocity.x, 0.0f, character.preSolvingVelocity.z);
+    glm::vec3 desiredHorizontalDir = glm::normalize(desiredHorizontalVelocity);
+    float currentForwardLength = glm::length(desiredHorizontalVelocity) * dt;
+    //float desiredForwardLength = std::max(currentForwardLength, capsule->radius);
+    const float LENGTH_TOLERANCE = 0.01f;
+    if (currentForwardLength <= LENGTH_TOLERANCE) return false;
+    float desiredForwardLength = currentForwardLength;
 
+    Ray snapDownRay = {
+        .origin = body.position,
+        .direction = -world.UP_VECTOR, // might change it for -character.groundNormal
+        .maxDistance = character.stepHeight
+    };
+
+    bool shouldStepDown = false;
+    float distanceForwardToStepDown = 0.0f;
     // Shapecast into the floor
-    ShapecastHit hit = world.shapecast(ray, body.shapeHandle, glm::identity<glm::quat>(), filter);
+    ShapecastHit hit = world.shapecast(snapDownRay, body.shapeHandle, orientation, filter);
     if (hit.isValid())
     {
         float upAlongNormal = glm::dot(hit.normal, world.UP_VECTOR);
@@ -534,16 +585,77 @@ bool Solver::trySnapDown(PhysicsCharacter& character, RigidBody& body, float dt)
 
             if (hit.body->isKinematic)
                 character.baseVelocity = hit.body->velocity;
+            else
+                character.baseVelocity = glm::vec3(0.0f);
         }
         else
         {
-            body.position = body.position - world.UP_VECTOR * hit.t;
-            body.velocity.y = 0.0f; // Testing
-            character.groundNormal = world.UP_VECTOR;
+            //body.position = body.position - world.UP_VECTOR * hit.t;
+            //body.velocity.y = 0.0f; // Testing
+            //character.groundNormal = world.UP_VECTOR;
+            // To be updated later
             character.groundState = PhysicsCharacter::GroundState::OnSteepGround;
+
+            // We hit a ledge (stair / obstacle) or a slope
+            glm::vec3 vectorForwardToStepDown = hit.pointA - body.position;
+            vectorForwardToStepDown.y = 0.0f;
+            distanceForwardToStepDown = capsule->radius - glm::length(vectorForwardToStepDown);
+            // Get the factor of the 1/dot(hit.normal, desiredDirection);
+            glm::vec3 nonVerticalNormal = glm::normalize(glm::vec3(hit.normal.x, 0.0f, hit.normal.z));
+            float factor = 1.0f / glm::dot(nonVerticalNormal, desiredHorizontalDir);
+            distanceForwardToStepDown *= factor;
+
+            shouldStepDown = true;
         }
     }
     
+    if (shouldStepDown)
+    {
+        Ray moveForwardRay = {
+            .origin = body.position,
+            .direction = desiredHorizontalDir,
+            .maxDistance = distanceForwardToStepDown // a little padding
+        };
+        hit = world.shapecast(moveForwardRay, body.shapeHandle, orientation, filter);
+        // We do NOT expect a hit at all, 
+        if (hit.isValid()) return false;
+
+        Ray stepDownRay = {
+            .origin = moveForwardRay.origin + moveForwardRay.direction * moveForwardRay.maxDistance,
+            .direction = -world.UP_VECTOR,
+            .maxDistance = character.stepHeight
+        };
+        hit = world.shapecast(stepDownRay, body.shapeHandle, orientation, filter);
+        // We are expecting a hit this time, if we do not, return false
+        if (!hit.isValid())
+        {
+            hit = world.shapecast(stepDownRay, body.shapeHandle, orientation, filter);
+            return false;
+        }
+
+        float upAlongNormal = glm::dot(hit.normal, world.UP_VECTOR);
+        float slopeAngle = glm::acos(upAlongNormal);
+
+        snappedDown = true;
+
+        // only if we hit and the angle is walkable, we commit to that
+        if (slopeAngle <= character.maxWalkableAngle)
+        {
+            body.position = stepDownRay.origin + stepDownRay.direction * stepDownRay.maxDistance * hit.t;
+            body.velocity.y = 0.0f; // Testing
+            character.groundNormal = hit.normal;
+            character.groundState = PhysicsCharacter::GroundState::OnGround;
+            character.jumping = false;
+
+            if (hit.body->isKinematic)
+                character.baseVelocity = hit.body->velocity;
+            else
+                character.baseVelocity = glm::vec3(0.0f);
+        }
+        
+        
+    }
+
 
     return snappedDown;
 }
