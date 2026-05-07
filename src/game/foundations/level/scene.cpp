@@ -5,7 +5,7 @@
 
 // animation update
 #include "core/animation.h"
-#include "game/foundations/PlayerMovementSystem.h"
+#include "game/systems/PlayerMovementSystem.h"
 // RapidJSON 
 #include "rapidjson/document.h"
 // Imported components for automated de-serialization
@@ -30,7 +30,7 @@ void Scene::StartUp()
     m_ecs.RegisterComponent<C_StaticMesh>();
     m_ecs.RegisterComponent<C_AnimatedMesh>();
     m_ecs.RegisterComponent<C_PlayerInput>();
-    m_ecs.RegisterComponent<C_CharacterController>();
+    m_ecs.RegisterComponent<C_PlayerController>();
     m_ecs.RegisterComponent<C_RigidBody>();
     m_ecs.RegisterComponent<C_Weapon>();
 
@@ -261,7 +261,7 @@ EntityID Scene::InstantiatePrefab(Asset* prefab, glm::vec3 spawnPosition, glm::q
             if (components.HasMember("PlayerInput"))
             {
                 m_ecs.AddComponent<C_PlayerInput>(eID, {});
-                m_ecs.AddComponent<C_CharacterController>(eID, {
+                m_ecs.AddComponent<C_PlayerController>(eID, {
                     /*.move_speed = 0.3f*/
                 });
             }
@@ -382,7 +382,8 @@ void Scene::Update(float dt)
 {
     //PlayerMovement_Update(&m_ecs, dt);
 
-    UpdatePlayer(dt);
+    PlayerMovementSystem::Update(m_ecs, m_physicsManager, m_currentPlayer, m_movementCameraForward, dt);
+    //UpdatePlayer(dt);
     
     m_physicsManager.update(m_ecs, dt);
 
@@ -448,211 +449,7 @@ void Scene::Render()
 void Scene::UpdatePlayer(float dt)
 {
 
-    // BIG IMPORTANT NOTE(jaime):
-    // WE NEED A fookin' class for this. if the player "crouches" we NEED to have a smaller capsule, 
-    // and i would appreciate if we had all IShapes stored in advance instead of creating them on the fly
-    // (PLEASE ALL CHARACTER SHAPES HAVE TO BE capsules please i beg you, otherwise physics die )
-
-    if (m_currentPlayer == NULL_ENTITY) return;
-    if (!m_ecs.Has(m_currentPlayer)) return;
-    PhysicsCharacter* player = m_physicsManager.getCharacter(m_currentPlayer);
-    if (!player) return;
-
-    C_Transform& transform = m_ecs.GetComponent<C_Transform>(m_currentPlayer);
-    C_PlayerInput& input = m_ecs.GetComponent<C_PlayerInput>(m_currentPlayer);
-    C_CharacterController& controller = m_ecs.GetComponent<C_CharacterController>(m_currentPlayer);
-
-    glm::vec3 scale;
-    glm::quat rotation;
-    glm::vec3 translation;
-    glm::vec3 skew;
-    glm::vec4 perspective;
-    glm::decompose(transform.matrix, scale, rotation, translation, skew, perspective);
-
-    // Flatten the camera forward vector so player movement stays horizontal.
-    auto flattenDirection = [](const glm::vec3& direction)
-        {
-            glm::vec3 flattened = glm::vec3(direction.x, 0.0f, direction.z);
-            float len = glm::length(flattened);
-            if (len <= 0.0001f)
-                return glm::vec3(0.0f, 0.0f, -1.0f);
-
-            return flattened / len;
-        };
-
-    // moving forward is now relative to the camera
-    glm::vec3 cameraForward = -flattenDirection(m_movementCameraForward);
-    glm::vec3 cameraRight = glm::normalize(glm::cross(cameraForward, glm::vec3(0.0f, 1.0f, 0.0f)));
-
-    glm::vec3 horizontalMoveDir(0.0f);
-
-    if (input.move_forward)
-        horizontalMoveDir -= cameraForward;
-    if (input.move_backward)
-        horizontalMoveDir += cameraForward;
-    if (input.move_left)
-        horizontalMoveDir += cameraRight;
-    if (input.move_right)
-        horizontalMoveDir -= cameraRight;
-
-    bool isMoving = glm::length(horizontalMoveDir) > 0.0f;
-    if (isMoving)
-    {
-        horizontalMoveDir = glm::normalize(horizontalMoveDir);
-        // update rotation 
-        glm::vec3 facingDir = glm::normalize(glm::vec3(horizontalMoveDir.x, 0.0f, horizontalMoveDir.z));
-        float yawDeg = glm::degrees(atan2f(facingDir.x, facingDir.z));
-        rotation = glm::angleAxis(glm::radians(yawDeg), glm::vec3(0.0f, 1.0f, 0.0f));
-
-        transform.matrix = glm::translate(glm::mat4(1.0f), translation) * glm::mat4_cast(rotation) * glm::scale(glm::mat4(1.0f), scale);
-    }
     
-    // If we are jumping, we need to check IF we touch the floor
-    // We take away time from the jumping cooldown using dt to check next step
-    if (controller.jumping)
-    {
-        controller.jumping_cooldown -= dt;
-    }
-        
-
-    // We only need to check if the jumping cooldown is done
-    if (controller.jumping_cooldown < 0.0f)
-    {
-        // Raycast to update if we are jumping
-        // For that, we need the current Character's transform AND shape to find the feet, and then throw a very tiny ray
-        //IShape* shape = m_physicsManager.getShape(m_currentPlayer);
-        //ShapeType shapeType = shape->getType();
-        //if (shapeType != ShapeType::Capsule)
-        //{
-        //    SDL_assert(false && "Character collider (IShape) needs to be of ShapeType::Capsule");
-        //    return;
-        //}
-        //CapsuleShape* capsuleShape = static_cast<CapsuleShape*>(shape);
-        //
-        //Ray feetRay;
-        //feetRay.origin = translation; // We will have to add the capsule's halfHeight +(-) radius to get the feet
-        //feetRay.direction = glm::vec3(0.0f, -1.0f, 0.0f);
-        //feetRay.maxDistance = capsuleShape->halfHeight + capsuleShape->radius + 0.15f; // add a small distance to the halfheight + radius
-
-        //QueryFilterExternal filter;
-        //filter.bodyToIgnore = m_currentPlayer;
-        //filter.hasLayerOfQuery = true;
-        //filter.layerOfQuery = (uint8_t)BodyLayer::MOVING;
-
-        //std::vector<EntityRaycastHit> hits = m_physicsManager.raycastAll(feetRay, filter);
-
-        if (/*!hits.empty() || */player->groundState == PhysicsCharacter::GroundState::OnGround)
-        {
-            controller.jumping = false;
-            controller.jumping_cooldown = 0.0f;
-        } // If there are hits, we are in the ground
-    } // If the jumping cooldown is done, we need to check if we can jump again
-
-    // can change it to only run forwards and have other animation for runnign sideways, backwards
-    bool isRunning = input.run && isMoving && !input.aim;
-    if (isMoving)
-    {
-        // Project horizontal velocity to character's slope normal
-        glm::vec3 slopeRight = glm::normalize(glm::cross(horizontalMoveDir, player->groundNormal));
-        glm::vec3 slopeForward = glm::normalize(glm::cross(player->groundNormal, slopeRight));
-
-        if (slopeForward.y > 0.0f) slopeForward.y = 0.0f; // Do this to walk down surfaces correctly.
-        //slopeForward.y = 0.0f;
-
-        // slow down when aiming
-        float aim_modifier = input.aim ? 0.4f : 1.0f;
-        float active_speed = isRunning ? (controller.move_speed * 5.0f) : (controller.move_speed * aim_modifier); //make it work with new physics
-        
-        controller.velocity = slopeForward * active_speed;
-    }
-    else
-    {
-        controller.velocity = horizontalMoveDir * controller.move_speed;
-    }
-    
-
-    // Important to add the velocity to the current one, NOT WITH addVelocity cause it would linearly add to it
-    glm::vec3 currentVelocity = m_physicsManager.getVelocity(m_currentPlayer);
-    controller.velocity.y += currentVelocity.y;
-
-    switch (player->groundState)
-    {
-    case PhysicsCharacter::GroundState::OnGround:
-
-        if(!(!isMoving && currentVelocity.x == 0.0f && currentVelocity.z == 0.0f))
-            m_physicsManager.setVelocity(m_currentPlayer, controller.velocity);
-
-        if (input.jump)
-        {
-            player->jumping = true; // very important
-            controller.jumping = true;
-            controller.jumping_cooldown = 0.2f; // Adjust to avoid multiple-consecutive-frame / jittery jumping
-
-            glm::vec3 gravity = m_physicsManager.getGravity();
-            m_physicsManager.addVelocity(m_currentPlayer, -(gravity * 0.5f)); // Adjust jump strength as you wish
-        }
-
-        break;
-    case PhysicsCharacter::GroundState::OnSteepGround:
-        break;
-    case PhysicsCharacter::GroundState::InAir:
-        break;
-    default:
-        break;
-    }
-
-    //C_AnimatedMesh& animatedMesh = m_ecs.GetComponent<C_AnimatedMesh>(m_currentPlayer);
-
-    // Play animations
-    if (m_ecs.Has<C_AnimatedMesh>(m_currentPlayer))
-    {
-        C_AnimatedMesh& animatedMesh = m_ecs.GetComponent<C_AnimatedMesh>(m_currentPlayer);
-        if (isMoving)
-        {
-            const char* animStateName = isRunning ? "run" : "walk";
-            int moveAnimId = GetAnimationIdFromName(animatedMesh, animStateName);
-
-            if (moveAnimId != -1 && animatedMesh.lowerBodyLayer.currentAnimation != moveAnimId)
-            {
-                PlayAnim(animatedMesh, animatedMesh.asset->animations[moveAnimId].name, 0.4f);
-                animatedMesh.lowerBodyLayer.isCurrentLooping = true;
-            }
-        }
-        else
-        {
-            int idleAnimId = GetAnimationIdFromName(animatedMesh, animatedMesh.idleAnimationName);
-            if (animatedMesh.lowerBodyLayer.currentAnimation != idleAnimId)
-            {
-                PlayAnim(animatedMesh, animatedMesh.idleAnimationName, 0.4f);
-                animatedMesh.lowerBodyLayer.isCurrentLooping = true;
-            }
-        }
-    }
-
-    // find equipped weapon and attach to hand
-    C_AnimatedMesh& animatedMesh = m_ecs.GetComponent<C_AnimatedMesh>(m_currentPlayer);
-    m_ecs.GetView<C_Weapon, C_Transform>().ForEach([&](C_Weapon& weapon, C_Transform& weaponTransform)
-    {
-        if (!weapon.equipped)
-            return;
-
-        int handNodeIndex = -1;
-
-        // find node for hand
-        for (uint32_t i = 0; i < animatedMesh.asset->node_count; i++)
-        {
-            Node* node = &animatedMesh.asset->nodes[i];
-
-            if (node->name && strcmp(node->name, "mixamorig:Head") == 0)
-            {
-                handNodeIndex = (int)i;
-                break;
-            }
-        }
-         
-        glm::mat4 handMatrix = animatedMesh.joint_matrices[handNodeIndex]; 
-        weaponTransform.matrix = transform.matrix * handMatrix;
-    });
 }
 
 void Scene::SetBodyCollisionLayers()

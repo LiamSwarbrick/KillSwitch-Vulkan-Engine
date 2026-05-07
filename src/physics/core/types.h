@@ -414,6 +414,23 @@ struct PhysicsCharacter
     {
         return body->velocity - baseVelocity;
     }
+    // QoL for setting / adding velocity directly without using PhysicsManager
+    void setVelocity(const glm::vec3& velocity)
+    {
+        if (body)
+        {
+            body->wakeUp();
+            body->velocity = velocity;
+        }
+    }
+    void addVelocity(const glm::vec3& velocity)
+    {
+        if (body)
+        {
+            body->wakeUp();
+            body->velocity += velocity;
+        }
+    }
 
     float maxWalkableAngle = glm::radians(50.0f); // Maximum angle compared to groundNormal that makes it able to snap-walk on tilted/uneven terrain
     float stepHeight = 0.4f; // Max height allowed for climbing/dropping-from steps or other obstacles
