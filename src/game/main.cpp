@@ -67,16 +67,16 @@ int main(int argc, char *argv[])
         "All_Sounds_MP3_UNMASTERED2/Bad_Signs.mp3"    
     );
     // Set up spatial audio for player start position
-    if (startup_music != 0)
-        {
-            AudioSystem_SetClipMinMaxDistance(&audio_system, startup_music, 1.0f, 40.0f);
-            AudioSystem_PlaySpatialLoop(
-                &audio_system,
-                startup_music,
-                1.0f,
-                2.0f, 1.0f, 0.0f
-            );
-        }
+    // if (startup_music != 0)
+    //     {
+    //         AudioSystem_SetClipMinMaxDistance(&audio_system, startup_music, 1.0f, 40.0f);
+    //         AudioSystem_PlaySpatialLoop(
+    //             &audio_system,
+    //             startup_music,
+    //             1.0f,
+    //             2.0f, 1.0f, 0.0f
+    //         );
+    //     }
 
     // AudioClipHandle startup_test_sfx = AudioSystem_LoadClipEx(
     //     &audio_system,
