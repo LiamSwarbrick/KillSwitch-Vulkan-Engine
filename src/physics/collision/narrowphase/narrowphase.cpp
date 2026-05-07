@@ -202,8 +202,8 @@ RaycastHit NarrowPhase::raycastCapsule(const Ray& ray, const CapsuleShape& capsu
 
 ShapecastHit NarrowPhase::conservativeAdvancement(const Ray& ray, const IShape* queryShape, const glm::vec3& queryPos, const glm::quat& queryOri, const IShape* targetShape, const glm::vec3& targetPos, const glm::quat& targetOri) const
 {
-	const float TOLERANCE = 1e-4f;
-	const int MAX_ITERATIONS = 64;
+	const float TOLERANCE = 0.004f;
+	const int MAX_ITERATIONS = 12;
 
 	float t = 0.0f;
 	glm::vec3 currentPos = queryPos; // not using ray.origin cause queryPos could be offset already
