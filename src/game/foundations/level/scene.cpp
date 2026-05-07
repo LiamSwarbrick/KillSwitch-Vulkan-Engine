@@ -643,7 +643,7 @@ void Scene::UpdatePlayer(float dt)
         {
             Node* node = &animatedMesh.asset->nodes[i];
 
-            if (node->name && strcmp(node->name, "mixamorig:Head") == 0)
+            if (node->name && strcmp(node->name, "mixamorig:RightHand") == 0)
             {
                 handNodeIndex = (int)i;
                 break;

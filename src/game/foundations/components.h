@@ -47,6 +47,7 @@ struct C_Weapon
 	bool equipped = false;
 
 	const char* attach_bone_name;
+	int attach_bone_index;
 };
 
 #endif // !FOUNDATIONS_COMPONENTS_H
