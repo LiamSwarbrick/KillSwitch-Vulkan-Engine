@@ -182,8 +182,8 @@ int main(int argc, char *argv[])
     //Asset* animationPrefab = scene.LoadPrefab("assets/animations/cat.gltf");
         
     scene.InstantiatePrefab(many_prefab, glm::vec3(0, 0, 0), glm::identity<glm::quat>());
-    scene.InstantiatePrefab(room_prefab, glm::vec3(0.0f, 0.0f, 10.0f), glm::identity<glm::quat>());
-    scene.InstantiatePrefab(playground_prefab, glm::vec3(0, 0, 10.0f), glm::identity<glm::quat>());
+    scene.InstantiatePrefab(room_prefab, glm::vec3(0.0f, 0.0f, -10.0f), glm::identity<glm::quat>());
+    scene.InstantiatePrefab(playground_prefab, glm::vec3(0, 0, -10.0f), glm::identity<glm::quat>());
     // scene.InstantiatePrefab(cube_prefab, glm::vec3(0, 5.1, 0));
     // scene.InstantiatePrefab(cube_prefab, glm::vec3(3, 4.9, 0));ss
     

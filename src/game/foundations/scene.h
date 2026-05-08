@@ -9,12 +9,19 @@
 
 #include "physics/physics_manager.h"
 
+#include "game/systems/System.h"
+
+#include <vector>
+#include <memory>
 
 class Scene {
 
 private:
     ECS m_ecs;
     PhysicsManager m_physicsManager;
+
+    SystemContext m_systemCtx;
+    std::vector<std::unique_ptr<System>> m_systems;
 
     EntityID m_currentPlayer = NULL_ENTITY;
 
@@ -57,9 +64,16 @@ public:
     void SetMovementCameraForward(const glm::vec3& forward) { m_movementCameraForward = forward; }
 
 private:
-    void UpdatePlayer(float dt);
-
-private:
+    void InitSystemContext();
+    void InitSystems();
+    template<typename T>
+    void RegisterSystem()
+    {
+        std::unique_ptr<System> system = std::make_unique<T>();
+        system->Init(m_systemCtx);
+        m_systems.push_back(std::move(system));
+    }
+    
     // Helper to set the body's collision matrix
     void SetBodyCollisionLayers();
 };

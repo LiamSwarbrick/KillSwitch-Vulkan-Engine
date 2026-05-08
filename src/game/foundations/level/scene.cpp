@@ -5,11 +5,17 @@
 
 // animation update
 #include "core/animation.h"
-#include "game/systems/PlayerMovementSystem.h"
 // RapidJSON 
 #include "rapidjson/document.h"
 // Imported components for automated de-serialization
 #include "imported_components.h"
+
+// Include all needed systems
+#include "game/systems/ZombieAISystem.h"
+#include "game/systems/PlayerInputSystem.h"
+#include "game/systems/MovementSystem.h"
+#include "game/systems/PhysicsSystem.h"
+#include "game/systems/AnimationSystem.h"
 
 // types from physics
 #include "physics/core/types.h"
@@ -29,9 +35,14 @@ void Scene::StartUp()
     m_ecs.RegisterComponent<C_Light>();
     m_ecs.RegisterComponent<C_StaticMesh>();
     m_ecs.RegisterComponent<C_AnimatedMesh>();
+    //m_ecs.RegisterComponent<C_PlayerController>();
     m_ecs.RegisterComponent<C_PlayerInput>();
-    m_ecs.RegisterComponent<C_PlayerController>();
+    m_ecs.RegisterComponent<C_ZombieAIInfo>();
     m_ecs.RegisterComponent<C_RigidBody>();
+    m_ecs.RegisterComponent<C_MovementInput>();
+    m_ecs.RegisterComponent<C_MovementStats>();
+    m_ecs.RegisterComponent<C_MovementInfo>();
+    m_ecs.RegisterComponent<C_CombatInput>();
     m_ecs.RegisterComponent<C_Weapon>();
 
     m_prefabs.clear();
@@ -50,6 +61,9 @@ void Scene::StartUp()
     // Both ways of subscribing
     m_onCollisionEnterSubscription = m_physicsManager.onCollisionEnter += printCollision; 
     m_onCollisionStaySubscription = m_physicsManager.onCollisionStay.Subscribe(printCollision);
+
+    // Important bit
+    InitSystems();
 }
 
 void Scene::Shutdown()
@@ -117,6 +131,8 @@ EntityID Scene::InstantiatePrefab(Asset* prefab, glm::vec3 spawnPosition, glm::q
         glm::quat localRotation = glm::quat(node->rotation[3], node->rotation[0], node->rotation[1], node->rotation[2]);
         glm::mat4 localTransform = glm::translate(glm::mat4(1.0f), localPosition) * glm::mat4_cast(localRotation);
         t.matrix = rootMatrix * localTransform;
+        localPosition += spawnPosition;
+        localRotation = spawnRotation * localRotation;
 
         if (node->light_index >= 0)
         {
@@ -258,12 +274,27 @@ EntityID Scene::InstantiatePrefab(Asset* prefab, glm::vec3 spawnPosition, glm::q
                     m_ecs.AddComponent<C_RigidBody>(eID, { rbHandle });
             } // if rigidbodycomponent
 
-            if (components.HasMember("PlayerInput"))
+            if ((components.HasMember("PlayerInput") || components.HasMember("ZombieInput")) && components.HasMember("RigidbodyComponent"))
             {
-                m_ecs.AddComponent<C_PlayerInput>(eID, {});
-                m_ecs.AddComponent<C_PlayerController>(eID, {
-                    /*.move_speed = 0.3f*/
-                });
+                if (components.HasMember("PlayerInput"))
+                {
+                    m_ecs.AddComponent<C_PlayerInput>(eID);
+                    m_ecs.AddComponent<C_MovementStats>(eID, C_MovementStats::DefaultPlayerStats());
+                }
+                if (components.HasMember("ZombieInput"))
+                {
+                    // No need for input as it is processed in the ZombieAISystem
+                    m_ecs.AddComponent<C_ZombieAIInfo>(eID);
+                    m_ecs.AddComponent<C_MovementStats>(eID, C_MovementStats::DefaultZombieStats());
+                }
+
+                m_ecs.AddComponent<C_MovementInput>(eID);
+                m_ecs.AddComponent<C_MovementInfo>(eID);
+                m_ecs.AddComponent<C_CombatInput>(eID);
+
+                //m_ecs.AddComponent<C_PlayerController>(eID, {
+                //    /*.move_speed = 0.3f*/
+                //});
             }
 
             if (components.HasMember("WeaponComponent"))
@@ -379,12 +410,9 @@ void Scene::BuildRendererScene()
 
 void Scene::Update(float dt)
 {
-    //PlayerMovement_Update(&m_ecs, dt);
 
-    PlayerMovementSystem::Update(m_ecs, m_physicsManager, m_currentPlayer, m_movementCameraForward, dt);
-    //UpdatePlayer(dt);
-    
-    m_physicsManager.update(m_ecs, dt);
+    for (auto& system : m_systems)
+        system->Update(dt);
 
     Ray ray = { glm::vec3(0.0f, 0.5f, 2.0f), glm::normalize(glm::vec3(0.0f, 0.0f, -1.0f)), 10.0f};
     QueryFilterExternal filter;
@@ -445,11 +473,35 @@ void Scene::Render()
     });
 }
 
-void Scene::UpdatePlayer(float dt)
+void Scene::InitSystemContext()
 {
-
-    
+    m_systemCtx.ecs = &m_ecs;
+    m_systemCtx.physicsManager = &m_physicsManager;
 }
+
+void Scene::InitSystems()
+{
+    InitSystemContext();
+    // PLEASE MAKE SURE THEY ARE IN ORDER OF COMPONENT DEPENDENCIES :D
+
+    // Process inputs first
+    RegisterSystem<PlayerInputSystem>();
+    RegisterSystem<ZombieAISystem>();
+
+    // Then process the movement based on those inputs
+    RegisterSystem<MovementSystem>();
+
+    // Process combat before physics update (so we attack what we see)
+    // Maybe do a Player/ZombieCombatSystem, but CombatSystem can process both anyway (like animation has UpdatePlayer(dt);)
+    //RegisterSystem<CombatSystem>();
+
+    // Physics After movement system
+    RegisterSystem<PhysicsSystem>();
+
+    // Animation System always in the end
+    RegisterSystem<AnimationSystem>();
+}
+
 
 void Scene::SetBodyCollisionLayers()
 {
