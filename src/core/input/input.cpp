@@ -31,6 +31,7 @@ static ActionState     s_actions[ACTION_COUNT]   = {};
 
 // Keyboard bool values from SDL_GetKeyboardState
 static const bool*     s_keyboard_state = nullptr;
+static bool            s_prev_keyboard_state[SDL_SCANCODE_COUNT] = {};
 
 // Mouse related values
 static float           s_mouse_dx = 0.0f;
@@ -38,10 +39,13 @@ static float           s_mouse_dy = 0.0f;
 static float           s_mouse_accum_x = 0.0f;
 static float           s_mouse_accum_y = 0.0f;
 static uint32_t        s_mouse_buttons = 0;
+static uint32_t        s_prev_mouse_buttons = 0;
 
 // Gamepad connection state
 static SDL_Gamepad*    s_gamepad = nullptr;
 static SDL_JoystickID  s_gamepad_id = 0;
+static bool            s_prev_gamepad_buttons[SDL_GAMEPAD_BUTTON_COUNT] = {};
+static bool            s_any_input_just_pressed = false;
 
 // Axis default deadzone, for now just keeped hardcoded here, can be made configurable if needed
 static constexpr float AXIS_DEADZONE = 0.20f;
@@ -337,9 +341,13 @@ void Input_Init(const char* bindings_path)
 {
     memset(s_actions,  0, sizeof(s_actions));   // Clear all action states
     memset(s_bindings, 0, sizeof(s_bindings));  // Clear all bindings
+    memset(s_prev_keyboard_state, 0, sizeof(s_prev_keyboard_state));
+    memset(s_prev_gamepad_buttons, 0, sizeof(s_prev_gamepad_buttons));
     s_mouse_dx = s_mouse_dy = 0.0f;             // Clear mouse state
     s_mouse_accum_x = s_mouse_accum_y = 0.0f;   // Clear mouse accumulators
     s_mouse_buttons = 0;                        // Clear mouse buttons
+    s_prev_mouse_buttons = 0;
+    s_any_input_just_pressed = false;
 
     set_default_bindings();
 
@@ -389,9 +397,39 @@ void Input_Update()
 {
     // Keyboard state
     s_keyboard_state = SDL_GetKeyboardState(NULL);
+    s_any_input_just_pressed = false;
+
+    if (s_keyboard_state)
+    {
+        for (int key = 0; key < SDL_SCANCODE_COUNT; ++key)
+        {
+            bool is_down = s_keyboard_state[key];
+            if (is_down && !s_prev_keyboard_state[key])
+                s_any_input_just_pressed = true;
+            s_prev_keyboard_state[key] = is_down;
+        }
+    }
 
     // Mouse button state
+    s_prev_mouse_buttons = s_mouse_buttons;
     s_mouse_buttons = SDL_GetMouseState(NULL, NULL);
+    if ((s_mouse_buttons & ~s_prev_mouse_buttons) != 0)
+        s_any_input_just_pressed = true;
+
+    if (s_gamepad)
+    {
+        for (int button = 0; button < SDL_GAMEPAD_BUTTON_COUNT; ++button)
+        {
+            bool is_down = SDL_GetGamepadButton(s_gamepad, (SDL_GamepadButton)button);
+            if (is_down && !s_prev_gamepad_buttons[button])
+                s_any_input_just_pressed = true;
+            s_prev_gamepad_buttons[button] = is_down;
+        }
+    }
+    else
+    {
+        memset(s_prev_gamepad_buttons, 0, sizeof(s_prev_gamepad_buttons));
+    }
 
     // Finalize mouse delta
     s_mouse_dx = s_mouse_accum_x;
@@ -433,6 +471,11 @@ bool Input_IsActionJustReleased(InputAction action)
 {
     if (action >= ACTION_COUNT) return false;
     return !s_actions[action].pressed && s_actions[action].prev_pressed;
+}
+
+bool Input_WasAnyInputJustPressed()
+{
+    return s_any_input_just_pressed;
 }
 
 float Input_GetActionValue(InputAction action)
