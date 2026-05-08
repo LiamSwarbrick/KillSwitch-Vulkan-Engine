@@ -226,7 +226,7 @@ void PlayerMovementSystem::Update(ECS& ecs, PhysicsManager& physics, EntityID pl
         C_AnimatedMesh& animatedMesh = ecs.GetComponent<C_AnimatedMesh>(playerID);
         if (isMoving)
         {
-            const char* animStateName = controller.state == C_PlayerController::Sprint ? "run" : "walk";
+            const char* animStateName = controller.state == C_PlayerController::Sprint ? "pistolrun" : "pistolwalk";
             int moveAnimId = GetAnimationIdFromName(animatedMesh, animStateName);
 
             if (moveAnimId != -1 && animatedMesh.lowerBodyLayer.currentAnimation != moveAnimId)
@@ -260,7 +260,7 @@ void PlayerMovementSystem::Update(ECS& ecs, PhysicsManager& physics, EntityID pl
             {
                 Node* node = &animatedMesh.asset->nodes[i];
 
-                if (node->name && strcmp(node->name, "mixamorig:Head") == 0)
+                if (node->name && strcmp(node->name, "mixamorig:RightHand") == 0)
                 {
                     handNodeIndex = (int)i;
                     break;
