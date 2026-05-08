@@ -5,7 +5,6 @@
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/quaternion.hpp>
 #include <core/components.h>
-#include <random>
 
 /*
 TO ENSURE THIS WORKS CORRECTLY, EMPTY DOORWAY NODES SHOULD PLACED AND NAMED AS FOLLOWS:
@@ -19,16 +18,16 @@ TO ENSURE THIS WORKS CORRECTLY, EMPTY DOORWAY NODES SHOULD PLACED AND NAMED AS F
 	WEST WALL: "Wall_W"
 */
 
-static std::mt19937 rng(std::random_device{}());
+//static std::mt19937 rng(std::random_device{}());
 
 // Just literally checks if each room has the necessary wall type to connect in the direction specified
-bool LevelGeneration::CanNeighbour(int roomAIndex, int roomBIndex, DoorDirection direction)
+bool LevelGeneration::CanNeighbour(LevelFloor& floor, int roomAIndex, int roomBIndex, DoorDirection direction)
 {
-	if (roomAIndex < 0 || roomAIndex >= palette.size() || roomBIndex < 0 || roomBIndex >= palette.size())
+	if (roomAIndex < 0 || roomAIndex >= floor.palette.size() || roomBIndex < 0 || roomBIndex >= floor.palette.size())
 		SDL_Log("Trying to check neighbour connections on invalid room numbers, RoomA: %d, RoomB: %d", roomAIndex, roomBIndex);
 
-	const Room& roomA = palette[roomAIndex];
-	const Room& roomB = palette[roomBIndex];
+	const Room& roomA = floor.palette[roomAIndex];
+	const Room& roomB = floor.palette[roomBIndex];
 
 	WallType roomAWallType = GetWallType(roomA.doorwayMask, direction);
 	WallType roomBWallType = GetWallType(roomB.doorwayMask, (DoorDirection)(((int)direction + 4) % 8));
@@ -44,7 +43,7 @@ bool LevelGeneration::CanNeighbour(int roomAIndex, int roomBIndex, DoorDirection
 	return true;
 }
 
-uint16_t LevelGeneration::RequiredMask(int x, int y)
+uint16_t LevelGeneration::RequiredMask(LevelFloor& floor, int x, int y)
 {
 	// Set default to be all walls
 	uint16_t mask = 170;
@@ -54,15 +53,15 @@ uint16_t LevelGeneration::RequiredMask(int x, int y)
 	{
 		glm::ivec2 neighbourCoords = { x + neighbourOffsets[i].x, y + neighbourOffsets[i].y };
 
-		if (neighbourCoords.x < 0 || neighbourCoords.x >= gridWidth || neighbourCoords.y < 0 || neighbourCoords.y >= gridHeight)
+		if (neighbourCoords.x < 0 || neighbourCoords.x >= floor.width || neighbourCoords.y < 0 || neighbourCoords.y >= floor.height)
 			continue;
 
-		GridCell& neighbourRoom = grid[neighbourCoords.y * gridWidth + neighbourCoords.x];
+		GridCell& neighbourRoom = floor.grid[neighbourCoords.y * floor.width + neighbourCoords.x];
 
 		if (!neighbourRoom.isCollapsed)
 			continue;
 
-		WallType neighbourWallType = GetWallType(palette[neighbourRoom.validRooms[0]].doorwayMask, (DoorDirection)(((int)directions[i] + 4) % 8));
+		WallType neighbourWallType = GetWallType(floor.palette[neighbourRoom.validRooms[0]].doorwayMask, (DoorDirection)(((int)directions[i] + 4) % 8));
 		SetWallType(mask, directions[i], neighbourWallType);
 	}
 
@@ -70,7 +69,7 @@ uint16_t LevelGeneration::RequiredMask(int x, int y)
 }
 
 // Gets a list of the themes of a cells neighbours, then randomly picks a theme from the list
-Theme LevelGeneration::GetPreferredTheme(glm::ivec2 room)
+Theme LevelGeneration::GetPreferredTheme(LevelFloor& floor, glm::ivec2 room, std::mt19937 rng)
 {
 	// Iterate through all neighbours and if connected by open or door, add their theme to a list
 	std::vector<Theme> neighbourThemes;
@@ -78,11 +77,13 @@ Theme LevelGeneration::GetPreferredTheme(glm::ivec2 room)
 	{
 		glm::ivec2 neighbourCoords = { room.x + neighbourOffsets[i].x, room.y + neighbourOffsets[i].y };
 		
-		if (neighbourCoords.x >= 0 && neighbourCoords.x < gridWidth && neighbourCoords.y >= 0 && neighbourCoords.y < gridHeight)
+		if (neighbourCoords.x >= 0 && neighbourCoords.x < floor.width && neighbourCoords.y >= 0 && neighbourCoords.y < floor.height)
 		{
-			GridCell& neighbourCell = grid[neighbourCoords.y * gridWidth + neighbourCoords.x];
-			if (neighbourCell.isCollapsed && GetWallType(palette[neighbourCell.validRooms[0]].doorwayMask, (DoorDirection)(((int)directions[i] + 4) % 8)) != WALL)
-				neighbourThemes.push_back(palette[neighbourCell.validRooms[0]].theme);
+			GridCell& neighbourCell = floor.grid[neighbourCoords.y * floor.width + neighbourCoords.x];
+			if (neighbourCell.isCollapsed && GetWallType(floor.palette[neighbourCell.validRooms[0]].doorwayMask, (DoorDirection)(((int)directions[i] + 4) % 8)) == OPEN)
+				return floor.palette[neighbourCell.validRooms[0]].theme;
+			else if (neighbourCell.isCollapsed && GetWallType(floor.palette[neighbourCell.validRooms[0]].doorwayMask, (DoorDirection)(((int)directions[i] + 4) % 8)) != WALL)
+				neighbourThemes.push_back(floor.palette[neighbourCell.validRooms[0]].theme);
 		}
 	}
 
@@ -210,7 +211,7 @@ void LevelGeneration::BuildPalette(const std::vector<Asset*>& roomAssets)
 }
 
 // Updates all rooms valid room lists if they have been affected by recent collapses
-void LevelGeneration::UpdatePossibilities(std::vector<glm::ivec2> updateRooms)
+void LevelGeneration::UpdatePossibilities(LevelFloor& floor, std::vector<glm::ivec2> updateRooms)
 {
 	while (!updateRooms.empty())
 	{
@@ -221,14 +222,14 @@ void LevelGeneration::UpdatePossibilities(std::vector<glm::ivec2> updateRooms)
 		{
 			// Get neighbouring room and check if valid within level boundaries
 			glm::ivec2 neighbourRoom = { currentRoom.x + neighbourOffsets[i].x, currentRoom.y + neighbourOffsets[i].y };
-			if (neighbourRoom.x < 0 || neighbourRoom.x >= gridWidth || neighbourRoom.y < 0 || neighbourRoom.y >= gridHeight)
+			if (neighbourRoom.x < 0 || neighbourRoom.x >= floor.width || neighbourRoom.y < 0 || neighbourRoom.y >= floor.height)
 				continue;
 
 			// Find neighbour gridcell and check if its already collapsed
-			int currentGridIndex = currentRoom.y * gridWidth + currentRoom.x;
-			GridCell& current = grid[currentGridIndex];
-			int neighbourGridIndex = neighbourRoom.y * gridWidth + neighbourRoom.x;
-			GridCell& neighbour = grid[neighbourGridIndex];
+			int currentGridIndex = currentRoom.y * floor.width + currentRoom.x;
+			GridCell& current = floor.grid[currentGridIndex];
+			int neighbourGridIndex = neighbourRoom.y * floor.width + neighbourRoom.x;
+			GridCell& neighbour = floor.grid[neighbourGridIndex];
 			if (neighbour.isCollapsed)
 				continue;
 
@@ -240,7 +241,7 @@ void LevelGeneration::UpdatePossibilities(std::vector<glm::ivec2> updateRooms)
 			bool hasNonOpenConnection = false;
 			for (int roomIndex : current.validRooms)
 			{
-				if (GetWallType(palette[roomIndex].doorwayMask, directions[i]) != OPEN)
+				if (GetWallType(floor.palette[roomIndex].doorwayMask, directions[i]) != OPEN)
 				{
 					hasNonOpenConnection = true;
 					break;
@@ -259,7 +260,7 @@ void LevelGeneration::UpdatePossibilities(std::vector<glm::ivec2> updateRooms)
 
 				// Update the valid rooms after the theme change
 				neighbour.validRooms.erase(std::remove_if(neighbour.validRooms.begin(), neighbour.validRooms.end(), [&](int rIdx) {
-					int roomTheme = palette[rIdx].theme;
+					int roomTheme = floor.palette[rIdx].theme;
 					return std::find(neighbour.validThemes.begin(), neighbour.validThemes.end(), roomTheme) == neighbour.validThemes.end();
 					}), neighbour.validRooms.end());
 			}
@@ -271,7 +272,7 @@ void LevelGeneration::UpdatePossibilities(std::vector<glm::ivec2> updateRooms)
 				bool compatible = false;
 				for (int currentValidRoom : current.validRooms)
 				{
-					if (CanNeighbour(currentValidRoom, neighbourValidRoom, directions[i]))
+					if (CanNeighbour(floor, currentValidRoom, neighbourValidRoom, directions[i]))
 					{
 						compatible = true;
 						break;
@@ -287,7 +288,7 @@ void LevelGeneration::UpdatePossibilities(std::vector<glm::ivec2> updateRooms)
 			// If no rooms are valid, then a room type is missing, output which room type
 			if (neighbour.validRooms.empty())
 			{
-				uint16_t requiredMask = RequiredMask(neighbourRoom.x, neighbourRoom.y);
+				uint16_t requiredMask = RequiredMask(floor, neighbourRoom.x, neighbourRoom.y);
 				SDL_Log("Room at %d,%d has no valid rooms, it needs: N:%d E:%d S:%d W:%d", neighbourRoom.x, neighbourRoom.y,
 					GetWallType(requiredMask, NORTH), GetWallType(requiredMask, EAST), GetWallType(requiredMask, SOUTH), GetWallType(requiredMask, WEST));
 			}
@@ -299,15 +300,15 @@ void LevelGeneration::UpdatePossibilities(std::vector<glm::ivec2> updateRooms)
 	}
 }
 
-std::vector<glm::ivec2> LevelGeneration::GetTraversableRooms(glm::ivec2 startRoom)
+std::vector<glm::ivec2> LevelGeneration::GetTraversableRooms(LevelFloor& floor, glm::ivec2 startRoom)
 {
 	// Create vectors and push the starting room onto the stack
 	std::vector<glm::ivec2> traversableRooms;
-	std::vector<bool> visited(gridWidth * gridHeight, false);
+	std::vector<bool> visited(floor.width * floor.height, false);
 	std::vector<glm::ivec2> roomStack;
 
 	roomStack.push_back(startRoom);
-	int gridIndex = startRoom.y * gridWidth + startRoom.x;
+	int gridIndex = startRoom.y * floor.width + startRoom.x;
 	visited[gridIndex] = true;
 
 	// Visit all rooms connected to the start room, and return their coords
@@ -321,18 +322,18 @@ std::vector<glm::ivec2> LevelGeneration::GetTraversableRooms(glm::ivec2 startRoo
 		for (int i = 0; i < 4; ++i)
 		{
 			glm::ivec2 neighbourRoom = { currentRoom.x + neighbourOffsets[i].x, currentRoom.y + neighbourOffsets[i].y };
-			if (neighbourRoom.x < 0 || neighbourRoom.x >= gridWidth || neighbourRoom.y < 0 || neighbourRoom.y >= gridHeight)
+			if (neighbourRoom.x < 0 || neighbourRoom.x >= floor.width || neighbourRoom.y < 0 || neighbourRoom.y >= floor.height)
 				continue;
 
-			int currentIndex = currentRoom.y * gridWidth + currentRoom.x;
-			int neighbourIndex = neighbourRoom.y * gridWidth + neighbourRoom.x;
+			int currentIndex = currentRoom.y * floor.width + currentRoom.x;
+			int neighbourIndex = neighbourRoom.y * floor.width + neighbourRoom.x;
 
 			if (visited[neighbourIndex])
 				continue;
 
 			// If there is a doorway or opening between the rooms, push the neighbour to the stack and specify it as visited
-			uint8_t currentMask = palette[grid[currentIndex].validRooms[0]].doorwayMask;
-			uint8_t neighbourMask = palette[grid[neighbourIndex].validRooms[0]].doorwayMask;
+			uint8_t currentMask = floor.palette[floor.grid[currentIndex].validRooms[0]].doorwayMask;
+			uint8_t neighbourMask = floor.palette[floor.grid[neighbourIndex].validRooms[0]].doorwayMask;
 
 			if ((GetWallType(currentMask, directions[i]) == OPEN && GetWallType(neighbourMask, (DoorDirection)(((int)directions[i] + 4) % 8)) == OPEN) || 
 				(GetWallType(currentMask, directions[i]) == DOOR && GetWallType(neighbourMask, (DoorDirection)(((int)directions[i] + 4) % 8)) == DOOR))
@@ -346,17 +347,26 @@ std::vector<glm::ivec2> LevelGeneration::GetTraversableRooms(glm::ivec2 startRoo
 }
 
 // Generates and instantiates a level
-void LevelGeneration::GenerateGrid(int width, int height, glm::ivec2 start, glm::ivec2 goal, uint16_t startDoorwayMask, Theme startTheme, int maxRooms)
+LevelFloor LevelGeneration::GenerateGrid(int width, int height, glm::ivec2 start, uint16_t startDoorwayMask, Theme startTheme, glm::ivec2 goal, uint16_t goalDoorwayMask, Theme goalTheme, int maxRooms, int floorNum)
 {
+	LevelFloor floor;
+	floor.floor = floorNum;
+	floor.width = width;
+	floor.height = height;
+	floor.startCoords = start;
+	floor.goalCoords = goal;
+	floor.palette = palette;
+
+	std::mt19937 rng(std::random_device{}());
+
 	while (true)
 	{
-		gridWidth = width;
-		gridHeight = height;
-		grid.assign(width * height, GridCell());
+		floor.grid.clear();
+		floor.grid.assign(width * height, GridCell());
 
 		// Give every grid cell every room and theme combination as possible rooms
 		std::vector<int> allRooms;
-		for (int i = 0; i < palette.size(); ++i)
+		for (int i = 0; i < floor.palette.size(); ++i)
 			allRooms.push_back(i);
 
 		std::vector<int> allThemes;
@@ -368,7 +378,7 @@ void LevelGeneration::GenerateGrid(int width, int height, glm::ivec2 start, glm:
 			for (int x = 0; x < width; ++x)
 			{
 				int gridIndex = y * width + x;
-				GridCell& cell = grid[gridIndex];
+				GridCell& cell = floor.grid[gridIndex];
 				cell.validRooms = allRooms;
 				cell.validThemes = allThemes;
 
@@ -376,7 +386,7 @@ void LevelGeneration::GenerateGrid(int width, int height, glm::ivec2 start, glm:
 				auto& p = cell.validRooms;
 				p.erase(std::remove_if(p.begin(), p.end(), [&](int index)
 					{
-						uint16_t mask = palette[index].doorwayMask;
+						uint16_t mask = floor.palette[index].doorwayMask;
 						if (y == height - 1 && GetWallType(mask, NORTH) != WALL)
 							return true;
 						if (y == 0 && GetWallType(mask, SOUTH) != WALL)
@@ -395,12 +405,12 @@ void LevelGeneration::GenerateGrid(int width, int height, glm::ivec2 start, glm:
 
 		// Collapsing starting cell
 		int gridIndex = start.y * width + start.x;
-		GridCell& startingCell = grid[gridIndex];
+		GridCell& startingCell = floor.grid[gridIndex];
 		int roomChoice = -1;
 
 		// Pick a random theme from themes and choose starting room
-		for (int i = 0; i < palette.size(); ++i)
-			if (palette[i].doorwayMask == startDoorwayMask && palette[i].theme == startTheme)
+		for (int i = 0; i < floor.palette.size(); ++i)
+			if (floor.palette[i].doorwayMask == startDoorwayMask && floor.palette[i].theme == startTheme)
 				roomChoice = i;
 
 		SDL_assert(roomChoice != -1);
@@ -413,8 +423,29 @@ void LevelGeneration::GenerateGrid(int width, int height, glm::ivec2 start, glm:
 		std::vector<glm::ivec2> updateRooms;
 		updateRooms.push_back(start);
 
+		// Collapsing goal cell
+		if (start != goal)
+		{
+			int gridIndex = goal.y * width + goal.x;
+			GridCell& startingCell = floor.grid[gridIndex];
+			int roomChoice = -1;
+
+			// Pick a random theme from themes and choose starting room
+			for (int i = 0; i < floor.palette.size(); ++i)
+				if (floor.palette[i].doorwayMask == goalDoorwayMask && floor.palette[i].theme == goalTheme)
+					roomChoice = i;
+
+			SDL_assert(roomChoice != -1);
+			startingCell.validRooms = { roomChoice };
+			startingCell.validThemes = { goalTheme };
+			startingCell.isCollapsed = true;
+			roomsPlaced++;
+
+			updateRooms.push_back(goal);
+		}
+
 		// For each cardinal direction, also make a room 2-5 cells away from the starting room
-		for (int i = 0; i < 4; ++i)
+		for (int i = 0; i < 1; ++i)
 		{
 			// Get random offset from start
 			std::uniform_int_distribution<int> dirDist(2, 5);
@@ -422,18 +453,20 @@ void LevelGeneration::GenerateGrid(int width, int height, glm::ivec2 start, glm:
 			glm::ivec2 position = start + offset;
 
 			// Check the new position is within the grid bounds
-			if (position.x < 0 || position.x >= gridWidth || position.y < 0 || position.y >= gridHeight)
+			if (position.x < 0 || position.x >= width || position.y < 0 || position.y >= height)
 				continue;
 
 			gridIndex = position.y * width + position.x;
-			GridCell& Cell = grid[gridIndex];
+			GridCell& Cell = floor.grid[gridIndex];
+			if (Cell.isCollapsed)
+				continue;
 			roomChoice = -1;
 
 			// Pick a random theme 
 			std::uniform_int_distribution<int> theme(0, THEME_COUNT - 1);
 			Theme randomTheme = (Theme)(theme(rng));
-			for (int i = 0; i < palette.size(); ++i)
-				if (palette[i].doorwayMask == ((DOOR << NORTH) + (DOOR << EAST) + (DOOR << SOUTH) + (DOOR << WEST)) && palette[i].theme == randomTheme)
+			for (int i = 0; i < floor.palette.size(); ++i)
+				if (floor.palette[i].doorwayMask == ((DOOR << NORTH) + (DOOR << EAST) + (DOOR << SOUTH) + (DOOR << WEST)) && floor.palette[i].theme == randomTheme)
 					roomChoice = i;
 
 			SDL_assert(roomChoice != -1);
@@ -444,7 +477,7 @@ void LevelGeneration::GenerateGrid(int width, int height, glm::ivec2 start, glm:
 			updateRooms.push_back({ position.x, position.y });
 		}
 
-		UpdatePossibilities(updateRooms);
+		UpdatePossibilities(floor, updateRooms);
 
 		// Place rooms connected by doors until the room limit is reached
 		while (roomsPlaced < maxRooms)
@@ -456,10 +489,10 @@ void LevelGeneration::GenerateGrid(int width, int height, glm::ivec2 start, glm:
 			{
 				for (int x = 0; x < width; ++x)
 				{
-					if (grid[y * width + x].isCollapsed)
+					if (floor.grid[y * width + x].isCollapsed)
 						continue;
 
-					uint16_t requiredMask = RequiredMask(x, y);
+					uint16_t requiredMask = RequiredMask(floor, x, y);
 					
 					if (requiredMask != 170)
 						leafRooms.push_back({ x, y });
@@ -479,16 +512,16 @@ void LevelGeneration::GenerateGrid(int width, int height, glm::ivec2 start, glm:
 				break;
 
 			gridIndex = nextRoomCoords.y * width + nextRoomCoords.x;
-			GridCell& cell = grid[gridIndex];
+			GridCell& cell = floor.grid[gridIndex];
 			
 			// Select a theme and weight that theme so it has a higher chance of being picked
-			Theme preferredTheme = GetPreferredTheme(nextRoomCoords);
+			Theme preferredTheme = GetPreferredTheme(floor, nextRoomCoords, rng);
 			std::vector<float> weights;
 			for (int roomIndex : cell.validRooms)
 			{
-				float weight = palette[roomIndex].weight;
+				float weight = floor.palette[roomIndex].weight;
 
-				if (palette[roomIndex].theme == preferredTheme)
+				if (floor.palette[roomIndex].theme == preferredTheme)
 					weight *= 3.0f;
 
 				weights.push_back(weight);
@@ -499,12 +532,13 @@ void LevelGeneration::GenerateGrid(int width, int height, glm::ivec2 start, glm:
 			int roomChoice = cell.validRooms[distribution(rng)];
 
 			cell.validRooms = { roomChoice };
+			cell.validThemes = { (int)floor.palette[roomChoice].theme };
 			cell.isCollapsed = true;
 			roomsPlaced++;
 
 			// Update their neighbours list of valid rooms after the collapse
 			updateRooms.push_back({ nextRoomCoords.x, nextRoomCoords.y });
-			UpdatePossibilities(updateRooms);
+			UpdatePossibilities(floor, updateRooms);
 		}
 
 		// After max rooms placed, check for any doors or open spaces leading into abyss and seal them
@@ -517,10 +551,10 @@ void LevelGeneration::GenerateGrid(int width, int height, glm::ivec2 start, glm:
 			{
 				for (int x = 0; x < width; ++x)
 				{
-					if (grid[y * width + x].isCollapsed)
+					if (floor.grid[y * width + x].isCollapsed)
 						continue;
 
-					if (RequiredMask(x, y) != 170)
+					if (RequiredMask(floor, x, y) != 170)
 						nonTerminatingRooms.push_back({ x, y });
 				}
 			}
@@ -533,14 +567,17 @@ void LevelGeneration::GenerateGrid(int width, int height, glm::ivec2 start, glm:
 			for (glm::ivec2& room : nonTerminatingRooms)
 			{
 				// Find the mask that only seals the open sides
-				GridCell& cell = grid[room.y * width + room.x];
-				uint8_t requiredMask = RequiredMask(room.x, room.y);
-				Theme preferredTheme = GetPreferredTheme(room);
+				GridCell& cell = floor.grid[room.y * width + room.x];
+				uint8_t requiredMask = RequiredMask(floor, room.x, room.y);
+				Theme preferredTheme = GetPreferredTheme(floor, room, rng);
 
 				// Add all possible terminating room layouts to a vector
 				std::vector<int> terminatingLayouts;
-				for (int i = 0; i < palette.size(); ++i)
-					if (palette[i].doorwayMask == requiredMask && palette[i].theme == preferredTheme)
+				//for (int i = 0; i < cell.validRooms.size(); ++i)
+				//	if (floor.palette[cell.validRooms[i]].doorwayMask == requiredMask && floor.palette[cell.validRooms[i]].theme == preferredTheme)
+				//		terminatingLayouts.push_back(i);
+				for (int i = 0; i < floor.palette.size(); ++i)
+					if (floor.palette[i].doorwayMask == requiredMask && floor.palette[i].theme == preferredTheme)
 						terminatingLayouts.push_back(i);
 
 				// Pick and place a terminating room to seal the level, keep adding to roomsPlaced
@@ -548,14 +585,15 @@ void LevelGeneration::GenerateGrid(int width, int height, glm::ivec2 start, glm:
 				{
 					std::uniform_int_distribution<int> pick(0, terminatingLayouts.size() - 1);
 					cell.validRooms = { terminatingLayouts[pick(rng)] };
+					cell.validThemes = { floor.palette[cell.validRooms[0]].theme };
 					cell.isCollapsed = true;
 					roomsPlaced++;
 				}
 				else
 				{
-					// Try again, without the theme constraint
-					for (int i = 0; i < palette.size(); ++i)
-						if (palette[i].doorwayMask == requiredMask)
+					// Try again, without the theme constraint to make sure it doesnt break
+					for (int i = 0; i < floor.palette.size(); ++i)
+						if (floor.palette[i].doorwayMask == requiredMask)
 							terminatingLayouts.push_back(i);
 
 					// If no terminating room exists, missing some assets
@@ -563,6 +601,7 @@ void LevelGeneration::GenerateGrid(int width, int height, glm::ivec2 start, glm:
 
 					std::uniform_int_distribution<int> pick(0, terminatingLayouts.size() - 1);
 					cell.validRooms = { terminatingLayouts[pick(rng)] };
+					cell.validThemes = { floor.palette[cell.validRooms[0]].theme };
 					cell.isCollapsed = true;
 					roomsPlaced++;
 				}
@@ -570,41 +609,44 @@ void LevelGeneration::GenerateGrid(int width, int height, glm::ivec2 start, glm:
 		}
 
 		// Find the coords of all rooms reachable from the starting room
-		std::vector<glm::ivec2> traversableRooms = GetTraversableRooms(start);
+		std::vector<glm::ivec2> traversableRooms = GetTraversableRooms(floor, start);
 
 		// Only create a valid level if it reaches the goal, is traversable enough and has placed enough rooms
 		float amountTraversable = (float)traversableRooms.size() / (roomsPlaced);
-		if (grid[goal.y * width + goal.x].isCollapsed && amountTraversable > 0.99f && roomsPlaced >= maxRooms)
+		if (floor.grid[goal.y * width + goal.x].isCollapsed && amountTraversable > 0.99f && roomsPlaced >= maxRooms)
 			break;
 		else
 			SDL_Log("Flipped up trying again..., traversable: %f, roomsplaced: %d, maxrooms: %d", amountTraversable, roomsPlaced, maxRooms);
-
 	}
+
+	return floor;
 }
 
-void LevelGeneration::InstantiateLevel(Scene* scene)
+void LevelGeneration::InstantiateLevel(Scene* scene, LevelFloor& floor)
 {
 	// For every grid cell, spawn the chosen room in its position with the necessary rotation
-	for (int y = 0; y < gridHeight; ++y)
+	for (int y = 0; y < floor.height; ++y)
 	{
-		for (int x = 0; x < gridWidth; ++x)
+		for (int x = 0; x < floor.width; ++x)
 		{
-			int gridIndex = y * gridWidth + x;
-			GridCell& cell = grid[gridIndex];
+			int gridIndex = y * floor.width + x;
+			GridCell& cell = floor.grid[gridIndex];
 
 			if (!cell.isCollapsed || cell.validRooms.empty())
 				continue;
 
 			int roomIndex = cell.validRooms[0];
-			Room& room = palette[roomIndex];
+			Room& room = floor.palette[roomIndex];
 
 			// Placing gaps instead of solid rooms
 			if (room.doorwayMask == 170)
 				continue;
 
-			glm::vec3 worldPos(x * 10.0f, 0.0f, y * -10.0f);
+			glm::vec3 localPos(x * 10.0f, 0.0f, y * -10.0f);
+			glm::vec3 worldPos = floor.worldOffset + localPos;
 			glm::quat rotation = glm::angleAxis(glm::radians(room.rotation), glm::vec3(0, 1, 0));
 			EntityID roomEntity = scene->InstantiatePrefab(room.asset, worldPos, rotation);
+			floor.roomEntities.push_back(roomEntity);
 		}
 	}
 }
@@ -686,4 +728,31 @@ void LevelGeneration::SetWallType(uint16_t& mask, DoorDirection direction, WallT
 	// Clear the correct bits, then assign the new wall type to them
 	mask &= ~(0x03 << direction);
 	mask |= wallType << direction;
+}
+
+void LevelGeneration::GenerateNextFloor(Scene* scene)
+{
+	LevelFloor& prevFloor = activeFloors.back();
+	currentFloor++;
+
+	glm::vec3 newOffset = prevFloor.worldOffset + glm::vec3(0, 20.0f, -40.0f) + glm::vec3(0.0f, 0.0f, prevFloor.goalCoords.y * -10.0f);
+
+	//Asset* stairs = scene->LoadPrefab("assets/levels/STAIRSSHITTY.gltf");
+	//scene->InstantiatePrefab(stairs, newOffset + glm::vec3(prevFloor.goalCoords.x * 10.0f, -20.0f, 30.0f));
+	glm::ivec2 newStart(prevFloor.width / 2, 0);
+	glm::ivec2 newGoal(prevFloor.width / 2, prevFloor.height - 1);
+
+	LevelFloor newFloor = GenerateGrid(7, 7,
+		newStart, ((DOOR << NORTH) + (DOOR << EAST) + (DOOR << SOUTH) + (DOOR << WEST)), OUTSIDE,
+		newGoal, ((DOOR << NORTH) + (DOOR << EAST) + (DOOR << SOUTH) + (DOOR << WEST)), INSIDE,
+		20, currentFloor);
+	newFloor.worldOffset = newOffset;
+
+	InstantiateLevel(scene, newFloor);
+	activeFloors.push_back(newFloor);
+}
+
+void LevelGeneration::CleanupOldFloors(Scene* scene)
+{
+	SDL_Log("cleaning up old floors");
 }
