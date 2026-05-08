@@ -1,0 +1,3 @@
+Walking produces footsteps.
+To hear the zombies footsteps, you can crouch which will silence yours.
+
