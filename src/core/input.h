@@ -42,6 +42,7 @@ void  Input_Update();                                // Call once after all even
 bool  Input_IsActionPressed(InputAction action);      // Held this frame
 bool  Input_IsActionJustPressed(InputAction action);  // Pressed this frame, not last
 bool  Input_IsActionJustReleased(InputAction action); // Released this frame
+bool  Input_WasAnyInputJustPressed();                 // Any keyboard/mouse/gamepad button pressed this frame
 float Input_GetActionValue(InputAction action);       // 0.0–1.0 (analog or digital)
 
     // Mouse delta 
