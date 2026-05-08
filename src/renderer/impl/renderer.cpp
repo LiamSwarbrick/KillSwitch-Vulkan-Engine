@@ -11,16 +11,6 @@
 
 RenderState renderstate;
 
-// 2d image resource creator for game-side ImGui
-uint32_t create_mipmapped_texture2d_resource(
-    const char*       debug_name,
-    FG_ResourceFlags  flags,
-    const uint8_t*    data,
-    uint64_t          data_size,
-    uint32_t          width,
-    uint32_t          height,
-    VkFormat          format
-);
 
 // STB DS for hash maps (pipeilne hashing), with the main thread alloc tracker.
 void* external_malloc(size_t size) { return L_calloc(1, size, &renderstate.main.tt); }
@@ -573,8 +563,8 @@ void Renderer_Init(const Renderer_InitInfo* info)
         .is_spotlight_shadowed = (b32*)L_calloc(MAX_SPOTLIGHTS, sizeof(b32), &renderstate.main.tt),
 
         // Clustered shading
-        .staging_point_light_indices = (uint32_t*)L_calloc(CLUSTER_COUNT * MAX_POINTLIGHTS, sizeof(uint32_t), &renderstate.main.tt),
-        .staging_spot_light_indices  = (uint32_t*)L_calloc(CLUSTER_COUNT * MAX_SPOTLIGHTS, sizeof(uint32_t), &renderstate.main.tt),
+        .staging_point_light_indices = (uint32_t*)L_calloc(CLUSTER_COUNT * MAX_LIGHTS_PER_CLUSTER, sizeof(uint32_t), &renderstate.main.tt),
+        .staging_spot_light_indices  = (uint32_t*)L_calloc(CLUSTER_COUNT * MAX_LIGHTS_PER_CLUSTER, sizeof(uint32_t), &renderstate.main.tt),
         .staging_cluster_offsets = (Cluster*)L_calloc(CLUSTER_COUNT, sizeof(Cluster), &renderstate.main.tt),
     };
 
@@ -906,9 +896,22 @@ void Renderer_PushLight(C_Light light, glm::vec3 position, glm::vec3 direction, 
     }
 }
 
-// NOTE(Liam): NANSONG'S UI CODE (won't be relevant once the renderer has it's own 2D pass, or after I move the renderer into it's own project)
+// NOTE(Liam): THIS IS NANSONG'S UI CODE:
+// (won't be relevant once the renderer has it's own 2D pass, or after I move the renderer into it's own project)
+// (what the helly)
 // START
-//
+
+// 2d image resource creator for game-side ImGui
+uint32_t create_mipmapped_texture2d_resource(
+    const char*       debug_name,
+    FG_ResourceFlags  flags,
+    const uint8_t*    data,
+    uint64_t          data_size,
+    uint32_t          width,
+    uint32_t          height,
+    VkFormat          format
+);
+
 
 // Loads a image and creates a GPU resource
 bool Renderer_LoadUITexture(const char* filepath, bool nearest_sampling, Renderer_UITexture* out_texture)
@@ -1035,6 +1038,18 @@ void Renderer_DrawFrame(CameraInfo main_camera)
 
 
 
+    // Set main camera
+    renderstate.main_camera = main_camera;
+
+    // NOTE: Assuming swapchain's aspect ratio for the projection matrix here:
+    float width  = (float)renderstate.swapchain_extent.width;
+    float height = (float)renderstate.swapchain_extent.height;
+    float aspect =  width / height;
+    float near   = renderstate.main_camera.near_plane;
+    float far    = renderstate.main_camera.far_plane;
+    renderstate.main_camera_fullscreen_proj = MakeProjectionMatrix(glm::radians(renderstate.settings.fov_y), aspect, near, far);
+
+
 
     /* Sort Drawcalls into arrays per shader
 
@@ -1120,10 +1135,7 @@ void Renderer_DrawFrame(CameraInfo main_camera)
 
     EndDrawCalls();
 
-    
 
-    // Set main camera
-    renderstate.main_camera = main_camera;
 
 
 

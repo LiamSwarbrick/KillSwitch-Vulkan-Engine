@@ -194,7 +194,7 @@ void main()
     uint tile_y = uint(screen_uv.y * float(CLUSTER_GRID_SIZE_Y));
 
     vec4 view_pos = scene.view * vec4(world_pos, 1.0);
-    float depth =  -view_pos.z;
+    float depth =  abs(-view_pos.z);  // NOTE: DO NOT NEED abs() if we actually use LookAtRH(), but some of the code used LookAt and it took me hours to find this bug, so I'm keeping abs() in case  this shit happens again
     depth = clamp(depth, scene.near_plane, scene.far_plane);
 
     // Get z bin (clusters get exponentially bigger away from the camera)
@@ -208,7 +208,6 @@ void main()
     // Fetch cluster
     uint cluster_index = CLUSTER_INDEX(tile_x, tile_y, tile_z);
     Cluster cluster = clusters.clusters[cluster_index];
-
 
     if (DEBUG_RENDERMODE == DEBUG_RENDERMODE_CLUSTERED_SHADING_HEATMAP)
     {
@@ -230,18 +229,9 @@ void main()
         );
         out_color = vec4(grid, 1.0);
         return;
-
-        // uint cid = cluster_index;
-        // vec3 debug_color = vec3(
-        //     float((cid * 97u) % 255u) / 255.0,
-        //     float((cid * 57u) % 255u) / 255.0,
-        //     float((cid * 23u) % 255u) / 255.0
-        // );
-        // out_color = vec4(debug_color, 1.0);
-        // return;
     }
 
-    const uint max_lights_per_pixel = 64;
+    const uint max_lights_per_pixel = MAX_LIGHTS_PER_CLUSTER;
     
     for (uint i = 0; i < min(cluster.point_count, max_lights_per_pixel); ++i)
     {
@@ -276,7 +266,7 @@ void main()
         SpotLight sl = sl_buf.spot_lights[light_index];
 
         float shadow_factor = 1.0;
-        int spotlight_shadowmap_index = sl_shadow_map_indices.spotlight_shadowmap_index[i];  // One slot per light, with -1 set when spotlight i does not have a shadowmap
+        int spotlight_shadowmap_index = sl_shadow_map_indices.spotlight_shadowmap_index[light_index];  // One slot per light, with -1 set when spotlight i does not have a shadowmap
         if (spotlight_shadowmap_index >= 0)  // If shadow map is available for this light
         {
             // SHADOW MAPPING

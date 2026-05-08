@@ -231,7 +231,7 @@ namespace
         }
 
         return CameraInfo{
-            .view            = glm::lookAt(cam.pos, cam.pos + cam.forward, glm::vec3(0.0f, 1.0f, 0.0f)),
+            .view            = glm::lookAtRH(cam.pos, cam.pos + cam.forward, glm::vec3(0.0f, 1.0f, 0.0f)),
             .position        = cam.pos,
             .near_plane      = near_plane,
             .far_plane       = far_plane,
@@ -430,7 +430,7 @@ namespace
 
         glm::vec3 aim_target = cam.target + right * (SHOULDER_OFFSET * s_tp_shoulder_side_blend);
         return CameraInfo{
-                    .view            = glm::lookAt(cam.pos, aim_target, glm::vec3(0.0f, 1.0f, 0.0f)),
+                    .view            = glm::lookAtRH(cam.pos, aim_target, glm::vec3(0.0f, 1.0f, 0.0f)),
                     .position        = cam.pos,
                     .near_plane      = near_plane,
                     .far_plane       = far_plane,
