@@ -166,9 +166,10 @@ int main(int argc, char *argv[])
     scene.InstantiatePrefab(room_prefab, glm::vec3(0.0f, 0.0f, 10.0f), glm::identity<glm::quat>());
     scene.InstantiatePrefab(playground_prefab, glm::vec3(0, 0, 10.0f), glm::identity<glm::quat>());
     // scene.InstantiatePrefab(cube_prefab, glm::vec3(0, 5.1, 0));
-    // scene.InstantiatePrefab(cube_prefab, glm::vec3(3, 4.9, 0));
+    // scene.InstantiatePrefab(cube_prefab, glm::vec3(3, 4.9, 0));ss
     
     EntityID playerID = scene.InstantiatePrefab(player, glm::vec3(0, 0, 0), glm::identity<glm::quat>());
+    scene.InstantiatePrefab(zombie_woman, glm::vec3(0, 0, 2.0f), glm::identity<glm::quat>());
     // scene.InstantiatePrefab(sphere_prefab, glm::vec3(4.7, 7, 0.1));
     // scene.InstantiatePrefab(sphere_prefab, glm::vec3(-4.7, 7, -0.1));
     // scene.InstantiatePrefab(sphere_prefab, glm::vec3(0.1, 7, -4.7));

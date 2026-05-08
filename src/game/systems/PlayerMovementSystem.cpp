@@ -73,7 +73,13 @@ void PlayerMovementSystem::Update(ECS& ecs, PhysicsManager& physics, EntityID pl
         // update rotation 
         // WE CAN EITHER UPDATE THE ROTATION TO THE HORIZONTAL MOVE DIR OR
         // update the rotation to the final controller's velocity (after processing Update), that way we always face where we are moving to instead of input
-        glm::vec3 facingDir = glm::normalize(glm::vec3(horizontalMoveDir.x, 0.0f, horizontalMoveDir.z));
+        // face forward when aiming
+        glm::vec3 facingDir;
+        if(input.aim)
+            facingDir = flattenDirection(forward);
+        else
+            facingDir = glm::normalize(glm::vec3(horizontalMoveDir.x, 0.0f, horizontalMoveDir.z));
+
         float yawDeg = glm::degrees(atan2f(facingDir.x, facingDir.z));
         rotation = glm::angleAxis(glm::radians(yawDeg), glm::vec3(0.0f, 1.0f, 0.0f));
 
@@ -217,37 +223,85 @@ void PlayerMovementSystem::Update(ECS& ecs, PhysicsManager& physics, EntityID pl
 
     // 7) UPDATE ANIMATIONS
 
-
-    //C_AnimatedMesh& animatedMesh = m_ecs.GetComponent<C_AnimatedMesh>(m_currentPlayer);
-
+    C_AnimatedMesh& animatedMesh = ecs.GetComponent<C_AnimatedMesh>(playerID);
     // Play animations
     if (ecs.Has<C_AnimatedMesh>(playerID))
     {
-        C_AnimatedMesh& animatedMesh = ecs.GetComponent<C_AnimatedMesh>(playerID);
-        if (isMoving)
-        {
-            const char* animStateName = controller.state == C_PlayerController::Sprint ? "pistolrun" : "pistolwalk";
-            int moveAnimId = GetAnimationIdFromName(animatedMesh, animStateName);
+        animatedMesh.playbackSpeed = 1.0f;
 
+        //jumping animations
+        if (controller.jumping)
+        {
+            int jumpAnimId = GetAnimationIdFromName(animatedMesh, "pistoljump");
+
+            // start jump once
+            if (animatedMesh.lowerBodyLayer.currentAnimation != jumpAnimId)
+            {
+                PlayAnim(animatedMesh, "pistoljump", 0.1f);
+                SetLooping(animatedMesh, animatedMesh.lowerBodyLayer, false);
+            }
+
+            animatedMesh.playbackSpeed = 0.6f;
+
+            float dur = GetAnimationDuration(animatedMesh, jumpAnimId);
+            if (animatedMesh.lowerBodyLayer.currentAnimationTime >= dur)
+            {
+                animatedMesh.lowerBodyLayer.currentAnimationTime = dur;
+            }
+        }
+        else if (isMoving)
+        {
+            const char* animStateName = "pistolwalk";
+            if (input.aim)
+            {
+                if (input.move_forward && !input.move_backward)
+                {
+                    animStateName = "pistolwalk";
+                }
+                else if (input.move_backward && !input.move_forward)
+                {
+                    animStateName = "pistolwalkbackwards";
+                }
+                else if (input.move_left && !input.move_right)
+                {
+                    animStateName = "pistolstrafeleft";
+                }
+                else if (input.move_right && !input.move_left)
+                {
+                    animStateName = "pistolstraferight";
+                }
+                else
+                {
+                    animStateName = "pistolwalk";
+                }
+            }
+            else
+            {
+                if (controller.state == C_PlayerController::Sprint)
+                    animStateName = "pistolrun";
+                else
+                    animStateName = "pistolwalk";
+            }
+
+            int moveAnimId =GetAnimationIdFromName(animatedMesh, animStateName);
             if (moveAnimId != -1 && animatedMesh.lowerBodyLayer.currentAnimation != moveAnimId)
             {
-                PlayAnim(animatedMesh, animatedMesh.asset->animations[moveAnimId].name, 0.4f);
+                PlayAnim(animatedMesh, animStateName, 0.15f);
                 animatedMesh.lowerBodyLayer.isCurrentLooping = true;
             }
         }
-        else
+        else //idle animations
         {
             int idleAnimId = GetAnimationIdFromName(animatedMesh, animatedMesh.idleAnimationName);
             if (animatedMesh.lowerBodyLayer.currentAnimation != idleAnimId)
             {
-                PlayAnim(animatedMesh, animatedMesh.idleAnimationName, 0.4f);
+                PlayAnim(animatedMesh, animatedMesh.idleAnimationName, 0.25f);
                 animatedMesh.lowerBodyLayer.isCurrentLooping = true;
             }
         }
     }
 
     // find equipped weapon and attach to hand
-    C_AnimatedMesh& animatedMesh = ecs.GetComponent<C_AnimatedMesh>(playerID);
     ecs.GetView<C_Weapon, C_Transform>().ForEach([&](C_Weapon& weapon, C_Transform& weaponTransform)
         {
             if (!weapon.equipped)
