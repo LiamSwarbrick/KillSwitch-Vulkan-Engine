@@ -98,7 +98,9 @@ struct GJKResult
 	// In case of not collision
 	glm::vec3 closestPointOnA = glm::vec3(0.0f);
 	glm::vec3 closestPointOnB = glm::vec3(0.0f);
+
 	float distance = 0.0f;
+	glm::vec3 distanceDirection = glm::vec3(0.0f); // direction from closest A to closest B (could be calculated outside)
 };
 
 // The positions and directions will be in world space, we need to:

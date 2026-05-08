@@ -70,6 +70,7 @@ typedef struct SwapchainSupportDetails
 }
 SwapChainSupportDetails;
 
+// TODO: I really need a per frame scratch arena instead of all these
 typedef struct RenderView
 {
     uint32_t num_renderables;
@@ -79,6 +80,13 @@ typedef struct RenderView
     uint32_t num_spot_lights;
     PointLight* point_lights;
     SpotLight* spot_lights;
+    b32* is_spotlight_shadowed;
+
+    // Clustered shading
+    // TODO: Switch to packed array during staging because this is quite big
+    uint32_t* staging_point_light_indices;  // CLUSTER_COUNT * MAX_POINTLIGHTS
+    uint32_t* staging_spot_light_indices;   // CLUSTER_COUNT * MAX_SPOTLIGHTS
+    Cluster*  staging_cluster_offsets;      // CLUSTER_COUNT
 }
 RenderView;
 

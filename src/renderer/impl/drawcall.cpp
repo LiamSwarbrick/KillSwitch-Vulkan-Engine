@@ -1,5 +1,6 @@
 #include "drawcall.h"
 
+#include "clustered_shading.h"
 #include "materials.h"
 #include "internal_state.h"
 #include "mapped_linear_allocator.h"
@@ -41,9 +42,10 @@ void BeginDrawCalls()
     }
 
     // Empty object data (e.g. model transforms)
-    ResetMappedArena(&renderstate.scenes_arena);
-    ResetMappedArena(&renderstate.object_transforms);
-    ResetMappedArena(&renderstate.joint_transforms);
+    RingBufferedRIDs* ring = &renderstate.rids.ring[renderstate.frame_in_flight];
+    ResetMappedArena(&ring->scenes_arena);
+    ResetMappedArena(&ring->object_transforms);
+    ResetMappedArena(&ring->joint_transforms);
 
     renderstate.drawcalls_collection.is_currently_adding_drawcalls = 1;
 }
@@ -52,14 +54,28 @@ void EndDrawCalls()
 {
     renderstate.drawcalls_collection.is_currently_adding_drawcalls = 0;
 
+    RingBufferedRIDs* ring = &renderstate.rids.ring[renderstate.frame_in_flight];
+
     // Upload lights
-    FG_Resource* lights_header_buf = &renderstate.registry.resources[renderstate.rids.lights_header_buffer_rid];
-    FG_Resource* pl_buf = &renderstate.registry.resources[renderstate.rids.point_lights_buffer_rid];
-    FG_Resource* sl_buf = &renderstate.registry.resources[renderstate.rids.spot_lights_buffer_rid];
+    FG_Resource* lights_header_buf = &renderstate.registry.resources[ring->lights_header_buffer_rid];
+    FG_Resource* pl_buf = &renderstate.registry.resources[ring->point_lights_buffer_rid];
+    FG_Resource* sl_buf = &renderstate.registry.resources[ring->spot_lights_buffer_rid];
+    FG_Resource* spotlight_shadowmap_id_buf_res     = &renderstate.registry.resources[ring->spotlight_shadowmap_index_buffer_rid];
+    FG_Resource* shadowmap_spotlight_camera_buf_res = &renderstate.registry.resources[ring->shadowmap_spotlight_camera_buffer_rid];
+    FG_Resource* point_light_indices_buffer_res = &renderstate.registry.resources[ring->point_light_indices_buffer_rid];
+    FG_Resource* spot_light_indices_buffer_res = &renderstate.registry.resources[ring->spot_light_indices_buffer_rid];
+    FG_Resource* cluster_offsets_buffer_res = &renderstate.registry.resources[ring->cluster_offsets_buffer_rid];
 
     LightsHeader header = {
         .num_point_lights  = renderstate.renderables_arena.num_point_lights,
-        .num_spot_lights   = renderstate.renderables_arena.num_spot_lights
+        .num_spot_lights   = renderstate.renderables_arena.num_spot_lights,
+        .point_lights_ptr  = pl_buf->buffer_gpu_address,
+        .spot_lights_ptr   = sl_buf->buffer_gpu_address,
+        .spotlight_shadowmap_index_buf_ptr = spotlight_shadowmap_id_buf_res->buffer_gpu_address,
+        .shadowmap_spotlight_camera_buf_ptr = shadowmap_spotlight_camera_buf_res->buffer_gpu_address,
+        .point_light_indices_buf_ptr = point_light_indices_buffer_res->buffer_gpu_address,
+        .spot_light_indices_buf_ptr = spot_light_indices_buffer_res->buffer_gpu_address,
+        .cluster_offsets_buf_ptr = cluster_offsets_buffer_res->buffer_gpu_address,
     };
     
     vmaCopyMemoryToAllocation(renderstate.vma_allocator, &header, lights_header_buf->allocation, 0, sizeof(LightsHeader));
@@ -69,6 +85,54 @@ void EndDrawCalls()
     vmaCopyMemoryToAllocation(renderstate.vma_allocator,
         renderstate.renderables_arena.spot_lights, sl_buf->allocation, 0, sizeof(SpotLight) * header.num_spot_lights
     );
+
+    // Copy which lights are shadowed to the shadowed buffer
+    int* mapped_shadowmap_ids_array = (int*)spotlight_shadowmap_id_buf_res->buffer.mapped_data;
+    memset(mapped_shadowmap_ids_array, -1, sizeof(int) * renderstate.renderables_arena.num_spot_lights);
+
+    uint32_t next_shadowmap_slot = 0;
+    for (uint32_t i = 0; i < renderstate.num_shadowed_spotlights; ++i)
+    {
+        uint32_t index = renderstate.shadowed_spotlight_indices[i];
+        mapped_shadowmap_ids_array[index] = next_shadowmap_slot++;
+    }
+    vmaFlushAllocation(
+        renderstate.vma_allocator,
+        spotlight_shadowmap_id_buf_res->allocation,
+        0,
+        sizeof(int) * renderstate.renderables_arena.num_spot_lights
+    );
+
+    // Calculate scene data for each spotlight shader map, which contains a view_proj matrix
+    for (uint32_t i = 0; i < renderstate.num_shadowed_spotlights; ++i)
+    {
+        FG_Resource* shadowmap_res = &renderstate.registry.resources[renderstate.rids.shadow_map_rids[i]];
+
+        renderstate.shadowed_spotlight_scenedatas[i] = MakeSpotLightSceneData(
+            renderstate.renderables_arena.spot_lights[renderstate.shadowed_spotlight_indices[i]],
+            (VkExtent2D){ shadowmap_res->image.extent.width, shadowmap_res->image.extent.height }
+        );
+    }
+
+    // Copy the view_proj matrix for the spotlight shadow maps to the GPU buffer
+    float* mapped_shadowmap_viewproj_matrices = (float*)shadowmap_spotlight_camera_buf_res->buffer.mapped_data;
+    for (uint32_t i = 0; i < renderstate.num_shadowed_spotlights; ++i)
+    {
+        memcpy(
+            mapped_shadowmap_viewproj_matrices + i * 16,
+            renderstate.shadowed_spotlight_scenedatas[i].view_proj,
+            sizeof(glm::mat4)
+        );
+    }
+    vmaFlushAllocation(
+        renderstate.vma_allocator,
+        shadowmap_spotlight_camera_buf_res->allocation,
+        0,
+        sizeof(glm::mat4) * renderstate.num_shadowed_spotlights
+    );
+
+    // Create cluster grid, assign lights and upload that grid to the GPU
+    ClusteredShading_CPULightAssignmentToMappedBuffer();
 }
 
 void AddDrawCall(Renderable* r)
@@ -78,19 +142,20 @@ void AddDrawCall(Renderable* r)
         && "Make sure you are not submitting draw calls outside of Begin/EndDrawCalls()"
     );
 
+    RingBufferedRIDs* ring = &renderstate.rids.ring[renderstate.frame_in_flight];
+
     DrawCall drawcall = {
         .renderable = r,
 
         // Push renderables transform to the mapped buffer and keep the pointer to it in draw calls.
-        .object_ptr = PushToMappedArena(&renderstate.object_transforms, &r->transform, sizeof(r->transform)),
-        .joints_ptr = r->joints ? PushToMappedArena(&renderstate.joint_transforms, r->joints, sizeof(glm::mat4) * r->joint_count) : 0
+        .object_ptr = PushToMappedArena(&ring->object_transforms, &r->transform, sizeof(r->transform)),
+        .joints_ptr = r->joints ? PushToMappedArena(&ring->joint_transforms, r->joints, sizeof(glm::mat4) * r->joint_count) : 0
     };
     
     const MaterialPipelineInfo* const shaders_for_material = &g_material_configs.array[r->mesh_prefab.mat_type];
 
     // Submit draw with depth prepasss
     {
-        // TODO: Should I ALWAYS be depth prepassing? It may break under some materials that displace vertices in the vertex shader
         uint32_t shader_id = SHADER_DEPTH;
         uint32_t* shader_drawcall_count = &renderstate.drawcalls_collection.array[shader_id].drawcall_count;
 
@@ -98,7 +163,7 @@ void AddDrawCall(Renderable* r)
             *shader_drawcall_count + 1 < MAX_DRAWCALLS_PER_SHADER &&
             "If this is exceeded, either increase MAX_DRAWCALLS_PER_SHADER to a ludicrous value, or use a dynamic array."
         );
-
+        
         renderstate.drawcalls_collection.array[shader_id].drawcalls[
             (*shader_drawcall_count)++
         ] = drawcall;
@@ -160,6 +225,7 @@ void AddDrawCall(Renderable* r)
 
     TODO: Whilst using glTF we gotta deal with meshes being multiple primitives.
     In the future, when reusing this with a custom format, decide whether this is still a good choice.
+    (vs just allowing multiple mesh components, which would be better to allow mixed material types for one entity).
 */
 
 typedef struct DrawPrimitive
@@ -246,12 +312,11 @@ void ExecuteDraws(VkCommandBuffer cmd, PushConstant_PassHeader push_pass, uint64
             .pass = push_pass
         };
 
-        // Prepare the draw call part of Push Constants 
+        // Prepare the draw call part of Push Constants
+        RingBufferedRIDs* ring = &renderstate.rids.ring[renderstate.frame_in_flight];
         push.dc.scene_ptr    = scene_ptr;
         push.dc.material_ptr = renderstate.registry.resources[renderstate.rids.materials_buffer_rid].buffer_gpu_address;
-        push.dc.lights_header_ptr  = renderstate.registry.resources[renderstate.rids.lights_header_buffer_rid].buffer_gpu_address;
-        push.dc.point_lights_ptr   = renderstate.registry.resources[renderstate.rids.point_lights_buffer_rid].buffer_gpu_address;
-        push.dc.spot_lights_ptr    = renderstate.registry.resources[renderstate.rids.spot_lights_buffer_rid].buffer_gpu_address;
+        push.dc.lights_header_ptr  = renderstate.registry.resources[ring->lights_header_buffer_rid].buffer_gpu_address;
         push.dc.object_ptr   = draw->dc.object_ptr;
         push.dc.joints_ptr   = draw->dc.joints_ptr;
 

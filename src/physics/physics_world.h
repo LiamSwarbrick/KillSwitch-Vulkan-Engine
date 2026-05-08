@@ -7,6 +7,7 @@
 #include "core/ecs/sparse_set.h"
 
 #include "physics/core/types.h"
+#include "physics/core/physics_settings.h"
 
 #include "physics/collision/broadphase/broadphase.h"
 #include "physics/collision/narrowphase/narrowphase.h"
@@ -35,6 +36,8 @@
 
 class PhysicsWorld
 {
+	friend class Solver; // add as friend class to access character sparseset
+
 public:
 	explicit PhysicsWorld(uint8_t numBodyLayers = 16U, uint32_t expectedBodies = 1024);
 	~PhysicsWorld();
@@ -71,8 +74,9 @@ public:
 	ShapeHandle getShapeHandle(RigidBodyHandle r);
 	IShape* getShape(RigidBodyHandle r); // extra
 
-	void setVelocity(RigidBodyHandle r, glm::vec3 velocity);
-	void addVelocity(RigidBodyHandle r, glm::vec3 velocity);
+	void teleportBody(RigidBodyHandle r, const glm::vec3& worldPosition);
+	void setVelocity(RigidBodyHandle r, const glm::vec3& velocity);
+	void addVelocity(RigidBodyHandle r, const glm::vec3& velocity);
 	void setGravityScale(RigidBodyHandle r, float scale);
 	void setForceLayers(RigidBodyHandle r, uint32_t layers);
 	void addForceLayers(RigidBodyHandle r, uint32_t layers);
@@ -147,10 +151,17 @@ public:
 
 	std::vector<RaycastHit> raycastAll(const Ray& ray, const QueryFilter& filter = {}) const;
 
-	// Shape-casting too (might change the input to be ShapeCast or something like that, but for now this, will see when i implement it)
-	std::vector<RigidBodyHandle> shapecast(
+	// Shape intersect the shape along the ray (using Conservative Advancement), targetting the optionalTargetBody or the first Body the raycast hits
+	ShapecastHit shapecast(
+		const Ray& ray, ShapeHandle shape, const glm::quat& orientation, 
+		const QueryFilter& filter = {}) const;
+
+	// Shape - intersecting
+	std::vector<RigidBodyHandle> shapeIntersects(
 		ShapeHandle shape, const glm::vec3& position, const glm::quat& orientation,
 		const QueryFilter& filter = {}) const;
+
+	
 
 	// ------------------------------
 	// EVENTS
@@ -170,6 +181,8 @@ public:
 	// ------------------------------
 	// SETTERS & GETTERS
 	// ------------------------------
+	glm::vec3 getWorldUp();
+
 	void setGravity(glm::vec3 gravity);
 	glm::vec3 getGravity() const;
 
@@ -178,13 +191,6 @@ public:
 
 	void setMaxSteps(int max);
 	int getMaxSteps() const;
-
-
-	// Extra functions for the solver
-	// Before using solve, reset all groundState's to InAir
-	void resetAllCharactersGroundState();
-	// After using solve, resolve groundState using raycast downwards in case we are InAir
-	void updateAllCharactersGroundState();
 
 private:
 	// ------------------------------
@@ -197,7 +203,7 @@ private:
 	void detectCollisions(); // broadPhase.queryPairs() + narrowPhase.testPair(<pair>)
 	void testPlanes(); // narrowPhase.testPlane(<bodies, planes>)
 	void solve(float dt); // solve interpenetration
-
+	void updateSleep(float dt);
 
 	// TODO after implementing events
 	void dispatchEvents();
@@ -210,6 +216,10 @@ private:
 	QueryFilterInternal getQueryFilterInternalFromQueryFilter(const QueryFilter& queryFilter) const;
 
 	//inline RigidBody& getBody();
+	void teleportBodyRaw(RigidBody* body, const glm::vec3& worldPos);
+	
+	// wake all bodies
+	void wakeAllBodies();
 
 private:
 	// --- SYSTEMS ---
@@ -260,9 +270,11 @@ private:
 
 	// --- SETTINGS ---
 	GravityGenerator gravityGen; // default gravity
-	float fixedStep = 1.0f / 120.0f;
+	float fixedStep = g_PhysicsSettings.fixedStepDuration;
 	float stepAccumulator = 0.0f;
-	int maxSteps = 4;
+	int maxSteps = g_PhysicsSettings.maxIterationSteps;
+
+	glm::vec3 worldUp = glm::vec3(0.0f, 1.0f, 0.0f);
 };
 
 #endif // !PHYSICS_PHYSICS_WORLD_H

@@ -5,10 +5,13 @@
 
 #include "core/utils/enum_bitmask.h"
 
+#include "physics_settings.h"
+
 #include "glm/glm.hpp"
 #include "glm/gtc/quaternion.hpp"
 
 #include "physics/queries/raycast.h"
+#include "physics/queries/shapecast.h"
 
 
 // For floats
@@ -304,8 +307,8 @@ DEFINE_ENUM_CLASS_BITWISE_OPERATORS(ForceLayer);
 // Descriptor to create RigidBodies via PhysicsManager.createBody()
 struct RigidBodyDesc
 {
-    glm::vec3 position = glm::vec3{};
-    glm::quat orientation = glm::quat{1.0f, 0.0f, 0.0f, 0.0f}; // glm::quat_identity()
+    glm::vec3 position = glm::vec3(0.0f);
+    glm::quat orientation = glm::identity<glm::quat>(); // glm::quat_identity()
 
     // IShape must be created first using physicsWorld.createShape (or physicsManager to delegate...)
     ShapeHandle shape = InvalidShapeHandle;
@@ -326,25 +329,28 @@ struct RigidBodyDesc
     // RigidBody type
     bool isStatic = false;
     bool isKinematic = false;
-    bool isCharacter = false;
-    bool isTrigger = false;
+    bool isDynamic = false; // adding this so its easier to do !isDynamic than isStatic || isKinematic || isTrigger
+
+    bool isCharacter = false; // extra rotation locked on Y for physics (when angular momentum is added)
+    bool isTrigger = false; // isTrigger will be treated as isStatic with NO collision resolution
 };
 
 struct RigidBody
 {
-    glm::vec3 position = glm::vec3{ 0.0f };
-    glm::quat orientation = glm::quat{ 1.0f, 0.0f, 0.0f, 0.0f };
+    glm::vec3 position = glm::vec3(0.0f); // managed by ECS, imported via PhysicsManager, modified via PhysicsWorld, exported to ECS again
+    glm::quat orientation = glm::identity<glm::quat>(); // managed by ECS, imported via PhysicsManager, modified via PhysicsWorld, exported to ECS again
 
-    glm::vec3 velocity = glm::vec3{ 0.0f };
-    glm::vec3 forceAccumulator = glm::vec3{ 0.0f };
+
+    glm::vec3 velocity = glm::vec3(0.0f);
+    glm::vec3 forceAccumulator = glm::vec3(0.0f);
 
     float mass = 1.0f;
     float invMass = 1.0f;
     float gravityScale = 1.0f;
     float damping = 0.99f;
 
-    float restitution = 0.5f;
-    float friction = 0.8f;
+    float restitution = 0.5f; // Might move it to global PhysicsSettings for now, but different Bodies would need this (ice, or other surfaces)
+    float friction = 0.8f; // Might move it to global PhysicsSettingsfor now, but different Bodies would need this (ice, or other surfaces)
 
     // We could add body layer (as in player, enemy, etc, to provide better query options, but idk)
     uint32_t forceLayers = (uint32_t) ForceLayer::Default;
@@ -355,13 +361,29 @@ struct RigidBody
 
     ShapeHandle shapeHandle; // get shape via physicsWorld.getShape()
 
+    // Out of the next block "isX" please choose only 1, not doing an enum now cause it is too much changing for everything
     bool isStatic = false;
     bool isKinematic = false;
-    bool isCharacter = false; // rotation locked for physics
-    bool isTrigger = false;
+    bool isDynamic = false; // adding this so its easier to do !isDynamic than isStatic || isKinematic || isTrigger
 
+    bool isCharacter = false; // extra rotation locked on Y for physics (when angular momentum is added)
+    bool isTrigger = false; // isTrigger will be treated as isStatic with NO collision resolution
+
+    // DO NOT add these in the script
     // No sleep system yet
+    float sleepTimer = 0.0f;
+    float accumulatedEnergy = g_PhysicsSettings.initialEnergy; // smoothed using g_PhysicsSettings
     bool sleeping = false;
+
+    void wakeUp()
+    {
+        if (sleeping)
+        {
+            sleepTimer = 0.0f;
+            accumulatedEnergy = g_PhysicsSettings.initialEnergy;
+            sleeping = false;
+        }
+    }
 
     AABB aabb; // maintained by broadphase
 
@@ -382,10 +404,45 @@ struct PhysicsCharacter
     RigidBody* body = nullptr;
     
     GroundState groundState = GroundState::InAir;
-    glm::vec3 groundNormal = glm::vec3(0.0f, 1.0f, 0.0f); // For a more complex controller, we could have the groundNormal be the gravity's opposite, (normalized)
+    GroundState lastFrameGroundState = GroundState::InAir;
+    glm::vec3 groundNormal = glm::vec3(0.0f, 1.0f, 0.0f); // use character's groundNormal to project the horizontal velocity before applying, that way we would get a much smoother movement
+
+    // DO NOT MODIFY GAME-SIDE (or maybe idk, you should move body.velocity)
+    glm::vec3 baseVelocity = glm::vec3(0.0f); // In case of contact with kinematic objects, we need to store this speed
+    // QoL for getting the relative (non-base) velocity of the character. (use in the game-controller)
+    glm::vec3 getRelativeVelocity() const
+    {
+        return body->velocity - baseVelocity;
+    }
+    // QoL for setting / adding velocity directly without using PhysicsManager
+    void setVelocity(const glm::vec3& velocity)
+    {
+        if (body)
+        {
+            body->wakeUp();
+            body->velocity = velocity;
+        }
+    }
+    void addVelocity(const glm::vec3& velocity)
+    {
+        if (body)
+        {
+            body->wakeUp();
+            body->velocity += velocity;
+        }
+    }
 
     float maxWalkableAngle = glm::radians(50.0f); // Maximum angle compared to groundNormal that makes it able to snap-walk on tilted/uneven terrain
-    float stepHeight = 0.4f; // Allows to climb / drop 
+    float stepHeight = 0.4f; // Max height allowed for climbing/dropping-from steps or other obstacles
+
+    // TO BE SET GAME-SIDE to true, it defaults to false on collision to ground
+    bool jumping = true; // Extra logic to make snap-down correctly, 
+
+    // This to do step ups and downs properly
+    // Basically position and velocity before solving the contacts
+    glm::vec3 lastNonWalkableNormalContact = glm::vec3(0.0f); // instead of storing if we were blocked last frame, we can store the normal to give us more information (we might not even use the extra info)
+    glm::vec3 preSolvingPosition{}; // the origin of the step-up
+    glm::vec3 preSolvingVelocity{}; // basically desired movement for the step-up
 };
 
 struct PhysicsCharacterInfo

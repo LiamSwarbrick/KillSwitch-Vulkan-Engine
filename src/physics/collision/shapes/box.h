@@ -115,6 +115,11 @@ public:
         return hit;
 	}
 
+    float getHeight() const override
+    {
+        return halfWidths.y * 2.0f;
+    }
+
 };
 
 #endif // !PHYSICS_SHAPES_BOX_H

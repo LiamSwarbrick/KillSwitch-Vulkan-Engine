@@ -237,6 +237,24 @@ struct FrameGraphVisualizer
             ImGui::Text("- Static   = Regular Dependency");
             ImGui::Text("- Flowing  = MSAA Resolve between nodes");
 
+            // NOTE: For now I'm adding debug rendermode toggles here
+            bool clustered_heatmap = renderstate.debug_rendermode == DEBUG_RENDERMODE_CLUSTERED_SHADING_HEATMAP;
+            bool cluster_count_mode = renderstate.debug_rendermode == DEBUG_RENDERMODE_CLUSTERED_SHADING_CLUSTERS;
+            ImGui::Checkbox("Clustered shading heatmap", &clustered_heatmap);
+            ImGui::Checkbox("Visualize clusters", &cluster_count_mode);
+            if (clustered_heatmap)
+            {
+                renderstate.debug_rendermode = DEBUG_RENDERMODE_CLUSTERED_SHADING_HEATMAP;
+            }
+            else if (cluster_count_mode)
+            {
+                renderstate.debug_rendermode = DEBUG_RENDERMODE_CLUSTERED_SHADING_CLUSTERS;
+            }
+            else
+            {
+                renderstate.debug_rendermode = 0;
+            }
+
             ImGui::End();
         }
     }

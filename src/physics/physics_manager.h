@@ -24,6 +24,24 @@ struct EntityRaycastHit
 	bool isValid() const { return entity != NULL_ENTITY; }
 };
 
+struct EntityShapecastHit
+{
+	glm::vec3 point; // o .  world-space
+	glm::vec3 pointA; // worldspace at t
+	glm::vec3 pointB; // worldspace at t
+
+	glm::vec3 normal; // surface normal (so B to A normal)
+
+	float t = -1.0f;
+
+	EntityID entity = NULL_ENTITY;
+	//RigidBody* body = nullptr;
+
+	bool isValid() const { return t >= 0.0f; }
+
+	static EntityShapecastHit none() { return {}; }
+};
+
 struct QueryFilterExternal
 {
 	EntityID bodyToIgnore = NULL_ENTITY; // The entity to ignore, if we are raycasting from the player, put the player entity here
@@ -107,14 +125,18 @@ public:
 	// ------------------------------
 	// GETTERS & SETTERS
 	// ------------------------------
+	glm::vec3 getWorldUp();
+
 	glm::vec3 getVelocity(EntityID e);
 	float getGravityScale(EntityID e);
 	uint32_t getForceLayers(EntityID e);
 	ShapeHandle getShapeHandle(EntityID e);
 	IShape* getShape(EntityID e); // extra
 
-	void setVelocity(EntityID e, glm::vec3 velocity);
-	void addVelocity(EntityID e, glm::vec3 velocity);
+	// Please do not use teleportBody to MOVE, use it to truly TELEPORT TO A PLACE
+	void teleportBody(EntityID e, const glm::vec3& worldPosition);
+	void setVelocity(EntityID e, const glm::vec3& velocity);
+	void addVelocity(EntityID e, const glm::vec3& velocity);
 	void setGravityScale(EntityID e, float scale);
 	void setForceLayers(EntityID e, uint32_t layers);
 	void addForceLayers(EntityID e, uint32_t layers);
@@ -157,8 +179,12 @@ public:
 
 	std::vector<EntityRaycastHit> raycastAll(const Ray& ray, const QueryFilterExternal& filter = {}) const;
 
-	// Shape-casting too (might change the input to be ShapeCast or something like that, but for now this, will see when i implement it)
-	std::vector<EntityID> shapecast(
+	EntityShapecastHit shapecast(
+		const Ray& ray, ShapeHandle shape, const glm::quat& orientation,
+		const QueryFilterExternal& filter = {}) const;
+
+	// Shape-casting too (might change the input to be shapeIntersects or something like that, but for now this, will see when i implement it)
+	std::vector<EntityID> shapeIntersects(
 		ShapeHandle shape, const glm::vec3& position, const glm::quat& orientation, 
 		const QueryFilterExternal& filter = {}) const;
 
@@ -209,6 +235,7 @@ private:
 
 	// Extra little helper
 	inline EntityRaycastHit rayHitToEntityRayHit(const RaycastHit& rayHit) const;
+	inline EntityShapecastHit shapeHitToEntityShapeHit(const ShapecastHit& shapeHit) const;
 	inline QueryFilter getQueryFilterFromQueryFilterExternal(const QueryFilterExternal& queryFilterExternal) const;
 };
 

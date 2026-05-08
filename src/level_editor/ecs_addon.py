@@ -285,6 +285,10 @@ class BaseComponent(bpy.types.PropertyGroup):
 class PlayerInput(BaseComponent):
     bl_label = "PlayerInput"
 
+class WeaponComponent(BaseComponent):
+    bl_label = "Weapon"
+    damage: bpy.props.IntProperty(default=100)
+
 class HealthComponent(BaseComponent):
     bl_label = "Health"
     max_health: bpy.props.IntProperty(default=200)
@@ -625,11 +629,11 @@ def serialize_ecs(obj):
                 # Convert from Blender's XYZ to engine's XZY
                 value = list(value)  # ensure it's a list
                 if len(value) == 3:
-                    value = [value[0], value[2], value[1]]  # X,Z,Y
+                    value = [value[0], value[2], value[1]]  # X,Z,-Y
             if prop.identifier == "collider_position_offset":
                 value = list(value)  # ensure it's a list
                 if len(value) == 3:
-                    value = [value[0], -value[2], value[1]]  # X,Z,Y
+                    value = [value[0], value[2], -value[1]]  # X,Z,Y
 
             print(f"      Property {prop.identifier}: {value}")
 
@@ -725,6 +729,10 @@ def apply_ecs_to_object(obj, ecs_data):
                     value = list(value)  # ensure it's a list
                     if len(value) == 3:
                         value = [value[0], value[2], value[1]]  # X,Z,Y
+                elif prop_meta.identifier == "collider_position_offset":
+                    value = list(value)  # ensure it's a list
+                    if len(value) == 3:
+                        value = [value[0], -value[2], value[1]]  # X,-Z,Y
                 elif prop_meta and prop_meta.type == 'FLOAT' and prop_meta.is_array:
                     value = tuple(value)
                     if len(value) == 4 and prop_meta.subtype == 'EULER':
@@ -763,13 +771,44 @@ def import_ecs_from_scene():
         print(f"[ECS IMPORT] Applied ECS to {obj.name}")
 
 
+def prepare_lights_for_export():
+    for obj in bpy.data.objects:
+        if obj.type != 'LIGHT':
+            continue
+
+        light = obj.data
+
+        # Force the actual color into extras so we can read it directly
+        # Blender light colors are usually Linear RGB. (For some reason it always exports as white otherwise on glTF)
+        light["engine_color"] = [light.color[0], light.color[1], light.color[2]]
+
+        light["engine_intensity"] = light.energy
+
+        # if light.type == 'POINT':
+        radius = light.shadow_soft_size
+
+        if radius <= 0.0:
+            continue  # or handle error
+
+        light.use_custom_distance = True
+        light.cutoff_distance = radius
+
 # the exporter and importer operator
 class EXPORT_OT_level_glb(bpy.types.Operator, ExportHelper):
     bl_idname = "export.level_glb"
     bl_label = "Build Level (.glb)"
     filename_ext = ".glb"
 
-    def execute(self, context):        
+    def execute(self, context):
+
+        # Make sure all lights have a radius, cuz we use this to set the cut off distance
+        for obj in bpy.data.objects:
+            if obj.type == 'LIGHT':
+                light = obj.data
+                if light.type == 'POINT' and light.shadow_soft_size == 0.0:
+                    self.report({'ERROR'}, f"Light '{obj.name}' has radius = 0")
+                    return {'CANCELLED'}
+
         # Clean all BlenderKit metadata from nodes custom properties
         for entity in bpy.data.objects:
             for key in list(entity.keys()):
@@ -789,6 +828,7 @@ class EXPORT_OT_level_glb(bpy.types.Operator, ExportHelper):
                     del scene[key]
 
 
+        prepare_lights_for_export()
         bake_ecs_to_custom_properties()
 
         # strip_ecs_runtime_properties()

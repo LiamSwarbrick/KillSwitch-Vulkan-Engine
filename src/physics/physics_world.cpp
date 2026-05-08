@@ -9,6 +9,7 @@
 
 #include <memory>
 #include <vector>
+#include <cmath>
 
 PhysicsWorld::PhysicsWorld(uint8_t numBodyLayers, uint32_t expectedBodies)
 {
@@ -125,17 +126,26 @@ ShapeHandle PhysicsWorld::getShapeHandle(RigidBodyHandle r)
 	return b->shapeHandle;
 }
 
-void PhysicsWorld::setVelocity(RigidBodyHandle r, glm::vec3 velocity)
+void PhysicsWorld::teleportBody(RigidBodyHandle r, const glm::vec3& worldPosition)
 {
 	RigidBody* b = getBody(r);
 	if (!b) return;
+	teleportBodyRaw(b, worldPosition);
+}
+
+void PhysicsWorld::setVelocity(RigidBodyHandle r, const glm::vec3& velocity)
+{
+	RigidBody* b = getBody(r);
+	if (!b) return;
+	b->wakeUp();
 	b->velocity = velocity;
 }
 
-void PhysicsWorld::addVelocity(RigidBodyHandle r, glm::vec3 velocity)
+void PhysicsWorld::addVelocity(RigidBodyHandle r, const glm::vec3& velocity)
 {
 	RigidBody* b = getBody(r);
 	if (!b) return;
+	b->wakeUp();
 	b->velocity += velocity;
 }
 
@@ -211,6 +221,7 @@ void PhysicsWorld::setCharacterMaxWalkableAngle(RigidBodyHandle r, float maxWalk
 
 	if (c == nullptr) return;
 
+	// Unsure if i should wake up the body here (i probably should cause if we change it and we're in a slope, the body will remain s
 	c->maxWalkableAngle = maxWalkableAngle;
 }
 
@@ -266,7 +277,7 @@ RigidBodyHandle PhysicsWorld::addBody(const RigidBodyDesc& desc)
 	body.velocity = glm::vec3(0.0f);
 	body.forceAccumulator = glm::vec3(0.0f);
 	body.mass = desc.mass;
-	body.invMass = desc.isStatic ? 0.0f : (1.0f / desc.mass);
+	body.invMass = (desc.isStatic || desc.isKinematic) ? 0.0f : (1.0f / desc.mass);
 	body.gravityScale = desc.gravityScale;
 	body.damping = desc.damping;
 
@@ -280,13 +291,15 @@ RigidBodyHandle PhysicsWorld::addBody(const RigidBodyDesc& desc)
 
 	body.isStatic = desc.isStatic;
 	body.isKinematic = desc.isKinematic;
+	body.isDynamic = desc.isDynamic;
+
 	body.isCharacter = desc.isCharacter;
 	body.isTrigger = desc.isTrigger;
 
 	// vERY IMPORTANT
 	body.bodyID = index;
 
-	// Unused as we are not putting bodies to sleep for now
+	// USED but leave at default values
 	body.sleeping = false;
 
 	calculateAABB(&body);
@@ -363,6 +376,8 @@ const RigidBody* PhysicsWorld::getBody(RigidBodyHandle handle) const
 void PhysicsWorld::setBodyShape(RigidBodyHandle bodyHandle, ShapeHandle shapeHandle)
 {
 	RigidBody* body = bodies.GetPtr(bodyHandle.index);
+	if (shapeHandle == body->shapeHandle || !shapeHandle.isValid()) return;
+
 	IShape* shape = shapes.GetPtr(shapeHandle.index)->shape;
 	if (!body || !shape) return;
 
@@ -614,6 +629,8 @@ void PhysicsWorld::removePlane(PlaneHandle handle)
 
 void PhysicsWorld::addGenerator(IForceGenerator* gen)
 {
+	// Wake all bodies up cause the new force gen should affect all bodies
+	wakeAllBodies();
 	forceRegistry.addGenerator(gen);
 }
 
@@ -626,7 +643,10 @@ void PhysicsWorld::addForce(RigidBodyHandle handle, IForceGenerator* gen)
 {
 	RigidBody* body = getBody(handle);
 	if (body)
+	{
+		body->wakeUp();
 		forceRegistry.addPair(body, gen);
+	}
 }
 
 void PhysicsWorld::removeForce(RigidBodyHandle handle, IForceGenerator* gen)
@@ -679,7 +699,66 @@ std::vector<RaycastHit> PhysicsWorld::raycastAll(const Ray& ray, const QueryFilt
 	return narrowHits;
 }
 
-std::vector<RigidBodyHandle> PhysicsWorld::shapecast(ShapeHandle shapeHandle, const glm::vec3& position, const glm::quat& orientation, const QueryFilter& filter) const
+ShapecastHit PhysicsWorld::shapecast(const Ray& ray, ShapeHandle shape, const glm::quat& orientation, const QueryFilter& filter) const
+{
+	
+	//RigidBody* target = nullptr;
+	//if (optionalTargetBody.isValid())
+	//{
+	//	target = getBody(optionalTargetBody);
+	//}
+	//else
+	//{
+	//	RaycastHit rayHit = raycast(ray, filter);
+	//	if (!rayHit.isValid()) return ShapecastHit::none();
+
+	//	target = rayHit.body;
+	//}
+	//if (!target) return ShapecastHit::none();
+
+	const IShape* queryShape = getShape(shape);
+	if (!queryShape) return ShapecastHit::none();
+
+	glm::vec3 shapePosition; glm::quat shapeOrientation;
+	narrowPhase.resolveShapeTransform(queryShape, ray.origin, orientation, shapePosition, shapeOrientation);
+
+	// ----
+	// Broadphase of the calculated swept AABB from start to finish to get all candidates, then check 1 by 1
+	// ---
+	AABB aabbStart = queryShape->computeAABB(shapePosition, shapeOrientation);
+	AABB aabbEnd = queryShape->computeAABB(shapePosition + ray.direction * ray.maxDistance, shapeOrientation);
+
+	AABB sweptAABB = AABB::merge(aabbStart, aabbEnd);
+
+	QueryFilterInternal filterInternal = getQueryFilterInternalFromQueryFilter(filter);
+
+	std::vector<RigidBody*> candidates;
+	broadPhase.queryAABB(sweptAABB, filterInternal, candidates);
+
+	ShapecastHit closest{};
+
+	for (RigidBody* body : candidates)
+	{
+		const IShape* targetShape = getShape(body->shapeHandle);
+
+		glm::vec3 targetPosition; glm::quat targetOrientation;
+		narrowPhase.resolveShapeTransform(targetShape, body->position, body->orientation, targetPosition, targetOrientation);
+		
+		ShapecastHit hit = narrowPhase.shapecast(ray, queryShape, shapePosition, shapeOrientation, targetShape, targetPosition, targetOrientation);
+
+		if (!hit.isValid()) continue;
+
+		hit.body = body; // important bit
+
+		if (!closest.isValid() || hit.t < closest.t)
+			closest = hit;
+	}
+
+
+	return closest;
+}
+
+std::vector<RigidBodyHandle> PhysicsWorld::shapeIntersects(ShapeHandle shapeHandle, const glm::vec3& position, const glm::quat& orientation, const QueryFilter& filter) const
 {
 	std::vector<RigidBody*> broadHits;
 	std::vector<RigidBodyHandle> hits;
@@ -708,6 +787,10 @@ std::vector<RigidBodyHandle> PhysicsWorld::shapecast(ShapeHandle shapeHandle, co
 	return hits;
 }
 
+glm::vec3 PhysicsWorld::getWorldUp()
+{
+	return worldUp;
+}
 
 void PhysicsWorld::setGravity(glm::vec3 g)
 {
@@ -741,13 +824,14 @@ int PhysicsWorld::getMaxSteps() const
 
 void PhysicsWorld::step(float dt)
 {
-	applyForces(dt);
-	integrate(dt);
-	updateBroadPhase();
-	detectCollisions();
-	testPlanes();
+	applyForces(dt); // applies all global and paired forces
+	integrate(dt); // integrates velocity and position
+	updateBroadPhase(); // updates broadphase based on the new positions of the moving bodies
+	detectCollisions(); // detects collisions at broadphase and narrowphase, fills contacts later resolved in solve()
+	testPlanes(); // (not using planes) 
 	
-	solve(dt);
+	solve(dt); // solves contacts (extra functionality for characters)
+	updateSleep(dt); // updates the sleep on moving bodies
 
 	dispatchEvents();
 }
@@ -759,6 +843,16 @@ void PhysicsWorld::applyForces(float dt)
 
 void PhysicsWorld::integrate(float dt)
 {
+	// Before we integrate the bodies, add the baseVelocity from the characters to their respective bodies
+	// BECAUSE WE ARE ASSUMING FOR CHARACTERS, GAME-SIDE UPDATES SETS THE SPEED EVERY FRAME
+	for (PhysicsCharacter& c : characters.Data())
+	{
+		if (!c.body) continue;
+
+		c.body->velocity += c.baseVelocity;
+	}
+	// Now the forces should be ready to be added to the bodies' velocities
+
 	for (RigidBody& body : bodies.Data())
 	{
 		integrator.integrate(body, dt);
@@ -772,7 +866,7 @@ void PhysicsWorld::updateBroadPhase()
 
 	for (RigidBody& body : bodies.Data())
 	{
-		if (body.isStatic) continue;
+		if (body.sleeping || body.isStatic || body.isTrigger) continue;
 
 		// Not calling calculateAABB(&body) because we're not fattening the newAABB
 		IShape* shape = getShape(body.shapeHandle);
@@ -821,7 +915,7 @@ void PhysicsWorld::testPlanes()
 	{
 		for (const RigidBody& body : bodies.Data())
 		{
-			if (body.isStatic) continue;
+			if (body.sleeping || body.isStatic || body.isKinematic || body.isTrigger) continue;
 
 			Contact contact = narrowPhase.testPlane(body, plane, *this);
 			if (contact.isValid())
@@ -835,24 +929,30 @@ void PhysicsWorld::solve(float dt)
 	solver.solve(contacts, dt);
 }
 
-void PhysicsWorld::resetAllCharactersGroundState()
+void PhysicsWorld::updateSleep(float dt)
 {
-	for (PhysicsCharacter& c : characters.Data())
+	for (RigidBody& body : bodies.Data())
 	{
-		c.groundState = PhysicsCharacter::GroundState::InAir;
+		if (body.sleeping || body.isStatic || body.isKinematic || body.isTrigger) continue;
+
+		float kineticEnergy = 0.5f * body.mass * glm::dot(body.velocity, body.velocity); // velocity squared, we can just square the threshold
+		float bias = 1.0f - std::pow(g_PhysicsSettings.sleepBiasRate, dt);
+
+		body.accumulatedEnergy = (1.0f - bias) * body.accumulatedEnergy + bias * kineticEnergy;
+
+		if (body.accumulatedEnergy < g_PhysicsSettings.energyThreshold)
+			body.sleepTimer += dt;
+		else
+			body.sleepTimer = 0.0f;
+
+		if (body.sleepTimer > g_PhysicsSettings.sleepTimeRequired)
+		{
+			body.sleeping = true;
+			body.velocity = glm::vec3(0.0f);
+		}
 	}
 }
 
-void PhysicsWorld::updateAllCharactersGroundState()
-{
-	for (PhysicsCharacter& c : characters.Data())
-	{
-		if (c.groundState != PhysicsCharacter::GroundState::InAir) continue;
-		
-		// TODO: raycast downwards (basically scene.cpp's code for the player movement) 
-		SDL_assert(false && "Need to implement this");
-	}
-}
 
 void PhysicsWorld::dispatchEvents()
 {
@@ -962,4 +1062,18 @@ QueryFilterInternal PhysicsWorld::getQueryFilterInternalFromQueryFilter(const Qu
 	res.layerOfQuery = queryFilter.layerOfQuery;
 
 	return res;
+}
+
+void PhysicsWorld::teleportBodyRaw(RigidBody* body, const glm::vec3& worldPosition)
+{
+	body->wakeUp();
+	body->position = worldPosition; // not doing extra checks at the moment because i do NOT have time, but should probably check for collisions (if it's a valid place to teleport)
+}
+
+void PhysicsWorld::wakeAllBodies()
+{
+	for (RigidBody& body : bodies.Data())
+	{
+		body.wakeUp();
+	}
 }

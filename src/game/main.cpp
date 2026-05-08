@@ -9,6 +9,7 @@
 #include "ingame_cam.h"
 #include "game/foundations/components.h"
 #include "core/audio_system.h"
+#include "physics/body_layers.h"
 
 #include "SDL3/SDL.h"
 #include "SDL3/SDL_main.h"
@@ -35,12 +36,24 @@ int main(int argc, char *argv[])
         .window = window,
         .enable_validation = enabled_validation_layers,
         .preferred_initial_settings = {  // Will fallback if these aren't possible
-            .uncapped_fps = 0,
-            .msaa_sample_count = 1,
+            .uncapped_fps = 0,  // NOTE: <- Enable when gathering FPS metrics
+            .msaa_sample_count = 4,
             .fov_y = 50.0f
         }
     };
     Renderer_Init(&renderer_info);
+
+    #if 0  // Just an example of settings API usage
+    // Set 4xMSAA if available
+    if (Renderer_GetSettingsCapabilities().max_msaa_samples >= 4)
+    {
+        SDL_Log("Enabling 4xMSAA");
+        Renderer_Settings settings = Renderer_GetSettings();
+        settings.msaa_sample_count = 4;
+        Renderer_ChangeSettings(settings);
+    }
+    #endif
+
 
     AudioSystem audio_system = AudioSystem_Create((AudioSystemCreateInfo){
         .debug_name = "GameAudio",
@@ -55,16 +68,16 @@ int main(int argc, char *argv[])
         "All_Sounds_MP3_UNMASTERED2/Bad_Signs.mp3"    
     );
     // Set up spatial audio for player start position
-    if (startup_music != 0)
-        {
-            AudioSystem_SetClipMinMaxDistance(&audio_system, startup_music, 1.0f, 40.0f);
-            AudioSystem_PlaySpatialLoop(
-                &audio_system,
-                startup_music,
-                1.0f,
-                2.0f, 1.0f, 0.0f
-            );
-        }
+    // if (startup_music != 0)
+    //     {
+    //         AudioSystem_SetClipMinMaxDistance(&audio_system, startup_music, 1.0f, 40.0f);
+    //         AudioSystem_PlaySpatialLoop(
+    //             &audio_system,
+    //             startup_music,
+    //             1.0f,
+    //             2.0f, 1.0f, 0.0f
+    //         );
+    //     }
 
     // AudioClipHandle startup_test_sfx = AudioSystem_LoadClipEx(
     //     &audio_system,
@@ -102,7 +115,6 @@ int main(int argc, char *argv[])
     DebugUI_SetImGuiCallback([](void*){ GameUI_BuildImGui(); }, nullptr);
 
     // Dunno whether this resource manager will end up in the final build, if no one is integrating it due to more important tasks
-
     // ResourceManager resource_manager = ResourceManager_Create((ResourceManagerCreateInfo){
     //     .debug_name = "GameAssets",
     //     .initial_capacity = 32
@@ -110,7 +122,7 @@ int main(int argc, char *argv[])
 
     // ResourceHandle boot_vert = ResourceManager_RequestBinary(
     //     &resource_manager,
-    //     RESOURCE_TYPE_SHADER_BYTECODE,
+//     RESOURCE_TYPE_SHADER_BYTECODE,
     //     RESOURCE_RESIDENCY_BOOT,
     //     "shader.unlit.vert",
     //     "shaderspv/unlit.vert.spv"
@@ -126,15 +138,6 @@ int main(int argc, char *argv[])
 
     // (void)boot_vert;
     // (void)boot_frag;
-
-    // Set 4xMSAA to test settings API
-    if (Renderer_GetSettingsCapabilities().max_msaa_samples >= 4)
-    {
-        Renderer_Settings settings = Renderer_GetSettings();
-        settings.msaa_sample_count = 4;
-        Renderer_ChangeSettings(settings);
-    }
-
     
     /* LOADING NOTES
        Realistically, the splash screen assets would load first, then the main menu assets
@@ -147,15 +150,16 @@ int main(int argc, char *argv[])
     scene.StartUp();
 
     Asset* room_prefab = scene.LoadPrefab("assets/levels/testroom_new.gltf");
+    Asset* many_prefab = scene.LoadPrefab("assets/levels/manylights.gltf");
     Asset* playground_prefab = scene.LoadPrefab("assets/levels/playground.gltf");
     Asset* cube_prefab = scene.LoadPrefab("assets/props/simple_cube.gltf");
     Asset* sphere_prefab = scene.LoadPrefab("assets/props/simple_sphere.gltf");
     //Asset* capsule_prefab = scene.LoadPrefab("assets/props/zombie.gltf");
     Asset* capsule_prefab = scene.LoadPrefab("assets/props/character_capsule.gltf");
+    Asset* zombie_woman = scene.LoadPrefab("assets/animations/zombie_woman.gltf");
     // TODO: Change the following 2 prefabs so they can be imported (add the boolean "Is ECS Entity" with the new script where it is needed)
-    // Asset* catPrefab = scene.LoadPrefab("assets/animations/scene.gltf");
+    // Asset* catPrefab = scene.LoadPrefab("assets/animations/zomboUntitled.gltf");
     // Asset* catPrefab = scene.LoadPrefab("assets/animations/flatzombo.gltf");
-    //Asset* animationPrefab = scene.LoadPrefab("assets/animations/sceneglb.glb");
 
     // scene.InstantiatePrefab(room_prefab, glm::vec3(0, 0, 0), glm::identity<glm::quat>());
     // scene.InstantiatePrefab(cube_prefab, glm::vec3(0, 5.1, 0), glm::identity<glm::quat>());
@@ -229,21 +233,28 @@ int main(int argc, char *argv[])
 
 
     //Asset* animationPrefab = scene.LoadPrefab("assets/animations/cat.gltf");
-    
-    scene.InstantiatePrefab(room_prefab, glm::vec3(0, 0, 0));
-    scene.InstantiatePrefab(playground_prefab, glm::vec3(0, 0, 0));
+        
+    scene.InstantiatePrefab(many_prefab, glm::vec3(0, 0, 0), glm::identity<glm::quat>());
+    scene.InstantiatePrefab(room_prefab, glm::vec3(0.0f, 0.0f, 10.0f), glm::identity<glm::quat>());
+    scene.InstantiatePrefab(playground_prefab, glm::vec3(0, 0, 10.0f), glm::identity<glm::quat>());
     // scene.InstantiatePrefab(cube_prefab, glm::vec3(0, 5.1, 0));
     // scene.InstantiatePrefab(cube_prefab, glm::vec3(3, 4.9, 0));
     
-    EntityID playerID = scene.InstantiatePrefab(capsule_prefab, glm::vec3(0, 2, 0.01));
-     scene.InstantiatePrefab(sphere_prefab, glm::vec3(4.7, 7, 0.1));
-     scene.InstantiatePrefab(sphere_prefab, glm::vec3(-4.7, 7, -0.1));
-     scene.InstantiatePrefab(sphere_prefab, glm::vec3(0.1, 7, -4.7));
-     scene.InstantiatePrefab(sphere_prefab, glm::vec3(-0.1, 7, 4.7));
+    EntityID playerID = scene.InstantiatePrefab(zombie_woman, glm::vec3(0, 0, 0.01), glm::identity<glm::quat>());
+    // scene.InstantiatePrefab(sphere_prefab, glm::vec3(4.7, 7, 0.1));
+    // scene.InstantiatePrefab(sphere_prefab, glm::vec3(-4.7, 7, -0.1));
+    // scene.InstantiatePrefab(sphere_prefab, glm::vec3(0.1, 7, -4.7));
+    // scene.InstantiatePrefab(sphere_prefab, glm::vec3(-0.1, 7, 4.7));
     // scene.InstantiatePrefab(catPrefab, glm::vec3(0, 0, 0));
     // scene.InstantiatePrefab(animationPrefab, glm::vec3(0, 0, 0));
     // render a second cat
     // EntityID playerEntity = scene.InstantiatePrefab(animationPrefab, glm::vec3(10, 0, 10));
+
+    //making gun
+    Asset* gun_prefab = scene.LoadPrefab("assets/props/colt.gltf"); 
+    EntityID gunID = scene.InstantiatePrefab(gun_prefab, glm::vec3(0, 0, 0));
+    // making gun
+
     scene.SetPlayer(playerID);
     scene.BuildRendererScene();
 
@@ -251,7 +262,7 @@ int main(int argc, char *argv[])
     //       This must change with the new scene system that can load many asset prefabs.
     DebugUI_SetECS(&scene.GetECS());
     DebugUI_SetAsset(&scene.m_prefabs);
-    InGameCam_Init(&scene.GetECS(), playerID);
+    InGameCam_Init(&scene.GetECS(), &scene.GetPhysicsManager(), playerID);
 
     bool running = true;
 
@@ -262,9 +273,26 @@ int main(int argc, char *argv[])
     {
 		// delta time calculation for testing
         uint64_t current_time = SDL_GetTicksNS();
-        float dt = (float)(current_time - last_time) / 1000000000.0f;
+        float dt = (float)((double)(current_time - last_time) / 1000000000.0);
         last_time = current_time;
-        if (dt > 0.1f) dt = 0.1f;   
+        if (dt > 0.1f) dt = 0.1f;
+
+        static double frame_time_accumulation = 0.0;
+        static int num_frames_accumulated = 0;
+        frame_time_accumulation += (double)dt;
+        ++num_frames_accumulated;
+        if (num_frames_accumulated >= 30)
+        {
+            double fps = (double)num_frames_accumulated / frame_time_accumulation;
+            
+            // Append average FPS to window title
+            char new_window_title[256] = {};
+            snprintf(new_window_title, sizeof(new_window_title), "%s | FPS=%f", title, fps);
+            SDL_SetWindowTitle(window, new_window_title);
+
+            frame_time_accumulation = 0.0;
+            num_frames_accumulated = 0;
+        }
 
         // Event Loop
         SDL_Event event;
@@ -279,23 +307,61 @@ int main(int argc, char *argv[])
         Input_Update();
         GameUI_Update();
 
-        // cam toggle logic
-        if (GameUI_GetState() == GameState::Playing && Input_IsActionJustPressed(ACTION_TOGGLE_CAMERA)){InGameCam_ToggleGameplayMode();}
+        // tpcam shoulder toggle
+        if (GameUI_GetState() == GameState::Playing && Input_IsActionJustPressed(ACTION_TOGGLE_CAMERA)){InGameCam_ToggleShoulder();}
         // pass debug ui edits
         DebugUICameraEdits ui_camera_edits = {};
         if (DebugUI_ConsumeCameraEdits(&ui_camera_edits)){InGameCam_ApplyDebugEdits(ui_camera_edits);}
+        // raycast attack at center of screen
+        if (GameUI_GetState() == GameState::Playing &&
+            Input_IsActionJustPressed(ACTION_ATTACK) && Input_IsActionPressed(ACTION_AIM))
+        {
+            const CameraInfo& cam = InGameCam_GetGameplayCamera();
+
+            Ray ray = {};
+            ray.origin = cam.position;
+            ray.direction = glm::normalize(glm::vec3(
+                -cam.view[0][2],
+                -cam.view[1][2],
+                -cam.view[2][2]
+            )); // Forward vector of the camera
+            ray.maxDistance = 100.0f; 
+
+            QueryFilterExternal filter = {};
+            filter.bodyToIgnore = playerID; 
+            filter.hasLayerOfQuery = true;
+            filter.layerOfQuery = (uint8_t)BodyLayer::WEAPON; 
+
+            EntityRaycastHit hit = scene.GetPhysicsManager().raycast(ray, filter);
+            if (hit.isValid())
+            {
+                // TODO: Apply damage to hit entity, spawn hit effects, etc.
+                SDL_Log("Raycast hit entity %u at point (%f, %f, %f)", hit.entity, hit.point.x, hit.point.y, hit.point.z);
+            }
+        }
         // Only capture mouse while playing (release it on pause), keep relative mouse when debug UI toggled.
         const bool right_mouse_down = (SDL_GetMouseState(nullptr, nullptr) & SDL_BUTTON_MASK(SDL_BUTTON_RIGHT)) != 0;
         SDL_SetWindowRelativeMouseMode(window, (GameUI_GetState() == GameState::Playing && !DebugUI_IsOpen()) || (DebugUI_IsOpen() && right_mouse_down));
 
         // controller test
-        const bool* state = SDL_GetKeyboardState(NULL);
         scene.GetECS().GetView<C_PlayerInput>().ForEach([&](C_PlayerInput& input) {
-                input.move_forward = state[SDL_SCANCODE_K];
-                input.move_backward = state[SDL_SCANCODE_I];
-                input.move_left = state[SDL_SCANCODE_L];
-                input.move_right = state[SDL_SCANCODE_J];
-                input.jump = state[SDL_SCANCODE_SPACE];
+
+            input.move_forward = Input_IsActionPressed(ACTION_MOVE_FORWARD);
+            input.forward = Input_GetActionValue(ACTION_MOVE_FORWARD);
+
+            input.move_backward = Input_IsActionPressed(ACTION_MOVE_BACKWARD);
+            input.backward = Input_GetActionValue(ACTION_MOVE_BACKWARD);
+
+            input.move_left = Input_IsActionPressed(ACTION_MOVE_LEFT);
+            input.left = Input_GetActionValue(ACTION_MOVE_LEFT);
+
+            input.move_right = Input_IsActionPressed(ACTION_MOVE_RIGHT);
+            input.right = Input_GetActionValue(ACTION_MOVE_RIGHT);
+
+            input.jump = Input_IsActionJustPressed(ACTION_JUMP);
+            input.crouch = Input_IsActionPressed(ACTION_CROUCH);
+            input.run = Input_IsActionPressed(ACTION_SPRINT);
+            input.aim = Input_IsActionPressed(ACTION_AIM);
             }
         );
         // Movement always follows camera forward.
@@ -305,7 +371,7 @@ int main(int argc, char *argv[])
         scene.Update(dt);
 
         // Update in-game camera
-        InGameCam_Update(dt, GameUI_GetState() == GameState::Playing, DebugUI_IsOpen(), DebugUI_GetCameraMode(), right_mouse_down);
+        InGameCam_Update(dt, GameUI_GetState() == GameState::Playing, DebugUI_IsOpen(), right_mouse_down, DebugUI_GetCameraMode());
         // pass camera snapshot to debug UI
         const InGameCamSnapshot ingame_cam_snapshot = InGameCam_GetSnapshot();
         DebugUI_SetInGameCameraSnapshot(&ingame_cam_snapshot);
@@ -345,6 +411,7 @@ int main(int argc, char *argv[])
         if (GameUI_GetState() == GameState::Quitting) running = false;
     }
 
+    InGameCam_Shutdown();
     scene.Shutdown();
     AudioSystem_Destroy(&audio_system);
     Input_Shutdown();

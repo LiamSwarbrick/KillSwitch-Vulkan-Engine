@@ -7,6 +7,16 @@
 
 #include "shared_types.glsl"
 
+#define MAX_SHADOWMAPS 3
+#define MAX_POINTLIGHTS 5000
+#define MAX_SPOTLIGHTS  5000
+#define CLUSTER_GRID_SIZE_X 16
+#define CLUSTER_GRID_SIZE_Y 9
+#define CLUSTER_GRID_SIZE_Z 24
+#define CLUSTER_COUNT (CLUSTER_GRID_SIZE_X * CLUSTER_GRID_SIZE_Y * CLUSTER_GRID_SIZE_Z)
+#define CLUSTER_INDEX(x, y, z) ((x) + (y)*CLUSTER_GRID_SIZE_X + (z)*CLUSTER_GRID_SIZE_X*CLUSTER_GRID_SIZE_Y)
+
+// NOTE: On the C++ side, mat and vec types here are not glm types, they are float arrays defined in shared_types.glsl
 struct SceneData
 {
     mat4 view;
@@ -22,6 +32,7 @@ struct SceneData
     float lens_distortion;  // Negative = wide-angle (none=0.0, subtle fish-eye=-0.03)
 
     uvec2 rendertarget_size;
+    float inv_log_far_over_near;  // For getting the Z bin in clustered shading (1.0f / log(far / near))
 };
 
 struct ObjectData
@@ -49,8 +60,6 @@ struct MaterialData
     // uint32_t texture_idx_normalmap;
 };
 
-#define MAX_POINTLIGHTS 500
-#define MAX_SPOTLIGHTS  500
 struct PointLight
 {
     vec4 pos_and_radius;
@@ -67,88 +76,45 @@ struct SpotLight
     // TODO: For future shadow map cache, add a dirty bit for if it has moved
 };
 
+struct Cluster
+{
+    uint32_t point_count;
+    uint32_t point_offset;
+
+    uint32_t spot_count;
+    uint32_t spot_offset;
+};
+
+// NOTE: Currently all light buffers are uploaded during EndDrawCalls()
 struct LightsHeader
 {
     uint32_t num_point_lights;
     uint32_t num_spot_lights;
+    uint64_t point_lights_ptr;
+    uint64_t spot_lights_ptr;
+
+    // Multiple shadow maps
+    uint64_t spotlight_shadowmap_index_buf_ptr;
+    uint64_t shadowmap_spotlight_camera_buf_ptr;
+
+    // Clustered shading
+    uint64_t point_light_indices_buf_ptr;
+    uint64_t spot_light_indices_buf_ptr;
+    uint64_t cluster_offsets_buf_ptr;
 };
 
-
-// #define LIGHT_FALLOFF_FACTOR 5.0  // Higher than 1.0 will fall off faster
-
 #ifdef IS_GLSL
-    float get_attenuation(float dist)
+    float get_attenuation(float dist, float range)
     {
-        return 1.0 / max(1.0, dist*dist);
+        // Standard inverse square
+        float attenuation = 1.0 / max(dist * dist, 1.0);
+        
+        // Smoothly transition to zero at the radius/range limit
+        // to match the KHR_lights_punctual recommendation
+        float window = pow(clamp(1.0 - pow(dist / range, 4.0), 0.0, 1.0), 2.0);
+        return attenuation * window;
     }
-    // float get_attenuation(float dist, float radius)
-    // {
-    //     return max(1.0, dist*dist);
-    //     // float s = dist / radius;
-    //     // if (s >= 1.0) return 0.0;
-
-    //     // float s2 = s*s;
-    //     // float s2_prime = 1.0 - s2;
-    //     // return s2_prime*s2_prime / (1.0 + LIGHT_FALLOFF_FACTOR * s);
-    // }
 #endif
-
-// #ifndef IS_GLSL
-//     static float get_light_intensity(float target_brightness, float target_dist, float radius)
-//     {
-//         return target_brightness;
-//         // if (target_dist >= radius) return target_brightness;
-
-//         // float s = target_dist / radius;
-//         // float s2 = s * s;
-//         // float F = LIGHT_FALLOFF_FACTOR;
-
-//         // // Inverse of the attenuation formula
-//         // float numerator = 1.0f + F * s;
-//         // float denominator = (1.0f - s2) * (1.0f - s2);
-
-//         // return target_brightness * (numerator / denominator);
-//     }
-// #endif
-
-// #ifndef IS_GLSL
-// static
-// #endif
-// float get_attenuation(float distance_to_light)
-// {
-//     // TODO: Replace with https://lisyarus.github.io/blog/posts/point-light-attenuation.html
-//     #ifdef IS_GLSL
-//         return 1.0 / max(distance_to_light*distance_to_light, 1.0);
-//     #else
-//         distance_to_light *= distance_to_light;
-//         if (distance_to_light < 1.0f)
-//         {
-//             return 1.0f;
-//         }
-//         else
-//         {
-//             return 1.0 / distance_to_light;
-//         }
-//     #endif
-// }
-
-// #ifndef IS_GLSL
-
-//     #include "glm/glm.hpp"
-
-//     // Function to get max perceivable distance of point and spot light (based on attenuation)
-//     static float get_light_radius(glm::vec3 color, float intensity)
-//     {
-//         // TODO: https://lisyarus.github.io/blog/posts/point-light-attenuation.html
-//         // And replace get_attenutation with that one as well
-//         #warning TODO: IMPLEMENT ATTENTUATION
-//         return 100.0;
-//     }
-
-// #endif
-
-
-
 
 #ifndef IS_GLSL
 
@@ -159,6 +125,8 @@ struct LightsHeader
     typedef struct MaterialData          MaterialData;
     typedef struct PointLight            PointLight;
     typedef struct SpotLight             SpotLight;
+    typedef struct Cluster               Cluster;
+    typedef struct LightsHeader          LightsHeader;
 
 #else
 
@@ -187,6 +155,28 @@ struct LightsHeader
     layout (buffer_reference, scalar) readonly buffer SpotLightBuffer
     {
         SpotLight spot_lights[];
+    };
+    layout (buffer_reference, scalar) readonly buffer SpotLightShadowMapIndexBuffer
+    {
+        int spotlight_shadowmap_index[];  // -1 means no shadowmap available for this spotlight
+    };
+    layout (buffer_reference, scalar) readonly buffer ShadowMapSpotLightCamerasBuffer
+    {
+        mat4 shadowmap_spotlight_viewproj[];  // Index by shadowmap idnex
+    };
+
+    // Clustered shading:
+    layout (buffer_reference, scalar) readonly buffer PointLightIndicesBuffer
+    {
+        uint indices[];  // One per light
+    };
+    layout (buffer_reference, scalar) readonly buffer SpotLightIndicesBuffer
+    {
+        uint indices[];
+    };
+    layout (buffer_reference, scalar) readonly buffer ClusterOffsetsBuffer
+    {
+        Cluster clusters[];  // Each element refers to a slice of the LightIndicesBuffer
     };
 
     // Pointer types for current mesh:

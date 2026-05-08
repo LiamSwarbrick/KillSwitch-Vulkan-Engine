@@ -196,6 +196,18 @@ namespace DebugUI
                     result.tp_state_changed = true;
                 }
 
+                if (ImGui::SliderFloat("Follow Lag", &edit_tp_cam.follow_lag_sec, 0.0f, 0.40f, "%.3f s"))
+                {
+                    if (edit_tp_cam.follow_lag_sec < 0.0f)
+                        edit_tp_cam.follow_lag_sec = 0.0f;
+                    result.tp_state_changed = true;
+                }
+
+                if (ImGui::Checkbox("Left Shoulder", &edit_tp_cam.shoulder_side_change))
+                {
+                    result.tp_state_changed = true;
+                }
+
                 if (ImGui::SliderFloat("FOV", &edit_tp_cam.fov_deg, 40.0f, 4000.0f, "%.1f deg"))
                 {
                     edit_tp_cam.fov_initialized = true;
@@ -213,7 +225,7 @@ namespace DebugUI
 
                 ImGui::SeparatorText("Controls");
                 ImGui::TextDisabled("Mouse / Right-stick  orbit");
-                ImGui::TextDisabled("Distance + FOV sliders");
+                ImGui::TextDisabled("Distance + Follow Lag + Left Shoulder + FOV");
                 ImGui::TextDisabled("Reset restores TP defaults");
                 break;
             }

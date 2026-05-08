@@ -18,6 +18,7 @@
     X(MOVE_DOWN,     "move_down")     \
     X(SPRINT,        "sprint")        \
     X(JUMP,          "jump")          \
+    X(CROUCH,        "crouch")        \
     /* Camera */           \
     X(CAMERA_UP,     "camera_up")     \
     X(CAMERA_DOWN,   "camera_down")   \
@@ -27,6 +28,7 @@
     /* Gameplay */         \
     X(INTERACT,      "interact")      \
     X(ATTACK,        "attack")        \
+    X(AIM,           "aim")           \
     /* UI / System */      \
     X(PAUSE,         "pause")         \
     X(DEBUG_TOGGLE,  "debug_toggle")

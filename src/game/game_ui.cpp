@@ -136,7 +136,7 @@ static void DrawMainMenu()
     else
     {
         ImGui::SetWindowFontScale(2.5f);
-        ImGui::TextUnformatted("ADVENTURE ENGINE");
+        ImGui::TextUnformatted("HELL MIST");
         ImGui::SetWindowFontScale(1.0f);
     }
 
@@ -288,6 +288,26 @@ void GameUI_Update()
     }
 }
 
+
+static void DrawCrosshair()
+{
+    ImGuiIO& io = ImGui::GetIO();
+    const ImVec2 c(io.DisplaySize.x * 0.5f, io.DisplaySize.y * 0.5f);
+
+    ImDrawList* dl = ImGui::GetForegroundDrawList();
+
+    const float arm = 8.0f;
+    const float gap = 4.0f;
+    const float thickness = 2.0f;
+    const ImU32 col = IM_COL32(255, 255, 255, 220);
+
+    // dl->AddLine(ImVec2(c.x - gap - arm, c.y), ImVec2(c.x - gap, c.y), col, thickness);
+    // dl->AddLine(ImVec2(c.x + gap, c.y), ImVec2(c.x + gap + arm, c.y), col, thickness);
+    // dl->AddLine(ImVec2(c.x, c.y - gap - arm), ImVec2(c.x, c.y - gap), col, thickness);
+    // dl->AddLine(ImVec2(c.x, c.y + gap), ImVec2(c.x, c.y + gap + arm), col, thickness);
+    dl->AddCircleFilled(c, 3.0f, col);
+}
+
 void GameUI_BuildImGui()
 {
     // When the debug UI is open the game viewport is a sub-window;
@@ -298,6 +318,12 @@ void GameUI_BuildImGui()
     {
     case GameState::MainMenu: DrawMainMenu(); break;
     case GameState::Paused:   DrawPauseMenu(); break;
+    case GameState::Playing: 
+        if (Input_IsActionPressed(ACTION_AIM))
+        {
+            DrawCrosshair();
+        }
+        break;
     default: break;  // Playing / Quitting: no UI drawn here
     }
 }

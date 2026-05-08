@@ -1,11 +1,11 @@
 #include "game/foundations/scene.h"
 #include "game/foundations/components.h"
-#include "game/foundations/body_layer_collisions.h"
+#include "physics/body_layers.h"
 #include "renderer/renderer.h"
 
 // animation update
 #include "core/animation.h"
-#include "game/foundations/PlayerMovementSystem.h"
+#include "game/systems/PlayerMovementSystem.h"
 // RapidJSON 
 #include "rapidjson/document.h"
 // Imported components for automated de-serialization
@@ -30,7 +30,9 @@ void Scene::StartUp()
     m_ecs.RegisterComponent<C_StaticMesh>();
     m_ecs.RegisterComponent<C_AnimatedMesh>();
     m_ecs.RegisterComponent<C_PlayerInput>();
-    m_ecs.RegisterComponent<C_CharacterController>();
+    m_ecs.RegisterComponent<C_PlayerController>();
+    m_ecs.RegisterComponent<C_RigidBody>();
+    m_ecs.RegisterComponent<C_Weapon>();
 
     m_prefabs.clear();
 
@@ -109,7 +111,48 @@ EntityID Scene::InstantiatePrefab(Asset* prefab, glm::vec3 spawnPosition, glm::q
             }
         }
 
-        if (has_ecs_data)
+        // Finding local positions/rotations and combining with root transforms
+        C_Transform t;
+        glm::vec3 localPosition = glm::vec3(node->translation[0], node->translation[1], node->translation[2]);
+        glm::quat localRotation = glm::quat(node->rotation[3], node->rotation[0], node->rotation[1], node->rotation[2]);
+        glm::mat4 localTransform = glm::translate(glm::mat4(1.0f), localPosition) * glm::mat4_cast(localRotation);
+        t.matrix = rootMatrix * localTransform;
+
+        if (node->light_index >= 0)
+        {
+            // LIGHT SOURCE ENTITY (just a transform and light properties)
+            EntityID eID = m_ecs.CreateEntity((node->name) ? (node->name) : "");
+            if (rootEntity == MAX_ENTITIES) rootEntity = eID;
+
+            // ---------------
+            // -- TRANSFORM --
+            // ---------------
+            m_ecs.AddComponent<C_Transform>(eID, { t.matrix });
+
+            // ------------------
+            // -- LIGHT SOURCE --
+            // ------------------
+            SDL_assert(node->light_index < prefab->light_count);
+            Light light_data = prefab->lights[node->light_index];
+            LightComponentType light_type;
+            switch (light_data.type)
+            {
+                case 2: light_type = LIGHT_COMPONENT_POINTLIGHT; break;
+                case 3: light_type = LIGHT_COMPONENT_SPOTLIGHT; break;
+                default: SDL_assert(0 && "Unimplemented light type detected (directional/area lights not implemented yet).");
+            }
+            
+            SDL_assert(light_data.range >= 0.0f && "Make sure in Blender to set the custom distance of the light, otherwise no culling can occurr");
+            m_ecs.AddComponent<C_Light>(eID, {
+                .type = light_type,
+                .color = glm::vec3(light_data.color[0], light_data.color[1], light_data.color[2]),
+                .intensity = light_data.intensity,
+                .radius = light_data.range,
+                .spot_inner_cone_angle = light_data.spot_inner_cone_angle,
+                .spot_outer_cone_angle = light_data.spot_outer_cone_angle
+            });
+        }
+        else if (has_ecs_data)
         { // if has ecs_data
             EntityID eID = m_ecs.CreateEntity((node->name) ? (node->name) : "");
             if (rootEntity == MAX_ENTITIES) rootEntity = eID;
@@ -117,42 +160,7 @@ EntityID Scene::InstantiatePrefab(Asset* prefab, glm::vec3 spawnPosition, glm::q
             // ---------------
             // -- TRANSFORM --
             // ---------------
-            
-            // Finding local positions/rotations and combining with root transforms
-            C_Transform t;
-            glm::vec3 localPosition = glm::vec3(node->translation[0], node->translation[1], node->translation[2]);
-            glm::quat localRotation = glm::quat(node->rotation[3], node->rotation[0], node->rotation[1], node->rotation[2]);
-            glm::mat4 localTransform = glm::translate(glm::mat4(1.0f), localPosition) * glm::mat4_cast(localRotation);
-            t.matrix = rootMatrix * localTransform;
-
             m_ecs.AddComponent<C_Transform>(eID, { t.matrix });
-
-            // ------------------
-            // -- LIGHT SOURCE --
-            // ------------------
-            if (node->light_index >= 0)
-            {
-                SDL_assert(node->light_index < prefab->light_count);
-                Light light_data = prefab->lights[node->light_index];
-                LightComponentType light_type;
-                switch (light_data.type)
-                {
-                    case 2: light_type = LIGHT_COMPONENT_POINTLIGHT; break;
-                    case 3: light_type = LIGHT_COMPONENT_SPOTLIGHT; break;
-                    default: SDL_assert(0 && "Unimplemented light type detected (directional/area lights not implemented yet).");
-                }
-                
-                SDL_assert(light_data.range >= 0.0f && "Make sure in Blender to set the custom distance of the light, otherwise no culling can occurr");
-                m_ecs.AddComponent<C_Light>(eID, {
-                    .type = light_type,
-                    .color = glm::vec3(light_data.color[0], light_data.color[1], light_data.color[2]),//glm::vec3(0.7f, 0.7f, 1.0f),
-                    .intensity = light_data.intensity,
-                    .radius = light_data.range,
-                    .spot_inner_cone_angle = light_data.spot_inner_cone_angle,
-                    .spot_outer_cone_angle = light_data.spot_outer_cone_angle
-                });
-            }
-
 
 
             // 2. And put the "_ecs" value in the following
@@ -207,15 +215,35 @@ EntityID Scene::InstantiatePrefab(Asset* prefab, glm::vec3 spawnPosition, glm::q
                 rbDesc.restitution = 0.0f;
                 rbDesc.friction = 0.2f;
                 rbDesc.forceLayers = importedRigidbody.force_layers;
+
+                // Important bit
+                bool isSomething = false;
+
+                SDL_assert(!(isSomething && importedRigidbody.is_static) && "RigidBody cannot be 2 'isSomething' at the same time");
+                isSomething = isSomething || importedRigidbody.is_static;
                 rbDesc.isStatic = importedRigidbody.is_static;
+
+                SDL_assert(!(isSomething && importedRigidbody.is_kinematic) && "RigidBody cannot be 2 'isSomething' at the same time");
+                isSomething = isSomething || importedRigidbody.is_kinematic;
                 rbDesc.isKinematic = importedRigidbody.is_kinematic;
+
+                SDL_assert(!(isSomething && importedRigidbody.is_character) && "RigidBody cannot be 2 'isSomething' at the same time");
+                isSomething = isSomething || importedRigidbody.is_character;
                 rbDesc.isCharacter = importedRigidbody.is_character;
+
+                SDL_assert(!(isSomething && importedRigidbody.is_trigger) && "RigidBody cannot be 2 'isSomething' at the same time");
+                isSomething = isSomething || importedRigidbody.is_trigger;
                 rbDesc.isTrigger = importedRigidbody.is_trigger;
 
-                // TEMPORARY
-                if (importedRigidbody.is_static || importedRigidbody.is_trigger)
+                if(!isSomething)
+                    rbDesc.isDynamic = !isSomething; // if we are nothing (from the importedRigidbody) then we are dynamic;
+
+                // TEMPORARY automated body layers if they are not in the script
+                if (importedRigidbody.is_static || importedRigidbody.is_trigger || importedRigidbody.is_kinematic)
                     rbDesc.bodyLayer = (uint8_t) BodyLayer::STATIC;
-                else
+                else if(importedRigidbody.is_character)
+                    rbDesc.bodyLayer = (uint8_t)BodyLayer::CHARACTER;
+                else // only dynamic bodies, kinematic bodies will be treated in the STATIC layer
                     rbDesc.bodyLayer = (uint8_t) BodyLayer::MOVING;
 
                 rbDesc.shape = shapeHandle;
@@ -233,7 +261,17 @@ EntityID Scene::InstantiatePrefab(Asset* prefab, glm::vec3 spawnPosition, glm::q
             if (components.HasMember("PlayerInput"))
             {
                 m_ecs.AddComponent<C_PlayerInput>(eID, {});
-                m_ecs.AddComponent<C_CharacterController>(eID, {});
+                m_ecs.AddComponent<C_PlayerController>(eID, {
+                    /*.move_speed = 0.3f*/
+                });
+            }
+
+            if (components.HasMember("WeaponComponent"))
+            {
+                m_ecs.AddComponent<C_Weapon>(eID, { 
+                    .equipped = true,
+                    .attach_bone_name = "hand" 
+                });
             }
 
             // -- MESH
@@ -258,7 +296,7 @@ EntityID Scene::InstantiatePrefab(Asset* prefab, glm::vec3 spawnPosition, glm::q
 
                     C_AnimatedMesh animMesh{ mesh, prefab };
                     animMesh.joint_count = joint_count;
-                    animMesh.idleAnimationName = "IDLE";
+                    animMesh.idleAnimationName = "idle";
                     animMesh.splitJointName = "SPINE";
                     OnStartAnim(animMesh, animMesh.idleAnimationName); // Start with idle animation by default
                 
@@ -283,6 +321,8 @@ EntityID Scene::InstantiatePrefab(Asset* prefab, glm::vec3 spawnPosition, glm::q
                     C_StaticMesh staticMesh{ &prefab->meshes[node->mesh_index], prefab };
                     m_ecs.AddComponent<C_StaticMesh>(eID, { staticMesh.mesh, staticMesh.parent_asset });
                 }
+
+                
             } // if (node->mesh_index >= 0)
         } // if has ecs_data
     }
@@ -342,7 +382,8 @@ void Scene::Update(float dt)
 {
     //PlayerMovement_Update(&m_ecs, dt);
 
-    UpdatePlayer(dt);
+    PlayerMovementSystem::Update(m_ecs, m_physicsManager, m_currentPlayer, m_movementCameraForward, dt);
+    //UpdatePlayer(dt);
     
     m_physicsManager.update(m_ecs, dt);
 
@@ -368,8 +409,9 @@ void Scene::Render()
     {
         glm::vec3 position = glm::vec3(transform.matrix[3]);
         glm::quat rotation = glm::quat_cast(transform.matrix);
-        glm::vec3 direction = rotation * glm::vec3(0.0f, 0.0f, 1.0f);
-        Renderer_PushLight(light, position, direction);
+        glm::vec3 direction = rotation * glm::vec3(0.0f, 0.0f, -1.0f);
+        b32 is_shadowed = light.type == LIGHT_COMPONENT_SPOTLIGHT;
+        Renderer_PushLight(light, position, direction, is_shadowed);
     });
 
     m_ecs.GetView<C_Transform, C_StaticMesh>().ForEach([&](C_Transform& transform, C_StaticMesh& mesh)
@@ -407,141 +449,34 @@ void Scene::Render()
 void Scene::UpdatePlayer(float dt)
 {
 
-    // BIG IMPORTANT NOTE(jaime):
-    // WE NEED A fookin' class for this. if the player "crouches" we NEED to have a smaller capsule, 
-    // and i would appreciate if we had all IShapes stored in advance instead of creating them on the fly
-    // (PLEASE ALL CHARACTER SHAPES HAVE TO BE capsules please i beg you, otherwise physics die )
-
-    if (m_currentPlayer == NULL_ENTITY) return;
-    if (!m_ecs.Has(m_currentPlayer)) return;
-    PhysicsCharacter* player = m_physicsManager.getCharacter(m_currentPlayer);
-    if (!player) return;
-
-    C_Transform& transform = m_ecs.GetComponent<C_Transform>(m_currentPlayer);
-    C_PlayerInput& input = m_ecs.GetComponent<C_PlayerInput>(m_currentPlayer);
-    C_CharacterController& controller = m_ecs.GetComponent<C_CharacterController>(m_currentPlayer);
-
-    glm::vec3 scale;
-    glm::quat rotation;
-    glm::vec3 translation;
-    glm::vec3 skew;
-    glm::vec4 perspective;
-    glm::decompose(transform.matrix, scale, rotation, translation, skew, perspective);
-
-    // Flatten the camera forward vector so player movement stays horizontal.
-    auto flattenDirection = [](const glm::vec3& direction)
-        {
-            glm::vec3 flattened = glm::vec3(direction.x, 0.0f, direction.z);
-            float len = glm::length(flattened);
-            if (len <= 0.0001f)
-                return glm::vec3(0.0f, 0.0f, -1.0f);
-
-            return flattened / len;
-        };
-
-    // moving forward is now relative to the camera
-    glm::vec3 cameraForward = -flattenDirection(m_movementCameraForward);
-    glm::vec3 cameraRight = glm::normalize(glm::cross(cameraForward, glm::vec3(0.0f, 1.0f, 0.0f)));
-
-    glm::vec3 horizontalMoveDir(0.0f);
-
-    if (input.move_forward)
-        horizontalMoveDir += cameraForward;
-    if (input.move_backward)
-        horizontalMoveDir -= cameraForward;
-    if (input.move_left)
-        horizontalMoveDir -= cameraRight;
-    if (input.move_right)
-        horizontalMoveDir += cameraRight;
-
-    bool isMoving = glm::length(horizontalMoveDir) > 0.0f;
-    if (isMoving)
-    {
-        horizontalMoveDir = glm::normalize(horizontalMoveDir);
-        // update rotation 
-        glm::vec3 facingDir = glm::normalize(glm::vec3(horizontalMoveDir.x, 0.0f, horizontalMoveDir.z));
-        float yawDeg = glm::degrees(atan2f(facingDir.x, facingDir.z));
-        rotation = glm::angleAxis(glm::radians(yawDeg), glm::vec3(0.0f, 1.0f, 0.0f));
-    }
     
-    // If we are jumping, we need to check IF we touch the floor
-    // We take away time from the jumping cooldown using dt to check next step
-    if (controller.jumping)
-    {
-        controller.jumping_cooldown -= dt;
-    }
-        
-
-    // We only need to check if the jumping cooldown is done
-    if (controller.jumping_cooldown < 0.0f)
-    {
-        // Raycast to update if we are jumping
-        // For that, we need the current Character's transform AND shape to find the feet, and then throw a very tiny ray
-        IShape* shape = m_physicsManager.getShape(m_currentPlayer);
-        ShapeType shapeType = shape->getType();
-        if (shapeType != ShapeType::Capsule)
-        {
-            SDL_assert(false && "Character collider (IShape) needs to be of ShapeType::Capsule");
-            return;
-        }
-        CapsuleShape* capsuleShape = static_cast<CapsuleShape*>(shape);
-        
-        Ray feetRay;
-        feetRay.origin = translation; // We will have to add the capsule's halfHeight +(-) radius to get the feet
-        feetRay.direction = glm::vec3(0.0f, -1.0f, 0.0f);
-        feetRay.maxDistance = capsuleShape->halfHeight + capsuleShape->radius + 0.15f; // add a small distance to the halfheight + radius
-
-        QueryFilterExternal filter;
-        filter.bodyToIgnore = m_currentPlayer;
-        filter.hasLayerOfQuery = true;
-        filter.layerOfQuery = (uint8_t)BodyLayer::MOVING;
-
-        std::vector<EntityRaycastHit> hits = m_physicsManager.raycastAll(feetRay, filter);
-
-        if (/*!hits.empty() || */player->groundState == PhysicsCharacter::GroundState::OnGround)
-        {
-            controller.jumping = false;
-            controller.jumping_cooldown = 0.0f;
-        } // If there are hits, we are in the ground
-    } // If the jumping cooldown is done, we need to check if we can jump again
-
-    
-    if (!controller.jumping && player->groundState == PhysicsCharacter::GroundState::OnGround)
-    {
-        controller.velocity = horizontalMoveDir * controller.move_speed;
-
-        // Important to add the velocity to the current one, NOT WITH addVelocity cause it would linearly add to it
-        glm::vec3 currentVelocity = m_physicsManager.getVelocity(m_currentPlayer);
-        controller.velocity.y += currentVelocity.y;
-        m_physicsManager.setVelocity(m_currentPlayer, controller.velocity);
-
-        if (input.jump)
-        {
-            controller.jumping = true;
-            controller.jumping_cooldown = 0.1f; // Adjust to avoid multiple-consecutive-frame / jittery jumping
-
-            glm::vec3 gravity = m_physicsManager.getGravity();
-            m_physicsManager.addVelocity(m_currentPlayer, -(gravity*0.5f)); // Adjust jump strength as you wish
-        }
-    }
-    else
-    {
-        //controller.velocity += horizontalMoveDir * controller.move_speed;
-    }
-
-    transform.matrix = glm::translate(glm::mat4(1.0f), translation) * glm::mat4_cast(rotation) * glm::scale(glm::mat4(1.0f), scale);
-    //C_AnimatedMesh& animatedMesh = m_ecs.GetComponent<C_AnimatedMesh>(m_currentPlayer);
 }
 
 void Scene::SetBodyCollisionLayers()
 {
     m_physicsManager.setNumLayers(NUM_BODY_LAYERS);
     //m_physicsManager.setLayerPair((uint8_t) BodyLayer::STATIC, (uint8_t) BodyLayer::STATIC, false);
+    // BodyLayers
+    // MOVING VS STATIC && MOVING
+    // CHARACTER VS CHARACTER && MOVING && STATIC
     m_physicsManager.disableLayerPair((uint8_t) BodyLayer::STATIC, (uint8_t) BodyLayer::STATIC);
-    // STATIC VS MOVING
-    // MOVING VS MOVING
-    // WEAPON VS MOVING
-    m_physicsManager.enableLayerPair((uint8_t) BodyLayer::STATIC, (uint8_t) BodyLayer::MOVING);
-    m_physicsManager.enableLayerPair((uint8_t) BodyLayer::MOVING, (uint8_t) BodyLayer::MOVING);
-    m_physicsManager.enableLayerPair((uint8_t) BodyLayer::WEAPON, (uint8_t) BodyLayer::MOVING);
+    m_physicsManager.enableLayerPair((uint8_t)BodyLayer::STATIC, (uint8_t)BodyLayer::MOVING);
+    m_physicsManager.enableLayerPair((uint8_t)BodyLayer::MOVING, (uint8_t)BodyLayer::MOVING);
+    m_physicsManager.enableLayerPair((uint8_t)BodyLayer::CHARACTER, (uint8_t)BodyLayer::CHARACTER);
+    m_physicsManager.enableLayerPair((uint8_t)BodyLayer::CHARACTER, (uint8_t)BodyLayer::MOVING);
+    m_physicsManager.enableLayerPair((uint8_t)BodyLayer::CHARACTER, (uint8_t)BodyLayer::STATIC);
+
+    // Query filter Layers
+    // WEAPON VS MOVING && CHARACTER
+    m_physicsManager.enableLayerPair((uint8_t)BodyLayer::WEAPON, (uint8_t)BodyLayer::MOVING);
+    m_physicsManager.enableLayerPair((uint8_t)BodyLayer::WEAPON, (uint8_t)BodyLayer::MOVING);
+    // AFFECT_ONLY_CHARACTER VS CHARACTER (for zombie attacks)?
+    m_physicsManager.enableLayerPair((uint8_t)BodyLayer::AFFECT_ONLY_CHARACTER, (uint8_t)BodyLayer::CHARACTER);
+    // AFFECT_ONLY_STATIC VS STATIC
+    m_physicsManager.enableLayerPair((uint8_t)BodyLayer::AFFECT_ONLY_STATIC, (uint8_t)BodyLayer::STATIC);
+
+    // AFFECT_NOT_CHARACTER VS STATIC VS MOVING (for camera shapecasting
+    m_physicsManager.enableLayerPair((uint8_t)BodyLayer::AFFECT_NOT_CHARACTER, (uint8_t)BodyLayer::STATIC);
+    m_physicsManager.enableLayerPair((uint8_t)BodyLayer::AFFECT_NOT_CHARACTER, (uint8_t)BodyLayer::MOVING);
+
 }

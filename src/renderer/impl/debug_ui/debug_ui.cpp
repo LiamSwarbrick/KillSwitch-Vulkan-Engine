@@ -104,7 +104,7 @@ CameraInfo DebugUI_GetCameraInfo(float dt)
             if (snapshot.valid && snapshot.has_fp_camera)
                 return snapshot.fp_camera;
             return DebugUI::FreeCam_Update(debug_ui_state.free_cam, dt);
-
+        
         case DebugUICameraMode::TPCam:
             if (snapshot.valid && snapshot.has_tp_camera)
                 return snapshot.tp_camera;
