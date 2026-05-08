@@ -224,20 +224,44 @@ void PlayerMovementSystem::Update(ECS& ecs, PhysicsManager& physics, EntityID pl
     // 7) UPDATE ANIMATIONS
 
     C_AnimatedMesh& animatedMesh = ecs.GetComponent<C_AnimatedMesh>(playerID);
-    // Play animations
+
     if (ecs.Has<C_AnimatedMesh>(playerID))
     {
         animatedMesh.playbackSpeed = 1.0f;
+        bool hasWeapon = false;
 
-        //jumping animations
+        ecs.GetView<C_Weapon>().ForEach([&](C_Weapon& weapon) // need to know what type of weapon for different animations
+            {
+                if (weapon.equipped)
+                    hasWeapon = true;
+            });
+
+        bool hasInput =
+            input.move_forward ||
+            input.move_backward ||
+            input.move_left ||
+            input.move_right ||
+            input.jump ||
+            input.run ||
+            input.crouch ||
+            input.aim;
+
+        if (hasInput)
+            controller.idleTimer = 0.0f;
+        else
+            controller.idleTimer += dt;
+
+        const char* prefix = hasWeapon ? "pistol" : "";
+
         if (controller.jumping)
         {
-            int jumpAnimId = GetAnimationIdFromName(animatedMesh, "pistoljump");
+            std::string animName = std::string(prefix) + "jump";
 
-            // start jump once
+            int jumpAnimId = GetAnimationIdFromName(animatedMesh, animName.c_str());
+
             if (animatedMesh.lowerBodyLayer.currentAnimation != jumpAnimId)
             {
-                PlayAnim(animatedMesh, "pistoljump", 0.1f);
+                PlayAnim(animatedMesh, animName.c_str(), 0.10f);
                 SetLooping(animatedMesh, animatedMesh.lowerBodyLayer, false);
             }
 
@@ -251,51 +275,57 @@ void PlayerMovementSystem::Update(ECS& ecs, PhysicsManager& physics, EntityID pl
         }
         else if (isMoving)
         {
-            const char* animStateName = "pistolwalk";
-            if (input.aim)
+            std::string animName;
+
+            if (input.aim && hasWeapon)
             {
                 if (input.move_forward && !input.move_backward)
-                {
-                    animStateName = "pistolwalk";
-                }
+                    animName = "pistolwalk";
                 else if (input.move_backward && !input.move_forward)
-                {
-                    animStateName = "pistolwalkbackwards";
-                }
+                    animName = "pistolwalkbackwards";
                 else if (input.move_left && !input.move_right)
-                {
-                    animStateName = "pistolstrafeleft";
-                }
+                    animName = "pistolstrafeleft";
                 else if (input.move_right && !input.move_left)
-                {
-                    animStateName = "pistolstraferight";
-                }
+                    animName = "pistolstraferight";
                 else
-                {
-                    animStateName = "pistolwalk";
-                }
+                    animName = "pistolwalk";
             }
             else
             {
                 if (controller.state == C_PlayerController::Sprint)
-                    animStateName = "pistolrun";
+                    animName = std::string(prefix) + "run";
                 else
-                    animStateName = "pistolwalk";
+                    animName = std::string(prefix) + "walk";
             }
 
-            int moveAnimId =GetAnimationIdFromName(animatedMesh, animStateName);
-            if (moveAnimId != -1 && animatedMesh.lowerBodyLayer.currentAnimation != moveAnimId)
+            int moveAnimId = GetAnimationIdFromName(animatedMesh, animName.c_str());
+
+            if (moveAnimId != -1 &&
+                animatedMesh.lowerBodyLayer.currentAnimation != moveAnimId)
             {
-                PlayAnim(animatedMesh, animStateName, 0.15f);
+                PlayAnim(animatedMesh, animName.c_str(), 0.15f);
                 animatedMesh.lowerBodyLayer.isCurrentLooping = true;
             }
         }
-        else //idle animations
+        else
         {
-            int idleAnimId = GetAnimationIdFromName(animatedMesh, animatedMesh.idleAnimationName);
+            std::string animName;
+
+            if (controller.idleTimer > 20.0f)
+            {
+                animName = std::string(prefix) + "idleafk";
+            }
+            else
+            {
+                animName = std::string(prefix) + "idle";
+            }
+
+            int idleAnimId =
+                GetAnimationIdFromName(animatedMesh, animName.c_str());
+
             if (animatedMesh.lowerBodyLayer.currentAnimation != idleAnimId)
             {
-                PlayAnim(animatedMesh, animatedMesh.idleAnimationName, 0.25f);
+                PlayAnim(animatedMesh, animName.c_str(), 0.25f);
                 animatedMesh.lowerBodyLayer.isCurrentLooping = true;
             }
         }

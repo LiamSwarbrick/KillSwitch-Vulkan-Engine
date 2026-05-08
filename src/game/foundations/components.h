@@ -48,6 +48,9 @@ struct C_PlayerController
 	float jumpForce = 9.8f / 2.0f; // half earth's gravity
 	bool isGrounded = false;
 
+	float idleTimer = 0.0f; // for animations
+	bool isAfk = false;
+
 	// If we have crouch we might need to store either both heights OR both shape handles (capsules with different height)
 	// We will see how this is tackled, for now i'll just test the movement of walk, sprint and crouch (as well as air- all of the previous)
 	ShapeHandle standingShape;
