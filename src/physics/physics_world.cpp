@@ -113,7 +113,7 @@ uint32_t PhysicsWorld::getForceLayers(RigidBodyHandle r)
 	return b->forceLayers;
 }
 
-IShape* PhysicsWorld::getShape(RigidBodyHandle r)
+Shape* PhysicsWorld::getShape(RigidBodyHandle r)
 {
 	RigidBody* b = getBody(r);
 	return getShape(b->shapeHandle);
@@ -378,7 +378,7 @@ void PhysicsWorld::setBodyShape(RigidBodyHandle bodyHandle, ShapeHandle shapeHan
 	RigidBody* body = bodies.GetPtr(bodyHandle.index);
 	if (shapeHandle == body->shapeHandle || !shapeHandle.isValid()) return;
 
-	IShape* shape = shapes.GetPtr(shapeHandle.index)->shape;
+	Shape* shape = shapes.GetPtr(shapeHandle.index)->shape;
 	if (!body || !shape) return;
 
 	// Doing retain first just in case our newHandle is the oldHandle
@@ -573,14 +573,14 @@ void PhysicsWorld::destroyShape(ShapeHandle handle)
 	freeShapeIndices.push_back(handle.index);
 }
 
-IShape* PhysicsWorld::getShape(ShapeHandle handle)
+Shape* PhysicsWorld::getShape(ShapeHandle handle)
 {
 	if (!handle.isValid()) return nullptr;
 
 	return shapes.GetPtr(handle.index)->shape;
 }
 
-const IShape* PhysicsWorld::getShape(ShapeHandle handle) const
+const Shape* PhysicsWorld::getShape(ShapeHandle handle) const
 {
 	if (!handle.isValid()) return nullptr;
 
@@ -716,7 +716,7 @@ ShapecastHit PhysicsWorld::shapecast(const Ray& ray, ShapeHandle shape, const gl
 	//}
 	//if (!target) return ShapecastHit::none();
 
-	const IShape* queryShape = getShape(shape);
+	const Shape* queryShape = getShape(shape);
 	if (!queryShape) return ShapecastHit::none();
 
 	glm::vec3 shapePosition; glm::quat shapeOrientation;
@@ -739,7 +739,7 @@ ShapecastHit PhysicsWorld::shapecast(const Ray& ray, ShapeHandle shape, const gl
 
 	for (RigidBody* body : candidates)
 	{
-		const IShape* targetShape = getShape(body->shapeHandle);
+		const Shape* targetShape = getShape(body->shapeHandle);
 
 		glm::vec3 targetPosition; glm::quat targetOrientation;
 		narrowPhase.resolveShapeTransform(targetShape, body->position, body->orientation, targetPosition, targetOrientation);
@@ -763,7 +763,7 @@ std::vector<RigidBodyHandle> PhysicsWorld::shapeIntersects(ShapeHandle shapeHand
 	std::vector<RigidBody*> broadHits;
 	std::vector<RigidBodyHandle> hits;
 
-	const IShape* shape = getShape(shapeHandle);
+	const Shape* shape = getShape(shapeHandle);
 	// TODO: keep going
 	// Let's create an AABB out of the shape, check on broadphase and then
 	glm::vec3 shapePosition;
@@ -869,7 +869,7 @@ void PhysicsWorld::updateBroadPhase()
 		if (body.sleeping || body.isStatic || body.isTrigger) continue;
 
 		// Not calling calculateAABB(&body) because we're not fattening the newAABB
-		IShape* shape = getShape(body.shapeHandle);
+		Shape* shape = getShape(body.shapeHandle);
 		if (!shape) continue;
 
 		glm::vec3 shapePosition;
@@ -1040,7 +1040,7 @@ void PhysicsWorld::dispatchEvents()
 
 void PhysicsWorld::calculateAABB(RigidBody* body)
 {
-	IShape* shape = getShape(body->shapeHandle);
+	Shape* shape = getShape(body->shapeHandle);
 	if (shape)
 	{
 		glm::vec3 shapePosition;

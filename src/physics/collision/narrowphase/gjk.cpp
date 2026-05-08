@@ -5,8 +5,8 @@
 
 
 SimplexPoint gjk_worldSupport(
-	const IShape* shapeA, const glm::vec3& posA, const glm::quat& oriA, 
-	const IShape* shapeB, const glm::vec3& posB, const glm::quat& oriB, 
+	const Shape* shapeA, const glm::vec3& posA, const glm::quat& oriA, 
+	const Shape* shapeB, const glm::vec3& posB, const glm::quat& oriB, 
 	glm::vec3 worldDirection)
 {
 	// Transform direction to local space (no scale for now)
@@ -297,14 +297,10 @@ void gjk_fillResultWithClosestPointAndDistance(GJKResult& gjk)
 
 		gjk.distanceDirection = glm::normalize(closestB - closestA);
 	}
-	else
-	{
-		SDL_assert(false && "ok it should not be possible (with the current implementation) to return false and have a tetrahedron");
-	}
 	
 }
 
-GJKResult gjk_runGJK(const IShape* shapeA, const glm::vec3& posA, const glm::quat& oriA, const IShape* shapeB, const glm::vec3& posB, const glm::quat& oriB)
+GJKResult gjk_runGJK(const Shape* shapeA, const glm::vec3& posA, const glm::quat& oriA, const Shape* shapeB, const glm::vec3& posB, const glm::quat& oriB)
 {
 	// GJK algorithm based on Casey Muratori's video (non optimized at the tetrahedron)
 	// Trying to optimize the calculation of the resulting distance based on each state

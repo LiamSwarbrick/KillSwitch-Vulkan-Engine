@@ -236,8 +236,8 @@ int main(int argc, char *argv[])
         Input_Update();
         GameUI_Update();
 
-        // cam toggle logic
-        if (GameUI_GetState() == GameState::Playing && Input_IsActionJustPressed(ACTION_TOGGLE_CAMERA)){InGameCam_ToggleGameplayMode();}
+        // tpcam shoulder toggle
+        if (GameUI_GetState() == GameState::Playing && Input_IsActionJustPressed(ACTION_TOGGLE_CAMERA)){InGameCam_ToggleShoulder();}
         // pass debug ui edits
         DebugUICameraEdits ui_camera_edits = {};
         if (DebugUI_ConsumeCameraEdits(&ui_camera_edits)){InGameCam_ApplyDebugEdits(ui_camera_edits);}

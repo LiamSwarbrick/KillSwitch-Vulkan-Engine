@@ -5,14 +5,14 @@
 
 #include <cmath>
 
-class SphereShape: public IShape
+class SphereShape: public Shape
 {
 public:
 	float radius;
 
 public:
 	explicit SphereShape(float radius)
-		: IShape(ShapeType::Sphere), radius(radius)
+		: Shape(ShapeType::Sphere), radius(radius)
 	{
 	}
 

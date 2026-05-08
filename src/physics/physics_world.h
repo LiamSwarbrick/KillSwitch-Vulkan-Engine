@@ -72,7 +72,7 @@ public:
 	float getGravityScale(RigidBodyHandle r);
 	uint32_t getForceLayers(RigidBodyHandle r);
 	ShapeHandle getShapeHandle(RigidBodyHandle r);
-	IShape* getShape(RigidBodyHandle r); // extra
+	Shape* getShape(RigidBodyHandle r); // extra
 
 	void teleportBody(RigidBodyHandle r, const glm::vec3& worldPosition);
 	void setVelocity(RigidBodyHandle r, const glm::vec3& velocity);
@@ -122,8 +122,8 @@ public:
 	ShapeHandle createShape(const ShapeDesc& desc);
 	// Destroy shape should only be called for shape queries, it is automatically called on body deletion
 	void destroyShape(ShapeHandle handle); 
-	IShape* getShape(ShapeHandle handle);
-	const IShape* getShape(ShapeHandle handle) const;
+	Shape* getShape(ShapeHandle handle);
+	const Shape* getShape(ShapeHandle handle) const;
 
 	// ------------------------------
 	// PLANE MANAGEMENT (because we have a floor. it could be terrain, but would change things)
@@ -245,7 +245,7 @@ private:
 	// we're not going to iterate over shapes, they are going to be accesed from rigidbodies
 	struct ShapeRef
 	{
-		IShape* shape = nullptr;
+		Shape* shape = nullptr;
 		uint32_t refCount = 0;
 	};
 

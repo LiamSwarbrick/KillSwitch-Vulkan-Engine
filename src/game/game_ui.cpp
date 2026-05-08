@@ -136,7 +136,7 @@ static void DrawMainMenu()
     else
     {
         ImGui::SetWindowFontScale(2.5f);
-        ImGui::TextUnformatted("ADVENTURE ENGINE");
+        ImGui::TextUnformatted("HELL MIST");
         ImGui::SetWindowFontScale(1.0f);
     }
 

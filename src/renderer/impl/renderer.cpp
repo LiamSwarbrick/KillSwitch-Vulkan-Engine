@@ -2,6 +2,7 @@
 #include "internal_state.h"
 #include "renderpasses/metadata.h"
 
+#include <float.h>
 #include "SDL3/SDL_vulkan.h"
 #include "imgui.h"
 #include "imgui_impl_sdl3.h"
@@ -904,6 +905,11 @@ void Renderer_PushLight(C_Light light, glm::vec3 position, glm::vec3 direction, 
         default: SDL_assert(0 && "Invalid light type"); abort();
     }
 }
+
+// NOTE(Liam): NANSONG'S UI CODE (won't be relevant once the renderer has it's own 2D pass, or after I move the renderer into it's own project)
+// START
+//
+
 // Loads a image and creates a GPU resource
 bool Renderer_LoadUITexture(const char* filepath, bool nearest_sampling, Renderer_UITexture* out_texture)
 {
@@ -942,7 +948,7 @@ bool Renderer_LoadUITexture(const char* filepath, bool nearest_sampling, Rendere
     FG_Resource* tex_res = &renderstate.registry.resources[rid];
     VkSampler sampler = renderstate.heap.samplers[
         nearest_sampling ? FG_SAMPLER_NEAREST_REPEAT : FG_SAMPLER_LINEAR_REPEAT
-    ]; // claude did this choosing between them
+    ];
 
     ImTextureID imgui_tex = (ImTextureID)ImGui_ImplVulkan_AddTexture(
         sampler,
@@ -956,6 +962,10 @@ bool Renderer_LoadUITexture(const char* filepath, bool nearest_sampling, Rendere
 
     return true;
 }
+
+//
+// END
+// //////
 
 void Renderer_DrawFrame(CameraInfo main_camera)
 {
@@ -1044,22 +1054,68 @@ void Renderer_DrawFrame(CameraInfo main_camera)
     {
         AddDrawCall(&renderstate.renderables_arena.items[i]);
     }
-    
-    // Saturate shadow maps with spotlights
-    // TODO: Use nearest lights or some shit instead of just the first shadowed spotlights we come across
-    renderstate.num_shadowed_spotlights = 0;
-    memset(renderstate.shadowed_spotlight_indices, 0, sizeof(renderstate.shadowed_spotlight_indices));
+
+
+    // Get N closest spotlights (where N is MAX_SHADOWMAPS)
+    // Comparing based on squared distance to main camera
+    // Then we only shadow the nearest spotlights
+    uint32_t num_closest_spotlights = 0;
+    uint32_t closest_spotlight_indices[MAX_SHADOWMAPS];
+    float closest_spotlight_dist2s[MAX_SHADOWMAPS];
+    for (uint32_t i = 0; i < MAX_SHADOWMAPS; ++i) closest_spotlight_dist2s[i] = 1e20f;
+
     for (uint32_t i = 0; i < renderstate.renderables_arena.num_spot_lights; ++i)
     {
         if (renderstate.renderables_arena.is_spotlight_shadowed[i])
         {
-            renderstate.shadowed_spotlight_indices[renderstate.num_shadowed_spotlights++] = i;
-        }
+            glm::vec3 v = glm::vec3(
+                renderstate.renderables_arena.spot_lights[i].pos_and_radius[0],
+                renderstate.renderables_arena.spot_lights[i].pos_and_radius[1],
+                renderstate.renderables_arena.spot_lights[i].pos_and_radius[2]
+            ) - renderstate.main_camera.position;
 
-        if (renderstate.num_shadowed_spotlights == MAX_SHADOWMAPS)
-        {
-            break;
+            float dist2 = v.x*v.x + v.y*v.y + v.z*v.z;
+
+            // Buffer not full yet: append directly
+            if (num_closest_spotlights < MAX_SHADOWMAPS)
+            {
+                closest_spotlight_indices[num_closest_spotlights] = i;
+                closest_spotlight_dist2s[num_closest_spotlights] = dist2;
+                num_closest_spotlights++;
+                continue;
+            }
+
+            // Get index in closest indices of the largest value in that array
+            uint32_t largest_current_idx = 0;
+
+            for (uint32_t j = 1; j < MAX_SHADOWMAPS; ++j)
+            {
+                if (closest_spotlight_dist2s[j] >
+                    closest_spotlight_dist2s[largest_current_idx])
+                {
+                    largest_current_idx = j;
+                }
+            }
+
+            // Now we can replace that largest value if the dist for spotlight i is smaller
+            if (dist2 > closest_spotlight_dist2s[largest_current_idx])
+            {
+                continue;
+            }
+
+            // Replace the current largest closest spotlight found with the new even closer one
+            closest_spotlight_indices[largest_current_idx] = i;
+            closest_spotlight_dist2s[largest_current_idx] = dist2;
         }
+    }
+
+    
+    // Saturate shadow maps with spotlights
+    renderstate.num_shadowed_spotlights = num_closest_spotlights;
+    memset(renderstate.shadowed_spotlight_indices, 0, sizeof(renderstate.shadowed_spotlight_indices));
+    for (uint32_t i = 0; i < num_closest_spotlights; ++i)
+    {
+        renderstate.shadowed_spotlight_indices[i] = closest_spotlight_indices[i];
     }
 
     EndDrawCalls();

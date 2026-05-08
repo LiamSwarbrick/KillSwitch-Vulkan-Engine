@@ -285,7 +285,7 @@ ShapeHandle PhysicsManager::getShapeHandle(EntityID e)
 	return world.getShapeHandle(handle);
 }
 
-IShape* PhysicsManager::getShape(EntityID e)
+Shape* PhysicsManager::getShape(EntityID e)
 {
 	RigidBodyHandle handle = getHandle(e);
 	if (!handle.isValid()) return nullptr;

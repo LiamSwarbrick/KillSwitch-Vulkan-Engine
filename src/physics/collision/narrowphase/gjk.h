@@ -107,14 +107,14 @@ struct GJKResult
 // 1) Transform direction to each shape's local space, use shape.support(localDir)
 // 2) Transform the result back to world space
 SimplexPoint gjk_worldSupport(
-	const IShape* shapeA, const glm::vec3& posA, const glm::quat& oriA,
-	const IShape* shapeB, const glm::vec3& posB, const glm::quat& oriB,
+	const Shape* shapeA, const glm::vec3& posA, const glm::quat& oriA,
+	const Shape* shapeB, const glm::vec3& posB, const glm::quat& oriB,
 	glm::vec3 worldDirection
 );
 
 GJKResult gjk_runGJK(
-	const IShape* shapeA, const glm::vec3& posA, const glm::quat& oriA,
-	const IShape* shapeB, const glm::vec3& posB, const glm::quat& oriB
+	const Shape* shapeA, const glm::vec3& posA, const glm::quat& oriA,
+	const Shape* shapeB, const glm::vec3& posB, const glm::quat& oriB
 );
 
 

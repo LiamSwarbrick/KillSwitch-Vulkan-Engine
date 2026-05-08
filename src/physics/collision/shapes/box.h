@@ -6,14 +6,14 @@
 
 #include "glm/glm.hpp"
 
-class BoxShape : public IShape
+class BoxShape : public Shape
 {
 public:
 	glm::vec3 halfWidths;
 
 public:
 	explicit BoxShape(glm::vec3 halfWidths)
-		: IShape(ShapeType::Box), halfWidths(halfWidths)
+		: Shape(ShapeType::Box), halfWidths(halfWidths)
 	{
 	}
 

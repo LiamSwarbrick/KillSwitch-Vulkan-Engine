@@ -7,7 +7,7 @@
 #include "glm/glm.hpp"
 #include "SDL3/SDL.h"
 
-class PlaneShape : public IShape
+class PlaneShape : public Shape
 {
 public:
 	glm::vec3 normal;
@@ -15,14 +15,14 @@ public:
 
 public:
 	explicit PlaneShape(glm::vec3 normal, float distance)
-		: IShape(ShapeType::Plane), normal(normal), distance(distance)
+		: Shape(ShapeType::Plane), normal(normal), distance(distance)
 	{
 	}
 
 	glm::vec3 support(glm::vec3 direction) const override
 	{
 		// GJK should NOT be used for planes. we should use analytic tests.
-		// only implemented so we complete the IShape interface
+		// only implemented so we complete the Shape interface
 		return normal * distance + glm::normalize(direction) * std::numeric_limits<float>::max();
 	}
 
