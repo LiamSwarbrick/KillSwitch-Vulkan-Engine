@@ -376,6 +376,8 @@ const RigidBody* PhysicsWorld::getBody(RigidBodyHandle handle) const
 void PhysicsWorld::setBodyShape(RigidBodyHandle bodyHandle, ShapeHandle shapeHandle)
 {
 	RigidBody* body = bodies.GetPtr(bodyHandle.index);
+	if (shapeHandle == body->shapeHandle || !shapeHandle.isValid()) return;
+
 	IShape* shape = shapes.GetPtr(shapeHandle.index)->shape;
 	if (!body || !shape) return;
 
@@ -785,6 +787,10 @@ std::vector<RigidBodyHandle> PhysicsWorld::shapeIntersects(ShapeHandle shapeHand
 	return hits;
 }
 
+glm::vec3 PhysicsWorld::getWorldUp()
+{
+	return worldUp;
+}
 
 void PhysicsWorld::setGravity(glm::vec3 g)
 {

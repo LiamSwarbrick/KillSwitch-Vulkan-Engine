@@ -125,6 +125,8 @@ public:
 	// ------------------------------
 	// GETTERS & SETTERS
 	// ------------------------------
+	glm::vec3 getWorldUp();
+
 	glm::vec3 getVelocity(EntityID e);
 	float getGravityScale(EntityID e);
 	uint32_t getForceLayers(EntityID e);

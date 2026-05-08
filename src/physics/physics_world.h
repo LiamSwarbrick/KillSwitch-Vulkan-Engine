@@ -181,6 +181,8 @@ public:
 	// ------------------------------
 	// SETTERS & GETTERS
 	// ------------------------------
+	glm::vec3 getWorldUp();
+
 	void setGravity(glm::vec3 gravity);
 	glm::vec3 getGravity() const;
 
@@ -272,7 +274,7 @@ private:
 	float stepAccumulator = 0.0f;
 	int maxSteps = g_PhysicsSettings.maxIterationSteps;
 
-	glm::vec3 UP_VECTOR = glm::vec3(0.0f, 1.0f, 0.0f);
+	glm::vec3 worldUp = glm::vec3(0.0f, 1.0f, 0.0f);
 };
 
 #endif // !PHYSICS_PHYSICS_WORLD_H

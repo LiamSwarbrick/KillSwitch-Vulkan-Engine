@@ -248,6 +248,11 @@ void PhysicsManager::update(ECS& ecs, float dt)
 	}
 }
 
+glm::vec3 PhysicsManager::getWorldUp()
+{
+	return world.getWorldUp();
+}
+
 glm::vec3 PhysicsManager::getVelocity(EntityID e)
 {
 	RigidBodyHandle handle = getHandle(e);

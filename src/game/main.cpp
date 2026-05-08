@@ -67,16 +67,16 @@ int main(int argc, char *argv[])
         "All_Sounds_MP3_UNMASTERED2/Bad_Signs.mp3"    
     );
     // Set up spatial audio for player start position
-    if (startup_music != 0)
-        {
-            AudioSystem_SetClipMinMaxDistance(&audio_system, startup_music, 1.0f, 40.0f);
-            AudioSystem_PlaySpatialLoop(
-                &audio_system,
-                startup_music,
-                1.0f,
-                2.0f, 1.0f, 0.0f
-            );
-        }
+    // if (startup_music != 0)
+    //     {
+    //         AudioSystem_SetClipMinMaxDistance(&audio_system, startup_music, 1.0f, 40.0f);
+    //         AudioSystem_PlaySpatialLoop(
+    //             &audio_system,
+    //             startup_music,
+    //             1.0f,
+    //             2.0f, 1.0f, 0.0f
+    //         );
+    //     }
 
     // AudioClipHandle startup_test_sfx = AudioSystem_LoadClipEx(
     //     &audio_system,
@@ -272,11 +272,21 @@ int main(int argc, char *argv[])
 
         // controller test
         scene.GetECS().GetView<C_PlayerInput>().ForEach([&](C_PlayerInput& input) {
+
             input.move_forward = Input_IsActionPressed(ACTION_MOVE_FORWARD);
+            input.forward = Input_GetActionValue(ACTION_MOVE_FORWARD);
+
             input.move_backward = Input_IsActionPressed(ACTION_MOVE_BACKWARD);
+            input.backward = Input_GetActionValue(ACTION_MOVE_BACKWARD);
+
             input.move_left = Input_IsActionPressed(ACTION_MOVE_LEFT);
+            input.left = Input_GetActionValue(ACTION_MOVE_LEFT);
+
             input.move_right = Input_IsActionPressed(ACTION_MOVE_RIGHT);
-            input.jump = Input_IsActionPressed(ACTION_JUMP);
+            input.right = Input_GetActionValue(ACTION_MOVE_RIGHT);
+
+            input.jump = Input_IsActionJustPressed(ACTION_JUMP);
+            input.crouch = Input_IsActionPressed(ACTION_CROUCH);
             input.run = Input_IsActionPressed(ACTION_SPRINT);
             input.aim = Input_IsActionPressed(ACTION_AIM);
             }
