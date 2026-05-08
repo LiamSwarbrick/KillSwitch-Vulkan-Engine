@@ -73,9 +73,9 @@ struct C_PlayerController
 
 	MovementProfile airProfiles[4] = {
 		//maxSpeed  accel	friction
-		{	3.0f,	 1.0f,	  1.5f }, // Air-Walk
-		{   5.0f,	 1.5f,	  1.0f }, // Air-Sprint
-		{   1.5f,	 0.5f,	  2.0f }, // Air-Crouch 
+		{	3.0f,	 5.0f,	  1.5f }, // Air-Walk
+		{   5.0f,	 6.5f,	  1.0f }, // Air-Sprint
+		{   1.5f,	 1.5f,	  2.0f }, // Air-Crouch 
 		{   8.0f,	 0.0f,	  0.5f }, // Air-Slide (what the helly) -> switch to air-walk/sprint/crouch
 	};
 

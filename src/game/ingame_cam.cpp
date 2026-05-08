@@ -57,7 +57,8 @@ namespace
     constexpr float OCCLUSION_HIT_PADDING = 0.12f;
     constexpr float CAM_PULLING_SPEED = 35.0f;
     constexpr float CAM_PUSHING_SPEED = 12.0f;
-    constexpr float TP_SHOULDER_OFFSET = 0.4f;
+    constexpr float TP_SHOULDER_OFFSET = 0.5f;// 0.4f;
+    constexpr float TP_SHOULDER_OFFSET_AIMING = 0.48f;
     constexpr float TP_FOLLOW_SNAP_DISTANCE = 4.0f;
     constexpr float TP_SHOULDER_BLEND_SPEED = 12.0f;
     constexpr float AIM_FOV_OFFSET = 700.0f;
@@ -416,7 +417,7 @@ namespace
         cam.pos = cam.target - cam.forward * s_occlusion_distance + right * shoulder_offset;
 
         // Aiming offset and FOV change
-        const float target_aim_offset = is_aiming ? (TP_SHOULDER_OFFSET + 0.08f) : TP_SHOULDER_OFFSET;
+        const float target_aim_offset = is_aiming ? TP_SHOULDER_OFFSET_AIMING : TP_SHOULDER_OFFSET;
         const float aimed_fov = glm::max(40.0f, s_base_fov - AIM_FOV_OFFSET);
         const float target_fov = is_aiming ? aimed_fov : s_base_fov;
 

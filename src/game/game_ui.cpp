@@ -47,9 +47,11 @@ struct SkillChoiceState
 static SkillChoiceState s_skill_choice = {};
 
 static const LevelStartSkillOption s_default_skill_options[LEVEL_START_SKILL_OPTION_COUNT] = {
-    { "skill_placeholder_alpha", "Placeholder Skill A", "skill description A." },
-    { "skill_placeholder_beta",  "Placeholder Skill B", "skill description B." },
-    { "skill_placeholder_gamma", "Placeholder Skill C", "skill description C." },
+    // NOTE(Liam): Deciding to remove the hints about how to use the upgrades so they discover it themselves
+    //             We can decide whether to add it back maybe.
+    { "skill_placeholder_alpha", "Quick Draw", "Reload barrel 1.25x faster!" },
+    { "skill_placeholder_beta",  "Big Fat Gun", "+1 Piering but higher recoil.\nPierce through 1 more zombie with a single bullet." },// Line 'em up in hoards to use ammo wisely!" },
+    { "skill_placeholder_gamma", "Juggernaut", "Tank another chomp to the face!\n+1 Health." }// If you run out of bullets you can tank some zombo damage on your way to an ammo box!" },
 };
 
 static constexpr float MAIN_MENU_TITLE_REVEAL_SEC = 1.45f;
@@ -257,13 +259,15 @@ static bool DrawSkillChoiceCard(int index, const LevelStartSkillOption& option, 
 
     if (ImGui::BeginChild("##skill_card", ImVec2(card_width, card_height), ImGuiChildFlags_Borders, ImGuiWindowFlags_NoScrollbar))
     {
-        ImGui::PushFont(GameUI_GetFont(GameFont::Body), 24.0f);
+        ImGui::PushFont(GameUI_GetFont(GameFont::Body), 32.0f);
         ImGui::TextWrapped("%s", option.display_name ? option.display_name : "Placeholder Skill");
         ImGui::PopFont();
 
         ImGui::Spacing();
         ImGui::Separator();
         ImGui::Spacing();
+        ImGui::PopFont();
+        ImGui::PushFont(GameUI_GetFont(GameFont::Body), 16.0f);
         ImGui::TextWrapped("%s", option.description ? option.description : "Skill description");
 
         float button_y = card_height - 54.0f;
@@ -288,7 +292,7 @@ static void DrawSkillChoiceModal()
         return;
 
     ImGuiIO& io = ImGui::GetIO();
-    ImDrawList* dl = ImGui::GetForegroundDrawList();
+    ImDrawList* dl = ImGui::GetBackgroundDrawList();
     dl->AddRectFilled(ImVec2(0, 0), io.DisplaySize, IM_COL32(0, 0, 0, 190));
 
     const float panel_w = (io.DisplaySize.x > 1120.0f) ? 1020.0f : io.DisplaySize.x - 80.0f;
