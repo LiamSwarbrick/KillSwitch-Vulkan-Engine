@@ -984,60 +984,6 @@ void Renderer_DrawFrame(CameraInfo main_camera)
     renderstate.frame_in_flight = renderstate.frame_number % NUM_FRAMES_IN_FLIGHT;
     
 
-    // Wait for rendering to be complete for this frame in flight.
-    // NOTE: We don't reset the fence until after we know the swapchain does not need recreating.
-    u64 sync_timeout_nanoseconds;
-#ifdef NDEBUG
-    sync_timeout_nanoseconds = UINT64_MAX;  // Wait forever in release mode
-#else
-    // sync_timeout_nanoseconds = 1000000000UL;  // Only wait one second in debug mdoe to detect deadlocks/hangs
-    sync_timeout_nanoseconds = 1000000000ULL * 120ULL;  // <- 2 mins in case some pipelines take rediculous amounts of time to build
-#endif
-    VK_CHECK(vkWaitForFences(renderstate.device, 1, &renderstate.frames[renderstate.frame_in_flight].rendering_complete_fence, VK_TRUE, sync_timeout_nanoseconds));
-
-    // Get next swapchain image
-    // NOTE: If another frame isn't finished with the swapchain image, the GPU must't execute commands on the next swapchain image.
-    //       so it must have attained the image_aquired semaphore first.
-    retry_with_resized_window:
-    uint32_t swapchain_image_index;
-    VkResult acquire_result = vkAcquireNextImageKHR(
-        renderstate.device,
-        renderstate.swapchain,
-        sync_timeout_nanoseconds,
-        renderstate.frames[renderstate.frame_in_flight].swapchain_image_acquired_semaphore,
-        VK_NULL_HANDLE,
-        &swapchain_image_index
-    );
-    if (acquire_result == VK_ERROR_OUT_OF_DATE_KHR || acquire_result == VK_SUBOPTIMAL_KHR)
-    {
-        // NOTE: This handles resizes explicitly for drivers that don't explicitly trigger
-        // VK_ERROR_OUT_OF_DATE_KHR automatically on window resize (hence not triggering the SDL callback)
-        // Haven't personally encountered this issue on my laptop but it seems like it may be needed for some machines.
-        
-        // Window to be resized.
-        _Renderer_OnWindowResize();
-        
-        // Swapchain was out of date, so try again.
-        goto retry_with_resized_window;
-    }
-#ifdef NDEBUG
-    else if (acquire_result == VK_TIMEOUT)
-    {
-        printf("Timeout occurred. Only waiting %d seconds in debug mode to detect deadlocks/hangs.\n(If you're screen turned off and that caused this crash, don't worry, that won't happen in release mode!\n)", (uint64_t)((double)sync_timeout_nanoseconds)/1000000000.0);
-    }
-#endif
-    VK_CHECK(acquire_result);
-
-    // Now we can safely reset the rendering complete fence.
-    // NOTE: The fence is in place to make sure this frame in flight's graphics commands have finished executing on the GPU.
-    VK_CHECK(vkResetFences(renderstate.device, 1, &renderstate.frames[renderstate.frame_in_flight].rendering_complete_fence));
-    
-    // Reset command buffers by resetting the entire pool
-    vkResetCommandPool(renderstate.device, renderstate.frames[renderstate.frame_in_flight].graphics_command_pool, 0);
-
-
-
-
     // Set main camera
     renderstate.main_camera = main_camera;
 
@@ -1139,6 +1085,59 @@ void Renderer_DrawFrame(CameraInfo main_camera)
 
 
 
+
+
+
+    // Wait for rendering to be complete for this frame in flight.
+    // NOTE: We don't reset the fence until after we know the swapchain does not need recreating.
+    u64 sync_timeout_nanoseconds;
+#ifdef NDEBUG
+    sync_timeout_nanoseconds = UINT64_MAX;  // Wait forever in release mode
+#else
+    // sync_timeout_nanoseconds = 1000000000UL;  // Only wait one second in debug mdoe to detect deadlocks/hangs
+    sync_timeout_nanoseconds = 1000000000ULL * 120ULL;  // <- 2 mins in case some pipelines take rediculous amounts of time to build
+#endif
+    VK_CHECK(vkWaitForFences(renderstate.device, 1, &renderstate.frames[renderstate.frame_in_flight].rendering_complete_fence, VK_TRUE, sync_timeout_nanoseconds));
+
+    // Get next swapchain image
+    // NOTE: If another frame isn't finished with the swapchain image, the GPU must't execute commands on the next swapchain image.
+    //       so it must have attained the image_aquired semaphore first.
+    retry_with_resized_window:
+    uint32_t swapchain_image_index;
+    VkResult acquire_result = vkAcquireNextImageKHR(
+        renderstate.device,
+        renderstate.swapchain,
+        sync_timeout_nanoseconds,
+        renderstate.frames[renderstate.frame_in_flight].swapchain_image_acquired_semaphore,
+        VK_NULL_HANDLE,
+        &swapchain_image_index
+    );
+    if (acquire_result == VK_ERROR_OUT_OF_DATE_KHR || acquire_result == VK_SUBOPTIMAL_KHR)
+    {
+        // NOTE: This handles resizes explicitly for drivers that don't explicitly trigger
+        // VK_ERROR_OUT_OF_DATE_KHR automatically on window resize (hence not triggering the SDL callback)
+        // Haven't personally encountered this issue on my laptop but it seems like it may be needed for some machines.
+        
+        // Window to be resized.
+        _Renderer_OnWindowResize();
+        
+        // Swapchain was out of date, so try again.
+        goto retry_with_resized_window;
+    }
+#ifdef NDEBUG
+    else if (acquire_result == VK_TIMEOUT)
+    {
+        printf("Timeout occurred. Only waiting %d seconds in debug mode to detect deadlocks/hangs.\n(If you're screen turned off and that caused this crash, don't worry, that won't happen in release mode!\n)", (uint64_t)((double)sync_timeout_nanoseconds)/1000000000.0);
+    }
+#endif
+    VK_CHECK(acquire_result);
+
+    // Now we can safely reset the rendering complete fence.
+    // NOTE: The fence is in place to make sure this frame in flight's graphics commands have finished executing on the GPU.
+    VK_CHECK(vkResetFences(renderstate.device, 1, &renderstate.frames[renderstate.frame_in_flight].rendering_complete_fence));
+    
+    // Reset command buffers by resetting the entire pool
+    vkResetCommandPool(renderstate.device, renderstate.frames[renderstate.frame_in_flight].graphics_command_pool, 0);
 
 
 

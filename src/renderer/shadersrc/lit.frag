@@ -131,8 +131,8 @@ vec3 apply_dithered_fog(
     float dither
 )
 {
-    const float fog_start = 5.0;
-    const float fog_length = 40.0;
+    const float fog_start = 3.0;
+    const float fog_length = 20.0;
     
     float fog = clamp((z_linear - fog_start) / fog_length, 0.0, 1.0);
     float fog_step = fog > dither ? 1.0 : 0.0;
@@ -347,7 +347,7 @@ void main()
     // Fog
     lit_rgb = apply_dithered_fog(
         lit_rgb,
-        -view_pos.z,
+        depth,
         dith_threshold
     );
 

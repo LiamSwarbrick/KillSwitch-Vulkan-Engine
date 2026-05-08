@@ -139,12 +139,12 @@ void ClusteredShading_CPULightAssignmentToMappedBuffer()
     float near   = renderstate.main_camera.near_plane;
     float far    = renderstate.main_camera.far_plane;
     glm::mat4 cam_proj = renderstate.main_camera_fullscreen_proj;
-    printf("cam_proj:\n%f %f %f %f\n%f %f %f %f\n%f %f %f %f\n%f %f %f %f\n",
-        cam_proj[0][0], cam_proj[1][0], cam_proj[2][0], cam_proj[3][0],
-        cam_proj[0][1], cam_proj[1][1], cam_proj[2][1], cam_proj[3][1],
-        cam_proj[0][2], cam_proj[1][2], cam_proj[2][2], cam_proj[3][2],
-        cam_proj[0][3], cam_proj[1][3], cam_proj[2][3], cam_proj[3][3]
-    );
+    // printf("cam_proj:\n%f %f %f %f\n%f %f %f %f\n%f %f %f %f\n%f %f %f %f\n",
+    //     cam_proj[0][0], cam_proj[1][0], cam_proj[2][0], cam_proj[3][0],
+    //     cam_proj[0][1], cam_proj[1][1], cam_proj[2][1], cam_proj[3][1],
+    //     cam_proj[0][2], cam_proj[1][2], cam_proj[2][2], cam_proj[3][2],
+    //     cam_proj[0][3], cam_proj[1][3], cam_proj[2][3], cam_proj[3][3]
+    // );
     float inv_log_far_over_near = 1.0f / logf(far / near);
 
     for (uint32_t i = 0; i < renderstate.renderables_arena.num_point_lights; ++i)
