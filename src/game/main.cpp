@@ -14,6 +14,25 @@
 #include "SDL3/SDL.h"
 #include "SDL3/SDL_main.h"
 
+static void ApplyPlaceholderLevelStartSkill(Scene& scene, const LevelStartSkillSelection& selection)
+{
+    ECS& ecs = scene.GetECS();
+    (void)ecs;
+
+    SDL_Log(
+        "GameUI: selected level-start skill [level=%d, slot=%d, id=%s, name=%s]",
+        selection.level_index,
+        selection.selected_index,
+        selection.selected_option.skill_id ? selection.selected_option.skill_id : "<null>",
+        selection.selected_option.display_name ? selection.selected_option.display_name : "<null>");
+
+    // TODO: Apply real gameplay modifications here.
+    // Suggested future integrations:
+    // - mutate gameplay components through scene.GetECS()
+    // - drive presentation through PlayAnim / PlayUpperBodyAnim on animated entities
+    // - store persistent run modifiers in scene-owned gameplay state
+}
+
 int main(int argc, char *argv[])
 {
     (void)argc;
@@ -186,6 +205,7 @@ int main(int argc, char *argv[])
 
     scene.SetPlayer(playerID);
     scene.BuildRendererScene();
+    GameUI_SetLevelStartSkillApplyCallback(&scene, ApplyPlaceholderLevelStartSkill);
 
     // TODO: Debug UI is built around the idea of 1 asset at the moment.
     //       This must change with the new scene system that can load many asset prefabs.
@@ -197,6 +217,8 @@ int main(int argc, char *argv[])
 
     // Set up the time tracker
     uint64_t last_time = SDL_GetTicksNS();
+    GameState last_ui_state = GameUI_GetState();
+    int placeholder_level_index = 0;
 
     while (running)
     {
@@ -236,13 +258,23 @@ int main(int argc, char *argv[])
         Input_Update();
         GameUI_Update();
 
+        GameState current_ui_state = GameUI_GetState();
+        if (last_ui_state == GameState::MainMenu && current_ui_state == GameState::Playing)
+        {
+            placeholder_level_index = 1;
+            GameUI_OpenLevelStartSkillSelection(placeholder_level_index);
+        }
+        last_ui_state = current_ui_state;
+
+        const bool gameplay_input_enabled = (current_ui_state == GameState::Playing && !GameUI_IsLevelStartSkillSelectionOpen());
+
         // tpcam shoulder toggle
-        if (GameUI_GetState() == GameState::Playing && Input_IsActionJustPressed(ACTION_TOGGLE_CAMERA)){InGameCam_ToggleShoulder();}
+        if (gameplay_input_enabled && Input_IsActionJustPressed(ACTION_TOGGLE_CAMERA)){InGameCam_ToggleShoulder();}
         // pass debug ui edits
         DebugUICameraEdits ui_camera_edits = {};
         if (DebugUI_ConsumeCameraEdits(&ui_camera_edits)){InGameCam_ApplyDebugEdits(ui_camera_edits);}
         // raycast attack at center of screen
-        if (GameUI_GetState() == GameState::Playing &&
+        if (gameplay_input_enabled &&
             Input_IsActionJustPressed(ACTION_ATTACK) && Input_IsActionPressed(ACTION_AIM))
         {
             const CameraInfo& cam = InGameCam_GetGameplayCamera();
@@ -270,27 +302,27 @@ int main(int argc, char *argv[])
         }
         // Only capture mouse while playing (release it on pause), keep relative mouse when debug UI toggled.
         const bool right_mouse_down = (SDL_GetMouseState(nullptr, nullptr) & SDL_BUTTON_MASK(SDL_BUTTON_RIGHT)) != 0;
-        SDL_SetWindowRelativeMouseMode(window, (GameUI_GetState() == GameState::Playing && !DebugUI_IsOpen()) || (DebugUI_IsOpen() && right_mouse_down));
+        SDL_SetWindowRelativeMouseMode(window, (gameplay_input_enabled && !DebugUI_IsOpen()) || (DebugUI_IsOpen() && right_mouse_down));
 
         // controller test
         scene.GetECS().GetView<C_PlayerInput>().ForEach([&](C_PlayerInput& input) {
 
-            input.move_forward = Input_IsActionPressed(ACTION_MOVE_FORWARD);
-            input.forward = Input_GetActionValue(ACTION_MOVE_FORWARD);
+            input.move_forward = gameplay_input_enabled && Input_IsActionPressed(ACTION_MOVE_FORWARD);
+            input.forward = gameplay_input_enabled ? Input_GetActionValue(ACTION_MOVE_FORWARD) : 0.0f;
 
-            input.move_backward = Input_IsActionPressed(ACTION_MOVE_BACKWARD);
-            input.backward = Input_GetActionValue(ACTION_MOVE_BACKWARD);
+            input.move_backward = gameplay_input_enabled && Input_IsActionPressed(ACTION_MOVE_BACKWARD);
+            input.backward = gameplay_input_enabled ? Input_GetActionValue(ACTION_MOVE_BACKWARD) : 0.0f;
 
-            input.move_left = Input_IsActionPressed(ACTION_MOVE_LEFT);
-            input.left = Input_GetActionValue(ACTION_MOVE_LEFT);
+            input.move_left = gameplay_input_enabled && Input_IsActionPressed(ACTION_MOVE_LEFT);
+            input.left = gameplay_input_enabled ? Input_GetActionValue(ACTION_MOVE_LEFT) : 0.0f;
 
-            input.move_right = Input_IsActionPressed(ACTION_MOVE_RIGHT);
-            input.right = Input_GetActionValue(ACTION_MOVE_RIGHT);
+            input.move_right = gameplay_input_enabled && Input_IsActionPressed(ACTION_MOVE_RIGHT);
+            input.right = gameplay_input_enabled ? Input_GetActionValue(ACTION_MOVE_RIGHT) : 0.0f;
 
-            input.jump = Input_IsActionJustPressed(ACTION_JUMP);
-            input.crouch = Input_IsActionPressed(ACTION_CROUCH);
-            input.run = Input_IsActionPressed(ACTION_SPRINT);
-            input.aim = Input_IsActionPressed(ACTION_AIM);
+            input.jump = gameplay_input_enabled && Input_IsActionJustPressed(ACTION_JUMP);
+            input.crouch = gameplay_input_enabled && Input_IsActionPressed(ACTION_CROUCH);
+            input.run = gameplay_input_enabled && Input_IsActionPressed(ACTION_SPRINT);
+            input.aim = gameplay_input_enabled && Input_IsActionPressed(ACTION_AIM);
             }
         );
         // Movement always follows camera forward.
@@ -300,7 +332,7 @@ int main(int argc, char *argv[])
         scene.Update(dt);
 
         // Update in-game camera
-        InGameCam_Update(dt, GameUI_GetState() == GameState::Playing, DebugUI_IsOpen(), right_mouse_down, DebugUI_GetCameraMode());
+    InGameCam_Update(dt, gameplay_input_enabled, DebugUI_IsOpen(), right_mouse_down, DebugUI_GetCameraMode());
         // pass camera snapshot to debug UI
         const InGameCamSnapshot ingame_cam_snapshot = InGameCam_GetSnapshot();
         DebugUI_SetInGameCameraSnapshot(&ingame_cam_snapshot);

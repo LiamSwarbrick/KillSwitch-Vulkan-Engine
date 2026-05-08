@@ -5,6 +5,7 @@
 #include "imgui.h"
 
 #include <cmath>
+#include <cstdio>
 #include <cstring>
 
 // ============================================================
@@ -33,6 +34,23 @@ struct MainMenuAnimState
 };
 
 static MainMenuAnimState s_main_menu_anim = {};
+
+struct SkillChoiceState
+{
+    bool active = false;
+    int level_index = 0;
+    LevelStartSkillOption options[LEVEL_START_SKILL_OPTION_COUNT] = {};
+    LevelStartSkillApplyCallback apply_callback = nullptr;
+    Scene* scene = nullptr;
+};
+
+static SkillChoiceState s_skill_choice = {};
+
+static const LevelStartSkillOption s_default_skill_options[LEVEL_START_SKILL_OPTION_COUNT] = {
+    { "skill_placeholder_alpha", "Placeholder Skill A", "skill description A." },
+    { "skill_placeholder_beta",  "Placeholder Skill B", "skill description B." },
+    { "skill_placeholder_gamma", "Placeholder Skill C", "skill description C." },
+};
 
 static constexpr float MAIN_MENU_TITLE_REVEAL_SEC = 1.45f;
 static constexpr float MAIN_MENU_PROMPT_FADE_SEC  = 0.55f;
@@ -63,6 +81,27 @@ ImFont* GameUI_GetFont(GameFont slot)
     if (idx < 0 || idx >= static_cast<int>(GameFont::Count))
         return nullptr;
     return s_fonts[idx]; // nullptr = default font
+}
+
+void GameUI_OpenLevelStartSkillSelection(int level_index, const LevelStartSkillOption* options)
+{
+    s_skill_choice.active = true;
+    s_skill_choice.level_index = level_index;
+
+    const LevelStartSkillOption* source = options ? options : s_default_skill_options;
+    for (int index = 0; index < LEVEL_START_SKILL_OPTION_COUNT; ++index)
+        s_skill_choice.options[index] = source[index];
+}
+
+bool GameUI_IsLevelStartSkillSelectionOpen()
+{
+    return s_skill_choice.active;
+}
+
+void GameUI_SetLevelStartSkillApplyCallback(Scene* scene, LevelStartSkillApplyCallback callback)
+{
+    s_skill_choice.apply_callback = callback;
+    s_skill_choice.scene = scene;
 }
 
 // ============================================================
@@ -131,6 +170,24 @@ static void TriggerMainMenuInteraction()
     }
 }
 
+static void CommitSkillChoice(int selected_index)
+{
+    if (!s_skill_choice.active)
+        return;
+    if (selected_index < 0 || selected_index >= LEVEL_START_SKILL_OPTION_COUNT)
+        return;
+
+    LevelStartSkillSelection selection = {};
+    selection.level_index = s_skill_choice.level_index;
+    selection.selected_index = selected_index;
+    selection.selected_option = s_skill_choice.options[selected_index];
+
+    if (s_skill_choice.apply_callback && s_skill_choice.scene)
+        s_skill_choice.apply_callback(*s_skill_choice.scene, selection);
+
+    s_skill_choice.active = false;
+}
+
 static void AdvanceMainMenuAnimation(float dt)
 {
     s_main_menu_anim.total_time += dt;
@@ -181,6 +238,107 @@ static void DrawGradientPromptCentered(ImDrawList* draw_list, const ImVec2& cent
         draw_list->AddText(prompt_font, font_size, ImVec2(x, pos.y), text_col, glyph);
         x += glyph_size.x;
     }
+}
+
+static bool DrawSkillChoiceCard(int index, const LevelStartSkillOption& option, float card_width, float card_height)
+{
+    bool chosen = false;
+
+    ImGui::PushID(index);
+    ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, 0.0f);
+    ImGui::PushStyleVar(ImGuiStyleVar_ChildBorderSize, 1.0f);
+    ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 0.0f);
+    ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 1.0f);
+    ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0.0f, 0.0f, 0.0f, 1.0f));
+    ImGui::PushStyleColor(ImGuiCol_Border, ImVec4(1.0f, 1.0f, 1.0f, 0.18f));
+    ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.0f, 0.0f, 0.0f, 1.0f));
+    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.0f, 0.0f, 0.0f, 1.0f));
+    ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.0f, 0.0f, 0.0f, 1.0f));
+
+    if (ImGui::BeginChild("##skill_card", ImVec2(card_width, card_height), ImGuiChildFlags_Borders, ImGuiWindowFlags_NoScrollbar))
+    {
+        ImGui::PushFont(GameUI_GetFont(GameFont::Body), 24.0f);
+        ImGui::TextWrapped("%s", option.display_name ? option.display_name : "Placeholder Skill");
+        ImGui::PopFont();
+
+        ImGui::Spacing();
+        ImGui::Separator();
+        ImGui::Spacing();
+        ImGui::TextWrapped("%s", option.description ? option.description : "Skill description");
+
+        float button_y = card_height - 54.0f;
+        if (ImGui::GetCursorPosY() < button_y)
+            ImGui::SetCursorPosY(button_y);
+
+        if (ImGui::Button("Choose", ImVec2(-1.0f, 40.0f)))
+            chosen = true;
+    }
+    ImGui::EndChild();
+
+    ImGui::PopStyleColor(5);
+    ImGui::PopStyleVar(4);
+    ImGui::PopID();
+
+    return chosen;
+}
+
+static void DrawSkillChoiceModal()
+{
+    if (!s_skill_choice.active)
+        return;
+
+    ImGuiIO& io = ImGui::GetIO();
+    ImDrawList* dl = ImGui::GetForegroundDrawList();
+    dl->AddRectFilled(ImVec2(0, 0), io.DisplaySize, IM_COL32(0, 0, 0, 190));
+
+    const float panel_w = (io.DisplaySize.x > 1120.0f) ? 1020.0f : io.DisplaySize.x - 80.0f;
+    const float panel_h = (io.DisplaySize.y > 620.0f) ? 430.0f : io.DisplaySize.y - 80.0f;
+    const float gap = 18.0f;
+
+    ImGui::SetNextWindowPos(ImVec2(io.DisplaySize.x * 0.5f, io.DisplaySize.y * 0.55f), ImGuiCond_Always, ImVec2(0.5f, 0.5f));
+    ImGui::SetNextWindowSize(ImVec2(panel_w, panel_h), ImGuiCond_Always);
+    ImGui::SetNextWindowBgAlpha(1.0f);
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0.0f);
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(28.0f, 24.0f));
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 1.0f);
+    ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.0f, 0.0f, 0.0f, 1.0f));
+    ImGui::PushStyleColor(ImGuiCol_Border, ImVec4(1.0f, 1.0f, 1.0f, 0.18f));
+
+    ImGui::Begin("##level_skill_choice", nullptr,
+        ImGuiWindowFlags_NoDecoration |
+        ImGuiWindowFlags_NoMove |
+        ImGuiWindowFlags_NoSavedSettings);
+
+    char header[96] = {};
+    snprintf(header, sizeof(header), "LEVEL %d START", s_skill_choice.level_index);
+
+    ImGui::PushFont(GameUI_GetFont(GameFont::Title), 38.0f);
+    ImGui::TextUnformatted(header);
+    ImGui::PopFont();
+
+    ImGui::Spacing();
+    ImGui::PushFont(GameUI_GetFont(GameFont::Title), 30.0f);
+    ImGui::TextWrapped("Choose your Hope.");
+    ImGui::PopFont();
+    ImGui::Spacing();
+
+    float available_w = ImGui::GetContentRegionAvail().x;
+    float card_w = (available_w - gap * 2.0f) / 3.0f;
+    float card_h = 250.0f;
+
+    for (int index = 0; index < LEVEL_START_SKILL_OPTION_COUNT; ++index)
+    {
+        if (index > 0)
+            ImGui::SameLine(0.0f, gap);
+
+        if (DrawSkillChoiceCard(index, s_skill_choice.options[index], card_w, card_h))
+            CommitSkillChoice(index);
+    }
+
+    ImGui::Spacing();
+    ImGui::End();
+    ImGui::PopStyleColor(2);
+    ImGui::PopStyleVar(3);
 }
 
 // ============================================================
@@ -369,6 +527,8 @@ void GameUI_Init()
 {
     s_state = GameState::MainMenu;
     ResetMainMenuAnimation();
+    s_skill_choice.active = false;
+    s_skill_choice.scene = nullptr;
     ImGuiIO& io = ImGui::GetIO();
     if (io.FontDefault == nullptr)
         io.FontDefault = io.Fonts->AddFontDefault();
@@ -386,6 +546,9 @@ void GameUI_Update()
     // While Debug UI is open, freeze game UI state transitions.
     // This keeps game UI hidden and restores its previous state when debug UI closes.
     if (DebugUI_IsOpen())
+        return;
+
+    if (s_state == GameState::Playing && s_skill_choice.active) // When the skill choice modal is open, block all input.
         return;
 
     // ESC — toggle pause while playing, or resume from pause
@@ -418,7 +581,7 @@ static void DrawCrosshair()
     // dl->AddLine(ImVec2(c.x + gap, c.y), ImVec2(c.x + gap + arm, c.y), col, thickness);
     // dl->AddLine(ImVec2(c.x, c.y - gap - arm), ImVec2(c.x, c.y - gap), col, thickness);
     // dl->AddLine(ImVec2(c.x, c.y + gap), ImVec2(c.x, c.y + gap + arm), col, thickness);
-    dl->AddCircleFilled(c, 3.0f, col);
+    dl->AddCircleFilled(c, 3.0f, col); // dot crosshair
 }
 
 void GameUI_BuildImGui()
@@ -432,7 +595,9 @@ void GameUI_BuildImGui()
     case GameState::MainMenu: DrawMainMenu(); break;
     case GameState::Paused:   DrawPauseMenu(); break;
     case GameState::Playing: 
-        if (Input_IsActionPressed(ACTION_AIM))
+        if (s_skill_choice.active) // draw skill for test
+            DrawSkillChoiceModal();
+        if (!s_skill_choice.active && Input_IsActionPressed(ACTION_AIM))
         {
             DrawCrosshair();
         }
@@ -450,5 +615,9 @@ void GameUI_SetState(GameState state)
 {
     if (s_state != GameState::MainMenu && state == GameState::MainMenu)
         ResetMainMenuAnimation();
+
+    if (state != GameState::Playing)
+        s_skill_choice.active = false;
+
     s_state = state;
 }
