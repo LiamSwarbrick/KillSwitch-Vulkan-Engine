@@ -542,6 +542,11 @@ static void AdvanceSkillChoiceAnimation(float dt)
     if (!s_skill_choice.active)
         return;
 
+    if (Input_IsActionJustPressed(ACTION_JUMP))
+    {
+        s_skill_choice.phase_time = 1000.0f;
+    }
+
     s_skill_choice.phase_time += dt;
 
     if (s_skill_choice.phase == SkillChoicePhase::LevelIntro)
@@ -582,6 +587,12 @@ static void AdvanceMainMenuAnimation(float dt)
 {
     s_main_menu_anim.total_time += dt;
     s_main_menu_anim.phase_time += dt;
+
+    // Skip menu pressing space (aka JUMP)
+    if (Input_IsActionJustPressed(ACTION_JUMP))
+    {
+        s_main_menu_anim.phase_time = 1000.0f;
+    }
 
     if (s_main_menu_anim.phase == MainMenuAnimPhase::TitleReveal &&
         s_main_menu_anim.phase_time >= MAIN_MENU_TITLE_REVEAL_SEC)
