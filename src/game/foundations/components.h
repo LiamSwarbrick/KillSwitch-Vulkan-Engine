@@ -113,6 +113,18 @@ struct ForcedSlideInfo
 //	
 //};
 
+struct C_Faction
+{
+	enum Type
+	{
+		Player,
+		Zombie,
+		// To add more, like Neutral etc
+	};
+
+	Type type;
+};
+
 struct C_MovementInput
 {
 	// Written by InputSystem
@@ -318,7 +330,7 @@ struct C_AIInput
 	bool has_target = false;
 };
 
-struct C_ZombieAIInfo
+struct C_EnemyAIInfo
 {
 	enum State
 	{
@@ -335,9 +347,19 @@ struct C_ZombieAIInfo
 	State previousState = State::Idle;
 	float stateTimer = 0.0f;
 
-	// Target
+	// Vision & alert
+	float visionDistance = 10.0f;
+	float visionMaxAngle = glm::radians(90.0f); // The max angle to where we're looking
+
+	// Target (for Alerted, Chase (if out of sight the target will be our last seen target), Attack
 	glm::vec3 target{ 0.0f };
 	bool hasTarget = false;
+
+	// Alert
+	glm::vec3 alertTarget{ 0.0f };
+	float alertDistance = 6.0f;
+
+	// Chasing (to check before we do anything else)
 	EntityID activeTargetID = NULL_ENTITY;
 
 	// Patrol

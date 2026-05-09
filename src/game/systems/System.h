@@ -10,7 +10,7 @@
 
 
 // All the things a system might need.
-// Every system will define them locally, see ZombieAISystem for an example
+// Every system will define them locally, see EnemyAISystem for an example
 struct SystemContext
 {
 	ECS* ecs = nullptr;
