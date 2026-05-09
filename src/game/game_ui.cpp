@@ -563,7 +563,7 @@ static void AdvanceSkillChoiceAnimation(float dt)
         {
             s_skill_choice.phase = SkillChoicePhase::AwaitSelection;
             s_skill_choice.phase_time = 0.0f;
-            s_skill_choice.selected_index = 0;
+            s_skill_choice.selected_index = -1;
         }
     }
     else if (s_skill_choice.phase == SkillChoicePhase::FadeOut)
@@ -913,13 +913,24 @@ static void DrawSkillChoiceModal()
 
     if (allow_select)
     {
-        if (s_skill_choice.selected_index < 0 || s_skill_choice.selected_index >= LEVEL_START_SKILL_OPTION_COUNT)
+        if (Input_IsGamepadConnected() &&
+            (s_skill_choice.selected_index < 0 || s_skill_choice.selected_index >= LEVEL_START_SKILL_OPTION_COUNT))
             s_skill_choice.selected_index = 0;
 
         if (IsSkillChoiceMoveLeftJustPressed())
-            s_skill_choice.selected_index = (s_skill_choice.selected_index + LEVEL_START_SKILL_OPTION_COUNT - 1) % LEVEL_START_SKILL_OPTION_COUNT;
+        {
+            if (s_skill_choice.selected_index < 0 || s_skill_choice.selected_index >= LEVEL_START_SKILL_OPTION_COUNT)
+                s_skill_choice.selected_index = LEVEL_START_SKILL_OPTION_COUNT - 1;
+            else
+                s_skill_choice.selected_index = (s_skill_choice.selected_index + LEVEL_START_SKILL_OPTION_COUNT - 1) % LEVEL_START_SKILL_OPTION_COUNT;
+        }
         else if (IsSkillChoiceMoveRightJustPressed())
-            s_skill_choice.selected_index = (s_skill_choice.selected_index + 1) % LEVEL_START_SKILL_OPTION_COUNT;
+        {
+            if (s_skill_choice.selected_index < 0 || s_skill_choice.selected_index >= LEVEL_START_SKILL_OPTION_COUNT)
+                s_skill_choice.selected_index = 0;
+            else
+                s_skill_choice.selected_index = (s_skill_choice.selected_index + 1) % LEVEL_START_SKILL_OPTION_COUNT;
+        }
 
         if (IsSkillChoiceConfirmJustPressed())
             CommitSkillChoice(s_skill_choice.selected_index);
