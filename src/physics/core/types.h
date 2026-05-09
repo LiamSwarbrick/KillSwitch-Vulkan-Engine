@@ -5,7 +5,7 @@
 
 #include "core/utils/enum_bitmask.h"
 
-#include "physics_settings.h"
+#include "physics/physics_settings.h"
 
 #include "glm/glm.hpp"
 #include "glm/gtc/quaternion.hpp"

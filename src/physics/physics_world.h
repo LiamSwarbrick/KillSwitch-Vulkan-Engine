@@ -7,7 +7,7 @@
 #include "core/ecs/sparse_set.h"
 
 #include "physics/core/types.h"
-#include "physics/core/physics_settings.h"
+#include "physics/physics_settings.h"
 
 #include "physics/collision/broadphase/broadphase.h"
 #include "physics/collision/narrowphase/narrowphase.h"
