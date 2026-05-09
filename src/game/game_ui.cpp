@@ -134,12 +134,21 @@ bool GameUI_LoadFont(GameFont slot, const char* ttf_path, float size_pixels)
         return false;
 
     ImGuiIO& io = ImGui::GetIO();
+    if (io.FontDefault == nullptr)
+        io.FontDefault = io.Fonts->AddFontDefault();
+
     ImFont* f = io.Fonts->AddFontFromFileTTF(ttf_path, size_pixels);
     if (!f)
     {
         printf("GameUI_LoadFont: failed to load '%s'\n", ttf_path);
         return false;
     }
+
+    ImFontConfig fallback_config;
+    fallback_config.MergeMode = true;
+    fallback_config.DstFont = f;
+    io.Fonts->AddFontDefault(&fallback_config);
+
     s_fonts[static_cast<int>(slot)] = f;
     return true;
 }
@@ -344,12 +353,6 @@ static void DrawControlsBindingCell(InputAction action, InputBindingDeviceGroup 
         snprintf(label, sizeof(label), "%s", Input_GetBindingDisplayName(binding));
     else
         snprintf(label, sizeof(label), "Unbound");
-
-    for (char* ch = label; *ch != '\0'; ++ch)
-    {
-        if (*ch == '-')
-            *ch = '_';
-    }
 
     ImGui::PushID(static_cast<int>(action) * 8 + static_cast<int>(device_group));
     ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 0.0f);
