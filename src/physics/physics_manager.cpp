@@ -178,6 +178,7 @@ inline EntityRaycastHit PhysicsManager::rayHitToEntityRayHit(const RaycastHit& r
 	entityRayHit.t = rayHit.t;
 
 	entityRayHit.entity = getEntityID({ rayHit.body->bodyID });
+	entityRayHit.body = rayHit.body;
 
 	return entityRayHit;
 }
@@ -194,6 +195,7 @@ inline EntityShapecastHit PhysicsManager::shapeHitToEntityShapeHit(const Shapeca
 	entityShapeHit.normal  = shapeHit.normal;
 
 	entityShapeHit.entity = getEntityID({ shapeHit.body->bodyID });
+	entityShapeHit.body = shapeHit.body;
 
 	return entityShapeHit;
 }
@@ -607,23 +609,29 @@ void PhysicsManager::setCharacterStepHeight(RigidBodyHandle handle, float stepHe
 	world.setCharacterStepHeight(handle, stepHeight);
 }
 
-EntityRaycastHit PhysicsManager::entityRaycast(const Ray& ray, const QueryFilterExternal& filter) const
+EntityRaycastHit PhysicsManager::raycast(const Ray& ray, const QueryFilterExternal& filter) const
 {
-	RaycastHit rayHit = world.raycast(ray, getQueryFilterFromQueryFilterExternal(filter));
-
-	return rayHitToEntityRayHit(rayHit);	
+	return raycast(ray, getQueryFilterFromQueryFilterExternal(filter));
 }
 
-RaycastHit PhysicsManager::raycast(const Ray& ray, const QueryFilter& filter) const
+EntityRaycastHit PhysicsManager::raycast(const Ray& ray, const QueryFilter& filter) const
 {
-	return world.raycast(ray, filter);
+	RaycastHit rayHit = world.raycast(ray, filter);
+
+	return rayHitToEntityRayHit(rayHit);
 }
 
-std::vector<EntityRaycastHit> PhysicsManager::entityRaycastAll(const Ray& ray, const QueryFilterExternal& filter) const
+
+std::vector<EntityRaycastHit> PhysicsManager::raycastAll(const Ray& ray, const QueryFilterExternal& filter) const
+{
+	return raycastAll(ray, getQueryFilterFromQueryFilterExternal(filter));
+}
+
+std::vector<EntityRaycastHit> PhysicsManager::raycastAll(const Ray& ray, const QueryFilter& filter) const
 {
 	std::vector<EntityRaycastHit> entityRayHits;
 
-	std::vector<RaycastHit> rayHits = world.raycastAll(ray, getQueryFilterFromQueryFilterExternal(filter));
+	std::vector<RaycastHit> rayHits = world.raycastAll(ray, filter);
 	entityRayHits.resize(rayHits.size());
 
 	for (size_t i = 0; i < rayHits.size(); i++)
@@ -634,39 +642,37 @@ std::vector<EntityRaycastHit> PhysicsManager::entityRaycastAll(const Ray& ray, c
 	return entityRayHits;
 }
 
-std::vector<RaycastHit> PhysicsManager::raycastAll(const Ray& ray, const QueryFilter& filter) const
+EntityShapecastHit PhysicsManager::shapecast(const Ray& ray, ShapeHandle shape, const glm::quat& orientation, const QueryFilterExternal& filter) const
 {
-	return world.raycastAll(ray, filter);
+	return shapecast(ray, shape, orientation, getQueryFilterFromQueryFilterExternal(filter));
 }
 
-EntityShapecastHit PhysicsManager::entityShapecast(const Ray& ray, ShapeHandle shape, const glm::quat& orientation, const QueryFilterExternal& filter) const
+EntityShapecastHit PhysicsManager::shapecast(const Ray& ray, ShapeHandle shape, const glm::quat& orientation, const QueryFilter& filter) const
 {
-	ShapecastHit hit = world.shapecast(ray, shape, orientation, getQueryFilterFromQueryFilterExternal(filter));
+	ShapecastHit hit = world.shapecast(ray, shape, orientation, filter);
 
 	return shapeHitToEntityShapeHit(hit);
 }
 
-ShapecastHit PhysicsManager::shapecast(const Ray& ray, ShapeHandle shape, const glm::quat& orientation, const QueryFilter& filter) const
+std::vector<EntityShapeIntersectsHit> PhysicsManager::shapeIntersects(ShapeHandle shape, const glm::vec3& position, const glm::quat& orientation, const QueryFilterExternal& filter) const
 {
-	return world.shapecast(ray, shape, orientation, filter);
+	return shapeIntersects(shape, position, orientation, getQueryFilterFromQueryFilterExternal(filter));
 }
 
-std::vector<EntityID> PhysicsManager::entityShapeIntersects(ShapeHandle shape, const glm::vec3& position, const glm::quat& orientation, const QueryFilterExternal& filter) const
+std::vector<EntityShapeIntersectsHit> PhysicsManager::shapeIntersects(ShapeHandle shape, const glm::vec3& position, const glm::quat& orientation, const QueryFilter& filter) const
 {
-	std::vector<EntityID> entityShapeHits;
+	std::vector<EntityShapeIntersectsHit> entityShapeHits;
 
-	std::vector<RigidBodyHandle> shapeHits = world.shapeIntersects(shape, position, orientation, getQueryFilterFromQueryFilterExternal(filter));
+	std::vector<RigidBodyHandle> shapeHits = world.shapeIntersects(shape, position, orientation, filter);
 	entityShapeHits.resize(shapeHits.size());
 
 	for (size_t i = 0; i < shapeHits.size(); i++)
 	{
-		entityShapeHits[i] = getEntityID(shapeHits[i]);
+		entityShapeHits[i] = {
+			.entity = getEntityID(shapeHits[i]),
+			.body = shapeHits[i]
+		};
 	}
 
 	return entityShapeHits;
-}
-
-std::vector<RigidBodyHandle> PhysicsManager::shapeIntersects(ShapeHandle shape, const glm::vec3& position, const glm::quat& orientation, const QueryFilter& filter) const
-{
-	 return world.shapeIntersects(shape, position, orientation, filter);
 }

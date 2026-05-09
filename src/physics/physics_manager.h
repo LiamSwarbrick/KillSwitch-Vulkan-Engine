@@ -10,16 +10,20 @@
 #include "physics/simulation/force_generators.h"
 #include "physics/collision/narrowphase/contact.h"
 
+#include "body_layers.h"
+
 #include "glm/glm.hpp"
 
 #include <unordered_map>
 
 struct EntityRaycastHit
 {
-	EntityID entity = NULL_ENTITY;
 	glm::vec3 point;
 	glm::vec3 normal;
+
 	float t = -1.0f;
+	EntityID entity = NULL_ENTITY;
+	RigidBody* body = nullptr;
 
 	bool isValid() const { return entity != NULL_ENTITY; }
 };
@@ -35,11 +39,17 @@ struct EntityShapecastHit
 	float t = -1.0f;
 
 	EntityID entity = NULL_ENTITY;
-	//RigidBody* body = nullptr;
+	RigidBody* body = nullptr;
 
 	bool isValid() const { return t >= 0.0f; }
 
 	static EntityShapecastHit none() { return {}; }
+};
+
+struct EntityShapeIntersectsHit
+{
+	EntityID entity = NULL_ENTITY;
+	RigidBodyHandle body = InvalidRigidBodyHandle;
 };
 
 struct QueryFilterExternal
@@ -209,26 +219,26 @@ public:
 	// ------------------------------
 	// All of these methods basically translate from RigidBody*/RigidBodyHandle to EntityID
 	
-	EntityRaycastHit entityRaycast(const Ray& ray, const QueryFilterExternal& filter = {}) const;
-	RaycastHit raycast(const Ray& ray, const QueryFilter& filter = {}) const;
+	EntityRaycastHit raycast(const Ray& ray, const QueryFilterExternal& filter = {}) const;
+	EntityRaycastHit raycast(const Ray& ray, const QueryFilter& filter = {}) const;
 
-	std::vector<EntityRaycastHit> entityRaycastAll(const Ray& ray, const QueryFilterExternal& filter = {}) const;
-	std::vector<RaycastHit> raycastAll(const Ray& ray, const QueryFilter& filter = {}) const;
+	std::vector<EntityRaycastHit> raycastAll(const Ray& ray, const QueryFilterExternal& filter = {}) const;
+	std::vector<EntityRaycastHit> raycastAll(const Ray& ray, const QueryFilter& filter = {}) const;
 
-	EntityShapecastHit entityShapecast(
+	EntityShapecastHit shapecast(
 		const Ray& ray, ShapeHandle shape, const glm::quat& orientation,
 		const QueryFilterExternal& filter = {}) const;
 
-	ShapecastHit shapecast(
+	EntityShapecastHit shapecast(
 		const Ray& ray, ShapeHandle shape, const glm::quat& orientation,
 		const QueryFilter& filter = {}) const;
 
 	// Shape-casting too (might change the input to be shapeIntersects or something like that, but for now this, will see when i implement it)
-	std::vector<EntityID> entityShapeIntersects(
+	std::vector<EntityShapeIntersectsHit> shapeIntersects(
 		ShapeHandle shape, const glm::vec3& position, const glm::quat& orientation, 
 		const QueryFilterExternal& filter = {}) const;
 
-	std::vector<RigidBodyHandle> shapeIntersects(
+	std::vector<EntityShapeIntersectsHit> shapeIntersects(
 		ShapeHandle shape, const glm::vec3& position, const glm::quat& orientation,
 		const QueryFilter& filter = {}) const;
 
