@@ -626,8 +626,13 @@ void Renderer_Init(const Renderer_InitInfo* info)
         ImGui::CreateContext();
         ImGuiIO& io = ImGui::GetIO();
         io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
+        io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;
         io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
         io.IniFilename = nullptr;
+
+        ImGuiStyle& style = ImGui::GetStyle();
+        style.Colors[ImGuiCol_NavCursor] = ImVec4(1.0f, 1.0f, 1.0f, 0.90f);
+        style.Colors[ImGuiCol_NavWindowingHighlight] = ImVec4(1.0f, 1.0f, 1.0f, 0.75f);
 
         // SDL3 backend
         ImGui_ImplSDL3_InitForVulkan(renderstate.window);
