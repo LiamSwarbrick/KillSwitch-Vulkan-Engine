@@ -22,7 +22,7 @@ void AnimationSystem::UpdatePlayer(float dt) const
         bool hasWeapon = false;
 
         // NEEDS REWORK TO THIS
-        /*if (ecs->Has<C_Weapon>(entity))
+        /*if (ecs->Has<C_WeaponSocket>(entity))
         {
             auto& socket = ecs->GetComponent<C_WeaponSocket>(entity);
             hasWeapon = (socket.weapon_entity != NULL_ENTITY) && ecs->IsEntityValid(socket.weapon_entity);
@@ -185,30 +185,32 @@ void AnimationSystem::UpdatePlayer(float dt) const
                 animatedMesh.lowerBodyLayer.isCurrentLooping = true;
             }
         }
+
+        ecs->GetView<C_Weapon, C_Transform>().ForEach([&](C_Weapon& weapon, C_Transform& weaponTransform)
+            {
+                if (!weapon.equipped)
+                    return;
+
+                int handNodeIndex = -1;
+
+                // find node for hand
+                for (uint32_t i = 0; i < animatedMesh.asset->node_count; i++)
+                {
+                    Node* node = &animatedMesh.asset->nodes[i];
+
+                    if (node->name && strcmp(node->name, "mixamorig:RightHand") == 0)
+                    {
+                        handNodeIndex = (int)i;
+                        break;
+                    }
+                }
+
+                glm::mat4 handMatrix = animatedMesh.joint_matrices[handNodeIndex];
+                weaponTransform.matrix = transform.matrix * handMatrix;
+            });
     });
 
 
-    //ecs.GetView<C_WeaponSocket, C_Transform>().ForEach([&](C_Weapon& weapon, C_Transform& weaponTransform)
-    //    {
-    //        if (!weapon.equipped)
-    //            return;
-
-    //        int handNodeIndex = -1;
-
-    //        // find node for hand
-    //        for (uint32_t i = 0; i < animatedMesh.asset->node_count; i++)
-    //        {
-    //            Node* node = &animatedMesh.asset->nodes[i];
-
-    //            if (node->name && strcmp(node->name, "mixamorig:RightHand") == 0)
-    //            {
-    //                handNodeIndex = (int)i;
-    //                break;
-    //            }
-    //        }
-
-    //        glm::mat4 handMatrix = animatedMesh.joint_matrices[handNodeIndex];
-    //        weaponTransform.matrix = transform.matrix * handMatrix;
-    //    });
+    
 
 }

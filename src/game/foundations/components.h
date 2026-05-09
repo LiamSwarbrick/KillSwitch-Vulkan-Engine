@@ -267,8 +267,9 @@ struct C_WeaponMelee
 		Sword, //lmao
 	};
 
-	float range = 0.0f;
-	float damage = 0.0f;
+	float range = 1.0f;
+	float damage = 1.0f;
+	bool hasDurability = false;
 	float maxDurability = 0.0f;
 	float currentDurabiliy = 0.0f;
 };
@@ -349,7 +350,10 @@ struct C_EnemyAIStats
 	float patrolWaitTimer = 0.0f;
 
 	// Turn speed (angles/radians per second or sum'n idk)
-	float turnSpeed = 10.0f;
+	float turnSpeed = glm::radians(360.0f); 
+
+	float finishAttackTime = 1.0f;
+	float attackCooldownTime = 0.5f; // Possibly unused
 };
 
 // To subdivide between the AIInfo and the AIStats (all ranges: vision distance, alert distance, attack range)
@@ -361,14 +365,14 @@ struct C_EnemyAIInfo
 		Patrol,
 		Alerted, // Until we implement a more complex AI i don't think this is going to be used
 		Chase,
+		Search,
 		Attack,
 		Staggered, // When pushed by our melee?
 		Dead, // Just in case, if we kill a zombie make it dead if we had ragdolls or whatever, but we might aswell despawn for now
 	};
 
 	State currentState = State::Idle;
-	State previousState = State::Idle; // To fall back in certain cases
-	float stateTimer = 0.0f; // Unsure if we should have this? but it can be a tracker for timers? (not really)
+	State fallbackState = State::Idle;
 
 	// Target 
 	// (for Idle: nothing
@@ -380,8 +384,21 @@ struct C_EnemyAIInfo
 	// (for Dead: nothing
 	glm::vec3 target{ 0.0f };
 	bool hasTarget = false;
+
+	// For Search mode (go to target -> reach target or max timer, fall back to idle)
+	bool hasReachedTarget = false;
+	float reachTheTargetTimer = 0.0f;
+	float reachTheTargetMaxTime = 5.0f;
+
+	// For alerted mode
+	float alertedTimer = 0.0f;
+	float alertedMaxTime = 5.0f;
+
 	// For Chasing / Attack, to check the active target first (say the zombie is dumb), and if the target falls off range then fallback to check for other players
 	EntityID activeTargetID = NULL_ENTITY;
+
+	// Timers
+	float attackTimer = 0.0f;
 
 	// Important addition (TODO: add turn speed calculations to turning)
 	glm::vec3 targetLookDirToLerp{ 0.0f };
