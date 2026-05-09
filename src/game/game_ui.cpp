@@ -134,12 +134,21 @@ bool GameUI_LoadFont(GameFont slot, const char* ttf_path, float size_pixels)
         return false;
 
     ImGuiIO& io = ImGui::GetIO();
+    if (io.FontDefault == nullptr)
+        io.FontDefault = io.Fonts->AddFontDefault();
+
     ImFont* f = io.Fonts->AddFontFromFileTTF(ttf_path, size_pixels);
     if (!f)
     {
         printf("GameUI_LoadFont: failed to load '%s'\n", ttf_path);
         return false;
     }
+
+    ImFontConfig fallback_config;
+    fallback_config.MergeMode = true;
+    fallback_config.DstFont = f;
+    io.Fonts->AddFontDefault(&fallback_config);
+
     s_fonts[static_cast<int>(slot)] = f;
     return true;
 }
@@ -344,12 +353,6 @@ static void DrawControlsBindingCell(InputAction action, InputBindingDeviceGroup 
         snprintf(label, sizeof(label), "%s", Input_GetBindingDisplayName(binding));
     else
         snprintf(label, sizeof(label), "Unbound");
-
-    for (char* ch = label; *ch != '\0'; ++ch)
-    {
-        if (*ch == '-')
-            *ch = '_';
-    }
 
     ImGui::PushID(static_cast<int>(action) * 8 + static_cast<int>(device_group));
     ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 0.0f);
@@ -568,7 +571,7 @@ static void AdvanceSkillChoiceAnimation(float dt)
         {
             s_skill_choice.phase = SkillChoicePhase::AwaitSelection;
             s_skill_choice.phase_time = 0.0f;
-            s_skill_choice.selected_index = 0;
+            s_skill_choice.selected_index = -1;
         }
     }
     else if (s_skill_choice.phase == SkillChoicePhase::FadeOut)
@@ -924,13 +927,24 @@ static void DrawSkillChoiceModal()
 
     if (allow_select)
     {
-        if (s_skill_choice.selected_index < 0 || s_skill_choice.selected_index >= LEVEL_START_SKILL_OPTION_COUNT)
+        if (Input_IsGamepadConnected() &&
+            (s_skill_choice.selected_index < 0 || s_skill_choice.selected_index >= LEVEL_START_SKILL_OPTION_COUNT))
             s_skill_choice.selected_index = 0;
 
         if (IsSkillChoiceMoveLeftJustPressed())
-            s_skill_choice.selected_index = (s_skill_choice.selected_index + LEVEL_START_SKILL_OPTION_COUNT - 1) % LEVEL_START_SKILL_OPTION_COUNT;
+        {
+            if (s_skill_choice.selected_index < 0 || s_skill_choice.selected_index >= LEVEL_START_SKILL_OPTION_COUNT)
+                s_skill_choice.selected_index = LEVEL_START_SKILL_OPTION_COUNT - 1;
+            else
+                s_skill_choice.selected_index = (s_skill_choice.selected_index + LEVEL_START_SKILL_OPTION_COUNT - 1) % LEVEL_START_SKILL_OPTION_COUNT;
+        }
         else if (IsSkillChoiceMoveRightJustPressed())
-            s_skill_choice.selected_index = (s_skill_choice.selected_index + 1) % LEVEL_START_SKILL_OPTION_COUNT;
+        {
+            if (s_skill_choice.selected_index < 0 || s_skill_choice.selected_index >= LEVEL_START_SKILL_OPTION_COUNT)
+                s_skill_choice.selected_index = 0;
+            else
+                s_skill_choice.selected_index = (s_skill_choice.selected_index + 1) % LEVEL_START_SKILL_OPTION_COUNT;
+        }
 
         if (IsSkillChoiceConfirmJustPressed())
             CommitSkillChoice(s_skill_choice.selected_index);
