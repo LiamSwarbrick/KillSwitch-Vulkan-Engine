@@ -13,6 +13,8 @@ TODO: Full names and emails.
 
 Of course many tasks were done collectively. Code for demo game, core systems, etc.
 
+### Libraries
+
 Libraries we did end up rellying on to reach the 3 month deadline (all very replacable, although SDL3 gives support for so many controllers and platforms it should probably stay):
 - SDL3
 - miniaudio
