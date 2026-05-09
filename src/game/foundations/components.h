@@ -113,6 +113,18 @@ struct ForcedSlideInfo
 //	
 //};
 
+struct C_Faction
+{
+	enum Type
+	{
+		Player,
+		Zombie,
+		// To add more, like Neutral etc
+	};
+
+	Type type;
+};
+
 struct C_MovementInput
 {
 	// Written by InputSystem
@@ -318,7 +330,30 @@ struct C_AIInput
 	bool has_target = false;
 };
 
-struct C_ZombieAIInfo
+// This should be changed by the game (if procedural generation) or added manually in the blender script if manual creation of levels
+struct C_EnemyAIStats
+{
+	// Vision & alert
+	float visionDistance = 10.0f;
+	float visionMaxAngle = glm::radians(90.0f); // The max angle to where we're looking
+
+	float alertDistance = 6.0f; // We probably should NOT have these, but the player having alertDistances on walk, run, jump and then read them from the zombie
+
+	// Attack ranges
+	float attackDistance = 1.0f;
+
+	// Patrol (unsure where the patrol thingy should go. should it go on stats?, we could have target be the current patrol point)
+	std::vector<glm::vec3> patrolPoints;
+	int currentPatrolIndex = 0;
+	float patrolWaitTime = 2.0f;
+	float patrolWaitTimer = 0.0f;
+
+	// Turn speed (angles/radians per second or sum'n idk)
+	float turnSpeed = 10.0f;
+};
+
+// To subdivide between the AIInfo and the AIStats (all ranges: vision distance, alert distance, attack range)
+struct C_EnemyAIInfo
 {
 	enum State
 	{
@@ -332,19 +367,24 @@ struct C_ZombieAIInfo
 	};
 
 	State currentState = State::Idle;
-	State previousState = State::Idle;
-	float stateTimer = 0.0f;
+	State previousState = State::Idle; // To fall back in certain cases
+	float stateTimer = 0.0f; // Unsure if we should have this? but it can be a tracker for timers? (not really)
 
-	// Target
+	// Target 
+	// (for Idle: nothing
+	// (for Patrol: the current patrolPoint
+	// (for Alerted : the place we have to look at, 
+	// (for Chase : the current player's position we should run at (if out of sight the target will be our last seen target), 
+	// (for Attack : the position we are attacking at
+	// (for Staggered: nothing or the place we should look at after being staggered
+	// (for Dead: nothing
 	glm::vec3 target{ 0.0f };
 	bool hasTarget = false;
+	// For Chasing / Attack, to check the active target first (say the zombie is dumb), and if the target falls off range then fallback to check for other players
 	EntityID activeTargetID = NULL_ENTITY;
 
-	// Patrol
-	std::vector<glm::vec3> patrolPoints;
-	int currentPatrolIndex = 0;
-	float patrolWaitTime = 2.0f;
-	float patrolWaitTimer = 0.0f;
+	// Important addition (TODO: add turn speed calculations to turning)
+	glm::vec3 targetLookDirToLerp{ 0.0f };
 };
 
 

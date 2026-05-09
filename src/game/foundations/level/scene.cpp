@@ -11,7 +11,7 @@
 #include "imported_components.h"
 
 // Include all needed systems
-#include "game/systems/ZombieAISystem.h"
+#include "game/systems/EnemyAISystem.h"
 #include "game/systems/PlayerInputSystem.h"
 #include "game/systems/MovementSystem.h"
 #include "game/systems/PhysicsSystem.h"
@@ -37,7 +37,7 @@ void Scene::StartUp()
     m_ecs.RegisterComponent<C_AnimatedMesh>();
     //m_ecs.RegisterComponent<C_PlayerController>();
     m_ecs.RegisterComponent<C_PlayerInput>();
-    m_ecs.RegisterComponent<C_ZombieAIInfo>();
+    m_ecs.RegisterComponent<C_EnemyAIInfo>();
     m_ecs.RegisterComponent<C_RigidBody>();
     m_ecs.RegisterComponent<C_MovementInput>();
     m_ecs.RegisterComponent<C_MovementStats>();
@@ -274,18 +274,20 @@ EntityID Scene::InstantiatePrefab(Asset* prefab, glm::vec3 spawnPosition, glm::q
                     m_ecs.AddComponent<C_RigidBody>(eID, { rbHandle });
             } // if rigidbodycomponent
 
-            if ((components.HasMember("PlayerInput") || components.HasMember("ZombieInput")) && components.HasMember("RigidbodyComponent"))
+            if ((components.HasMember("PlayerInput") || components.HasMember("ZombieInput")))
             {
                 if (components.HasMember("PlayerInput"))
                 {
                     m_ecs.AddComponent<C_PlayerInput>(eID);
                     m_ecs.AddComponent<C_MovementStats>(eID, C_MovementStats::DefaultPlayerStats());
+                    m_ecs.AddComponent<C_Faction>(eID, { C_Faction::Player });
                 }
                 if (components.HasMember("ZombieInput"))
                 {
-                    // No need for input as it is processed in the ZombieAISystem
-                    m_ecs.AddComponent<C_ZombieAIInfo>(eID);
+                    // No need for input as it is processed in the EnemyAISystem
+                    m_ecs.AddComponent<C_EnemyAIInfo>(eID);
                     m_ecs.AddComponent<C_MovementStats>(eID, C_MovementStats::DefaultZombieStats());
+                    m_ecs.AddComponent<C_Faction>(eID, { C_Faction::Zombie });
                 }
 
                 m_ecs.AddComponent<C_MovementInput>(eID);
@@ -486,7 +488,7 @@ void Scene::InitSystems()
 
     // Process inputs first
     RegisterSystem<PlayerInputSystem>();
-    RegisterSystem<ZombieAISystem>();
+    RegisterSystem<EnemyAISystem>();
 
     // Then process the movement based on those inputs
     RegisterSystem<MovementSystem>();

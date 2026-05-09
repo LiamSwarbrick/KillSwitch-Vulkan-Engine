@@ -10,16 +10,20 @@
 #include "physics/simulation/force_generators.h"
 #include "physics/collision/narrowphase/contact.h"
 
+#include "body_layers.h"
+
 #include "glm/glm.hpp"
 
 #include <unordered_map>
 
 struct EntityRaycastHit
 {
-	EntityID entity = NULL_ENTITY;
 	glm::vec3 point;
 	glm::vec3 normal;
+
 	float t = -1.0f;
+	EntityID entity = NULL_ENTITY;
+	RigidBody* body = nullptr;
 
 	bool isValid() const { return entity != NULL_ENTITY; }
 };
@@ -35,11 +39,17 @@ struct EntityShapecastHit
 	float t = -1.0f;
 
 	EntityID entity = NULL_ENTITY;
-	//RigidBody* body = nullptr;
+	RigidBody* body = nullptr;
 
 	bool isValid() const { return t >= 0.0f; }
 
 	static EntityShapecastHit none() { return {}; }
+};
+
+struct EntityShapeIntersectsHit
+{
+	EntityID entity = NULL_ENTITY;
+	RigidBodyHandle body = InvalidRigidBodyHandle;
 };
 
 struct QueryFilterExternal
@@ -92,11 +102,15 @@ public:
 	// ------------------------------
 	RigidBodyHandle createBody(EntityID entity, const RigidBodyDesc& desc);
 	void destroyBody(EntityID entity);
+	void destroyBody(RigidBodyHandle handle);
 	// do not confuse with setShape(ShapeHandle handle, ShapeDesc);
-	void setBodyShape(EntityID e, ShapeHandle handle);
+	void setBodyShape(EntityID e, ShapeHandle shapeHandle);
+	void setBodyShape(RigidBodyHandle handle, ShapeHandle shapeHandle);
 
 	PhysicsCharacter* getCharacter(EntityID entity);
+	PhysicsCharacter* getCharacter(RigidBodyHandle handle);
 	void setCharacterInfo(EntityID entity, const PhysicsCharacterInfo& info);
+	void setCharacterInfo(RigidBodyHandle handle, const PhysicsCharacterInfo& info);
 
 	// ------------------------------
 	// SHAPE MANAGEMENT
@@ -128,19 +142,39 @@ public:
 	glm::vec3 getWorldUp();
 
 	glm::vec3 getVelocity(EntityID e);
+	glm::vec3 getVelocity(RigidBodyHandle handle);
 	float getGravityScale(EntityID e);
+	float getGravityScale(RigidBodyHandle handle);
 	uint32_t getForceLayers(EntityID e);
+	uint32_t getForceLayers(RigidBodyHandle handle);
 	ShapeHandle getShapeHandle(EntityID e);
+	ShapeHandle getShapeHandle(RigidBodyHandle handle);
 	Shape* getShape(EntityID e); // extra
+	Shape* getShape(RigidBodyHandle handle); // extra
 
 	// Please do not use teleportBody to MOVE, use it to truly TELEPORT TO A PLACE
 	void teleportBody(EntityID e, const glm::vec3& worldPosition);
+	void teleportBody(RigidBodyHandle handle, const glm::vec3& worldPosition);
+
 	void setVelocity(EntityID e, const glm::vec3& velocity);
+	void setVelocity(RigidBodyHandle handle, const glm::vec3& velocity);
+
 	void addVelocity(EntityID e, const glm::vec3& velocity);
+	void addVelocity(RigidBodyHandle handle, const glm::vec3& velocity);
+
 	void setGravityScale(EntityID e, float scale);
+	void setGravityScale(RigidBodyHandle handle, float scale);
+
 	void setForceLayers(EntityID e, uint32_t layers);
+	void setForceLayers(RigidBodyHandle handle, uint32_t layers);
+
 	void addForceLayers(EntityID e, uint32_t layers);
+	void addForceLayers(RigidBodyHandle handle, uint32_t layers);
+
 	void removeForceLayers(EntityID e, uint32_t layers);
+	void removeForceLayers(RigidBodyHandle handle, uint32_t layers);
+
+	// Same methods but with handle
 
 	glm::vec3 getGravity() const;
 	
@@ -152,10 +186,20 @@ public:
 
 	// Characters
 	PhysicsCharacter::GroundState getCharacterGroundState(EntityID e);
+	PhysicsCharacter::GroundState getCharacterGroundState(RigidBodyHandle handle);
+
 	float getCharacterMaxWalkableAngle(EntityID e);
+	float getCharacterMaxWalkableAngle(RigidBodyHandle handle);
+
 	void setCharacterMaxWalkableAngle(EntityID e, float maxWalkableAngle);
+	void setCharacterMaxWalkableAngle(RigidBodyHandle handlee, float maxWalkableAngle);
+
 	float getCharacterStepHeight(EntityID e);
+	float getCharacterStepHeight(RigidBodyHandle handle);
+
 	void setCharacterStepHeight(EntityID e, float stepHeight);
+	void setCharacterStepHeight(RigidBodyHandle handle, float stepHeight);
+
 
 	// ------------------------------
 	// FORCES (REGISTRY)
@@ -176,17 +220,27 @@ public:
 	// All of these methods basically translate from RigidBody*/RigidBodyHandle to EntityID
 	
 	EntityRaycastHit raycast(const Ray& ray, const QueryFilterExternal& filter = {}) const;
+	EntityRaycastHit raycast(const Ray& ray, const QueryFilter& filter = {}) const;
 
 	std::vector<EntityRaycastHit> raycastAll(const Ray& ray, const QueryFilterExternal& filter = {}) const;
+	std::vector<EntityRaycastHit> raycastAll(const Ray& ray, const QueryFilter& filter = {}) const;
 
 	EntityShapecastHit shapecast(
 		const Ray& ray, ShapeHandle shape, const glm::quat& orientation,
 		const QueryFilterExternal& filter = {}) const;
 
+	EntityShapecastHit shapecast(
+		const Ray& ray, ShapeHandle shape, const glm::quat& orientation,
+		const QueryFilter& filter = {}) const;
+
 	// Shape-casting too (might change the input to be shapeIntersects or something like that, but for now this, will see when i implement it)
-	std::vector<EntityID> shapeIntersects(
+	std::vector<EntityShapeIntersectsHit> shapeIntersects(
 		ShapeHandle shape, const glm::vec3& position, const glm::quat& orientation, 
 		const QueryFilterExternal& filter = {}) const;
+
+	std::vector<EntityShapeIntersectsHit> shapeIntersects(
+		ShapeHandle shape, const glm::vec3& position, const glm::quat& orientation,
+		const QueryFilter& filter = {}) const;
 
 	// ------------------------------
 	// EVENTS
