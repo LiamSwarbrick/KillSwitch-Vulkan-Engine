@@ -21,9 +21,9 @@ public:
 	void Update(float dt) const override;
 
 private:
-	void UpdateState			(EntityID enemyID, C_EnemyAIInfo& info, const C_RigidBody& bodyHandle, const glm::vec3& position, const glm::vec3& lookDir, float dt) const;
-	bool ShouldChaseOrGetAlerted(EntityID enemyID, C_EnemyAIInfo& info, const C_RigidBody& bodyHandle, const glm::vec3& position, const glm::vec3& lookDir, float dt) const;
-	bool ShouldAttack			(EntityID enemyID, C_EnemyAIInfo& info, const C_RigidBody& bodyHandle, const glm::vec3& position, const glm::vec3& lookDir, float dt) const;
+	void UpdateState			(EntityID enemyID, const C_EnemyAIStats& stats, C_EnemyAIInfo& info, const C_RigidBody& bodyHandle, const glm::vec3& position, const glm::vec3& lookDir, float dt) const;
+	bool ShouldChaseOrGetAlerted(const C_EnemyAIStats& stats, C_EnemyAIInfo& info, const C_RigidBody& bodyHandle, const glm::vec3& position, const glm::vec3& lookDir, float dt) const;
+	bool ShouldAttack			(const C_EnemyAIStats& stats, C_EnemyAIInfo& info, const C_RigidBody& bodyHandle, const glm::vec3& position, const glm::vec3& lookDir, float dt) const;
 
 	bool IsEntityVisible(RigidBodyHandle enemyHandle, C_EnemyAIInfo& info, const glm::vec3& position, RigidBodyHandle targetHandle, const glm::vec3& targetPosition) const;
 };
