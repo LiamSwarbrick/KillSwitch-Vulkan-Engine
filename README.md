@@ -1,5 +1,5 @@
 ## KillSwitch. A Vulkan-1.4 High Performance Game Engine Built in 3 Months from Scratch.
-#### A handmade framegraph-based 3D renderer, physics engine, skeletal animation, prefab-based entity system, procedural generation, key-rebinding, and more.
+#### A handmade framegraph-based 3D renderer, physics engine, dual-layer skeletal animation system, prefab-based entity system, procedural generation, key-rebinding, and more.
 
 TODO: Add poster image to showcase the engine here.
 TODO: Full names and emails.
