@@ -1583,6 +1583,10 @@ void GameUI_Update()
 
     if (s_options_panel.active)
     {
+        if (s_options_panel.awaiting_binding)
+        {
+            return; // block exit when await for rebind
+        }
         if (Input_IsActionJustPressed(ACTION_PAUSE))
         {
             CloseOptionsPanel();
