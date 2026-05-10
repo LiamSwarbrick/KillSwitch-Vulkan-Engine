@@ -386,6 +386,15 @@ struct C_EnemyAIInfo
 	};
 
 	State currentState = State::Idle;
+	State previousState = State::Idle;
+	State lastAudioState = State::Idle;
+	float stateTimer = 0.0f;
+
+	// Vision & alert
+	float visionDistance = 10.0f;
+	float visionMaxAngle = glm::radians(90.0f); // The max angle to where we're looking
+
+	// Target (for Alerted, Chase (if out of sight the target will be our last seen target), Attack
 	State fallbackState = State::Idle;
 
 	// Target 

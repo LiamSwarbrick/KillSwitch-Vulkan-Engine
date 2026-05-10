@@ -35,12 +35,195 @@ static void ApplyPlaceholderLevelStartSkill(Scene& scene, const LevelStartSkillS
     // - store persistent run modifiers in scene-owned gameplay state
 }
 
+struct GameplayAudioClips
+{
+    AudioClipHandle soundtrack_loop = 0;
+    AudioClipHandle ambient_loop = 0;
+    AudioClipHandle weapon_fire = 0;
+    AudioClipHandle zombie_alert = 0;
+    AudioClipHandle zombie_groan = 0;
+    AudioClipHandle zombie_attack = 0;
+};
+
+static AudioClipHandle LoadGameplayClip(
+    AudioSystem* audio_system,
+    const char* logical_name,
+    const char* path,
+    const char* fallback_path,
+    AudioClipCategory category)
+{
+    AudioClipHandle handle = AudioSystem_LoadClipEx(audio_system, logical_name, path, category);
+    if (handle == 0 && fallback_path != nullptr && fallback_path[0] != '\0')
+    {
+        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "GameplayAudio: primary path missing for '%s'; trying '%s'.", logical_name, fallback_path);
+        handle = AudioSystem_LoadClipEx(audio_system, logical_name, fallback_path, category);
+    }
+
+    if (handle == 0)
+    {
+        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "GameplayAudio: failed to load '%s' from '%s'.", logical_name, path);
+    }
+    return handle;
+}
+
+static GameplayAudioClips LoadGameplayAudio(AudioSystem* audio_system)
+{
+    GameplayAudioClips clips = {};
+
+    clips.soundtrack_loop = LoadGameplayClip(
+        audio_system,
+        "gameplay_soundtrack_loop",
+        "assets/sounds/gameplay/soundtrack_loop.mp3",
+        "All_Sounds_MP3_UNMASTERED2/Bad_Signs.mp3",
+        AUDIO_CLIP_CATEGORY_SOUNDTRACK);
+    clips.ambient_loop = LoadGameplayClip(
+        audio_system,
+        "gameplay_ambient_loop",
+        "assets/sounds/gameplay/ambient_loop.mp3",
+        "All_Sounds_MP3_UNMASTERED2/Deep_Forest_Random_Drone.mp3",
+        AUDIO_CLIP_CATEGORY_AMBIENT);
+    clips.weapon_fire = LoadGameplayClip(
+        audio_system,
+        "weapon_fire",
+        "assets/sounds/gameplay/weapon_fire.mp3",
+        "All_Sounds_MP3_UNMASTERED2/drive_by.mp3",
+        AUDIO_CLIP_CATEGORY_SFX);
+    clips.zombie_alert = LoadGameplayClip(
+        audio_system,
+        "zombie_alert",
+        "assets/sounds/gameplay/zombie_alert.mp3",
+        "All_Sounds_MP3_UNMASTERED2/Intercom.mp3",
+        AUDIO_CLIP_CATEGORY_SFX);
+    clips.zombie_groan = LoadGameplayClip(
+        audio_system,
+        "zombie_groan",
+        "assets/sounds/gameplay/zombie_groan.mp3",
+        "All_Sounds_MP3_UNMASTERED2/Deep_Thunderous_Drone.mp3",
+        AUDIO_CLIP_CATEGORY_SFX);
+    clips.zombie_attack = LoadGameplayClip(
+        audio_system,
+        "zombie_attack",
+        "assets/sounds/gameplay/zombie_attack.mp3",
+        "All_Sounds_MP3_UNMASTERED2/TV_Static.mp3",
+        AUDIO_CLIP_CATEGORY_SFX);
+
+    AudioSystem_SetCategoryVolume(audio_system, AUDIO_CLIP_CATEGORY_SOUNDTRACK, 0.6f);
+    AudioSystem_SetCategoryVolume(audio_system, AUDIO_CLIP_CATEGORY_AMBIENT, 0.6f);
+    AudioSystem_SetCategoryVolume(audio_system, AUDIO_CLIP_CATEGORY_SFX, 1.0f);
+
+    if (clips.soundtrack_loop != 0 && !AudioSystem_PlaySoundtrackLoop(audio_system, clips.soundtrack_loop, 0.35f))
+    {
+        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "GameplayAudio: soundtrack loaded but did not start.");
+    }
+
+    if (clips.ambient_loop != 0 && !AudioSystem_PlayAmbientLoop(audio_system, clips.ambient_loop, 0.35f))
+    {
+        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "GameplayAudio: ambient loop loaded but did not start.");
+    }
+
+    return clips;
+}
+
+static void PlayGameplaySFXAt(
+    AudioSystem* audio_system,
+    AudioClipHandle handle,
+    float volume,
+    const glm::vec3& position,
+    float min_distance,
+    float max_distance)
+{
+    if (handle == 0)
+    {
+        return;
+    }
+
+    AudioSystem_PlayEntitySFXAt(
+        audio_system,
+        handle,
+        volume,
+        position.x, position.y, position.z,
+        min_distance,
+        max_distance);
+}
+
+static void PlayGameplaySFX(AudioSystem* audio_system, AudioClipHandle handle, float volume)
+{
+    if (handle == 0)
+    {
+        return;
+    }
+
+    AudioSystem_SetClipSpatialized(audio_system, handle, 0);
+    AudioSystem_PlaySFXOneShot(audio_system, handle, volume);
+}
+
+static void UpdateZombieAudio(
+    Scene& scene,
+    AudioSystem* audio_system,
+    const GameplayAudioClips& clips,
+    float dt,
+    bool gameplay_audio_enabled)
+{
+    static float zombie_groan_timer = 2.0f;
+
+    if (!gameplay_audio_enabled)
+    {
+        return;
+    }
+
+    bool played_state_entry_sound = false;
+    scene.GetECS().GetView<C_Transform, C_EnemyAIInfo>().ForEach(
+        [&](C_Transform& transform, C_EnemyAIInfo& info)
+        {
+            if (info.currentState == info.lastAudioState)
+            {
+                return;
+            }
+
+            const bool became_threat =
+                info.currentState == C_EnemyAIInfo::Alerted ||
+                info.currentState == C_EnemyAIInfo::Chase;
+
+            if (!played_state_entry_sound && clips.zombie_alert != 0 && became_threat)
+            {
+                glm::vec3 position = glm::vec3(transform.matrix[3]);
+                PlayGameplaySFXAt(audio_system, clips.zombie_alert, 0.65f, position, 1.0f, 35.0f);
+                played_state_entry_sound = true;
+            }
+
+            info.lastAudioState = info.currentState;
+        });
+
+    zombie_groan_timer -= dt;
+    if (zombie_groan_timer > 0.0f)
+    {
+        return;
+    }
+
+    bool played_idle_groan = false;
+    scene.GetECS().GetView<C_Transform, C_EnemyAIInfo>().ForEach(
+        [&](C_Transform& transform, C_EnemyAIInfo& info)
+        {
+            if (played_idle_groan || clips.zombie_groan == 0 || info.currentState == C_EnemyAIInfo::Dead)
+            {
+                return;
+            }
+
+            glm::vec3 position = glm::vec3(transform.matrix[3]);
+            const float volume = (info.currentState == C_EnemyAIInfo::Chase) ? 0.58f : 0.38f;
+            PlayGameplaySFXAt(audio_system, clips.zombie_groan, volume, position, 1.5f, 40.0f);
+            played_idle_groan = true;
+        });
+
+    zombie_groan_timer = played_idle_groan ? 6.0f : 2.0f;
+}
+
 int main(int argc, char *argv[])
 {
     (void)argc;
     (void)argv;
 
-    bool enabled_validation_layers = true;
+    bool enabled_validation_layers = false;
     // NOTE: For non production builds, we still want Vulkan validation layers on in release mode, because release mode can have different bugs
     // To make sure it's obvious when validation layers are used, we'll put it in the window title.
     // Note that validation layers degrade performance significantly, so should be disabled in performance metrics and absolutely in production builds
@@ -77,58 +260,11 @@ int main(int argc, char *argv[])
 
     AudioSystem audio_system = AudioSystem_Create((AudioSystemCreateInfo){
         .debug_name = "GameAudio",
-        .initial_capacity = 8,
+        .initial_capacity = 16,
         .master_volume = 1.0f
     });
     AudioSystem_LogSummary(&audio_system);
-
-    AudioClipHandle startup_music = AudioSystem_LoadClip(
-        &audio_system,
-        "startup_music",
-        "All_Sounds_MP3_UNMASTERED2/Bad_Signs.mp3"    
-    );
-    // Set up spatial audio for player start position
-    // if (startup_music != 0)
-    //     {
-    //         AudioSystem_SetClipMinMaxDistance(&audio_system, startup_music, 1.0f, 40.0f);
-    //         AudioSystem_PlaySpatialLoop(
-    //             &audio_system,
-    //             startup_music,
-    //             1.0f,
-    //             2.0f, 1.0f, 0.0f
-    //         );
-    //     }
-
-    // AudioClipHandle startup_test_sfx = AudioSystem_LoadClipEx(
-    //     &audio_system,
-    //     "startup_test_sfx",
-    //     "All_Sounds_MP3_UNMASTERED2/TV_Static.mp3",
-    //     AUDIO_CLIP_CATEGORY_SFX
-    // );
-
-    // if (startup_music != 0)
-    // {
-    //     if (!AudioSystem_PlaySoundtrackLoop(&audio_system, startup_music, 0.1f))
-    //     {
-    //         SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "AudioSystem: soundtrack loaded but failed to start playback.");
-    //     }
-    // }
-    // else
-    // {
-    //     SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "AudioSystem: failed to load startup soundtrack.");
-    // }
-
-    // if (startup_test_sfx != 0)
-    // {
-    //     if (!AudioSystem_PlaySFXOneShot(&audio_system, startup_test_sfx, 0.1f))
-    //     {
-    //         SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "AudioSystem: startup test SFX loaded but failed to start playback.");
-    //     }
-    // }
-    // else
-    // {
-    //     SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "AudioSystem: failed to load startup test SFX.");
-    // }
+    GameplayAudioClips gameplay_audio = LoadGameplayAudio(&audio_system);
 
     Input_Init("assets/keybindings.json");
     GameUI_Init();
@@ -289,6 +425,7 @@ int main(int argc, char *argv[])
             Input_IsActionJustPressed(ACTION_ATTACK) && Input_IsActionPressed(ACTION_AIM))
         {
             const CameraInfo& cam = InGameCam_GetGameplayCamera();
+            PlayGameplaySFX(&audio_system, gameplay_audio.weapon_fire, 0.9f);
 
             Ray ray = {};
             ray.origin = cam.position;
@@ -309,6 +446,12 @@ int main(int argc, char *argv[])
             {
                 // TODO: Apply damage to hit entity, spawn hit effects, etc.
                 SDL_Log("Raycast hit entity %u at point (%f, %f, %f)", hit.entity, hit.point.x, hit.point.y, hit.point.z);
+
+                ECS& ecs = scene.GetECS();
+                if (ecs.Has<C_Faction>(hit.entity) && ecs.GetComponent<C_Faction>(hit.entity).type == C_Faction::Zombie)
+                {
+                    PlayGameplaySFXAt(&audio_system, gameplay_audio.zombie_attack, 0.72f, hit.point, 1.0f, 35.0f);
+                }
             }
         }
         // Only capture mouse while playing (release it on pause), keep relative mouse when debug UI toggled.
@@ -334,6 +477,7 @@ int main(int argc, char *argv[])
             input.crouch = gameplay_input_enabled && Input_IsActionPressed(ACTION_CROUCH);
             input.run = gameplay_input_enabled && Input_IsActionPressed(ACTION_SPRINT);
             input.aim = gameplay_input_enabled && Input_IsActionPressed(ACTION_AIM);
+            input.attack = gameplay_input_enabled && Input_IsActionJustPressed(ACTION_ATTACK);
             }
         );
         // Movement always follows camera forward.
@@ -341,6 +485,7 @@ int main(int argc, char *argv[])
 
         // Game ticks
         scene.Update(dt);
+        UpdateZombieAudio(scene, &audio_system, gameplay_audio, dt, current_ui_state == GameState::Playing);
 
         // Update in-game camera
     InGameCam_Update(dt, gameplay_input_enabled, DebugUI_IsOpen(), right_mouse_down, DebugUI_GetCameraMode());
@@ -366,7 +511,7 @@ int main(int argc, char *argv[])
             listener_pos.x, listener_pos.y, listener_pos.z, 
             listener_forward.x, listener_forward.y, listener_forward.z,
             listener_up.x, listener_up.y, listener_up.z,
-            nullptr, 1
+            nullptr, 0
         );
 
         AudioSystem_Update(&audio_system, dt);

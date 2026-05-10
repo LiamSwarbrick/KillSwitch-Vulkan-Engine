@@ -836,6 +836,13 @@ AudioSystem_Create(AudioSystemCreateInfo create_info)
 
    apply_master_volume(&system);
    update_listener(&system);
+
+   const ma_result start_result = ma_engine_start(&get_impl(&system)->engine);
+   if (start_result != MA_SUCCESS)
+   {
+       SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "AudioSystem: failed to start miniaudio engine (%d).", (int)start_result);
+   }
+
    log_engine_device(&system);
    return system;
 }
