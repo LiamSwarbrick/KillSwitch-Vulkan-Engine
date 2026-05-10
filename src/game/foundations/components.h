@@ -232,46 +232,33 @@ struct C_MovementInfo
 	float idleTimer = 0.0f;
 };
 
-struct C_CombatInput
+struct C_Equipment
 {
-	// Modified by an InputSystem
-	bool wantsMelee = false;
-	bool wantsRanged = false;
-	glm::vec3 aimDir{ 0.0f };
-
-	// Modified by the CombatSystem
-	bool isAttacking = false;
+	
 };
 
-
-struct C_WeaponSocket
-{
-	EntityID weapon_entity = NULL_ENTITY;
-	glm::mat4 local_transform = glm::mat4(1.0f);
-	bool equipped = false;
-
-	const char* attach_bone_name;
-	int attach_bone_index;
-};
-
-struct C_WeaponMelee
-{
-	// Don't know what weapon types could exist in a horror game
-	// Type should be for the combat system (depending on the weapon we could have different attack patterns)
-	enum Type
-	{
-		Knuckle,
-		Knife,
-		Crowbar,
-		Sword, //lmao
-	};
-
-	float range = 1.0f;
-	float damage = 1.0f;
-	bool hasDurability = false;
-	float maxDurability = 0.0f;
-	float currentDurabiliy = 0.0f;
-};
+//struct C_WeaponMelee
+//{
+//	// Don't know what weapon types could exist in a horror game
+//	// Type should be for the combat system (depending on the weapon we could have different attack patterns)
+//	enum Type
+//	{
+//		BareHanded, // default to BareHanded if we do NOT have a weapon equipped
+//		Knuckle,
+//		Knife,
+//		Crowbar,
+//		Sword, //lmao
+//	};
+//
+//	float damage = 1.0f;
+//	float range = 1.0f;
+//	float knockback = 1.0f;
+//	//float atttackSpeed = 1.0f; // should speed up timers? idc
+//
+//	bool hasDurability = false;
+//	float maxDurability = 0.0f;
+//	float currentDurabiliy = 0.0f;
+//};
 
 struct C_WeaponRanged
 {
@@ -320,6 +307,158 @@ struct C_WeaponRanged
 	}
 };
 
+// Player will have hearts, each heart will be 1 health
+struct C_Health
+{
+	int currentHealth; 
+	int maxHealth;
+
+	static C_Health PlayerDefaultHealth()
+	{
+		return C_Health{ 16, 16 };
+	}
+
+	static C_Health ZombieDefaultHealth()
+	{
+		return C_Health { 20, 20 };
+	}
+};
+
+struct C_CombatInput
+{
+	// Modified by an InputSystem
+	bool wantsMelee = false;
+	bool wantsRanged = false;
+	glm::vec3 aimDir{ 0.0f };
+};
+
+// To allow zombies / player to have combo attacks
+struct C_CombatMeleeStats
+{
+	struct Attack
+	{
+		std::string animationID;
+		// WeaponMelee defines the base damage, knockback, etc so we only have multipliers here
+		float damageMultiplier = 1.0f;
+		float rangeMultiplier = 1.0f;
+		float knockbackMultiplier = 1.0f;
+		//float speedMultiplier = 1.0f;
+
+		float duration; // how long the attack animation takes
+		float cancelWindow; // when in duration a follow-up can buffer
+		float comboWindow; // how long player has to chain the next hit
+	};
+
+	struct Combo
+	{
+		std::string name;
+		std::vector<Attack> attacks; // sequence of attacks in this combo
+	};
+
+	// We will have 
+	int damage;
+	float range;
+	std::vector<Combo> combos;
+
+	static C_CombatMeleeStats PlayerDefaultCombatStats()
+	{
+		C_CombatMeleeStats stats;
+		stats.damage = 4;
+		stats.range = 0.4; // this range is from the outside of the capsule radius
+		stats.combos.push_back(
+		{
+			"Default", // Combo name,
+			{
+				// Vector of attacks
+				Attack {
+				// Attack 1
+				.animationID = "pistol_whip", // animationID (don't know the name)
+				.duration = 0.6f, // duration
+				.cancelWindow = 0.0f,
+				.comboWindow = 0.0f
+				},
+				// Attack 2 if there was one
+			}
+		});
+
+		return stats;
+	}
+
+	static C_CombatMeleeStats ZombieDefaultCombatStats()
+	{
+		C_CombatMeleeStats stats;
+		stats.combos.push_back({
+			"Default", // Combo name,
+			{
+				// Vector of attacks
+				Attack {
+					// Attack 1
+					.animationID = "zombie_swipe", // animationID (don't know the name)
+					.duration = 1.0f, // duration
+					.cancelWindow = 0.0f,
+					.comboWindow = 0.0f
+				}
+				// Attack 2 if there was one
+			}
+		});
+
+		return stats;
+	}
+
+	// This combo provides 2 hits, one short after the first one, that way it does 2 hits. Total of 6 dmg
+	static C_CombatMeleeStats ZombieDoubleComboCombatStats()
+	{
+		C_CombatMeleeStats stats;
+		stats.damage = 4;
+		stats.range = 5;
+		stats.combos.push_back({
+			"Default", // Combo name,
+			{
+				// Vector of attacks
+				Attack {
+					// Attack 1
+					.animationID = "zombie_swipe", // animationID (don't know the name)
+					.damageMultiplier = 0.75f,
+					.duration = 0.7f, // duration
+					.cancelWindow = 0.1f,
+					.comboWindow = 0.2f
+				},
+				// Attack 2 if there was one
+				Attack {
+					// Attack 2
+					.animationID = "zombie_swipe", // animationID (don't know the name)
+					.damageMultiplier = 0.75f,
+					.duration = 0.3f, // duration
+					.cancelWindow = 0.1f,
+					.comboWindow = 0.3f
+				},
+			}
+		});
+
+		return stats;
+	}
+};
+
+
+struct C_CombatInfo
+{
+	int activeCombo = -1;    // index into C_ComboStats::combos (-1 = none)
+	int currentStep = 0;     // which attack in the sequence we're on
+	float windowTimer = 0.0f;  // time left to chain the next hit
+	float attackTimer = 0.0f;  // how far into the current attack animation
+	bool inputBuffered = false;  // next attack was pressed during cancel window
+	bool isAttacking = false;
+};
+
+struct C_WeaponSocket
+{
+	EntityID weapon_entity = NULL_ENTITY;
+	glm::mat4 local_transform = glm::mat4(1.0f);
+	bool equipped = false;
+
+	const char* attach_bone_name;
+	int attach_bone_index;
+};
 
 
 struct C_PlayerInput
