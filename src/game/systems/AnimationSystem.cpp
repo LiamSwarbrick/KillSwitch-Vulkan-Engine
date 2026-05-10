@@ -210,22 +210,52 @@ void AnimationSystem::UpdatePlayer(float dt) const
 
             if (handJointIndex != -1)
             {
-                // glm::mat4 handMatrix = animatedMesh.joint_matrices[handJointIndex];
-                // weaponTransform.matrix = transform.matrix * handMatrix;
-
                 glm::mat4 inverseBind =
                     glm::make_mat4(animatedMesh.asset->skins[0].inverse_bind_matrices +
                                 handJointIndex * 16);
 
                 glm::mat4 bindMatrix = glm::inverse(inverseBind);
 
-                glm::mat4 handMatrix =
+                glm::mat4 animatedMatrix =
                     animatedMesh.joint_matrices[handJointIndex] *
                     bindMatrix;
 
+                glm::vec3 scale;
+                glm::quat rotation;
+                glm::vec3 translation;
+                glm::vec3 skew;
+                glm::vec4 perspective;
+
+                glm::decompose(
+                    animatedMatrix,
+                    scale,
+                    rotation,
+                    translation,
+                    skew,
+                    perspective
+                );
+
+                glm::mat4 handMatrix =
+                    glm::translate(glm::mat4(1.0f), translation) *
+                    glm::mat4_cast(rotation);
+
+                glm::mat4 weaponOffset =
+                    glm::translate(glm::mat4(1.0f),
+                        glm::vec3(0.07f, 0.12f, 0.061f)) *  // +x is down. +z is left.
+
+                    glm::mat4_cast(glm::quat(glm::vec3(
+                        glm::radians(-17.0f),
+                        glm::radians(-90.0f),
+                        glm::radians(-65.0f)
+                    ))) *
+
+                    glm::scale(glm::mat4(1.0f),
+                        glm::vec3(1.0f));
+
                 weaponTransform.matrix =
                     transform.matrix *
-                    handMatrix;
+                    handMatrix *
+                    weaponOffset;
             }
         });
     });

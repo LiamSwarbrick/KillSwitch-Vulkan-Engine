@@ -912,7 +912,7 @@ static void DrawSkillChoiceModal()
         ImGuiWindowFlags_NoSavedSettings);
 
     ImGui::PushFont(GameUI_GetFont(GameFont::Title), 45.0f);
-    const char* title = "Choose your Hope.";
+    const char* title = "Choose your Fate.";  // NOTE: Changing from hope to pretend that it's a curse or some shit lol
     const float title_offset = (ImGui::GetContentRegionAvail().x - ImGui::CalcTextSize(title).x) * 0.5f;
     if (title_offset > 0.0f)
         ImGui::SetCursorPosX(ImGui::GetCursorPosX() + title_offset);
