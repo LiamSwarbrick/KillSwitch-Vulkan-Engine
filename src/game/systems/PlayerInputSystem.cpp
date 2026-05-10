@@ -62,5 +62,21 @@ void PlayerInputSystem::Update(float dt) const
         combatInput.aimDir = cameraForward;
         combatInput.wantsMelee = input.attack;
         combatInput.wantsRanged = input.aim && input.attack; // assume ranged is aiming + action button == attack
+
+
+
+        // ecs->GetView<C_Weapon>().ForEach([&](C_Weapon& weapon)
+        // {
+        // // NAH, this looks bad
+        //     if (input.aim)
+        //     {
+        //         weapon.equipped = true;
+        //     }
+        //     else
+        //     {
+        //         weapon.equipped = false;
+        //     }
+        // });
+
     });
 }

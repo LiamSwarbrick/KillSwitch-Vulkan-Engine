@@ -34,6 +34,7 @@ struct SceneData
 
     uvec2 rendertarget_size;
     float inv_log_far_over_near;  // For getting the Z bin in clustered shading (1.0f / log(far / near))
+    float screenshake;  // 0.0 is off, 1.0 is max
 };
 
 struct ObjectData

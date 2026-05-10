@@ -42,7 +42,7 @@ namespace
     EntityID s_tp_follow_target_entity = NULL_ENTITY;
     float s_tp_shoulder_side_blend = 1.0f;
     const float near_plane = 0.1f;
-    const float far_plane  = 100.0f;
+    const float far_plane  = 200.0f;
     const float default_lens_distortion = -0.025f;
 
     bool  s_initialized = false;
@@ -435,7 +435,8 @@ namespace
                     .position        = cam.pos,
                     .near_plane      = near_plane,
                     .far_plane       = far_plane,
-                    .lens_distortion = default_lens_distortion
+                    .lens_distortion = default_lens_distortion,
+                    .screenshake     = 0.0f  // TODO: Change this.
         };
     }
 
