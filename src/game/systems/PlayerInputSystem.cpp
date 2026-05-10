@@ -62,5 +62,19 @@ void PlayerInputSystem::Update(float dt) const
         combatInput.aimDir = cameraForward;
         combatInput.wantsMelee = input.attack;
         combatInput.wantsRanged = input.aim && input.attack; // assume ranged is aiming + action button == attack
+
+
+        if (ecs->Has<C_WeaponSocket>(entity))
+        {
+            auto& socket = ecs->GetComponent<C_WeaponSocket>(entity);
+            bool hasWeapon = (socket.weapon_entity != NULL_ENTITY) && ecs->IsEntityValid(socket.weapon_entity);
+
+            if (hasWeapon)
+            {
+                socket.equipped = input.aim;
+            }
+        }
+        
+
     });
 }

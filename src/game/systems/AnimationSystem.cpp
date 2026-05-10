@@ -22,17 +22,11 @@ void AnimationSystem::UpdatePlayer(float dt) const
         bool hasWeapon = false;
 
         // NEEDS REWORK TO THIS
-        /*if (ecs->Has<C_Weapon>(entity))
+        if (ecs->Has<C_WeaponSocket>(entity))
         {
             auto& socket = ecs->GetComponent<C_WeaponSocket>(entity);
-            hasWeapon = (socket.weapon_entity != NULL_ENTITY) && ecs->IsEntityValid(socket.weapon_entity);
-        }*/
-
-        ecs->GetView<C_Weapon>().ForEach([&](C_Weapon& weapon) // need to know what type of weapon for different animations
-            {
-                if (weapon.equipped)
-                    hasWeapon = true;
-            });
+            hasWeapon = (socket.weapon_entity != NULL_ENTITY) && ecs->IsEntityValid(socket.weapon_entity) && socket.equipped;
+        }
 
         // Small tweak to update the rotation
         if ((playerInput.aim && moveInfo.isGrounded) || moveInfo.isMoving)
@@ -185,30 +179,83 @@ void AnimationSystem::UpdatePlayer(float dt) const
                 animatedMesh.lowerBodyLayer.isCurrentLooping = true;
             }
         }
+
+        if (ecs->Has<C_WeaponSocket>(entity))
+        {
+            auto& socket = ecs->GetComponent<C_WeaponSocket>(entity);
+            hasWeapon = (socket.weapon_entity != NULL_ENTITY) && ecs->IsEntityValid(socket.weapon_entity) && socket.equipped;
+        
+            if (!hasWeapon)
+                return;
+
+            C_Transform& weaponTransform = ecs->GetComponent<C_Transform>(socket.weapon_entity);
+
+            int handJointIndex = -1;
+
+            // find node for hand
+            SDL_assert(animatedMesh.asset->skin_count == 1 && "Assuming player has one gltf skin");
+
+            Skin* skin = &animatedMesh.asset->skins[0];
+            for (uint32_t i = 0; i < skin->joint_count; i++)
+            {
+                // Node* node = &animatedMesh.asset->nodes[skin->joint_node_indices[i]];
+                Bone* joint = &skin->bones[i];
+                if (joint->name && strcmp(joint->name, "mixamorig:RightHand") == 0)
+                {
+                    handJointIndex = (int)i;
+                    break;
+                }
+            }
+
+            if (handJointIndex != -1)
+            {
+                glm::mat4 inverseBind =
+                    glm::make_mat4(animatedMesh.asset->skins[0].inverse_bind_matrices +
+                        handJointIndex * 16);
+
+                glm::mat4 bindMatrix = glm::inverse(inverseBind);
+
+                glm::mat4 animatedMatrix =
+                    animatedMesh.joint_matrices[handJointIndex] *
+                    bindMatrix;
+
+                glm::vec3 scale;
+                glm::quat rotation;
+                glm::vec3 translation;
+                glm::vec3 skew;
+                glm::vec4 perspective;
+
+                glm::decompose(
+                    animatedMatrix,
+                    scale,
+                    rotation,
+                    translation,
+                    skew,
+                    perspective
+                );
+
+                glm::mat4 handMatrix =
+                    glm::translate(glm::mat4(1.0f), translation) *
+                    glm::mat4_cast(rotation);
+
+                glm::mat4 weaponOffset =
+                    glm::translate(glm::mat4(1.0f),
+                        glm::vec3(0.07f, 0.12f, 0.061f)) *  // +x is down. +z is left.
+
+                    glm::mat4_cast(glm::quat(glm::vec3(
+                        glm::radians(-17.0f),
+                        glm::radians(-90.0f),
+                        glm::radians(-65.0f)
+                    ))) *
+
+                    glm::scale(glm::mat4(1.0f),
+                        glm::vec3(1.0f));
+
+                weaponTransform.matrix =
+                    transform.matrix *
+                    handMatrix *
+                    weaponOffset;
+            }
+        }
     });
-
-
-    //ecs.GetView<C_WeaponSocket, C_Transform>().ForEach([&](C_Weapon& weapon, C_Transform& weaponTransform)
-    //    {
-    //        if (!weapon.equipped)
-    //            return;
-
-    //        int handNodeIndex = -1;
-
-    //        // find node for hand
-    //        for (uint32_t i = 0; i < animatedMesh.asset->node_count; i++)
-    //        {
-    //            Node* node = &animatedMesh.asset->nodes[i];
-
-    //            if (node->name && strcmp(node->name, "mixamorig:RightHand") == 0)
-    //            {
-    //                handNodeIndex = (int)i;
-    //                break;
-    //            }
-    //        }
-
-    //        glm::mat4 handMatrix = animatedMesh.joint_matrices[handNodeIndex];
-    //        weaponTransform.matrix = transform.matrix * handMatrix;
-    //    });
-
 }

@@ -43,7 +43,7 @@ void Scene::StartUp()
     m_ecs.RegisterComponent<C_MovementStats>();
     m_ecs.RegisterComponent<C_MovementInfo>();
     m_ecs.RegisterComponent<C_CombatInput>();
-    m_ecs.RegisterComponent<C_Weapon>();
+    m_ecs.RegisterComponent<C_WeaponSocket>();
 
     m_prefabs.clear();
 
@@ -279,32 +279,39 @@ EntityID Scene::InstantiatePrefab(Asset* prefab, glm::vec3 spawnPosition, glm::q
                 if (components.HasMember("PlayerInput"))
                 {
                     m_ecs.AddComponent<C_PlayerInput>(eID);
+
+                    m_ecs.AddComponent<C_WeaponSocket>(eID, {
+                        .equipped = false,
+                        .attach_bone_name = "hand"
+                    });
+
                     m_ecs.AddComponent<C_MovementStats>(eID, C_MovementStats::DefaultPlayerStats());
                     m_ecs.AddComponent<C_Faction>(eID, { C_Faction::Player });
+                    m_ecs.AddComponent<C_CombatMeleeStats>(eID, C_CombatMeleeStats::PlayerDefaultCombatStats());
+                    m_ecs.AddComponent<C_Health>(eID, C_Health::PlayerDefaultHealth());
+
                 }
                 if (components.HasMember("ZombieInput"))
                 {
                     // No need for input as it is processed in the EnemyAISystem
+                    m_ecs.AddComponent<C_EnemyAIStats>(eID);
                     m_ecs.AddComponent<C_EnemyAIInfo>(eID);
                     m_ecs.AddComponent<C_MovementStats>(eID, C_MovementStats::DefaultZombieStats());
                     m_ecs.AddComponent<C_Faction>(eID, { C_Faction::Zombie });
+                    m_ecs.AddComponent<C_CombatMeleeStats>(eID, C_CombatMeleeStats::ZombieDefaultCombatStats());
+                    m_ecs.AddComponent<C_Health>(eID, C_Health::ZombieDefaultHealth());
                 }
 
                 m_ecs.AddComponent<C_MovementInput>(eID);
                 m_ecs.AddComponent<C_MovementInfo>(eID);
                 m_ecs.AddComponent<C_CombatInput>(eID);
-
-                //m_ecs.AddComponent<C_PlayerController>(eID, {
-                //    /*.move_speed = 0.3f*/
-                //});
+                m_ecs.AddComponent<C_CombatInfo>(eID);
             }
 
             if (components.HasMember("WeaponComponent"))
             {
-                m_ecs.AddComponent<C_Weapon>(eID, { 
-                    .equipped = true,
-                    .attach_bone_name = "hand" 
-                });
+                // Add the default pistol for now (we don't have other weapons
+                m_ecs.AddComponent<C_WeaponRanged>(eID, C_WeaponRanged::DefaultPistol());
             }
 
             // -- MESH

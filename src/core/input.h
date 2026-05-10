@@ -14,6 +14,12 @@ enum BindingSource : uint8_t
     BIND_GAMEPAD_AXIS_NEG    // stick left&down/trigger
 };
 
+enum InputBindingDeviceGroup : uint8_t
+{
+    INPUT_BINDING_DEVICE_KEYBOARD_MOUSE,
+    INPUT_BINDING_DEVICE_GAMEPAD,
+};
+
 // Binding values
 struct InputBinding
 {
@@ -44,6 +50,8 @@ bool  Input_IsActionJustPressed(InputAction action);  // Pressed this frame, not
 bool  Input_IsActionJustReleased(InputAction action); // Released this frame
 bool  Input_WasAnyInputJustPressed();                 // Any keyboard/mouse/gamepad button pressed this frame
 float Input_GetActionValue(InputAction action);       // 0.0–1.0 (analog or digital)
+bool  Input_IsKeyJustPressed(SDL_Scancode scancode);
+bool  Input_IsGamepadButtonJustPressed(SDL_GamepadButton button);
 
     // Mouse delta 
 void  Input_GetMouseDelta(float* dx, float* dy);
@@ -60,6 +68,10 @@ void  Input_ClearBindings(InputAction action);
     // Save/load bindings to JSON file
 bool  Input_SaveBindings(const char* path);
 bool  Input_LoadBindings(const char* path);
+
+    // Rebind capture helpers
+bool  Input_PollPendingBinding(InputBindingDeviceGroup device_group, InputBinding* out_binding);
+void  Input_ClearPendingBindingCapture();
 
     // Utility
 const char* Input_GetActionName(InputAction action);

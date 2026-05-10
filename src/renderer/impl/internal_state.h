@@ -103,8 +103,6 @@ typedef struct RenderState
     Scene_InitInfo next_scene_info;
 
 
-
-
     // IMGUI
     //
 

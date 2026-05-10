@@ -53,6 +53,7 @@ typedef struct CameraInfo
     float near_plane;
     float far_plane;
     float lens_distortion;
+    float screenshake;  // 0.0 is off, 1.0 is high, but it can go as high as your heart desires
 }
 CameraInfo;
 

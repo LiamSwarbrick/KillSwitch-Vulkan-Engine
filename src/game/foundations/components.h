@@ -233,47 +233,33 @@ struct C_MovementInfo
 	float idleTimer = 0.0f;
 };
 
-struct C_CombatInput
+struct C_Equipment
 {
-	// Modified by an InputSystem
-	bool wantsMelee = false;
-	bool wantsRanged = false;
-	bool wantsReload = false;
-	glm::vec3 aimDir{ 0.0f };
-
-	// Modified by the CombatSystem
-	bool isAttacking = false;
+	
 };
 
-
-
-struct C_Weapon
-{
-	EntityID weapon_entity = NULL_ENTITY;
-	glm::mat4 local_transform = glm::mat4(1.0f);
-	bool equipped = false;
-
-	const char* attach_bone_name;
-	int attach_bone_index;
-};
-
-struct C_WeaponMelee
-{
-	// Don't know what weapon types could exist in a horror game
-	// Type should be for the combat system (depending on the weapon we could have different attack patterns)
-	enum Type
-	{
-		Knuckle,
-		Knife,
-		Crowbar,
-		Sword, //lmao
-	};
-
-	float range = 0.0f;
-	float damage = 0.0f;
-	float maxDurability = 0.0f;
-	float currentDurabiliy = 0.0f;
-};
+//struct C_WeaponMelee
+//{
+//	// Don't know what weapon types could exist in a horror game
+//	// Type should be for the combat system (depending on the weapon we could have different attack patterns)
+//	enum Type
+//	{
+//		BareHanded, // default to BareHanded if we do NOT have a weapon equipped
+//		Knuckle,
+//		Knife,
+//		Crowbar,
+//		Sword, //lmao
+//	};
+//
+//	float damage = 1.0f;
+//	float range = 1.0f;
+//	float knockback = 1.0f;
+//	//float atttackSpeed = 1.0f; // should speed up timers? idc
+//
+//	bool hasDurability = false;
+//	float maxDurability = 0.0f;
+//	float currentDurabiliy = 0.0f;
+//};
 
 struct C_WeaponRanged
 {
@@ -303,10 +289,177 @@ struct C_WeaponRanged
 	float shootMaxCooldown = 0.0f; // the time between each shot
 
 	// Extra goofy shit
-	float dispersionRecoveryCooldown;
+	float dispersionRecoveryCooldown = 0.0f;
 	std::function<void()> dispersionPattern; // idk if this would even work
+
+	static C_WeaponRanged DefaultPistol()
+	{
+		return C_WeaponRanged{
+			.type = Pistol,
+			.firingMode = Semi,
+			.damage = 100.0f, // Assume 100 health is a zombie's
+			.maxBullets = 1,
+			.currentBullets = 1,
+			.lastTimeSinceShot = 0.0f,
+			.shotsPerFire = 1,
+			.shootMaxCooldown = 1.0f,
+			.dispersionRecoveryCooldown = 1.5f
+		};
+	}
 };
 
+// Player will have hearts, each heart will be 1 health
+struct C_Health
+{
+	int currentHealth; 
+	int maxHealth;
+
+	static C_Health PlayerDefaultHealth()
+	{
+		return C_Health{ 16, 16 };
+	}
+
+	static C_Health ZombieDefaultHealth()
+	{
+		return C_Health { 20, 20 };
+	}
+};
+
+struct C_CombatInput
+{
+	// Modified by an InputSystem
+	bool wantsMelee = false;
+	bool wantsRanged = false;
+	glm::vec3 aimDir{ 0.0f };
+};
+
+// To allow zombies / player to have combo attacks
+struct C_CombatMeleeStats
+{
+	struct Attack
+	{
+		std::string animationID;
+		// WeaponMelee defines the base damage, knockback, etc so we only have multipliers here
+		float damageMultiplier = 1.0f;
+		float rangeMultiplier = 1.0f;
+		float knockbackMultiplier = 1.0f;
+		//float speedMultiplier = 1.0f;
+
+		float duration; // how long the attack animation takes
+		float cancelWindow; // when in duration a follow-up can buffer
+		float comboWindow; // how long player has to chain the next hit
+	};
+
+	struct Combo
+	{
+		std::string name;
+		std::vector<Attack> attacks; // sequence of attacks in this combo
+	};
+
+	// We will have 
+	int damage;
+	float range;
+	std::vector<Combo> combos;
+
+	static C_CombatMeleeStats PlayerDefaultCombatStats()
+	{
+		C_CombatMeleeStats stats;
+		stats.damage = 4;
+		stats.range = 0.4; // this range is from the outside of the capsule radius
+		stats.combos.push_back(
+		{
+			"Default", // Combo name,
+			{
+				// Vector of attacks
+				Attack {
+				// Attack 1
+				.animationID = "pistol_whip", // animationID (don't know the name)
+				.duration = 0.6f, // duration
+				.cancelWindow = 0.0f,
+				.comboWindow = 0.0f
+				},
+				// Attack 2 if there was one
+			}
+		});
+
+		return stats;
+	}
+
+	static C_CombatMeleeStats ZombieDefaultCombatStats()
+	{
+		C_CombatMeleeStats stats;
+		stats.combos.push_back({
+			"Default", // Combo name,
+			{
+				// Vector of attacks
+				Attack {
+					// Attack 1
+					.animationID = "zombie_swipe", // animationID (don't know the name)
+					.duration = 1.0f, // duration
+					.cancelWindow = 0.0f,
+					.comboWindow = 0.0f
+				}
+				// Attack 2 if there was one
+			}
+		});
+
+		return stats;
+	}
+
+	// This combo provides 2 hits, one short after the first one, that way it does 2 hits. Total of 6 dmg
+	static C_CombatMeleeStats ZombieDoubleComboCombatStats()
+	{
+		C_CombatMeleeStats stats;
+		stats.damage = 4;
+		stats.range = 5;
+		stats.combos.push_back({
+			"Default", // Combo name,
+			{
+				// Vector of attacks
+				Attack {
+					// Attack 1
+					.animationID = "zombie_swipe", // animationID (don't know the name)
+					.damageMultiplier = 0.75f,
+					.duration = 0.7f, // duration
+					.cancelWindow = 0.1f,
+					.comboWindow = 0.2f
+				},
+				// Attack 2 if there was one
+				Attack {
+					// Attack 2
+					.animationID = "zombie_swipe", // animationID (don't know the name)
+					.damageMultiplier = 0.75f,
+					.duration = 0.3f, // duration
+					.cancelWindow = 0.1f,
+					.comboWindow = 0.3f
+				},
+			}
+		});
+
+		return stats;
+	}
+};
+
+
+struct C_CombatInfo
+{
+	int activeCombo = -1;    // index into C_ComboStats::combos (-1 = none)
+	int currentStep = 0;     // which attack in the sequence we're on
+	float windowTimer = 0.0f;  // time left to chain the next hit
+	float attackTimer = 0.0f;  // how far into the current attack animation
+	bool inputBuffered = false;  // next attack was pressed during cancel window
+	bool isAttacking = false;
+};
+
+struct C_WeaponSocket
+{
+	EntityID weapon_entity = NULL_ENTITY;
+	glm::mat4 local_transform = glm::mat4(1.0f);
+	bool equipped = false;
+
+	const char* attach_bone_name;
+	int attach_bone_index;
+};
 
 
 struct C_PlayerInput
@@ -333,6 +486,32 @@ struct C_AIInput
 	bool has_target = false;
 };
 
+// This should be changed by the game (if procedural generation) or added manually in the blender script if manual creation of levels
+struct C_EnemyAIStats
+{
+	// Vision & alert
+	float visionDistance = 10.0f;
+	float visionMaxAngle = glm::radians(90.0f); // The max angle to where we're looking
+
+	float alertDistance = 6.0f; // We probably should NOT have these, but the player having alertDistances on walk, run, jump and then read them from the zombie
+
+	// Attack ranges
+	float attackDistance = 1.0f;
+
+	// Patrol (unsure where the patrol thingy should go. should it go on stats?, we could have target be the current patrol point)
+	std::vector<glm::vec3> patrolPoints;
+	int currentPatrolIndex = 0;
+	float patrolWaitTime = 2.0f;
+	float patrolWaitTimer = 0.0f;
+
+	// Turn speed (angles/radians per second or sum'n idk)
+	float turnSpeed = glm::radians(360.0f); 
+
+	float finishAttackTime = 1.0f;
+	float attackCooldownTime = 0.5f; // Possibly unused
+};
+
+// To subdivide between the AIInfo and the AIStats (all ranges: vision distance, alert distance, attack range)
 struct C_EnemyAIInfo
 {
 	enum State
@@ -341,6 +520,7 @@ struct C_EnemyAIInfo
 		Patrol,
 		Alerted, // Until we implement a more complex AI i don't think this is going to be used
 		Chase,
+		Search,
 		Attack,
 		Staggered, // When pushed by our melee?
 		Dead, // Just in case, if we kill a zombie make it dead if we had ragdolls or whatever, but we might aswell despawn for now
@@ -348,6 +528,7 @@ struct C_EnemyAIInfo
 
 	State currentState = State::Idle;
 	State previousState = State::Idle;
+	State lastAudioState = State::Idle;
 	float stateTimer = 0.0f;
 
 	// Vision & alert
@@ -355,21 +536,36 @@ struct C_EnemyAIInfo
 	float visionMaxAngle = glm::radians(90.0f); // The max angle to where we're looking
 
 	// Target (for Alerted, Chase (if out of sight the target will be our last seen target), Attack
+	State fallbackState = State::Idle;
+
+	// Target 
+	// (for Idle: nothing
+	// (for Patrol: the current patrolPoint
+	// (for Alerted : the place we have to look at, 
+	// (for Chase : the current player's position we should run at (if out of sight the target will be our last seen target), 
+	// (for Attack : the position we are attacking at
+	// (for Staggered: nothing or the place we should look at after being staggered
+	// (for Dead: nothing
 	glm::vec3 target{ 0.0f };
 	bool hasTarget = false;
 
-	// Alert
-	glm::vec3 alertTarget{ 0.0f };
-	float alertDistance = 6.0f;
+	// For Search mode (go to target -> reach target or max timer, fall back to idle)
+	bool hasReachedTarget = false;
+	float reachTheTargetTimer = 0.0f;
+	float reachTheTargetMaxTime = 5.0f;
 
-	// Chasing (to check before we do anything else)
+	// For alerted mode
+	float alertedTimer = 0.0f;
+	float alertedMaxTime = 5.0f;
+
+	// For Chasing / Attack, to check the active target first (say the zombie is dumb), and if the target falls off range then fallback to check for other players
 	EntityID activeTargetID = NULL_ENTITY;
 
-	// Patrol
-	std::vector<glm::vec3> patrolPoints;
-	int currentPatrolIndex = 0;
-	float patrolWaitTime = 2.0f;
-	float patrolWaitTimer = 0.0f;
+	// Timers
+	float attackTimer = 0.0f;
+
+	// Important addition (TODO: add turn speed calculations to turning)
+	glm::vec3 targetLookDirToLerp{ 0.0f };
 };
 
 
