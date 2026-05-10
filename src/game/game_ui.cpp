@@ -340,7 +340,7 @@ static void DrawPlayingHUD()
     if (s_playing_hud_resources.layer_banner.imgui_texture_id != 0)
     {
         dl->AddImage(
-            reinterpret_cast<ImTextureID>(s_playing_hud_resources.layer_banner.imgui_texture_id),
+            (ImTextureID)(s_playing_hud_resources.layer_banner.imgui_texture_id),
             banner_pos,
             ImVec2(banner_pos.x + banner_size.x, banner_pos.y + banner_size.y));
     }
@@ -361,7 +361,7 @@ static void DrawPlayingHUD()
         {
             const float x = hearts_right - heart_size.x * static_cast<float>(index + 1) - heart_gap * static_cast<float>(index);
             dl->AddImage(
-                reinterpret_cast<ImTextureID>(s_playing_hud_resources.heart_icon.imgui_texture_id),
+                (ImTextureID)(s_playing_hud_resources.heart_icon.imgui_texture_id),
                 ImVec2(x, hearts_top),
                 ImVec2(x + heart_size.x, hearts_top + heart_size.y));
         }
@@ -375,7 +375,7 @@ static void DrawPlayingHUD()
 
         const float flash_alpha = EaseOutCubic(s_playing_hud.damage_flash_time / PLAYING_HUD_DAMAGE_FLASH_SEC) * 0.78f;
         dl->AddImage(
-            reinterpret_cast<ImTextureID>(s_playing_hud_resources.damage_overlay.imgui_texture_id),
+            (ImTextureID)(s_playing_hud_resources.damage_overlay.imgui_texture_id),
             ImVec2(0.0f, 0.0f),
             io.DisplaySize,
             ImVec2(0.0f, 0.0f),

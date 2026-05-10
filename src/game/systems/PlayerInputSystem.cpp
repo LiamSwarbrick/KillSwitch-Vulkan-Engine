@@ -71,7 +71,7 @@ void PlayerInputSystem::Update(float dt) const
 
             if (hasWeapon)
             {
-                socket.equipped = input.aim;
+                socket.equipped = true;//input.aim;
             }
         }
         
