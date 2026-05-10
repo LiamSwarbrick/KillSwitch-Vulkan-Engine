@@ -29,6 +29,7 @@
     X(INTERACT,      "interact")      \
     X(ATTACK,        "attack")        \
     X(AIM,           "aim")           \
+    X(RELOAD,        "reload")        \
     /* UI / System */      \
     X(PAUSE,         "pause")         \
     X(DEBUG_TOGGLE,  "debug_toggle")

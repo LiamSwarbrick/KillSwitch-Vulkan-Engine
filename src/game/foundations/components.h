@@ -228,6 +228,7 @@ struct C_MovementInfo
 	bool isMoving = false;
 	bool isGrounded = false;
 	bool isJumping = false;
+	bool isReloading = false;
 
 	float idleTimer = 0.0f;
 };
@@ -237,6 +238,7 @@ struct C_CombatInput
 	// Modified by an InputSystem
 	bool wantsMelee = false;
 	bool wantsRanged = false;
+	bool wantsReload = false;
 	glm::vec3 aimDir{ 0.0f };
 
 	// Modified by the CombatSystem
@@ -322,6 +324,7 @@ struct C_PlayerInput
 	bool run = false;
 	bool aim = false;
 	bool attack = false;
+	bool reload = false;
 };
 
 struct C_AIInput
