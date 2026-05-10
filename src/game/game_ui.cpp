@@ -1,5 +1,6 @@
 #include "game_ui.h"
 #include "core/input.h"
+#include "renderer/renderer.h"
 #include "renderer/debug_ui_api.h"
 
 #include "imgui.h"
@@ -35,6 +36,21 @@ struct MainMenuAnimState
 };
 
 static MainMenuAnimState s_main_menu_anim = {};
+
+enum class GameOverAnimPhase
+{
+    TitleReveal,
+    FadeInMenuButtons,
+    MenuReady,
+};
+
+struct GameOverAnimState
+{
+    GameOverAnimPhase phase = GameOverAnimPhase::TitleReveal;
+    float phase_time = 0.0f;
+};
+
+static GameOverAnimState s_game_over_anim = {};
 
 enum class OptionsPanelSection
 {
@@ -80,6 +96,24 @@ struct SkillChoiceState
 
 static SkillChoiceState s_skill_choice = {};
 
+struct PlayingHUDState
+{
+    int life_count = 0;
+    int loaded_bullets = 0;
+    int backup_bullets = 0;
+    float damage_flash_time = 0.0f;
+};
+
+struct PlayingHUDResources
+{
+    Renderer_UITexture heart_icon = {};
+    Renderer_UITexture layer_banner = {};
+    Renderer_UITexture damage_overlay = {};
+};
+
+static PlayingHUDState s_playing_hud = {};
+static PlayingHUDResources s_playing_hud_resources = {};
+
 static const LevelStartSkillOption s_default_skill_options[LEVEL_START_SKILL_OPTION_COUNT] = {
     // NOTE(Liam): Deciding to remove the hints about how to use the upgrades so they discover it themselves
     //             We can decide whether to add it back maybe.
@@ -92,13 +126,19 @@ static constexpr float MAIN_MENU_TITLE_REVEAL_SEC = 1.45f;
 static constexpr float MAIN_MENU_PROMPT_FADE_SEC  = 0.55f;
 static constexpr float MAIN_MENU_REVEAL_SEC       = 0.85f;
 static constexpr float MAIN_MENU_BUTTON_FADE_SEC  = 0.45f;
+static constexpr float GAME_OVER_TITLE_REVEAL_SEC = 0.90f;
+static constexpr float GAME_OVER_MENU_FADE_SEC    = 0.40f;
 static constexpr float OPTIONS_DETAIL_REVEAL_SEC  = 0.25f;
 static constexpr float SKILL_CHOICE_LEVEL_INTRO_FADE_IN_SEC  = 1.0f;
 static constexpr float SKILL_CHOICE_LEVEL_INTRO_HOLD_SEC     = 1.0f;
 static constexpr float SKILL_CHOICE_LEVEL_INTRO_FADE_OUT_SEC = 0.6f;
 static constexpr float SKILL_CHOICE_CARDS_FADE_SEC           = 0.30f;
 static constexpr float SKILL_CHOICE_CLOSE_FADE_SEC           = 0.30f;
+static constexpr float PLAYING_HUD_DAMAGE_FLASH_SEC          = 0.35f;
 static constexpr const char* INPUT_BINDINGS_PATH             = "assets/keybindings.json";
+static constexpr const char* HUD_HEART_ICON_PATH             = "assets/UI/ingame png/icon_heart.png";
+static constexpr const char* HUD_LAYER_BANNER_PATH           = "assets/UI/ingame png/Layer 46.png";
+static constexpr const char* HUD_DAMAGE_OVERLAY_PATH         = "assets/UI/ingame png/LowHealthScreenEffect.png";
 
 struct ControlsActionEntry
 {
@@ -185,6 +225,22 @@ void GameUI_SetLevelStartSkillApplyCallback(Scene* scene, LevelStartSkillApplyCa
     s_skill_choice.scene = scene;
 }
 
+void GameUI_SetPlayingHUDState(const GameUIPlayingHUDState& state)
+{
+    const int clamped_life_count = (state.life_count < 0) ? 0 : state.life_count;
+    if (clamped_life_count < s_playing_hud.life_count)
+        s_playing_hud.damage_flash_time = PLAYING_HUD_DAMAGE_FLASH_SEC;
+
+    s_playing_hud.life_count = clamped_life_count;
+    s_playing_hud.loaded_bullets = (state.loaded_bullets < 0) ? 0 : state.loaded_bullets;
+    s_playing_hud.backup_bullets = (state.backup_bullets < 0) ? 0 : state.backup_bullets;
+}
+
+void GameUI_TriggerDamageFlash()
+{
+    s_playing_hud.damage_flash_time = PLAYING_HUD_DAMAGE_FLASH_SEC;
+}
+
 // ============================================================
 //  Helpers — shared style
 // ============================================================
@@ -233,6 +289,99 @@ static float EaseInOutCubic(float t)
 static float Lerp(float a, float b, float t)
 {
     return a + (b - a) * t;
+}
+
+static ImVec2 GetTextureSizeForHeight(const Renderer_UITexture& texture, float target_height)
+{
+    if (texture.width == 0 || texture.height == 0 || target_height <= 0.0f)
+        return ImVec2(0.0f, 0.0f);
+
+    const float aspect = static_cast<float>(texture.width) / static_cast<float>(texture.height);
+    return ImVec2(target_height * aspect, target_height);
+}
+
+static void DrawPlayingHUD()
+{
+    ImGuiIO& io = ImGui::GetIO();
+    ImDrawList* dl = ImGui::GetBackgroundDrawList();
+
+    float scale = io.DisplaySize.y / 1080.0f; 
+    if (scale < 0.75f) scale = 0.75f;
+    if (scale > 1.35f) scale = 1.35f;
+
+    ImFont* hud_font = GameUI_GetFont(GameFont::Body);
+    if (!hud_font)
+        hud_font = ImGui::GetFont();
+
+    const float margin_x = 34.0f * scale;
+    const float margin_y = 28.0f * scale;
+    const float banner_height = 82.0f * scale;
+    const float row_gap = 14.0f * scale;
+    const float heart_height = 32.0f * scale;
+    const float heart_gap = 8.0f * scale;
+    const float ammo_gap = 18.0f * scale;
+    const float ammo_font_size = 30.0f * scale;
+
+    const ImVec2 banner_size = GetTextureSizeForHeight(s_playing_hud_resources.layer_banner, banner_height);
+
+    char ammo_label[32] = {};
+    snprintf(ammo_label, sizeof(ammo_label), "%d / %d", s_playing_hud.loaded_bullets, s_playing_hud.backup_bullets);
+    
+
+    const ImVec2 ammo_text_size = hud_font->CalcTextSizeA(ammo_font_size, FLT_MAX, 0.0f, ammo_label);
+    const float top_row_width = banner_size.x + ammo_gap + ammo_text_size.x;
+    const float top_row_right = io.DisplaySize.x - margin_x;
+    const float hearts_right = top_row_right;
+    const float bottom_anchor = io.DisplaySize.y - margin_y;
+    const float hearts_top = bottom_anchor - heart_height;
+    const float row_top = hearts_top - row_gap - banner_height;
+    const ImVec2 banner_pos(top_row_right - top_row_width, row_top);
+
+    if (s_playing_hud_resources.layer_banner.imgui_texture_id != 0)
+    {
+        dl->AddImage(
+            reinterpret_cast<ImTextureID>(s_playing_hud_resources.layer_banner.imgui_texture_id),
+            banner_pos,
+            ImVec2(banner_pos.x + banner_size.x, banner_pos.y + banner_size.y));
+    }
+
+    const ImVec2 ammo_pos(
+        banner_pos.x + banner_size.x + ammo_gap,
+        banner_pos.y + (banner_height - ammo_text_size.y) * 0.5f);
+    const ImU32 ammo_shadow_col = IM_COL32(0, 0, 0, 180);
+    const ImU32 ammo_text_col = IM_COL32(255, 255, 255, 255);
+    dl->AddText(hud_font, ammo_font_size, ImVec2(ammo_pos.x + 2.0f, ammo_pos.y + 2.0f), ammo_shadow_col, ammo_label);
+    dl->AddText(hud_font, ammo_font_size, ammo_pos, ammo_text_col, ammo_label);
+
+    if (s_playing_hud_resources.heart_icon.imgui_texture_id != 0 && s_playing_hud.life_count > 0)
+    {
+        const ImVec2 heart_size = GetTextureSizeForHeight(s_playing_hud_resources.heart_icon, heart_height);
+
+        for (int index = 0; index < s_playing_hud.life_count; ++index)
+        {
+            const float x = hearts_right - heart_size.x * static_cast<float>(index + 1) - heart_gap * static_cast<float>(index);
+            dl->AddImage(
+                reinterpret_cast<ImTextureID>(s_playing_hud_resources.heart_icon.imgui_texture_id),
+                ImVec2(x, hearts_top),
+                ImVec2(x + heart_size.x, hearts_top + heart_size.y));
+        }
+    }
+
+    if (s_playing_hud.damage_flash_time > 0.0f && s_playing_hud_resources.damage_overlay.imgui_texture_id != 0)
+    {
+        s_playing_hud.damage_flash_time -= io.DeltaTime;
+        if (s_playing_hud.damage_flash_time < 0.0f)
+            s_playing_hud.damage_flash_time = 0.0f;
+
+        const float flash_alpha = EaseOutCubic(s_playing_hud.damage_flash_time / PLAYING_HUD_DAMAGE_FLASH_SEC) * 0.78f;
+        dl->AddImage(
+            reinterpret_cast<ImTextureID>(s_playing_hud_resources.damage_overlay.imgui_texture_id),
+            ImVec2(0.0f, 0.0f),
+            io.DisplaySize,
+            ImVec2(0.0f, 0.0f),
+            ImVec2(1.0f, 1.0f),
+            IM_COL32(255, 255, 255, static_cast<int>(255.0f * flash_alpha)));
+    }
 }
 
 static bool IsBindingInDeviceGroup(const InputBinding& binding, InputBindingDeviceGroup device_group)
@@ -508,6 +657,12 @@ static void ResetMainMenuAnimation()
     s_main_menu_anim.total_time = 0.0f;
 }
 
+static void ResetGameOverAnimation()
+{
+    s_game_over_anim.phase = GameOverAnimPhase::TitleReveal;
+    s_game_over_anim.phase_time = 0.0f;
+}
+
 static void TriggerMainMenuInteraction()
 {
     if (s_main_menu_anim.phase == MainMenuAnimPhase::AwaitInput)
@@ -614,6 +769,24 @@ static void AdvanceMainMenuAnimation(float dt)
     {
         s_main_menu_anim.phase = MainMenuAnimPhase::MenuReady;
         s_main_menu_anim.phase_time = 0.0f;
+    }
+}
+
+static void AdvanceGameOverAnimation(float dt)
+{
+    s_game_over_anim.phase_time += dt;
+
+    if (s_game_over_anim.phase == GameOverAnimPhase::TitleReveal &&
+        s_game_over_anim.phase_time >= GAME_OVER_TITLE_REVEAL_SEC)
+    {
+        s_game_over_anim.phase = GameOverAnimPhase::FadeInMenuButtons;
+        s_game_over_anim.phase_time = 0.0f;
+    }
+    else if (s_game_over_anim.phase == GameOverAnimPhase::FadeInMenuButtons &&
+             s_game_over_anim.phase_time >= GAME_OVER_MENU_FADE_SEC)
+    {
+        s_game_over_anim.phase = GameOverAnimPhase::MenuReady;
+        s_game_over_anim.phase_time = 0.0f;
     }
 }
 
@@ -1079,6 +1252,91 @@ static void DrawMainMenu()
     ImGui::PopStyleVar(3);
 }
 
+static void DrawGameOverMenu()
+{
+    ImGuiIO& io = ImGui::GetIO();
+    AdvanceGameOverAnimation(io.DeltaTime);
+
+    const float sw = io.DisplaySize.x;
+    const float sh = io.DisplaySize.y;
+
+    float title_alpha = 1.0f;
+    if (s_game_over_anim.phase == GameOverAnimPhase::TitleReveal)
+        title_alpha = EaseInOutCubic(s_game_over_anim.phase_time / GAME_OVER_TITLE_REVEAL_SEC);
+
+    float menu_alpha = 0.0f;
+    if (s_game_over_anim.phase == GameOverAnimPhase::FadeInMenuButtons)
+        menu_alpha = EaseInOutCubic(s_game_over_anim.phase_time / GAME_OVER_MENU_FADE_SEC);
+    else if (s_game_over_anim.phase == GameOverAnimPhase::MenuReady)
+        menu_alpha = 1.0f;
+
+    ImDrawList* dl = ImGui::GetBackgroundDrawList();
+    dl->AddRectFilled(ImVec2(0, 0), ImVec2(sw, sh), IM_COL32(0, 0, 0, 180));
+
+    ImGui::SetNextWindowPos(ImVec2(sw * 0.5f, sh * 0.28f), ImGuiCond_Always, ImVec2(0.5f, 0.5f));
+    ImGui::SetNextWindowSize(ImVec2(0, 0));
+    ImGui::SetNextWindowBgAlpha(0.0f);
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
+    ImGui::PushStyleVar(ImGuiStyleVar_Alpha, title_alpha);
+    ImGui::PushStyleColor(ImGuiCol_Border, ImVec4(0, 0, 0, 0));
+    ImGui::Begin("##gameover_title", nullptr,
+        ImGuiWindowFlags_NoDecoration |
+        ImGuiWindowFlags_NoInputs |
+        ImGuiWindowFlags_NoMove |
+        ImGuiWindowFlags_NoSavedSettings);
+
+    ImGui::PushFont(GameUI_GetFont(GameFont::Title), 120.0f);
+    ImGui::TextUnformatted("GAME OVER");
+    ImGui::PopFont();
+
+    ImGui::End();
+    ImGui::PopStyleColor();
+    ImGui::PopStyleVar(2);
+
+    const float btn_w = 320.0f;
+    const float btn_h = 48.0f;
+    const float gap = 16.0f;
+    const float pad_v = 2.0f;
+    const float total_h = pad_v * 2.0f + btn_h * 2.0f + gap * 2.0f;
+
+    const float bx = sw * 0.5f - btn_w * 0.5f;
+    const float by = sh * 0.52f;
+
+    ImGui::SetNextWindowPos(ImVec2(bx, by), ImGuiCond_Always);
+    ImGui::SetNextWindowSize(ImVec2(btn_w, total_h), ImGuiCond_Always);
+    ImGui::SetNextWindowBgAlpha(0.0f);
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
+    ImGui::PushStyleVar(ImGuiStyleVar_Alpha, menu_alpha);
+    ImGui::PushStyleColor(ImGuiCol_Border, ImVec4(0, 0, 0, 0));
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, pad_v));
+    ImGui::Begin("##gameover_btns", nullptr,
+        ImGuiWindowFlags_NoDecoration |
+        ImGuiWindowFlags_NoMove |
+        ImGuiWindowFlags_NoSavedSettings |
+        ((s_game_over_anim.phase == GameOverAnimPhase::MenuReady) ? 0 : ImGuiWindowFlags_NoInputs));
+
+    PushMenuButtonStyle();
+    ImGui::PushFont(GameUI_GetFont(GameFont::Body), 30.0f);
+
+    if (ImGui::Button("Restart", ImVec2(btn_w, btn_h)))
+        GameUI_SetState(GameState::Playing);
+    ImGui::SetItemDefaultFocus();
+
+    ImGui::Dummy(ImVec2(0, gap));
+
+    if (ImGui::Button("Return to Main Menu", ImVec2(btn_w, btn_h)))
+        GameUI_SetState(GameState::MainMenu);
+
+    ImGui::Dummy(ImVec2(0, gap));
+
+    ImGui::PopFont();
+    PopMenuButtonStyle();
+
+    ImGui::End();
+    ImGui::PopStyleColor();
+    ImGui::PopStyleVar(3);
+}
+
 // ============================================================
 //  Pause Menu
 // ============================================================
@@ -1176,6 +1434,7 @@ void GameUI_Init()
 {
     s_state = GameState::MainMenu;
     ResetMainMenuAnimation();
+    ResetGameOverAnimation();
     s_options_panel.active = false;
     s_options_panel.return_state = GameState::MainMenu;
     s_options_panel.selected_section = OptionsPanelSection::None;
@@ -1194,6 +1453,15 @@ void GameUI_Init()
     GameUI_LoadFont(GameFont::Body,  "assets/UI/menu fonts/SplendidB.ttf",  32.0f);
     //   GameUI_LoadFont(GameFont::Mono,  "assets/fonts/my_mono.ttf",  18.0f);
     // Unloaded slots fall back to the ImGui built-in default font automatically.
+
+    Renderer_LoadUITexture(HUD_HEART_ICON_PATH, true, &s_playing_hud_resources.heart_icon);
+    Renderer_LoadUITexture(HUD_LAYER_BANNER_PATH, true, &s_playing_hud_resources.layer_banner);
+    Renderer_LoadUITexture(HUD_DAMAGE_OVERLAY_PATH, false, &s_playing_hud_resources.damage_overlay);
+
+    s_playing_hud.life_count = 0;
+    s_playing_hud.loaded_bullets = 0;
+    s_playing_hud.backup_bullets = 0;
+    s_playing_hud.damage_flash_time = 0.0f;
 }
 
 void GameUI_Update()
@@ -1202,6 +1470,12 @@ void GameUI_Update()
     // This keeps game UI hidden and restores its previous state when debug UI closes.
     if (DebugUI_IsOpen())
         return;
+
+    if (s_state == GameState::Playing && Input_IsKeyJustPressed(SDL_SCANCODE_P)) // TODO: damage flash should be triggered by get hit
+        GameUI_TriggerDamageFlash();
+
+    if (s_state == GameState::Playing && Input_IsKeyJustPressed(SDL_SCANCODE_O))
+        GameUI_SetState(GameState::GameOver);
 
     if (s_options_panel.active)
     {
@@ -1268,7 +1542,9 @@ void GameUI_BuildImGui()
     {
     case GameState::MainMenu: DrawMainMenu(); break;
     case GameState::Paused:   DrawPauseMenu(); break;
+    case GameState::GameOver: DrawGameOverMenu(); break;
     case GameState::Playing: 
+        DrawPlayingHUD();
         if (s_skill_choice.active) // draw skill for test
             DrawSkillChoiceModal();
         if (!s_skill_choice.active && Input_IsActionPressed(ACTION_AIM))
@@ -1290,6 +1566,9 @@ void GameUI_SetState(GameState state)
     if (s_state != GameState::MainMenu && state == GameState::MainMenu)
         ResetMainMenuAnimation();
 
+    if (s_state != GameState::GameOver && state == GameState::GameOver)
+        ResetGameOverAnimation();
+
     if (state != GameState::MainMenu && state != GameState::Paused)
         CloseOptionsPanel();
 
@@ -1299,6 +1578,7 @@ void GameUI_SetState(GameState state)
         s_options_panel.awaiting_action = ACTION_COUNT;
         s_options_panel.awaiting_device_group = INPUT_BINDING_DEVICE_KEYBOARD_MOUSE;
         s_options_panel.request_nav_focus = false;
+        s_playing_hud.damage_flash_time = 0.0f;
         s_skill_choice.active = false;
         s_skill_choice.phase = SkillChoicePhase::LevelIntro;
         s_skill_choice.phase_time = 0.0f;

@@ -16,6 +16,32 @@
 #include "SDL3/SDL.h"
 #include "SDL3/SDL_main.h"
 
+static constexpr int DEFAULT_PLAYER_HUD_LIFE_COUNT = 3;
+static int s_player_hud_life_count = DEFAULT_PLAYER_HUD_LIFE_COUNT;
+
+static GameUIPlayingHUDState BuildPlayingHUDState(Scene& scene, EntityID player_id)
+{
+    GameUIPlayingHUDState hud_state = {};
+    hud_state.life_count = s_player_hud_life_count;
+
+    ECS& ecs = scene.GetECS();
+    if (!ecs.IsEntityValid(player_id) || !ecs.Has<C_WeaponSocket>(player_id))
+        return hud_state;
+
+    const C_WeaponSocket& weapon_socket = ecs.GetComponent<C_WeaponSocket>(player_id);
+    const bool has_ranged_weapon = weapon_socket.weapon_entity != NULL_ENTITY &&
+        ecs.IsEntityValid(weapon_socket.weapon_entity) &&
+        ecs.Has<C_WeaponRanged>(weapon_socket.weapon_entity);
+
+    if (!has_ranged_weapon)
+        return hud_state;
+
+    const C_WeaponRanged& weapon = ecs.GetComponent<C_WeaponRanged>(weapon_socket.weapon_entity);
+    hud_state.loaded_bullets = weapon.currentBullets;
+    hud_state.backup_bullets = 0;
+    return hud_state;
+}
+
 static void ApplyPlaceholderLevelStartSkill(Scene& scene, const LevelStartSkillSelection& selection)
 {
     ECS& ecs = scene.GetECS();
@@ -27,6 +53,12 @@ static void ApplyPlaceholderLevelStartSkill(Scene& scene, const LevelStartSkillS
         selection.selected_index,
         selection.selected_option.skill_id ? selection.selected_option.skill_id : "<null>",
         selection.selected_option.display_name ? selection.selected_option.display_name : "<null>");
+
+    if (selection.selected_option.skill_id != nullptr &&
+        SDL_strcmp(selection.selected_option.skill_id, "skill_placeholder_gamma") == 0)
+    {
+        ++s_player_hud_life_count;
+    }
 
     // TODO: Apply real gameplay modifications here.
     // Suggested future integrations:
@@ -517,6 +549,8 @@ int main(int argc, char *argv[])
         AudioSystem_Update(&audio_system, dt);
 
         // Rendering
+        GameUI_SetPlayingHUDState(BuildPlayingHUDState(scene, playerID));
+
         uint32_t flags = SDL_GetWindowFlags(window);
         if (!(flags & SDL_WINDOW_MINIMIZED))
         {

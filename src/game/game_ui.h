@@ -27,6 +27,7 @@ enum class GameState
     MainMenu,
     Playing,
     Paused,
+    GameOver,
     Quitting,
 };
 
@@ -44,6 +45,13 @@ struct LevelStartSkillSelection
     int level_index = 0;
     int selected_index = -1;
     LevelStartSkillOption selected_option = {};
+};
+
+struct GameUIPlayingHUDState
+{
+    int life_count = 0;
+    int loaded_bullets = 0;
+    int backup_bullets = 0;
 };
 
 using LevelStartSkillApplyCallback = void (*)(Scene& scene, const LevelStartSkillSelection& selection);
@@ -64,6 +72,12 @@ bool      GameUI_IsLevelStartSkillSelectionOpen();
 
 // Register a Scene-typed callback where gameplay modifications should be applied.
 void      GameUI_SetLevelStartSkillApplyCallback(Scene* scene, LevelStartSkillApplyCallback callback);
+
+// Update the persistent playing HUD values that get rendered over gameplay.
+void      GameUI_SetPlayingHUDState(const GameUIPlayingHUDState& state);
+
+// Trigger the short damage vignette used when the player gets hit.
+void      GameUI_TriggerDamageFlash();
 
 void      GameUI_Init();
 void      GameUI_Update();          // call once per frame (handles ACTION_PAUSE etc.)
