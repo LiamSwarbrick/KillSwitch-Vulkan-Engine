@@ -285,6 +285,7 @@ EntityID Scene::InstantiatePrefab(Asset* prefab, glm::vec3 spawnPosition, glm::q
                 if (components.HasMember("ZombieInput"))
                 {
                     // No need for input as it is processed in the EnemyAISystem
+                    m_ecs.AddComponent<C_EnemyAIStats>(eID);
                     m_ecs.AddComponent<C_EnemyAIInfo>(eID);
                     m_ecs.AddComponent<C_MovementStats>(eID, C_MovementStats::DefaultZombieStats());
                     m_ecs.AddComponent<C_Faction>(eID, { C_Faction::Zombie });

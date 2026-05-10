@@ -84,7 +84,7 @@ glm::vec3 Math::Slerp(const glm::vec3& a, const glm::vec3& b, float t, std::func
 	if (angle < 1e-6f)
 		return b;
 
-	// If the vectors are opposite (cosAngle = -1.0f, or angle = M_PI/2 (180º))
+	// If the vectors are opposite (cosAngle = -1.0f, or angle = M_PI (180º))
 	glm::vec3 correctedB = (cosAngle < -1.0f + 1e-5f) ? RotateAroundY(b, glm::radians(10.0f)) : b;
 
 	t = easingFn(t);

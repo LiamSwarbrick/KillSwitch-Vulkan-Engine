@@ -22,7 +22,7 @@ void AnimationSystem::UpdatePlayer(float dt) const
         bool hasWeapon = false;
 
         // NEEDS REWORK TO THIS
-        /*if (ecs->Has<C_Weapon>(entity))
+        /*if (ecs->Has<C_WeaponSocket>(entity))
         {
             auto& socket = ecs->GetComponent<C_WeaponSocket>(entity);
             hasWeapon = (socket.weapon_entity != NULL_ENTITY) && ecs->IsEntityValid(socket.weapon_entity);

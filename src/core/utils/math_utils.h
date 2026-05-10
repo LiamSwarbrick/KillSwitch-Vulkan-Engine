@@ -384,15 +384,20 @@ namespace Math
 		return glm::slerp(a, b, t);
 	}
 
-	// Considering forward = -z -> (0, 0, -1)
+	// Considering forward = z -> (0, 0, 1)
 	inline glm::vec3 QuatToViewDir(const glm::quat& q)
 	{
-		return glm::normalize(q * glm::vec3(0.0f, 0.0f, -1.0f));
+		return glm::normalize(q * glm::vec3(0.0f, 0.0f, 1.0f));
 	}
 
 	inline glm::quat ViewDirToQuat(const glm::vec3& viewDir)
 	{
-		return glm::rotation(glm::vec3(0.0f, 0.0f, -1.0f), glm::normalize(viewDir));
+		return glm::rotation(glm::normalize(viewDir), glm::vec3(0.0f, 0.0f, 1.0f));
+	}
+
+	inline glm::quat GetRotationBetweenDirs(const glm::vec3& from, const glm::vec3& to)
+	{
+		return glm::rotation(glm::normalize(from), glm::normalize(to));
 	}
 
 }
