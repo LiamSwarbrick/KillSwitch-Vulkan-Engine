@@ -208,7 +208,7 @@ public:
 	template <typename T>
 	void RegisterComponent()
 	{
-		if (m_componentPools.size() <= MAX_COMPONENTS)
+		if (m_componentPools.size() >= MAX_COMPONENTS)
 		{
 			SDL_assert(false && "We ran out of component slots, modify the max value in ecs/types.h");
 		}
