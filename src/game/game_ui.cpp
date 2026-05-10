@@ -545,7 +545,7 @@ static void AdvanceSkillChoiceAnimation(float dt)
     if (!s_skill_choice.active)
         return;
 
-    if (Input_IsActionJustPressed(ACTION_JUMP))
+    if (Input_IsActionJustPressed(ACTION_PAUSE))
     {
         s_skill_choice.phase_time = 1000.0f;
     }
@@ -591,8 +591,8 @@ static void AdvanceMainMenuAnimation(float dt)
     s_main_menu_anim.total_time += dt;
     s_main_menu_anim.phase_time += dt;
 
-    // Skip menu pressing space (aka JUMP)
-    if (Input_IsActionJustPressed(ACTION_JUMP))
+    // Skip menu pressing escape (aka PAUSE)
+    if (Input_IsActionJustPressed(ACTION_PAUSE))
     {
         s_main_menu_anim.phase_time = 1000.0f;
     }
