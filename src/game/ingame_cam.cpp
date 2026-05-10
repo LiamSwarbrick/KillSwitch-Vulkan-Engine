@@ -168,7 +168,7 @@ namespace
         if (!ecs) return NULL_ENTITY;
 
         EntityID found = NULL_ENTITY;
-        ecs->GetView<C_PlayerInput>().ForEach([&](EntityID id, C_PlayerInput&)
+        ecs->GetView<C_PlayerInfo>().ForEach([&](EntityID id, C_PlayerInfo&)
         {
             if (found == NULL_ENTITY)
                 found = id;
@@ -289,8 +289,8 @@ namespace
         bool is_aiming = false;
         if (s_ecs && cam.bound_entity != NULL_ENTITY)
         {
-            if (const C_PlayerInput* input = s_ecs->GetComponentPtr<C_PlayerInput>(cam.bound_entity))
-                is_aiming = input->aim;
+            if (const C_CombatInput* combatInput = s_ecs->GetComponentPtr<C_CombatInput>(cam.bound_entity))
+                is_aiming = combatInput->wantsAim;
         }
 
         if (bound_transform)

@@ -7,8 +7,8 @@
 
 void EnemyAISystem::Update(float dt) const
 {
-    auto view = ecs->GetView<C_Transform, C_EnemyAIStats, C_EnemyAIInfo, C_RigidBody, C_MovementInput, C_CombatInput, C_Faction>();
-    view.ForEach([&](EntityID entity, C_Transform& transform, C_EnemyAIStats& stats, C_EnemyAIInfo& info, C_RigidBody& bodyHandle, C_MovementInput& moveInput, C_CombatInput& combatInput, C_Faction& faction)
+    auto view = ecs->GetView<C_Transform, C_EnemyAIStats, C_EnemyAIInfo, C_RigidBody, C_MovementInput, C_CombatInput, C_CombatInfo, C_Faction>();
+    view.ForEach([&](EntityID entity, C_Transform& transform, C_EnemyAIStats& stats, C_EnemyAIInfo& info, C_RigidBody& bodyHandle, C_MovementInput& moveInput, C_CombatInput& combatInput, C_CombatInfo& combatInfo, C_Faction& faction)
         {
             // READ FROM: ZombieAIInfo and PhysicsManager
             // WRITE TO: ZombieAIInfo, MovementInput, CombatInput
@@ -24,7 +24,7 @@ void EnemyAISystem::Update(float dt) const
             glm::vec3 lookDir = rotation * glm::vec3(0.0f, 0.0f, -1.0f);
             lookDir = Math::QuatToViewDir(rotation);
 
-            UpdateState(entity, stats, info, bodyHandle, position, lookDir, dt); // We might not need to pass entity (we have the position)
+            UpdateState(entity, stats, info, combatInfo, bodyHandle, position, lookDir, dt); // We might not need to pass entity (we have the position)
 
             // Before updating inputs, reset them
             moveInput.desiredDir = glm::vec3(0.0f);
@@ -34,11 +34,10 @@ void EnemyAISystem::Update(float dt) const
             moveInput.wantsCrouch = false;
             moveInput.wantsAim = false;
             //moveInput.aimDir = glm::vec3(0.0f); // lets keep the direction !!!
-            moveInput.combatFactor = 0.0f;
 
             combatInput.aimDir = glm::vec3(0.0f);
             combatInput.wantsMelee = false;
-            combatInput.wantsRanged = false;
+            combatInput.wantsAim = false;
 
             // After updating the state, lets now fill the inputs of the current state (they have to be updated from UpdateState)
             // Instead of a switch...
@@ -145,6 +144,8 @@ void EnemyAISystem::Update(float dt) const
                 rotation = Math::RotateTowardTarget(rotation, targetRotation, stats.turnSpeed, dt, Math::Smoothstep);
 
                 transform.matrix = glm::translate(glm::mat4(1.0f), position) * glm::mat4_cast(rotation) * glm::scale(glm::mat4(1.0f), scale);
+
+                combatInput.wantsMelee = true;
             }
             else if (info.currentState == info.Staggered)
             {
@@ -164,10 +165,11 @@ void EnemyAISystem::Update(float dt) const
         });
 }
 
-void EnemyAISystem::UpdateState(EntityID enemyID, const C_EnemyAIStats& stats, C_EnemyAIInfo& info, const C_RigidBody& bodyHandle, const glm::vec3& position, const glm::vec3& lookDir, float dt) const
+void EnemyAISystem::UpdateState(EntityID enemyID, const C_EnemyAIStats& stats, C_EnemyAIInfo& info, const C_CombatInfo& combatInfo, const C_RigidBody& bodyHandle, const glm::vec3& position, const glm::vec3& lookDir, float dt) const
 {
 
     ChaseOrAlertInfo chaseOrAlertInfo;
+    bool shouldAttack;
     switch (info.currentState)
     {
     case info.Idle:
@@ -237,14 +239,11 @@ void EnemyAISystem::UpdateState(EntityID enemyID, const C_EnemyAIStats& stats, C
         break;
     case info.Chase:
         // Viciously chase the mf
-        if (info.attackTimer >= 0.0f)
-            info.attackTimer -= dt;
 
-        if (info.attackTimer < 0.0f && ShouldAttack(stats, info, bodyHandle, position, lookDir, dt))
+        if (combatInfo.attackTimer <= 0.0f && ShouldAttack(stats, info, bodyHandle, position, lookDir, dt))
         {
             //info.previousState = info.Chase;
             info.currentState = info.Attack;
-            info.attackTimer = stats.finishAttackTime;
         }
         else if (chaseOrAlertInfo = ShouldChaseOrGetAlerted(stats, info, bodyHandle, position, lookDir, dt);
             chaseOrAlertInfo.shouldChase || chaseOrAlertInfo.shouldGetAlerted)
@@ -305,13 +304,13 @@ void EnemyAISystem::UpdateState(EntityID enemyID, const C_EnemyAIStats& stats, C
         break;
     case info.Attack:
         // Attacking (written from C_Combat hopefully)
-        // Wait for attack to finish, fall back to previous state (hopefully Chase)
-        info.attackTimer -= dt;
-        if (info.attackTimer <= 0.0f)
+        // Wait for attack to finish, go back to Chase also IF we should not attack, otherwise just keep attacking
+        shouldAttack = ShouldAttack(stats, info, bodyHandle, position, lookDir, dt);
+        if (combatInfo.attackTimer < 0.0f && !shouldAttack)
         {
-            info.currentState = info.Chase; // Go back to chase
-            info.attackTimer = stats.attackCooldownTime; // Make the attack have a cooldown
+            info.currentState = info.Chase;
         }
+
         break;
     case info.Staggered:
         // Wait till staggered finish (Staggered written from C_Combat hopefully)
@@ -503,7 +502,7 @@ bool EnemyAISystem::IsEntityVisible(RigidBodyHandle enemyHandle, C_EnemyAIInfo& 
         // here you can manually skip any Entities by checking ECS
 
         // For example, we're going to exclude those entities that are zombies -> C_Faction.type == Zombie (because we still want to chase the player if we see it)
-        if (ecs->Has<C_Faction>(hit.entity) && (ecs->GetComponent<C_Faction>(hit.entity).type == C_Faction::Zombie))
+        if (ecs->Has<C_Faction>(hit.entity) && (ecs->GetComponent<C_Faction>(hit.entity).type ==  FactionType::Zombie))
             continue;
 
         // Get the closest Hit that passes the filters

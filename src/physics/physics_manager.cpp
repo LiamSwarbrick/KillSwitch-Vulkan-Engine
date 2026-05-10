@@ -59,6 +59,18 @@ void PhysicsManager::destroyBody(EntityID entity)
 	handleToEntity.erase(handle);
 }
 
+void PhysicsManager::destroyBody(RigidBodyHandle handle)
+{
+	if (!handle.isValid()) return;
+
+	EntityID entity = getEntityID(handle);
+
+	world.removeBody(handle);
+
+	entityToHandle.erase(entity);
+	handleToEntity.erase(handle);
+}
+
 ShapeHandle PhysicsManager::createShape(const ShapeDesc& desc)
 {
 	return world.createShape(desc);

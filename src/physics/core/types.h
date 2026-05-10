@@ -17,6 +17,15 @@
 // For floats
 constexpr float F_EPSILON = 1e-6f;
 
+// Important for a fix
+template<typename T>
+struct Slot
+{
+    T body;
+    bool occupied = false;
+};
+using BodySlot = Slot<RigidBody>;
+
 // ------------------
 // SHAPES RELATED
 // ------------------

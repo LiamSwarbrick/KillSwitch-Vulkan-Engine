@@ -1,6 +1,7 @@
 #include "AnimationSystem.h"
 
 #include "core/animation.h"
+#include "core/utils/math_utils.h"
 
 #define GLM_ENABLE_EXPERIMENTAL
 #include "glm/gtx/matrix_decompose.hpp"
@@ -15,8 +16,8 @@ void AnimationSystem::Update(float dt) const
 
 void AnimationSystem::UpdatePlayer(float dt) const
 {
-    auto view = ecs->GetView<C_Transform, C_PlayerInput, C_MovementInput, C_MovementInfo, C_AnimatedMesh>();
-    view.ForEach([&](EntityID entity, C_Transform& transform, C_PlayerInput& playerInput, C_MovementInput& moveInput, C_MovementInfo& moveInfo, C_AnimatedMesh& animatedMesh)
+    auto view = ecs->GetView<C_Transform, C_MovementInput, C_MovementInfo, C_CombatInput, C_AnimatedMesh>();
+    view.ForEach([&](EntityID entity, C_Transform& transform, C_MovementInput& moveInput, C_MovementInfo& moveInfo, C_CombatInput& combatInput, C_AnimatedMesh& animatedMesh)
     {
         animatedMesh.playbackSpeed = 1.0f;
         bool hasWeapon = false;
@@ -28,73 +29,69 @@ void AnimationSystem::UpdatePlayer(float dt) const
             hasWeapon = (socket.weapon_entity != NULL_ENTITY) && ecs->IsEntityValid(socket.weapon_entity) && socket.equipped;
         }
 
+        glm::vec3 scale;
+        glm::quat rotation;
+        glm::vec3 translation;
+        glm::vec3 skew;
+        glm::vec4 perspective;
+        glm::decompose(transform.matrix, scale, rotation, translation, skew, perspective);
+
         // Small tweak to update the rotation
-        if ((playerInput.aim && moveInfo.isGrounded) || moveInfo.isMoving)
+        if (combatInput.wantsAim || moveInfo.isMoving)
         {
-            glm::vec3 scale;
-            glm::quat rotation;
-            glm::vec3 translation;
-            glm::vec3 skew;
-            glm::vec4 perspective;
-            glm::decompose(transform.matrix, scale, rotation, translation, skew, perspective);
-
             // update rotation 
             // WE CAN EITHER UPDATE THE ROTATION TO THE HORIZONTAL MOVE DIR OR
             // update the rotation to the final controller's velocity (after processing Update), that way we always face where we are moving to instead of input
             // face forward when aiming
-
-
             glm::vec3 facingDir;
-            if (playerInput.aim)
+            if (combatInput.wantsAim)
                 facingDir = moveInput.aimDir;
             else
                 facingDir = moveInput.desiredDir;
+
 
             float yawDeg = glm::degrees(atan2f(facingDir.x, facingDir.z));
             rotation = glm::angleAxis(glm::radians(yawDeg), glm::vec3(0.0f, 1.0f, 0.0f));
 
             transform.matrix = glm::translate(glm::mat4(1.0f), translation) * glm::mat4_cast(rotation) * glm::scale(glm::mat4(1.0f), scale);
-
         }
 
-        if (moveInfo.isMoving && moveInfo.isGrounded)
+        glm::vec3 movingDir = moveInput.desiredDir;
+        glm::vec3 forwardDir = Math::QuatToViewDir(rotation); // Might be the same as moveDir
+        struct DirectionalInput
         {
-            glm::vec3 scale;
-            glm::quat rotation;
-            glm::vec3 translation;
-            glm::vec3 skew;
-            glm::vec4 perspective;
-            glm::decompose(transform.matrix, scale, rotation, translation, skew, perspective);
-
-            // update rotation 
-            // WE CAN EITHER UPDATE THE ROTATION TO THE HORIZONTAL MOVE DIR OR
-            // update the rotation to the final controller's velocity (after processing Update), that way we always face where we are moving to instead of input
-            // face forward when aiming
-
-
-            glm::vec3 facingDir;
-            if (playerInput.aim)
-                facingDir = moveInput.aimDir;
-            else
-                facingDir = moveInput.desiredDir;
-
-            float yawDeg = glm::degrees(atan2f(facingDir.x, facingDir.z));
-            rotation = glm::angleAxis(glm::radians(yawDeg), glm::vec3(0.0f, 1.0f, 0.0f));
-
-            transform.matrix = glm::translate(glm::mat4(1.0f), translation) * glm::mat4_cast(rotation) * glm::scale(glm::mat4(1.0f), scale);
-
+            bool isMovingForward = false;
+            bool isMovingBackward = false;
+            bool isMovingRight = false;
+            bool isMovingLeft = false;
+        };
+        DirectionalInput dirInput;
+        if (glm::dot(movingDir, forwardDir) > 1.0f - 1e-6f)
+        {
+            dirInput.isMovingForward = true;
         }
+        else if (moveInfo.isMoving)
+        {
+            const float moveThreshold = 0.01f;
+            glm::vec3 rightDir = glm::cross(forwardDir, glm::vec3(0.0f, 1.0f, 0.0f));
+
+            float forwardDot = glm::dot(movingDir, forwardDir);
+            float rightDot = glm::dot(movingDir, rightDir);
+
+            dirInput.isMovingForward = forwardDot > moveThreshold;
+            dirInput.isMovingBackward = forwardDot < -moveThreshold;
+            dirInput.isMovingRight = rightDot > moveThreshold;
+            dirInput.isMovingLeft = rightDot < -moveThreshold;
+        }
+        
 
         bool hasInput =
-            playerInput.move_forward ||
-            playerInput.move_backward ||
-            playerInput.move_left ||
-            playerInput.move_right ||
-            playerInput.jump ||
-            playerInput.run ||
-            playerInput.crouch ||
-            playerInput.aim ||
-            playerInput.attack;
+            moveInput.moveAmount > 0.0f ||
+            moveInput.wantsJump ||
+            moveInput.wantsCrouch ||
+            moveInput.wantsRun ||
+            combatInput.wantsAim ||
+            combatInput.wantsMelee;
 
         if (hasInput)
             moveInfo.idleTimer = 0.0f;
@@ -127,15 +124,15 @@ void AnimationSystem::UpdatePlayer(float dt) const
         {
             std::string animName;
 
-            if (playerInput.aim && hasWeapon)
+            if (combatInput.wantsAim && hasWeapon)
             {
-                if (playerInput.move_forward && !playerInput.move_backward)
+                if (dirInput.isMovingForward)
                     animName = "pistolwalk";
-                else if (playerInput.move_backward && !playerInput.move_forward)
+                else if (dirInput.isMovingBackward)
                     animName = "pistolwalkbackwards";
-                else if (playerInput.move_left && !playerInput.move_right)
+                else if (dirInput.isMovingLeft)
                     animName = "pistolstrafeleft";
-                else if (playerInput.move_right && !playerInput.move_left)
+                else if (dirInput.isMovingRight)
                     animName = "pistolstraferight";
                 else
                     animName = "pistolwalk";

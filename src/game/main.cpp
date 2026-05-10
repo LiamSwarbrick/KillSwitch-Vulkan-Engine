@@ -404,39 +404,8 @@ int main(int argc, char *argv[])
         DebugUICameraEdits ui_camera_edits = {};
         if (DebugUI_ConsumeCameraEdits(&ui_camera_edits)){InGameCam_ApplyDebugEdits(ui_camera_edits);}
         // raycast attack at center of screen
-        if (gameplay_input_enabled &&
-            Input_IsActionJustPressed(ACTION_ATTACK) && Input_IsActionPressed(ACTION_AIM))
-        {
-            const CameraInfo& cam = InGameCam_GetGameplayCamera();
-            PlayGameplaySFX(&audio_system, gameplay_audio.weapon_fire, 0.9f);
+        
 
-            Ray ray = {};
-            ray.origin = cam.position;
-            ray.direction = glm::normalize(glm::vec3(
-                -cam.view[0][2],
-                -cam.view[1][2],
-                -cam.view[2][2]
-            )); // Forward vector of the camera
-            ray.maxDistance = 100.0f; 
-
-            QueryFilterExternal filter = {};
-            filter.bodyToIgnore = playerID; 
-            filter.hasLayerOfQuery = true;
-            filter.layerOfQuery = (uint8_t)BodyLayer::WEAPON; 
-
-            EntityRaycastHit hit = scene.GetPhysicsManager().raycast(ray, filter);
-            if (hit.isValid())
-            {
-                // TODO: Apply damage to hit entity, spawn hit effects, etc.
-                SDL_Log("Raycast hit entity %u at point (%f, %f, %f)", hit.entity, hit.point.x, hit.point.y, hit.point.z);
-
-                ECS& ecs = scene.GetECS();
-                if (ecs.Has<C_Faction>(hit.entity) && ecs.GetComponent<C_Faction>(hit.entity).type == C_Faction::Zombie)
-                {
-                    PlayGameplaySFXAt(&audio_system, gameplay_audio.zombie_attack, 0.72f, hit.point, 1.0f, 35.0f);
-                }
-            }
-        }
         // Only capture mouse while playing (release it on pause), keep relative mouse when debug UI toggled.
         const bool right_mouse_down = (SDL_GetMouseState(nullptr, nullptr) & SDL_BUTTON_MASK(SDL_BUTTON_RIGHT)) != 0;
         SDL_SetWindowRelativeMouseMode(window, (gameplay_input_enabled && !DebugUI_IsOpen()) || (DebugUI_IsOpen() && right_mouse_down));
