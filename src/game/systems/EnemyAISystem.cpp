@@ -1,12 +1,14 @@
 #include "EnemyAISystem.h"
 
+#include "core/utils/math_utils.h"
+
 #define GLM_ENABLE_EXPERIMENTAL
 #include "glm/gtx/matrix_decompose.hpp"
 
 void EnemyAISystem::Update(float dt) const
 {
-    auto view = ecs->GetView<C_Transform, C_EnemyAIInfo, C_RigidBody, C_MovementInput, C_CombatInput, C_Faction>();
-    view.ForEach([&](EntityID entity, C_Transform& transform, C_EnemyAIInfo& info, C_RigidBody& bodyHandle, C_MovementInput& moveInput, C_CombatInput& combatInput, C_Faction& faction)
+    auto view = ecs->GetView<C_Transform, C_EnemyAIStats, C_EnemyAIInfo, C_RigidBody, C_MovementInput, C_CombatInput, C_Faction>();
+    view.ForEach([&](EntityID entity, C_Transform& transform, C_EnemyAIStats& stats, C_EnemyAIInfo& info, C_RigidBody& bodyHandle, C_MovementInput& moveInput, C_CombatInput& combatInput, C_Faction& faction)
         {
             // READ FROM: ZombieAIInfo and PhysicsManager
             // WRITE TO: ZombieAIInfo, MovementInput, CombatInput
@@ -20,8 +22,9 @@ void EnemyAISystem::Update(float dt) const
 
             // Should be
             glm::vec3 lookDir = rotation * glm::vec3(0.0f, 0.0f, -1.0f);
+            lookDir = Math::QuatToViewDir(rotation);
 
-            UpdateState(entity, info, bodyHandle, position, lookDir, dt);
+            UpdateState(entity, stats, info, bodyHandle, position, lookDir, dt); // We might not need to pass entity (we have the position)
 
             // Before updating inputs, reset them
             moveInput.desiredDir = glm::vec3(0.0f);
@@ -30,7 +33,7 @@ void EnemyAISystem::Update(float dt) const
             moveInput.wantsJump = false;
             moveInput.wantsCrouch = false;
             moveInput.wantsAim = false;
-            moveInput.aimDir = glm::vec3(0.0f);
+            //moveInput.aimDir = glm::vec3(0.0f); // lets keep the direction !!!
             moveInput.combatFactor = 0.0f;
 
             combatInput.aimDir = glm::vec3(0.0f);
@@ -41,27 +44,26 @@ void EnemyAISystem::Update(float dt) const
             // Instead of a switch...
             if (info.currentState == info.Idle)
             {
-                // Wait for idle till alerted or chase
-                moveInput.moveAmount = 0.0f;
-
+                // Do nothing
             }
             else if (info.currentState == info.Patrol)
             {
                 // Patrol 
                 // Changed if alerted or chase
                 // TODO: move to patrolPoint, when patrolPoint reached, stay for a while, go to next patrolPoint
-
             }
             else if (info.currentState == info.Alerted)
             {
                 // Look at the alert (should be written by another action bc it made an alert-able action (e.g. noise, walk, etc))
                 moveInput.moveAmount = 0.0f;
-                glm::vec3 facingDir = glm::normalize(info.target - position);
-                moveInput.aimDir = glm::normalize(info.target - position);
-
+                glm::vec3 targetFacingDir = glm::normalize(info.target - position);
                 // Quick fix until we get animations on the zombie
-                float yawDeg = glm::degrees(atan2f(facingDir.x, facingDir.z));
-                rotation = glm::angleAxis(glm::radians(yawDeg), glm::vec3(0.0f, 1.0f, 0.0f));
+                float yawDeg = glm::degrees(atan2f(targetFacingDir.x, targetFacingDir.z));
+                glm::quat targetRotation = glm::angleAxis(glm::radians(yawDeg), glm::vec3(0.0f, 1.0f, 0.0f));
+
+                rotation = Math::RotateTowardTarget(rotation, targetRotation, stats.turnSpeed, dt, Math::Smoothstep);
+
+                // We should probably have some turn speed
 
                 transform.matrix = glm::translate(glm::mat4(1.0f), position) * glm::mat4_cast(rotation) * glm::scale(glm::mat4(1.0f), scale);
 
@@ -69,17 +71,80 @@ void EnemyAISystem::Update(float dt) const
             }
             else if (info.currentState == info.Chase)
             {
-                // Viciously chase the mf
-                moveInput.moveAmount = 1.0f;
+                // Chase the player if we see him, otherwise
                 glm::vec3 facingDir = glm::normalize(info.target - position);
+                float distanceToTarget = glm::length(info.target - position);
+                
+                // To possibly be changed in the next if
+                moveInput.moveAmount = 1.0f;
+
+                // We're chasing a player, stop if we're within a certain range
+                Shape* playerShape = physics->getShape(info.activeTargetID);
+                CapsuleShape* playerCapsule = static_cast<CapsuleShape*>(playerShape);
+                if (distanceToTarget <= playerCapsule->radius + 0.2f)
+                {
+                    moveInput.moveAmount = 0.0f;
+                }
+                    
                 moveInput.desiredDir = facingDir;
                 moveInput.wantsRun = true;
-                // If vision with target lost, go to last seen target and remain alerted (or patrol between those 2 points or randomly)
+                
+                glm::vec3 targetFacingDir = glm::normalize(info.target - position);
+                    
+                float yawDeg = glm::degrees(atan2f(targetFacingDir.x, targetFacingDir.z));
+                glm::quat targetRotation = glm::angleAxis(glm::radians(yawDeg), glm::vec3(0.0f, 1.0f, 0.0f));
+
+                rotation = Math::RotateTowardTarget(rotation, targetRotation, stats.turnSpeed, dt, Math::Smoothstep);
+
+                // We should probably have some turn speed
+
+                transform.matrix = glm::translate(glm::mat4(1.0f), position) * glm::mat4_cast(rotation) * glm::scale(glm::mat4(1.0f), scale);
+            }
+            else if (info.currentState == info.Search)
+            {
+                glm::vec3 facingDir = glm::normalize(info.target - position);
+                float distanceToTarget = glm::length(info.target - position);
+
+                // If we're near the target, mark as complete, back to fallback state
+                if (distanceToTarget < 0.5f)
+                {
+                    info.hasReachedTarget = true;
+                    moveInput.moveAmount = 0.0f;
+                    // Don't change the desiredDir
+                }
+                else
+                {
+                    moveInput.moveAmount = 1.0f;
+                    moveInput.desiredDir = facingDir;
+
+                    float yawDeg = glm::degrees(atan2f(facingDir.x, facingDir.z));
+                    glm::quat targetRotation = glm::angleAxis(glm::radians(yawDeg), glm::vec3(0.0f, 1.0f, 0.0f));
+
+                    rotation = Math::RotateTowardTarget(rotation, targetRotation, stats.turnSpeed, dt, Math::Smoothstep);
+
+                    // We should probably have some turn speed
+
+                    transform.matrix = glm::translate(glm::mat4(1.0f), position) * glm::mat4_cast(rotation) * glm::scale(glm::mat4(1.0f), scale);
+                }
+
             }
             else if (info.currentState == info.Attack)
             {
                 // Attacking (written from C_Combat hopefully)
                 // Wait for attack to finish, fall back to previous state (hopefully Chase)
+                // If vision with target lost, go to last seen target and remain alerted (or patrol between those 2 points or randomly)
+                C_Transform& targetTransform = ecs->GetComponent<C_Transform>(info.activeTargetID);
+                glm::vec3 targetPosition = glm::vec3(targetTransform.matrix[3]);
+                info.target = targetPosition;
+
+                glm::vec3 targetFacingDir = glm::normalize(targetPosition - position);
+                // Quick fix until we get animations on the zombie
+                float yawDeg = glm::degrees(atan2f(targetFacingDir.x, targetFacingDir.z));
+                glm::quat targetRotation = glm::angleAxis(glm::radians(yawDeg), glm::vec3(0.0f, 1.0f, 0.0f));
+
+                rotation = Math::RotateTowardTarget(rotation, targetRotation, stats.turnSpeed, dt, Math::Smoothstep);
+
+                transform.matrix = glm::translate(glm::mat4(1.0f), position) * glm::mat4_cast(rotation) * glm::scale(glm::mat4(1.0f), scale);
             }
             else if (info.currentState == info.Staggered)
             {
@@ -99,37 +164,72 @@ void EnemyAISystem::Update(float dt) const
         });
 }
 
-void EnemyAISystem::UpdateState(EntityID enemyID, C_EnemyAIInfo& info, const C_RigidBody& bodyHandle, const glm::vec3& position, const glm::vec3& lookDir, float dt) const
+void EnemyAISystem::UpdateState(EntityID enemyID, const C_EnemyAIStats& stats, C_EnemyAIInfo& info, const C_RigidBody& bodyHandle, const glm::vec3& position, const glm::vec3& lookDir, float dt) const
 {
-    info.stateTimer += dt;
 
+    ChaseOrAlertInfo chaseOrAlertInfo;
     switch (info.currentState)
     {
     case info.Idle:
         // Wait for idle till alerted or chase
-        if (ShouldChaseOrGetAlerted(enemyID, info, bodyHandle, position, lookDir, dt))
+        if (chaseOrAlertInfo = ShouldChaseOrGetAlerted(stats, info, bodyHandle, position, lookDir, dt);
+            chaseOrAlertInfo.shouldChase || chaseOrAlertInfo.shouldGetAlerted)
         {
-            info.previousState = info.Idle;
-            info.stateTimer = 0.0f;
+            info.target = chaseOrAlertInfo.target;
+            info.activeTargetID = chaseOrAlertInfo.targetID; // Might be NULL_ENTITY and that's fine
+            info.hasTarget = chaseOrAlertInfo.hasTarget;
+
+            info.fallbackState = info.Idle; // TO be removed once i do a proper connection between states
+
+            if (chaseOrAlertInfo.shouldChase)
+            {
+                info.currentState = info.Chase;
+            }
+            else
+            {
+                info.currentState = info.Alerted;
+            }
         }
 
         break;
     case info.Patrol:
         // Patrol 
         // Changed if alerted or chase
-        if (ShouldChaseOrGetAlerted(enemyID, info, bodyHandle, position, lookDir, dt))
+        if (chaseOrAlertInfo = ShouldChaseOrGetAlerted(stats, info, bodyHandle, position, lookDir, dt);
+            chaseOrAlertInfo.shouldChase || chaseOrAlertInfo.shouldGetAlerted)
         {
-            info.previousState = info.Patrol;
+            info.target = chaseOrAlertInfo.target;
+            info.activeTargetID = chaseOrAlertInfo.targetID; // Might be NULL_ENTITY and that's fine
+            info.hasTarget = chaseOrAlertInfo.hasTarget;
+
+            info.fallbackState = info.Patrol;
+            info.currentState = chaseOrAlertInfo.shouldChase ? info.Chase : info.Alerted;
         }
 
         break;
     case info.Alerted:
         // Look at the alert (should be written by another action bc it made an alert-able action (e.g. noise, walk, etc))
-        if (ShouldChaseOrGetAlerted(enemyID, info, bodyHandle, position, lookDir, dt))
+        info.alertedTimer -= dt;
+        
+        if (chaseOrAlertInfo = ShouldChaseOrGetAlerted(stats, info, bodyHandle, position, lookDir, dt);
+            chaseOrAlertInfo.shouldChase || chaseOrAlertInfo.shouldGetAlerted)
         {
+            info.target = chaseOrAlertInfo.target;
+            info.activeTargetID = chaseOrAlertInfo.targetID; // Might be NULL_ENTITY and that's fine
+            info.hasTarget = chaseOrAlertInfo.hasTarget;
+
             // ShouldChaseOrGetAlerted writes the current state
-            if(info.currentState == info.Chase)
-                info.previousState = info.Alerted;
+            if (chaseOrAlertInfo.shouldChase)
+            {
+                info.currentState = info.Chase;
+            }
+        }
+        else
+        {
+            if (info.alertedTimer < 0.0f)
+            {
+                info.currentState = info.fallbackState; // Should be either patrol or idle
+            }
         }
 
         // When alert cooldown reaches 0 go to Patrol or Idle
@@ -137,16 +237,81 @@ void EnemyAISystem::UpdateState(EntityID enemyID, C_EnemyAIInfo& info, const C_R
         break;
     case info.Chase:
         // Viciously chase the mf
-        if (ShouldAttack(enemyID, info, bodyHandle, position, lookDir, dt))
+        if (info.attackTimer >= 0.0f)
+            info.attackTimer -= dt;
+
+        if (info.attackTimer < 0.0f && ShouldAttack(stats, info, bodyHandle, position, lookDir, dt))
         {
-            info.previousState = info.Chase;
+            //info.previousState = info.Chase;
+            info.currentState = info.Attack;
+            info.attackTimer = stats.finishAttackTime;
+        }
+        else if (chaseOrAlertInfo = ShouldChaseOrGetAlerted(stats, info, bodyHandle, position, lookDir, dt);
+            chaseOrAlertInfo.shouldChase || chaseOrAlertInfo.shouldGetAlerted)
+        {
+            // If we should keep chasing we update 
+            if (chaseOrAlertInfo.shouldChase)
+            {
+                info.target = chaseOrAlertInfo.target;
+                info.activeTargetID = chaseOrAlertInfo.targetID; // Might be NULL_ENTITY and that's fine
+                info.hasTarget = chaseOrAlertInfo.hasTarget;
+            }
+            else
+            {
+                // Otherwise if we do not have to chase, go to search mode and the previous frame's target will be our target
+
+                // The current target will stay there
+                info.currentState = info.Search;
+                info.reachTheTargetTimer = info.reachTheTargetMaxTime;
+                info.hasReachedTarget = false;
+            }
+        }
+        else
+        {
+            // The current target will stay there
+            info.currentState = info.Search;
+            info.reachTheTargetTimer = info.reachTheTargetMaxTime;
+            info.hasReachedTarget = false;
         }
 
         // If vision with target lost, go to last seen target and remain alerted (or patrol between those 2 points or randomly)
         break;
+    case info.Search:
+        // Go to target, reach target, fall back to Alerted or Idle
+        // Can only go to chase, NOT ALERTED
+
+        info.reachTheTargetTimer -= dt;
+
+        if (chaseOrAlertInfo = ShouldChaseOrGetAlerted(stats, info, bodyHandle, position, lookDir, dt);
+            chaseOrAlertInfo.shouldChase || chaseOrAlertInfo.shouldGetAlerted)
+        {
+            // DO NOT GET ALERTED, JUST GO TO CHASE
+            if (chaseOrAlertInfo.shouldChase)
+            {
+                info.target = chaseOrAlertInfo.target;
+                info.activeTargetID = chaseOrAlertInfo.targetID; // Might be NULL_ENTITY and that's fine
+                info.hasTarget = chaseOrAlertInfo.hasTarget;
+
+                info.currentState = info.Chase;
+            }
+        }
+        else if (info.reachTheTargetTimer < 0.0f || info.hasReachedTarget)
+        {
+            info.reachTheTargetTimer = 0.0f;
+            info.hasReachedTarget = true;
+            info.currentState = info.fallbackState;
+        }
+
+        break;
     case info.Attack:
         // Attacking (written from C_Combat hopefully)
         // Wait for attack to finish, fall back to previous state (hopefully Chase)
+        info.attackTimer -= dt;
+        if (info.attackTimer <= 0.0f)
+        {
+            info.currentState = info.Chase; // Go back to chase
+            info.attackTimer = stats.attackCooldownTime; // Make the attack have a cooldown
+        }
         break;
     case info.Staggered:
         // Wait till staggered finish (Staggered written from C_Combat hopefully)
@@ -168,14 +333,17 @@ void EnemyAISystem::UpdateState(EntityID enemyID, C_EnemyAIInfo& info, const C_R
 }
 
 // Returns true if should chase or get alerted. Writes the current 
-bool EnemyAISystem::ShouldChaseOrGetAlerted(EntityID enemyID, C_EnemyAIInfo& info, const C_RigidBody& bodyHandle, const glm::vec3& position, const glm::vec3& lookDir, float dt) const
+EnemyAISystem::ChaseOrAlertInfo EnemyAISystem::ShouldChaseOrGetAlerted(const C_EnemyAIStats& stats, C_EnemyAIInfo& info, const C_RigidBody& bodyHandle, const glm::vec3& position, const glm::vec3& lookDir, float dt) const
 {
+    ChaseOrAlertInfo returnInfo;
+
+    // Negating the position now to add it in the loop
     glm::vec3 negatedPosition = -position;
 
+    // Instantiating the default values for the return
     float closestTargetDistance = std::numeric_limits<float>::max();
     EntityID closestTargetID = NULL_ENTITY;
     glm::vec3 closestTargetPos = { 0,0,0 };
-
     bool shouldChase = false;
     bool shouldGetAlerted = false;
 
@@ -190,18 +358,21 @@ bool EnemyAISystem::ShouldChaseOrGetAlerted(EntityID enemyID, C_EnemyAIInfo& inf
             glm::vec4 perspective;
             glm::decompose(transform.matrix, scale, rotation, playerPosition, skew, perspective);*/
 
-            glm::vec3 playerPosition = glm::vec3(transform.matrix[3]); // slight optimization
+            // Get the players postion
+            glm::vec3 playerPosition = glm::vec3(transform.matrix[3]); // slight optimization bc we only want the player position
 
+            // Calculate the enemy -> player direction and distance
             glm::vec3 enemyToPlayer = playerPosition + negatedPosition;
             glm::vec3 enemyToPlayerDir = glm::normalize(enemyToPlayer);
             float distanceToPlayer = glm::length(playerPosition + negatedPosition);
         
-            float enemyToPlayerAngle = glm::acos(glm::dot(enemyToPlayerDir, -lookDir)); // -lookDir cause its the other way around idk
+            // Get the angle from the current look direction
+            float enemyToPlayerAngle = glm::acos(glm::dot(enemyToPlayerDir, lookDir));
 
             // Check if we have to chase is within the AI's vision
             // AND also if it is closer than the closestTargetDistance (early out)
-            if (distanceToPlayer <= info.visionDistance 
-                && enemyToPlayerAngle <= info.visionMaxAngle 
+            if (distanceToPlayer <= stats.visionDistance 
+                && enemyToPlayerAngle <= stats.visionMaxAngle 
                 && distanceToPlayer < closestTargetDistance)
             {
                 // If it's within distance, raycast into player and check if we see him
@@ -221,7 +392,7 @@ bool EnemyAISystem::ShouldChaseOrGetAlerted(EntityID enemyID, C_EnemyAIInfo& inf
             // AND the player is moving
             // AND the player is not crouching
             if (!shouldChase
-                && distanceToPlayer <= info.alertDistance
+                && distanceToPlayer <= stats.alertDistance // to be changed to the player's sounds having alertDistance
                 && distanceToPlayer < closestTargetDistance // (early out)
                 && playerMoveInfo.isMoving
                 && playerMoveInfo.state != MoveState::Crouch)
@@ -236,31 +407,54 @@ bool EnemyAISystem::ShouldChaseOrGetAlerted(EntityID enemyID, C_EnemyAIInfo& inf
     if (shouldChase) 
     { 
         // Fill the target values
-        info.target = closestTargetPos;
-        info.hasTarget = true;
-        info.activeTargetID = closestTargetID;
+        returnInfo.target = closestTargetPos;
+        returnInfo.hasTarget = true;
+        returnInfo.targetID = closestTargetID;
 
         info.currentState = info.Chase;
     }
     else if (shouldGetAlerted)
     {
-        info.target = closestTargetPos;
-        info.hasTarget = true;
+        returnInfo.target = closestTargetPos;
+        returnInfo.hasTarget = true;
         // No ID because we shouldn't know who it was
-
-        info.currentState = info.Alerted;
-    }
-    else
-    {
-        info.hasTarget = true;
     }
 
-    return (shouldChase || shouldGetAlerted);
+    returnInfo.shouldChase = shouldChase;
+    returnInfo.shouldGetAlerted = shouldGetAlerted;
+
+    return returnInfo;
 }
 
 
-bool EnemyAISystem::ShouldAttack(EntityID enemyID, C_EnemyAIInfo& info, const C_RigidBody& bodyHandle, const glm::vec3& position, const glm::vec3& lookDir, float dt) const
+bool EnemyAISystem::ShouldAttack(const C_EnemyAIStats& stats, C_EnemyAIInfo& info, const C_RigidBody& bodyHandle, const glm::vec3& position, const glm::vec3& lookDir, float dt) const
 {
+    // We should get the current target's position, and if it is in range we should attack
+    // 
+    // We could otherwise scan every player and choose the closest there is and check for an attack, but we will let the other functions change target
+    if (info.activeTargetID == NULL_ENTITY)
+    {
+        SDL_assert(false && "We're checking if the AI should attack but it has no targetEntityID");
+        return false;
+    }
+
+    // As we are using this after the physics engine, we know we can use C_Transform instead, but we might rather choose the RigidBody and check its position just in case
+    C_Transform& targetTransform = ecs->GetComponent<C_Transform>(info.activeTargetID);
+    Shape* targetShape = physics->getShape(info.activeTargetID);
+    CapsuleShape* targetCapsule = static_cast<CapsuleShape*>(targetShape);
+    float targetRadius = targetCapsule->radius;
+
+    glm::vec3 targetPosition = glm::vec3(targetTransform.matrix[3]);
+
+    glm::vec3 enemyToTarget = targetPosition - position;
+    // We could also check the direction. If we had rotation speed we could get behind the zombie (at the time of writing this, enemy's rotation to target is instantaneous)
+    float distanceToTarget = glm::length(enemyToTarget) - targetRadius;
+
+    // If the target is within attack distance (WE SHOULD TAKE THE TARGET'S CAPSULE RADIUS INTO ACCOUNT)
+    if (distanceToTarget <= stats.attackDistance)
+    {
+        return true;
+    }
 
     return false;
 }
@@ -295,6 +489,11 @@ bool EnemyAISystem::IsEntityVisible(RigidBodyHandle enemyHandle, C_EnemyAIInfo& 
     };
     std::vector<EntityRaycastHit> hits = physics->raycastAll(headToBodyRay, filter);
 
+    if (hits.empty())
+    {
+        SDL_assert(false && "This raycast hit should not be empty EVER, some shape->intersectsRay must be wrong");
+        return false;
+    }
     // We will filter the raycastHits (instead of calling entityRaycast)
     int closestIndex = -1;
     float closestT = std::numeric_limits<float>::max();
@@ -316,7 +515,11 @@ bool EnemyAISystem::IsEntityVisible(RigidBodyHandle enemyHandle, C_EnemyAIInfo& 
 
         i++;
     }
-    // if (closestIndex == -1) return false; // should never be the case unless its empty, but should never be empty cause we should at least always hit the target
+    if (closestIndex == -1)
+    {
+        SDL_assert(false && "We should always hit one body -> The conditions of the for-loop above are wrong");
+        return false;
+    }
     EntityRaycastHit& closestHit = hits[closestIndex];
     
     // We return true if the closest filtered handle equals the target handle

@@ -11,6 +11,8 @@
 #include "core/audio_system.h"
 #include "physics/body_layers.h"
 
+#include "core/utils/math_utils.h"
+
 #include "SDL3/SDL.h"
 #include "SDL3/SDL_main.h"
 
@@ -237,7 +239,7 @@ int main(int argc, char *argv[])
         .window = window,
         .enable_validation = enabled_validation_layers,
         .preferred_initial_settings = {  // Will fallback if these aren't possible
-            .uncapped_fps = 0,  // NOTE: <- Enable when gathering FPS metrics
+            .uncapped_fps = 1,  // NOTE: <- Enable when gathering FPS metrics
             .msaa_sample_count = 4,
             .fov_y = 50.0f
         }
@@ -303,20 +305,21 @@ int main(int argc, char *argv[])
     Scene scene{};
     scene.StartUp();
 
-    Asset* room_prefab = scene.LoadPrefab("assets/levels/testroom_new.gltf");
-    Asset* many_prefab = scene.LoadPrefab("assets/levels/manylights.gltf");
+     Asset* room_prefab = scene.LoadPrefab("assets/levels/testroom_new.gltf");
+    //Asset* room_prefab = scene.LoadPrefab("assets/levels/testroom-liamrandomtest-Untitled.gltf");
+     Asset* many_prefab = scene.LoadPrefab("assets/levels/manylights.gltf");
     Asset* playground_prefab = scene.LoadPrefab("assets/levels/playground.gltf");
-    Asset* cube_prefab = scene.LoadPrefab("assets/props/simple_cube.gltf");
-    Asset* sphere_prefab = scene.LoadPrefab("assets/props/simple_sphere.gltf");
+    //Asset* cube_prefab = scene.LoadPrefab("assets/props/simple_cube.gltf");
+    //Asset* sphere_prefab = scene.LoadPrefab("assets/props/simple_sphere.gltf");
     //Asset* capsule_prefab = scene.LoadPrefab("assets/props/zombie.gltf");
-    Asset* capsule_prefab = scene.LoadPrefab("assets/props/character_capsule.gltf");
+    //Asset* capsule_prefab = scene.LoadPrefab("assets/props/character_capsule.gltf");
     Asset* zombie_woman = scene.LoadPrefab("assets/animations/zombie_woman.gltf");
     Asset* player = scene.LoadPrefab("assets/animations/player.gltf");
     // TODO: Change the following 2 prefabs so they can be imported (add the boolean "Is ECS Entity" with the new script where it is needed)
     // Asset* catPrefab = scene.LoadPrefab("assets/animations/zomboUntitled.gltf");
     // Asset* catPrefab = scene.LoadPrefab("assets/animations/flatzombo.gltf");
     //Asset* animationPrefab = scene.LoadPrefab("assets/animations/cat.gltf");
-        
+    
     scene.InstantiatePrefab(many_prefab, glm::vec3(0, 0, 0), glm::identity<glm::quat>());
     scene.InstantiatePrefab(room_prefab, glm::vec3(0.0f, 0.0f, -10.0f), glm::identity<glm::quat>());
     scene.InstantiatePrefab(playground_prefab, glm::vec3(0, 0, -10.0f), glm::identity<glm::quat>());
@@ -324,9 +327,9 @@ int main(int argc, char *argv[])
     // scene.InstantiatePrefab(cube_prefab, glm::vec3(3, 4.9, 0));ss
     
     EntityID playerID = scene.InstantiatePrefab(player, glm::vec3(0, 0, 0), glm::identity<glm::quat>());
-    scene.InstantiatePrefab(zombie_woman, glm::vec3(3, 0.0f, -11.5f), glm::identity<glm::quat>());
-    scene.InstantiatePrefab(zombie_woman, glm::vec3(3, 0.0f, -7.5f), glm::identity<glm::quat>());
-    scene.InstantiatePrefab(zombie_woman, glm::vec3(-3, 0.0f, -11.5f), glm::identity<glm::quat>());
+    scene.InstantiatePrefab(zombie_woman, glm::vec3(3, 0.0f, -11.5f), Math::ViewDirToQuat({0.0f ,0.0f, 1.0f}));
+    scene.InstantiatePrefab(zombie_woman, glm::vec3(3, 0.0f, -7.5f), Math::ViewDirToQuat({ 0.0f ,0.0f, 1.0f }));
+    scene.InstantiatePrefab(zombie_woman, glm::vec3(-3, 0.0f, -11.5f), Math::ViewDirToQuat({ 0.0f ,0.0f, 1.0f }));
     // scene.InstantiatePrefab(sphere_prefab, glm::vec3(4.7, 7, 0.1));
     // scene.InstantiatePrefab(sphere_prefab, glm::vec3(-4.7, 7, -0.1));
     // scene.InstantiatePrefab(sphere_prefab, glm::vec3(0.1, 7, -4.7));
@@ -340,6 +343,12 @@ int main(int argc, char *argv[])
     Asset* gun_prefab = scene.LoadPrefab("assets/props/colt.gltf"); 
     EntityID gunID = scene.InstantiatePrefab(gun_prefab, glm::vec3(0, 0, 0));
     // making gun
+
+    
+    { // IMPORTANT BIT tying gun to player
+        auto& playerSocket = scene.GetECS().GetComponent<C_WeaponSocket>(playerID);
+        playerSocket.weapon_entity = gunID;
+    }
 
     scene.SetPlayer(playerID);
     scene.BuildRendererScene();

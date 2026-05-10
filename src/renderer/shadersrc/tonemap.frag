@@ -25,6 +25,19 @@ vec2 lens_distortion(vec2 uv, float k, float aspect)
     return 0.5 * (p + 1.0);
 }
 
+float hash(float x)
+{
+    return fract(sin(x * 91.3458) * 47453.5453);
+}
+
+vec2 screenshake_offset(float t)
+{
+    return vec2(
+        hash(t) * 2.0 - 1.0,
+        hash(t + 17.0) * 2.0 - 1.0
+    );
+}
+
 vec3 tonemap_reinhard(vec3 x)
 {
     return x / (1.0 + x);
@@ -36,10 +49,21 @@ void main()
     SceneData scene  = SceneBuffer(push.dc.scene_ptr).scene;
     vec2 uv = lens_distortion(frag_uv, scene.lens_distortion, scene.aspect);
 
+    // SCREEN SHAKE
+    if (scene.screenshake > 1e-12)
+    {
+        // Random direction
+        vec2 shake = screenshake_offset(floor(scene.time * 120.0));
+        shake.x *= 1.75;                      // Horizontal usually feels stronger
+        shake *= 0.003 * scene.screenshake;  // Convert from pixels-ish to UV scale
+
+        uv += shake;
+    }
+
     // TONEMAPPING
     // NOTE: Currently LDR is sRGB because it matches swapchain image format
     //       Maybe LDR should be UNORM?
-    // TODO: HDR Monitor support, is that easy peasy?
+    // TODO: HDR Monitor support, should be a simple change to swapchain creation for the special colorspaces?
 
     // Read HDR linear color then output to monitor color-space.
     vec3 hdr = texture(sampler2D(

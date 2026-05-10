@@ -8,6 +8,7 @@
 #include "imgui_impl_sdl3.h"
 #include "imgui_impl_vulkan.h"
 #include "debug_ui/debug_ui.h"
+#include "renderer/shadersrc/common/shared.glsl"
 
 RenderState renderstate;
 
@@ -626,8 +627,13 @@ void Renderer_Init(const Renderer_InitInfo* info)
         ImGui::CreateContext();
         ImGuiIO& io = ImGui::GetIO();
         io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
+        io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;
         io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
         io.IniFilename = nullptr;
+
+        ImGuiStyle& style = ImGui::GetStyle();
+        style.Colors[ImGuiCol_NavCursor] = ImVec4(1.0f, 1.0f, 1.0f, 0.90f);
+        style.Colors[ImGuiCol_NavWindowingHighlight] = ImVec4(1.0f, 1.0f, 1.0f, 0.75f);
 
         // SDL3 backend
         ImGui_ImplSDL3_InitForVulkan(renderstate.window);
@@ -1284,7 +1290,7 @@ void Renderer_DrawFrame(CameraInfo main_camera)
                 .load_op = VK_ATTACHMENT_LOAD_OP_CLEAR,
                 .store_op = use_msaa ? VK_ATTACHMENT_STORE_OP_DONT_CARE : VK_ATTACHMENT_STORE_OP_STORE,  // DO NOT STORE MSAA TARGETS BACK TO MAIN MEMORY (Applies to tiled architectures)
                 // .clear_value = { .color = { .float32 = { 0.392f, 0.584f, 0.929f, 0.0f } } }  // Cornflower blue
-                .clear_value = { .color = { .float32 = { 0.0f, 0.0f, 0.0f, 0.0f } } }
+                .clear_value = { .color = { .float32 = { 0.0f, 0.0f, 0.0f, 0.0f, } } }
             },
 
             // Depth attachment (preloading with depth from the prepass)
