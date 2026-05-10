@@ -240,19 +240,23 @@ struct FrameGraphVisualizer
             // NOTE: For now I'm adding debug rendermode toggles here
             bool clustered_heatmap = renderstate.debug_rendermode == DEBUG_RENDERMODE_CLUSTERED_SHADING_HEATMAP;
             bool cluster_count_mode = renderstate.debug_rendermode == DEBUG_RENDERMODE_CLUSTERED_SHADING_CLUSTERS;
+            bool unlit_mode = renderstate.debug_rendermode == DEBUG_RENDERMODE_UNLIT;
             ImGui::Checkbox("Clustered shading heatmap", &clustered_heatmap);
             ImGui::Checkbox("Visualize clusters", &cluster_count_mode);
+            ImGui::Checkbox("Unlit materials", &unlit_mode);
             if (clustered_heatmap)
             {
                 renderstate.debug_rendermode = DEBUG_RENDERMODE_CLUSTERED_SHADING_HEATMAP;
             }
-            else if (cluster_count_mode)
+
+            if (cluster_count_mode)
             {
                 renderstate.debug_rendermode = DEBUG_RENDERMODE_CLUSTERED_SHADING_CLUSTERS;
             }
-            else
+
+            if (unlit_mode)
             {
-                renderstate.debug_rendermode = 0;
+                renderstate.debug_rendermode = DEBUG_RENDERMODE_UNLIT;
             }
 
             ImGui::End();
