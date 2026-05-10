@@ -6,7 +6,7 @@ TODO: Full names and emails.
 
 - Jaime: Physics engine and ECS
 - Liam: Renderer, Build-system & High-Level Architecture.
-- Finley: Procedural Gen, Skeletal Animation, Blender Level Editor
+- Finley: Procedural Generation, Skeletal Animation, Blender Level Editor
 - Nansong: Key rebinds, GUI, intelligent thirdperson camera.
 - Pio: Asset System, Skeletal Animation, rigged our assets for the demo game.
 - Xiangyu: Audio System
@@ -25,6 +25,7 @@ Libraries we did end up rellying on to reach the 3 month deadline (all very repl
 - stb_image.h (for PNG loading), stb_ds.h (for hash table used in renderer's pipeline hashing because the C++ STL is dog water)
 - AMD's Vulkan Memory Allocator (vk_mem_alloc.h).
 - volk: Vulkan Proc Loader Library
+  
 TODO: Make these links^
 
 ### Build
@@ -62,7 +63,7 @@ make clean && ./premake5 gmake && bear -- make -j
 ```
 
 
-### Architecture Design So Far
+### Architecture Design So Far (this is section hasn't been updated since the initial repo was made)
 Settling on a modular approach like this:
 
 NOTE: modules e.g. /core/ have their api visible in /core/, while internal implementation (internal headers and source) for these modules that aren't part of an exported API should go in e.g. /core/impl/.
