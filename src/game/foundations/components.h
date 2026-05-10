@@ -8,8 +8,12 @@
 // #include "renderer/components.h"
 // #include "core/animation/components.h"
 
+#include "core/utils/enum_bitmask.h"
+
 #include "core/assetsys.h"
 #include "glm/glm.hpp"
+
+#include <set>
 
 enum MoveState
 {
@@ -113,16 +117,42 @@ struct ForcedSlideInfo
 //	
 //};
 
+enum class FactionType : uint32_t
+{
+	None = 0, // Shouldn't be none
+	Player = 1 << 0,
+	Zombie = 1 << 1,
+	Neutral = 1 << 2,
+};
+DEFINE_ENUM_CLASS_BITWISE_OPERATORS(FactionType);
+
 struct C_Faction
 {
-	enum Type
-	{
-		Player,
-		Zombie,
-		// To add more, like Neutral etc
-	};
+	FactionType type;
 
-	Type type;
+	// Returns the damage factions should do to each other (in an enum bitmask)
+	static FactionType FactionDamageMask(FactionType type)
+	{
+		uint32_t mask = (uint32_t)FactionType::None;
+		switch (type)
+		{
+		case FactionType::None:
+			break;
+		case FactionType::Player:
+			mask |= (uint32_t) FactionType::Zombie;
+			break;
+		case FactionType::Zombie:
+			mask |= (uint32_t) FactionType::Player;
+			break;
+		case FactionType::Neutral:
+			break;
+		default:
+			break;
+		}
+
+		FactionType ret = (FactionType)mask;
+		return ret;
+	};
 };
 
 struct C_MovementInput
@@ -136,9 +166,6 @@ struct C_MovementInput
 	bool wantsCrouch = false;
 	bool wantsAim = false;
 	glm::vec3 aimDir{ 0.0f }; // For now, to rotate optionally (this should be in an animation input component or something)
-
-	// If we want dynamic combat just add some sort of slow down multiplier when attacking
-	float combatFactor = 0.0f;
 };
 
 struct C_MovementStats
@@ -280,13 +307,14 @@ struct C_WeaponRanged
 	Type type;
 	FiringMode firingMode;
 
-	float damage = 0.0f;
+	int damage = 0;
 	short maxBullets = 0;
 	short currentBullets = 0;
 
 	float lastTimeSinceShot = 0.0f;
 	int shotsPerFire = 0; // shots per fire (for bursts or any other semi that shoots multiple things (double barrel shotgun or anything idk))
 	float shootMaxCooldown = 0.0f; // the time between each shot
+	float reloadTime = 0.0f;
 
 	// Extra goofy shit
 	float dispersionRecoveryCooldown = 0.0f;
@@ -297,12 +325,13 @@ struct C_WeaponRanged
 		return C_WeaponRanged{
 			.type = Pistol,
 			.firingMode = Semi,
-			.damage = 100.0f, // Assume 100 health is a zombie's
+			.damage = 20, // Assume 20 health is a default zombie's health
 			.maxBullets = 1,
 			.currentBullets = 1,
 			.lastTimeSinceShot = 0.0f,
 			.shotsPerFire = 1,
 			.shootMaxCooldown = 1.0f,
+			.reloadTime = 3.0f,
 			.dispersionRecoveryCooldown = 1.5f
 		};
 	}
@@ -329,6 +358,7 @@ struct C_CombatInput
 {
 	// Modified by an InputSystem
 	bool wantsMelee = false;
+	bool wantsAim = false;
 	bool wantsRanged = false;
 	glm::vec3 aimDir{ 0.0f };
 };
@@ -346,7 +376,7 @@ struct C_CombatMeleeStats
 		//float speedMultiplier = 1.0f;
 
 		float duration; // how long the attack animation takes
-		float cancelWindow; // when in duration a follow-up can buffer
+		float bufferWindow; // when in duration a follow-up can buffer
 		float comboWindow; // how long player has to chain the next hit
 	};
 
@@ -375,7 +405,7 @@ struct C_CombatMeleeStats
 				// Attack 1
 				.animationID = "pistol_whip", // animationID (don't know the name)
 				.duration = 0.6f, // duration
-				.cancelWindow = 0.0f,
+				.bufferWindow = 0.0f,
 				.comboWindow = 0.0f
 				},
 				// Attack 2 if there was one
@@ -396,7 +426,7 @@ struct C_CombatMeleeStats
 					// Attack 1
 					.animationID = "zombie_swipe", // animationID (don't know the name)
 					.duration = 1.0f, // duration
-					.cancelWindow = 0.0f,
+					.bufferWindow = 0.0f,
 					.comboWindow = 0.0f
 				}
 				// Attack 2 if there was one
@@ -421,8 +451,8 @@ struct C_CombatMeleeStats
 					.animationID = "zombie_swipe", // animationID (don't know the name)
 					.damageMultiplier = 0.75f,
 					.duration = 0.7f, // duration
-					.cancelWindow = 0.1f,
-					.comboWindow = 0.2f
+					.bufferWindow = 0.7f, // always buffer the second hit
+					.comboWindow = 0.7f // always link the next hit
 				},
 				// Attack 2 if there was one
 				Attack {
@@ -430,8 +460,8 @@ struct C_CombatMeleeStats
 					.animationID = "zombie_swipe", // animationID (don't know the name)
 					.damageMultiplier = 0.75f,
 					.duration = 0.3f, // duration
-					.cancelWindow = 0.1f,
-					.comboWindow = 0.3f
+					.bufferWindow = 0.0f, // end of window
+					.comboWindow = 0.0f // end of window
 				},
 			}
 		});
@@ -440,15 +470,27 @@ struct C_CombatMeleeStats
 	}
 };
 
-
 struct C_CombatInfo
 {
-	int activeCombo = -1;    // index into C_ComboStats::combos (-1 = none)
-	int currentStep = 0;     // which attack in the sequence we're on
-	float windowTimer = 0.0f;  // time left to chain the next hit
-	float attackTimer = 0.0f;  // how far into the current attack animation
-	bool inputBuffered = false;  // next attack was pressed during cancel window
+	// For melee
+	int activeCombo = -1; // index into C_CombatMeleeStats::combos (-1 = none)
+	int currentStep = 0; // which attack in the combo sequence we're on
+
+	float bufferTimer = 0.0f; // time to buffer
+	float windowTimer = 0.0f; // time left to chain the next hit
+	bool inputBuffered = false; // next attack was pressed during buffer
+
 	bool isAttacking = false;
+
+	// For ranged (attackTimer will be firingTimer)
+	bool isFiring = false;
+
+	bool isStaggered = false;
+	float staggeredTimer = 0.0f;
+
+	// For melee & ranged
+	// Attack timer will serves as the shoot cooldown and as the attack cooldown
+	float attackTimer = 0.0f; // how far into the current attack animation (for melee) (and could be for ranged too)
 };
 
 struct C_WeaponSocket
@@ -478,6 +520,51 @@ struct C_PlayerInput
 	bool aim = false;
 	bool attack = false;
 	bool reload = false;
+};
+
+struct C_DespawnTimer
+{
+	float timer = 2.0f;
+};
+
+
+struct Upgrades
+{
+	// Upgrades
+	int extraHealth = 0;
+	int extraHealthGainedPerKills = 0;
+	int extraPierce = 0;
+	//int extraDamage = 0; // or damageMultiplier
+	float damageMultiplier = 1.0f; // damage multiplier
+	float speedMultiplier = 1.0f; // run faster
+	float extraReloadSpeed = 0; // reload faster
+	float extraFiringSpeed = 0; // fire faster
+};
+
+struct C_PlayerInfo
+{
+	enum State
+	{
+		Free, // Free includes Idle & Moving (same state for now, divide if want different functionality)
+		Attacking, // Attacking will decide if we can move
+		Aiming, // Same for aiming
+		Firing, // Same for firing
+		Reloading, // Same for reloading
+		Staggered,
+		Dead,
+	};
+
+	State state = State::Free;
+
+	Upgrades upgrades;
+
+	// Unsure...
+	bool isMoving = false;
+	bool isGrounded = false;
+	bool isJumping = false;
+	bool isReloading = false;
+
+	float idleTimer = 0.0f;
 };
 
 struct C_AIInput
@@ -561,8 +648,11 @@ struct C_EnemyAIInfo
 	// For Chasing / Attack, to check the active target first (say the zombie is dumb), and if the target falls off range then fallback to check for other players
 	EntityID activeTargetID = NULL_ENTITY;
 
-	// Timers
-	float attackTimer = 0.0f;
+	// Little helper when updating state we do shouldAttack, save it for when performing the state
+	// bool shouldAttack = false;
+
+	// Attack timers will be read from C_CombatInfo
+	/*float attackTimer = 0.0f;*/
 
 	// Important addition (TODO: add turn speed calculations to turning)
 	glm::vec3 targetLookDirToLerp{ 0.0f };
