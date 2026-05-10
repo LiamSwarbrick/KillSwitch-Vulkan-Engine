@@ -456,8 +456,8 @@ void PhysicsWorld::removeCharacter(RigidBodyHandle r)
 
 	if (!cHandle.isValid()) return;
 
-	characters.Delete(r.index);
-	freeCharacterIndices.push_back(r.index);
+	characters.Delete(cHandle.index);
+	freeCharacterIndices.push_back(cHandle.index);
 	bodyToCharacter.erase(r);
 }
 
@@ -583,6 +583,13 @@ Shape* PhysicsWorld::getShape(ShapeHandle handle)
 const Shape* PhysicsWorld::getShape(ShapeHandle handle) const
 {
 	if (!handle.isValid()) return nullptr;
+	
+	const ShapeRef* ret = shapes.GetPtr(handle.index);
+	if (!ret)
+	{
+		return nullptr;
+		shapes.GetPtr(handle.index);
+	}
 
 	return shapes.GetPtr(handle.index)->shape;
 }
