@@ -1043,7 +1043,7 @@ static void DrawSkillChoiceModal()
 
     const float backdrop_alpha =
         (s_skill_choice.phase == SkillChoicePhase::LevelIntro) ? 220.0f : (190.0f * cards_alpha);
-    dl->AddRectFilled(ImVec2(0, 0), io.DisplaySize, IM_COL32(0, 0, 0, (int)backdrop_alpha));
+    dl->AddRectFilled(ImVec2(0, 0), io.DisplaySize, IM_COL32(0, 0, 0, 255));
 
     if (s_skill_choice.phase == SkillChoicePhase::LevelIntro)
     {

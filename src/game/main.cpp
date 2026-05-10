@@ -386,8 +386,6 @@ int main(int argc, char *argv[])
     scene.BuildRendererScene();
     GameUI_SetLevelStartSkillApplyCallback(&scene, ApplyPlaceholderLevelStartSkill);
 
-    // TODO: Debug UI is built around the idea of 1 asset at the moment.
-    //       This must change with the new scene system that can load many asset prefabs.
     DebugUI_SetECS(&scene.GetECS());
     DebugUI_SetAsset(&scene.m_prefabs);
     InGameCam_Init(&scene.GetECS(), &scene.GetPhysicsManager(), playerID);
@@ -516,15 +514,17 @@ int main(int argc, char *argv[])
         scene.SetMovementCameraForward(InGameCam_GetMovementForward());
 
         // Game ticks
-        scene.Update(dt);
-        UpdateZombieAudio(scene, &audio_system, gameplay_audio, dt, current_ui_state == GameState::Playing);
-
-        // Update in-game camera
-    InGameCam_Update(dt, gameplay_input_enabled, DebugUI_IsOpen(), right_mouse_down, DebugUI_GetCameraMode());
-        // pass camera snapshot to debug UI
-        const InGameCamSnapshot ingame_cam_snapshot = InGameCam_GetSnapshot();
-        DebugUI_SetInGameCameraSnapshot(&ingame_cam_snapshot);
-
+        if (current_ui_state == GameState::Playing && !GameUI_IsLevelStartSkillSelectionOpen()) // freeze game when not playing
+        {
+            scene.Update(dt);
+            UpdateZombieAudio(scene, &audio_system, gameplay_audio, dt, current_ui_state == GameState::Playing);
+            // Update in-game camera
+            InGameCam_Update(dt, gameplay_input_enabled, DebugUI_IsOpen(), right_mouse_down, DebugUI_GetCameraMode());
+            // pass camera snapshot to debug UI
+            const InGameCamSnapshot ingame_cam_snapshot = InGameCam_GetSnapshot();
+            DebugUI_SetInGameCameraSnapshot(&ingame_cam_snapshot);
+        }
+        
         // update spatial audio with audio position
         glm::vec3 listener_pos = InGameCam_GetGameplayCamera().position;
         glm::vec3 listener_forward = glm::normalize(glm::vec3(
