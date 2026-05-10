@@ -73,8 +73,14 @@ bool      GameUI_IsLevelStartSkillSelectionOpen();
 // Register a Scene-typed callback where gameplay modifications should be applied.
 void      GameUI_SetLevelStartSkillApplyCallback(Scene* scene, LevelStartSkillApplyCallback callback);
 
-// Update the persistent playing HUD values that get rendered over gameplay.
-void      GameUI_SetPlayingHUDState(const GameUIPlayingHUDState& state);
+// Built-in placeholder callback used while real skill gameplay hooks are still being wired.
+void      GameUI_ApplyPlaceholderLevelStartSkill(Scene& scene, const LevelStartSkillSelection& selection);
+
+// Update the playing HUD from scene runtime data and enter game over when player health reaches zero.
+void      GameUI_UpdatePlayingHUD(Scene& scene);
+
+// Temporary debug hook for simulating player damage against the real runtime health component.
+void      GameUI_DebugDamagePlayer(Scene& scene, int damage_amount);
 
 // Trigger the short damage vignette used when the player gets hit.
 void      GameUI_TriggerDamageFlash();

@@ -1,5 +1,7 @@
 #include "game_ui.h"
 #include "core/input.h"
+#include "foundations/scene.h"
+#include "game/foundations/components.h"
 #include "renderer/renderer.h"
 #include "renderer/debug_ui_api.h"
 
@@ -165,6 +167,60 @@ static const ControlsActionEntry s_controls_actions[] = {
     { ACTION_PAUSE,         "Pause" },
 };
 
+static EntityID FindFirstPlayerEntity(Scene& scene)
+{
+    EntityID player_id = NULL_ENTITY;
+    scene.GetECS().GetView<C_PlayerInput>().ForEach([&](EntityID id, C_PlayerInput&)
+    {
+        if (player_id == NULL_ENTITY)
+            player_id = id;
+    });
+
+    return player_id;
+}
+
+static C_Health* TryGetPlayerHealth(Scene& scene, EntityID player_id)
+{
+    ECS& ecs = scene.GetECS();
+    if (!ecs.IsEntityValid(player_id) || !ecs.Has<C_Health>(player_id))
+        return nullptr;
+
+    return &ecs.GetComponent<C_Health>(player_id);
+}
+
+static GameUIPlayingHUDState BuildPlayingHUDState(Scene& scene, EntityID player_id, bool* out_has_real_health)
+{
+    GameUIPlayingHUDState hud_state = {};
+    bool has_real_health = false;
+
+    if (const C_Health* health = TryGetPlayerHealth(scene, player_id))
+    {
+        hud_state.life_count = (health->currentHealth < 0) ? 0 : health->currentHealth;
+        has_real_health = true;
+    }
+
+    ECS& ecs = scene.GetECS();
+    if (ecs.IsEntityValid(player_id) && ecs.Has<C_WeaponSocket>(player_id))
+    {
+        const C_WeaponSocket& weapon_socket = ecs.GetComponent<C_WeaponSocket>(player_id);
+        const bool has_ranged_weapon = weapon_socket.weapon_entity != NULL_ENTITY &&
+            ecs.IsEntityValid(weapon_socket.weapon_entity) &&
+            ecs.Has<C_WeaponRanged>(weapon_socket.weapon_entity);
+
+        if (has_ranged_weapon)
+        {
+            const C_WeaponRanged& weapon = ecs.GetComponent<C_WeaponRanged>(weapon_socket.weapon_entity);
+            hud_state.loaded_bullets = weapon.currentBullets;
+            hud_state.backup_bullets = 0;
+        }
+    }
+
+    if (out_has_real_health)
+        *out_has_real_health = has_real_health;
+
+    return hud_state;
+}
+
 
 //  Font loading
 bool GameUI_LoadFont(GameFont slot, const char* ttf_path, float size_pixels)
@@ -225,7 +281,34 @@ void GameUI_SetLevelStartSkillApplyCallback(Scene* scene, LevelStartSkillApplyCa
     s_skill_choice.scene = scene;
 }
 
-void GameUI_SetPlayingHUDState(const GameUIPlayingHUDState& state)
+void GameUI_ApplyPlaceholderLevelStartSkill(Scene& scene, const LevelStartSkillSelection& selection)
+{
+    SDL_Log(
+        "GameUI: selected level-start skill [level=%d, slot=%d, id=%s, name=%s]",
+        selection.level_index,
+        selection.selected_index,
+        selection.selected_option.skill_id ? selection.selected_option.skill_id : "<null>",
+        selection.selected_option.display_name ? selection.selected_option.display_name : "<null>");
+
+    if (selection.selected_option.skill_id != nullptr &&
+        SDL_strcmp(selection.selected_option.skill_id, "skill_placeholder_gamma") == 0)
+    {
+        const EntityID player_id = FindFirstPlayerEntity(scene);
+        if (C_Health* health = TryGetPlayerHealth(scene, player_id))
+        {
+            ++health->maxHealth;
+            ++health->currentHealth;
+        }
+    }
+
+    // TODO: Apply real gameplay modifications here.
+    // Suggested future integrations:
+    // - mutate gameplay components through scene.GetECS()
+    // - drive presentation through PlayAnim / PlayUpperBodyAnim on animated entities
+    // - store persistent run modifiers in scene-owned gameplay state
+}
+
+static void GameUI_SetPlayingHUDState(const GameUIPlayingHUDState& state)
 {
     const int clamped_life_count = (state.life_count < 0) ? 0 : state.life_count;
     if (clamped_life_count < s_playing_hud.life_count)
@@ -234,6 +317,33 @@ void GameUI_SetPlayingHUDState(const GameUIPlayingHUDState& state)
     s_playing_hud.life_count = clamped_life_count;
     s_playing_hud.loaded_bullets = (state.loaded_bullets < 0) ? 0 : state.loaded_bullets;
     s_playing_hud.backup_bullets = (state.backup_bullets < 0) ? 0 : state.backup_bullets;
+}
+
+void GameUI_UpdatePlayingHUD(Scene& scene)
+{
+    bool has_real_health = false;
+    const EntityID player_id = FindFirstPlayerEntity(scene);
+    const GameUIPlayingHUDState hud_state = BuildPlayingHUDState(scene, player_id, &has_real_health);
+
+    GameUI_SetPlayingHUDState(hud_state);
+
+    if (s_state == GameState::Playing && has_real_health && hud_state.life_count <= 0)
+        GameUI_SetState(GameState::GameOver);
+}
+
+void GameUI_DebugDamagePlayer(Scene& scene, int damage_amount)
+{
+    if (damage_amount <= 0)
+        return;
+
+    const EntityID player_id = FindFirstPlayerEntity(scene);
+    C_Health* health = TryGetPlayerHealth(scene, player_id);
+    if (!health)
+        return;
+
+    health->currentHealth -= damage_amount;
+    if (health->currentHealth < 0)
+        health->currentHealth = 0;
 }
 
 void GameUI_TriggerDamageFlash()
@@ -1470,12 +1580,6 @@ void GameUI_Update()
     // This keeps game UI hidden and restores its previous state when debug UI closes.
     if (DebugUI_IsOpen())
         return;
-
-    if (s_state == GameState::Playing && Input_IsKeyJustPressed(SDL_SCANCODE_P)) // TODO: damage flash should be triggered by get hit
-        GameUI_TriggerDamageFlash();
-
-    if (s_state == GameState::Playing && Input_IsKeyJustPressed(SDL_SCANCODE_O))
-        GameUI_SetState(GameState::GameOver);
 
     if (s_options_panel.active)
     {
