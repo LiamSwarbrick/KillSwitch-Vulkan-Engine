@@ -244,8 +244,7 @@ struct C_CombatInput
 };
 
 
-
-struct C_Weapon
+struct C_WeaponSocket
 {
 	EntityID weapon_entity = NULL_ENTITY;
 	glm::mat4 local_transform = glm::mat4(1.0f);
@@ -302,8 +301,23 @@ struct C_WeaponRanged
 	float shootMaxCooldown = 0.0f; // the time between each shot
 
 	// Extra goofy shit
-	float dispersionRecoveryCooldown;
+	float dispersionRecoveryCooldown = 0.0f;
 	std::function<void()> dispersionPattern; // idk if this would even work
+
+	static C_WeaponRanged DefaultPistol()
+	{
+		return C_WeaponRanged{
+			.type = Pistol,
+			.firingMode = Semi,
+			.damage = 100.0f, // Assume 100 health is a zombie's
+			.maxBullets = 1,
+			.currentBullets = 1,
+			.lastTimeSinceShot = 0.0f,
+			.shotsPerFire = 1,
+			.shootMaxCooldown = 1.0f,
+			.dispersionRecoveryCooldown = 1.5f
+		};
+	}
 };
 
 

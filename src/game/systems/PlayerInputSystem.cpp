@@ -64,19 +64,17 @@ void PlayerInputSystem::Update(float dt) const
         combatInput.wantsRanged = input.aim && input.attack; // assume ranged is aiming + action button == attack
 
 
+        if (ecs->Has<C_WeaponSocket>(entity))
+        {
+            auto& socket = ecs->GetComponent<C_WeaponSocket>(entity);
+            bool hasWeapon = (socket.weapon_entity != NULL_ENTITY) && ecs->IsEntityValid(socket.weapon_entity);
 
-        // ecs->GetView<C_Weapon>().ForEach([&](C_Weapon& weapon)
-        // {
-        // // NAH, this looks bad
-        //     if (input.aim)
-        //     {
-        //         weapon.equipped = true;
-        //     }
-        //     else
-        //     {
-        //         weapon.equipped = false;
-        //     }
-        // });
+            if (hasWeapon)
+            {
+                socket.equipped = input.aim;
+            }
+        }
+        
 
     });
 }

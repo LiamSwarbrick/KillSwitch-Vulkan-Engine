@@ -22,17 +22,11 @@ void AnimationSystem::UpdatePlayer(float dt) const
         bool hasWeapon = false;
 
         // NEEDS REWORK TO THIS
-        /*if (ecs->Has<C_WeaponSocket>(entity))
+        if (ecs->Has<C_WeaponSocket>(entity))
         {
             auto& socket = ecs->GetComponent<C_WeaponSocket>(entity);
-            hasWeapon = (socket.weapon_entity != NULL_ENTITY) && ecs->IsEntityValid(socket.weapon_entity);
-        }*/
-
-        ecs->GetView<C_Weapon>().ForEach([&](C_Weapon& weapon) // need to know what type of weapon for different animations
-            {
-                if (weapon.equipped)
-                    hasWeapon = true;
-            });
+            hasWeapon = (socket.weapon_entity != NULL_ENTITY) && ecs->IsEntityValid(socket.weapon_entity) && socket.equipped;
+        }
 
         // Small tweak to update the rotation
         if ((playerInput.aim && moveInfo.isGrounded) || moveInfo.isMoving)
@@ -186,16 +180,21 @@ void AnimationSystem::UpdatePlayer(float dt) const
             }
         }
 
-        ecs->GetView<C_Weapon, C_Transform>().ForEach([&](C_Weapon& weapon, C_Transform& weaponTransform)
+        if (ecs->Has<C_WeaponSocket>(entity))
         {
-            if (!weapon.equipped)
+            auto& socket = ecs->GetComponent<C_WeaponSocket>(entity);
+            hasWeapon = (socket.weapon_entity != NULL_ENTITY) && ecs->IsEntityValid(socket.weapon_entity) && socket.equipped;
+        
+            if (!hasWeapon)
                 return;
+
+            C_Transform& weaponTransform = ecs->GetComponent<C_Transform>(socket.weapon_entity);
 
             int handJointIndex = -1;
 
             // find node for hand
             SDL_assert(animatedMesh.asset->skin_count == 1 && "Assuming player has one gltf skin");
-            
+
             Skin* skin = &animatedMesh.asset->skins[0];
             for (uint32_t i = 0; i < skin->joint_count; i++)
             {
@@ -212,7 +211,7 @@ void AnimationSystem::UpdatePlayer(float dt) const
             {
                 glm::mat4 inverseBind =
                     glm::make_mat4(animatedMesh.asset->skins[0].inverse_bind_matrices +
-                                handJointIndex * 16);
+                        handJointIndex * 16);
 
                 glm::mat4 bindMatrix = glm::inverse(inverseBind);
 
@@ -257,6 +256,6 @@ void AnimationSystem::UpdatePlayer(float dt) const
                     handMatrix *
                     weaponOffset;
             }
-        });
+        }
     });
 }
