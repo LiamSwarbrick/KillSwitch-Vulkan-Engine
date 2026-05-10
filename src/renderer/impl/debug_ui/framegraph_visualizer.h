@@ -259,6 +259,11 @@ struct FrameGraphVisualizer
                 renderstate.debug_rendermode = DEBUG_RENDERMODE_UNLIT;
             }
 
+            if (!clustered_heatmap && !cluster_count_mode && !unlit_mode)
+            {
+                renderstate.debug_rendermode = DEBUG_RENDERMODE_OFF;
+            }
+
             ImGui::End();
         }
     }

@@ -160,6 +160,7 @@ struct C_MovementInput
 	// Written by InputSystem
 	glm::vec3 desiredDir{ 0.0f };
 	float moveAmount = 0.0f;
+	float lastYaw = 100.0f;  // Using > 2PI to indicate it hasn't been set yet
 
 	bool wantsJump = false;
 	bool wantsRun = false;

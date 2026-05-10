@@ -49,9 +49,18 @@ void AnimationSystem::UpdatePlayer(float dt) const
             else
                 facingDir = moveInput.desiredDir;
 
+            float yawRad = atan2f(facingDir.x, facingDir.z);
 
-            float yawDeg = glm::degrees(atan2f(facingDir.x, facingDir.z));
-            rotation = glm::angleAxis(glm::radians(yawDeg), glm::vec3(0.0f, 1.0f, 0.0f));
+            // Interpolate towards facingDir instead of immediate snap.
+            if (moveInput.lastYaw <= 2.0f * M_PI)
+            {
+                float delta = remainderf(yawRad - moveInput.lastYaw, 2.0f * M_PI);
+                float t = 1.0f - expf(-12.0f * dt);
+                yawRad = moveInput.lastYaw + delta * t;
+                yawRad = remainderf(yawRad, 2.0f * M_PI);
+            }
+            rotation = glm::angleAxis(yawRad, glm::vec3(0.0f, 1.0f, 0.0f));
+            moveInput.lastYaw = yawRad;
 
             transform.matrix = glm::translate(glm::mat4(1.0f), translation) * glm::mat4_cast(rotation) * glm::scale(glm::mat4(1.0f), scale);
         }
