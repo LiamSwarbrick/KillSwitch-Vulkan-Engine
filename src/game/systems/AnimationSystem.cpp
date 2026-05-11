@@ -63,7 +63,14 @@ void AnimationSystem::UpdatePlayer(float dt) const
             moveInput.lastYaw = yawRad;
 
             transform.matrix = glm::translate(glm::mat4(1.0f), translation) * glm::mat4_cast(rotation) * glm::scale(glm::mat4(1.0f), scale);
+
+            if (combatInput.wantsAim)
+            {
+                animatedMesh.aimPitch = -glm::degrees(asinf(facingDir.y));
+                //animatedMesh.aimYaw = 0.0f;
+            }
         }
+        animatedMesh.isAiming = combatInput.wantsAim;
 
         glm::vec3 movingDir = moveInput.desiredDir;
         glm::vec3 forwardDir = Math::QuatToViewDir(rotation); // Might be the same as moveDir
