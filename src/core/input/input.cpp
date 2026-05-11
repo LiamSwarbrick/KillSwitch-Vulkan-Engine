@@ -128,6 +128,7 @@ static void set_default_bindings()
     add_binding(ACTION_INTERACT, BIND_KEYBOARD,        SDL_SCANCODE_F);
     add_binding(ACTION_INTERACT, BIND_GAMEPAD_BUTTON,  SDL_GAMEPAD_BUTTON_WEST);
     add_binding(ACTION_ATTACK,   BIND_MOUSE_BUTTON,    SDL_BUTTON_LEFT);
+    add_binding(ACTION_ATTACK,   BIND_KEYBOARD,        SDL_SCANCODE_RSHIFT);  // NOTE(Liam): Just for me, since I wanna test on my laptop using just the arrow key camera controls lol :P
     add_binding(ACTION_ATTACK,   BIND_GAMEPAD_AXIS_POS, SDL_GAMEPAD_AXIS_RIGHT_TRIGGER);
     add_binding(ACTION_AIM,      BIND_MOUSE_BUTTON,    SDL_BUTTON_RIGHT);
     add_binding(ACTION_AIM,      BIND_GAMEPAD_AXIS_POS, SDL_GAMEPAD_AXIS_LEFT_TRIGGER);
