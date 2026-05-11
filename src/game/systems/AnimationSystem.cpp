@@ -118,7 +118,10 @@ void AnimationSystem::UpdatePlayer(float dt) const
 
         std::string reloadAnimName = "reload";
         int reloadAnimId = GetAnimationIdFromName(animatedMesh, reloadAnimName.c_str());
+        std::string meleeAnimName = "melee";
+        int meleeAnimId = GetAnimationIdFromName(animatedMesh, meleeAnimName.c_str());
 
+        // upperbody animations
         if (playerInfo.isReloading)
         {
             if (animatedMesh.upperBodyLayer.currentAnimation != reloadAnimId || !animatedMesh.isUpperLayerActive)
@@ -127,13 +130,25 @@ void AnimationSystem::UpdatePlayer(float dt) const
                 SetLooping(animatedMesh, animatedMesh.upperBodyLayer, false);
             }
         }
+        else if (playerInfo.state == playerInfo.Attacking)
+        {
+            if (animatedMesh.upperBodyLayer.currentAnimation != meleeAnimId ||
+                !animatedMesh.isUpperLayerActive)
+            {
+                PlayUpperBodyAnim(animatedMesh, meleeAnimName.c_str(), 0.1f);
+                SetLooping(animatedMesh, animatedMesh.upperBodyLayer, false);
+            }
+        }
         else
         {
-            if (animatedMesh.isUpperLayerActive && animatedMesh.upperBodyLayer.currentAnimation == reloadAnimId)
+            // Make sure we stop blending if either animation was previously playing
+            if (animatedMesh.isUpperLayerActive && (animatedMesh.upperBodyLayer.currentAnimation == reloadAnimId || animatedMesh.upperBodyLayer.currentAnimation == meleeAnimId))
             {
                 StopUpperBodyAnim(animatedMesh, 0.2f);
             }
         }
+
+
         if (moveInfo.isJumping || !moveInfo.isGrounded)
         {
             std::string animName = std::string(prefix) + "jump";
