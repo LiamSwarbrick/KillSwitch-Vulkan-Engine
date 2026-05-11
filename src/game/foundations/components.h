@@ -654,11 +654,9 @@ struct C_EnemyAIInfo
 	// For Chasing / Attack, to check the active target first (say the zombie is dumb), and if the target falls off range then fallback to check for other players
 	EntityID activeTargetID = NULL_ENTITY;
 
-	// Little helper when updating state we do shouldAttack, save it for when performing the state
-	// bool shouldAttack = false;
-
-	// Attack timers will be read from C_CombatInfo
-	//float attackTimer = 0.0f;
+	// Timers
+	float attackTimer = 0.0f;
+	float audioFootstepTimer = 0.0f;
 
 	// Important addition (TODO: add turn speed calculations to turning)
 	glm::vec3 targetLookDirToLerp{ 0.0f };
