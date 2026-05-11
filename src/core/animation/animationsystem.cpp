@@ -538,7 +538,13 @@ void SetAimingRotations(C_AnimatedMesh& animatedMesh, std::vector<BoneTransform>
         if (spineIndex >= 0 && spineIndex < animatedMesh.asset->skins[0].joint_count)
         {
             glm::quat yawRotation = glm::angleAxis(glm::radians(clampedYaw * yawWeights[i]), glm::vec3(0, 1, 0));
-            glm::quat pitchRotation = glm::angleAxis(glm::radians(clampedPitch * pitchWeights[i]), glm::vec3(1, 0, 0));
+            
+            glm::vec3 axisUp = glm::normalize(glm::vec3(0.8f, 0.4f, 0.0f));
+            glm::vec3 axisDown = glm::normalize(glm::vec3(0.8f, -0.2f, 0.0f));
+
+            // Pick the right axis depending on if we aim up or down
+            glm::vec3 currentAxis = (clampedPitch <= 0.0f) ? axisUp : axisDown;
+            glm::quat pitchRotation = glm::angleAxis(glm::radians(clampedPitch * pitchWeights[i]), currentAxis);
             pose[spineIndex].rotation = pose[spineIndex].rotation * (yawRotation * pitchRotation);
         }
     }

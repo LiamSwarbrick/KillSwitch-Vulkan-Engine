@@ -285,6 +285,9 @@ class BaseComponent(bpy.types.PropertyGroup):
 class PlayerInput(BaseComponent):
     bl_label = "PlayerInput"
 
+class ZombieInput(BaseComponent):
+    bl_label = "ZombieInput"
+
 class WeaponComponent(BaseComponent):
     bl_label = "Weapon"
     damage: bpy.props.IntProperty(default=100)

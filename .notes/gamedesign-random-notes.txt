@@ -1,0 +1,30 @@
+Walking produces footsteps.
+To hear the zombies footsteps, you can crouch which will silence yours.
+
+Proc gen:
+interior of room can be instantiated seperately
+
+
+ORIGINAL NOTES FROM YESTERDAY
+
+Melee: Punching or knife but damage is shit (like 5 hits to kill zombie)
+Golden eye ass revolver: Instakills zombies, 1 to 6 bullets in chamber, piecing.
+
+Vampire survivors ass upgrade system each floor:
+Choose between:
+- Piercing updrade (+1 zombo the bullet pierces and instakills)
+- Reload speed (25% faster) (so the progression is 2 seconds, 1.5, 1.125, 0.84, 0.63, etc..)
+- Health upgrade (for pussyclarts)
+
+And maybe each floor isn't too big, so playtesters don't take yons to get to the crazy weapons.
+E.g. first and second (maybe third) floors are tiny and let the player get used to controls.
+Then the later floors are a bit larger, but the player has some upgrades by that point.
+
+Rooms have ammo boxes, maybe zombies occasionally give health, or you just regen to max hp on next floor.
+
+Starter gun: 1 bullet, 1 piercing. + optional upgrade they get to choose immediately
+So the game starts:
+- Choose upgrade: ammo vs piercing vs health
+
+SIDE NOTE: What even is health in this game?
+- Can we a give zombies a ranged attack somehow? e.g. zombie with gun

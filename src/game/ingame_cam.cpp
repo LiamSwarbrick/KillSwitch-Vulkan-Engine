@@ -42,13 +42,14 @@ namespace
     EntityID s_tp_follow_target_entity = NULL_ENTITY;
     float s_tp_shoulder_side_blend = 1.0f;
     const float near_plane = 0.1f;
-    const float far_plane  = 100.0f;
+    const float far_plane  = 200.0f;
     const float default_lens_distortion = -0.025f;
 
     bool  s_initialized = false;
     bool  s_tp_follow_target_initialized = false;
     float s_occlusion_distance = s_tp_cam.distance;
     float s_base_fov = TPCamState{}.fov_deg;
+    float s_look_sensitivity_scale = 1.0f;
     ShapeHandle s_camera_probe_shape = InvalidShapeHandle;
 
     constexpr float MOUSE_SENSITIVITY  = 0.10f;
@@ -57,7 +58,8 @@ namespace
     constexpr float OCCLUSION_HIT_PADDING = 0.12f;
     constexpr float CAM_PULLING_SPEED = 35.0f;
     constexpr float CAM_PUSHING_SPEED = 12.0f;
-    constexpr float TP_SHOULDER_OFFSET = 0.4f;
+    constexpr float TP_SHOULDER_OFFSET = 0.5f;// 0.4f;
+    constexpr float TP_SHOULDER_OFFSET_AIMING = 0.48f;
     constexpr float TP_FOLLOW_SNAP_DISTANCE = 4.0f;
     constexpr float TP_SHOULDER_BLEND_SPEED = 12.0f;
     constexpr float AIM_FOV_OFFSET = 700.0f;
@@ -167,7 +169,7 @@ namespace
         if (!ecs) return NULL_ENTITY;
 
         EntityID found = NULL_ENTITY;
-        ecs->GetView<C_PlayerInput>().ForEach([&](EntityID id, C_PlayerInput&)
+        ecs->GetView<C_PlayerInfo>().ForEach([&](EntityID id, C_PlayerInfo&)
         {
             if (found == NULL_ENTITY)
                 found = id;
@@ -190,13 +192,13 @@ namespace
             float mouse_dy = 0.0f;
             Input_GetMouseDelta(&mouse_dx, &mouse_dy);
 
-            cam.yaw += mouse_dx * MOUSE_SENSITIVITY;
-            cam.pitch -= mouse_dy * MOUSE_SENSITIVITY;
+            cam.yaw += mouse_dx * MOUSE_SENSITIVITY * s_look_sensitivity_scale;
+            cam.pitch -= mouse_dy * MOUSE_SENSITIVITY * s_look_sensitivity_scale;
 
             cam.yaw += (Input_GetActionValue(ACTION_CAMERA_RIGHT) - Input_GetActionValue(ACTION_CAMERA_LEFT))
-                * GAMEPAD_LOOK_SPEED * dt;
+                * GAMEPAD_LOOK_SPEED * s_look_sensitivity_scale * dt;
             cam.pitch += (Input_GetActionValue(ACTION_CAMERA_UP) - Input_GetActionValue(ACTION_CAMERA_DOWN))
-                * GAMEPAD_LOOK_SPEED * dt;
+                * GAMEPAD_LOOK_SPEED * s_look_sensitivity_scale * dt;
         }
 
         if (cam.pitch > 89.0f) cam.pitch = 89.0f; // cam pitch limit
@@ -211,7 +213,7 @@ namespace
 
         // find bound entity transform
         C_Transform* bound_transform = nullptr;
-        if (s_ecs && cam.bound_entity != NULL_ENTITY)
+        if (s_ecs && cam.bound_entity != NULL_ENTITY && s_ecs->IsEntityValid(cam.bound_entity))
             bound_transform = s_ecs->GetComponentPtr<C_Transform>(cam.bound_entity);
 
         if (!bound_transform)
@@ -231,7 +233,7 @@ namespace
         }
 
         return CameraInfo{
-            .view            = glm::lookAt(cam.pos, cam.pos + cam.forward, glm::vec3(0.0f, 1.0f, 0.0f)),
+            .view            = glm::lookAtRH(cam.pos, cam.pos + cam.forward, glm::vec3(0.0f, 1.0f, 0.0f)),
             .position        = cam.pos,
             .near_plane      = near_plane,
             .far_plane       = far_plane,
@@ -251,13 +253,13 @@ namespace
             float mouse_dy = 0.0f;
             Input_GetMouseDelta(&mouse_dx, &mouse_dy);
 
-            cam.yaw += mouse_dx * MOUSE_SENSITIVITY;
-            cam.pitch -= mouse_dy * MOUSE_SENSITIVITY;
+            cam.yaw += mouse_dx * MOUSE_SENSITIVITY * s_look_sensitivity_scale;
+            cam.pitch -= mouse_dy * MOUSE_SENSITIVITY * s_look_sensitivity_scale;
             // gamepad input
             cam.yaw += (Input_GetActionValue(ACTION_CAMERA_RIGHT) - Input_GetActionValue(ACTION_CAMERA_LEFT))
-                * GAMEPAD_LOOK_SPEED * dt;
+                * GAMEPAD_LOOK_SPEED * s_look_sensitivity_scale * dt;
             cam.pitch += (Input_GetActionValue(ACTION_CAMERA_UP) - Input_GetActionValue(ACTION_CAMERA_DOWN))
-                * GAMEPAD_LOOK_SPEED * dt;
+                * GAMEPAD_LOOK_SPEED * s_look_sensitivity_scale * dt;
         }
 
         if (cam.pitch > 80.0f) cam.pitch = 80.0f;
@@ -272,7 +274,7 @@ namespace
         cam.forward = glm::normalize(forward);
         // find bound entity transform
         C_Transform* bound_transform = nullptr;
-        if (s_ecs && cam.bound_entity != NULL_ENTITY)
+        if (s_ecs && cam.bound_entity != NULL_ENTITY && s_ecs->IsEntityValid(cam.bound_entity))
             bound_transform = s_ecs->GetComponentPtr<C_Transform>(cam.bound_entity);
 
         if (!bound_transform)
@@ -286,10 +288,10 @@ namespace
         }
 
         bool is_aiming = false;
-        if (s_ecs && cam.bound_entity != NULL_ENTITY)
+        if (s_ecs && cam.bound_entity != NULL_ENTITY && s_ecs->IsEntityValid(cam.bound_entity))
         {
-            if (const C_PlayerInput* input = s_ecs->GetComponentPtr<C_PlayerInput>(cam.bound_entity))
-                is_aiming = input->aim;
+            if (const C_CombatInput* combatInput = s_ecs->GetComponentPtr<C_CombatInput>(cam.bound_entity))
+                is_aiming = combatInput->wantsAim;
         }
 
         if (bound_transform)
@@ -298,7 +300,7 @@ namespace
             float height = cam.target_height;
             if (s_ecs->Has<C_RigidBody>(cam.bound_entity) && s_physics)
             {
-                IShape* genShape = s_physics->getShape(cam.bound_entity);
+                Shape* genShape = s_physics->getShape(cam.bound_entity);
                 height = genShape->getHeight(); // for character_capsule.gltf = 2m
 
                 height = height * 0.5f * 0.7f; // tweak this
@@ -367,7 +369,10 @@ namespace
             ray.maxDistance = desired_distance;
 
             QueryFilterExternal filter = {};
-            filter.bodyToIgnore = cam.bound_entity; // ignore the player
+            if (cam.bound_entity != NULL_ENTITY && s_ecs->IsEntityValid(cam.bound_entity))
+            {
+                filter.bodyToIgnore = cam.bound_entity;
+            }// ignore the player
             filter.hasLayerOfQuery = s_occlusion_settings.layered_query;
             filter.layerOfQuery = s_occlusion_settings.layer;
 
@@ -416,7 +421,7 @@ namespace
         cam.pos = cam.target - cam.forward * s_occlusion_distance + right * shoulder_offset;
 
         // Aiming offset and FOV change
-        const float target_aim_offset = is_aiming ? (TP_SHOULDER_OFFSET + 0.08f) : TP_SHOULDER_OFFSET;
+        const float target_aim_offset = is_aiming ? TP_SHOULDER_OFFSET_AIMING : TP_SHOULDER_OFFSET;
         const float aimed_fov = glm::max(40.0f, s_base_fov - AIM_FOV_OFFSET);
         const float target_fov = is_aiming ? aimed_fov : s_base_fov;
 
@@ -430,11 +435,12 @@ namespace
 
         glm::vec3 aim_target = cam.target + right * (SHOULDER_OFFSET * s_tp_shoulder_side_blend);
         return CameraInfo{
-                    .view            = glm::lookAt(cam.pos, aim_target, glm::vec3(0.0f, 1.0f, 0.0f)),
+                    .view            = glm::lookAtRH(cam.pos, aim_target, glm::vec3(0.0f, 1.0f, 0.0f)),
                     .position        = cam.pos,
                     .near_plane      = near_plane,
                     .far_plane       = far_plane,
-                    .lens_distortion = default_lens_distortion
+                    .lens_distortion = default_lens_distortion,
+                    .screenshake     = 0.0f  // TODO: Change this.
         };
     }
 
@@ -558,6 +564,16 @@ void InGameCam_ToggleShoulder()
     s_tp_cam.shoulder_side_change = !s_tp_cam.shoulder_side_change;
 }
 
+void InGameCam_SetLookSensitivity(float sensitivity_scale)
+{
+    s_look_sensitivity_scale = glm::max(sensitivity_scale, 0.01f);
+}
+
+float InGameCam_GetLookSensitivity()
+{
+    return s_look_sensitivity_scale;
+}
+
 void InGameCam_Shutdown()
 {
     DestroyCameraProbeShape();
@@ -593,10 +609,10 @@ void InGameCam_ApplyDebugEdits(const InGameCamDebugEdits& edits)
         s_fp_cam = edits.fp_state;
 
     if (edits.apply_tp_state)
-        {
-            s_tp_cam = edits.tp_state;
-            s_base_fov = edits.tp_state.fov_deg;
-        }
+    {
+        s_tp_cam = edits.tp_state;
+        s_base_fov = edits.tp_state.fov_deg;
+    }
     
     if (edits.reset_tp || edits.apply_tp_state)
     {

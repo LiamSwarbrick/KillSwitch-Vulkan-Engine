@@ -5,14 +5,14 @@
 
 #include <cmath>
 
-class SphereShape: public IShape
+class SphereShape: public Shape
 {
 public:
 	float radius;
 
 public:
 	explicit SphereShape(float radius)
-		: IShape(ShapeType::Sphere), radius(radius)
+		: Shape(ShapeType::Sphere), radius(radius)
 	{
 	}
 
@@ -36,17 +36,7 @@ public:
 		float oc2 = glm::dot(oc, oc);
 		float r2 = radius * radius;
 		float t, t0, t1;
-#if 1
-		// Geometrical solution
-		float tc = glm::dot(oc, ray.direction);
-		float d2 = oc2 - tc * tc;
-		if (d2 > r2) return RaycastHit::none(); // Hit's outside the sphere
 
-		float thc = sqrt(r2 - d2); // pythagoras
-
-		t0 = tc - thc;
-		t1 = tc + thc;
-#else
 		// Analytical solution
 
 		// float a = dot(ray.direction, ray.direction); // assuming direction is normalized, a is 1
@@ -62,7 +52,7 @@ public:
 
 		t0 = (-b - discSqrt) * 0.5f;
 		t1 = (-b + discSqrt) * 0.5f;
-#endif
+
 		if (t0 > t1) std::swap(t0, t1);
 
 		if (t0 < 0.0f) t0 = t1;

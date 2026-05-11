@@ -4,8 +4,8 @@
 
 Contact NarrowPhase::testPair(const RigidBody& a, const RigidBody& b, const PhysicsWorld& world) const
 {
-	const IShape* shapeA = world.getShape(a.shapeHandle);
-	const IShape* shapeB = world.getShape(b.shapeHandle);
+	const Shape* shapeA = world.getShape(a.shapeHandle);
+	const Shape* shapeB = world.getShape(b.shapeHandle);
 
 	SDL_assert(shapeA && "Body A has null shape");
 	SDL_assert(shapeB && "Body A has null shape");
@@ -42,7 +42,7 @@ Contact NarrowPhase::testPlane(const RigidBody& a, const PlaneShape& plane, cons
 
 RaycastHit NarrowPhase::raycast(const Ray& ray, const RigidBody& body, const PhysicsWorld& world) const
 {
-	const IShape* shape = world.getShape(body.shapeHandle);
+	const Shape* shape = world.getShape(body.shapeHandle);
 
 	SDL_assert(shape && "Body has null shape");
 	if (!shape) return RaycastHit::none();
@@ -54,9 +54,9 @@ RaycastHit NarrowPhase::raycast(const Ray& ray, const RigidBody& body, const Phy
 	return shape->intersectsRay(ray, position, orientation);
 }
 
-bool NarrowPhase::testShapeIntersects(const IShape* shape, const glm::vec3& shapePosition, const glm::quat& shapeOrientation, const RigidBody& body, const PhysicsWorld& world) const
+bool NarrowPhase::testShapeIntersects(const Shape* shape, const glm::vec3& shapePosition, const glm::quat& shapeOrientation, const RigidBody& body, const PhysicsWorld& world) const
 {
-	const IShape* shapeB = world.getShape(body.shapeHandle);
+	const Shape* shapeB = world.getShape(body.shapeHandle);
 
 	SDL_assert(shapeB && "Body B has null shape");
 
@@ -69,7 +69,7 @@ bool NarrowPhase::testShapeIntersects(const IShape* shape, const glm::vec3& shap
 	return res.intersecting;
 }
 
-ShapecastHit NarrowPhase::shapecast(const Ray& ray, const IShape* queryShape, const glm::vec3& queryPos, const glm::quat& queryOri, const IShape* targetShape, const glm::vec3& targetPos, const glm::quat& targetOri) const
+ShapecastHit NarrowPhase::shapecast(const Ray& ray, const Shape* queryShape, const glm::vec3& queryPos, const glm::quat& queryOri, const Shape* targetShape, const glm::vec3& targetPos, const glm::quat& targetOri) const
 {
 	return conservativeAdvancement(ray, queryShape, queryPos, queryOri, targetShape, targetPos, targetOri);
 }
@@ -80,7 +80,7 @@ RaycastHit NarrowPhase::raycastPlane(const Ray& ray, const PlaneShape& plane, co
 	return RaycastHit();
 }
 
-void NarrowPhase::resolveShapeTransform(const IShape* shape,
+void NarrowPhase::resolveShapeTransform(const Shape* shape,
 	const glm::vec3& bodyPosition, const glm::quat& bodyOrientation, 
 	glm::vec3& outPosition, glm::quat& outOrientation) const
 {
@@ -98,8 +98,8 @@ void NarrowPhase::resolveShapeTransform(const IShape* shape,
 }
 
 Contact NarrowPhase::dispatch(
-	const IShape* shapeA, const glm::vec3& posA, const glm::quat& oriA, 
-	const IShape* shapeB, const glm::vec3& posB, const glm::quat& oriB) const
+	const Shape* shapeA, const glm::vec3& posA, const glm::quat& oriA, 
+	const Shape* shapeB, const glm::vec3& posB, const glm::quat& oriB) const
 {
 
 	// For now we're just going to do GJK, except Sphere_Sphere.
@@ -164,7 +164,7 @@ Contact NarrowPhase::testCapsulePlane(const CapsuleShape& a, const glm::vec3& po
 	return Contact();
 }
 
-Contact NarrowPhase::testGJK_EPA(const IShape* shapeA, const glm::vec3& posA, const glm::quat& oriA, const IShape* shapeB, const glm::vec3& posB, const glm::quat& oriB) const
+Contact NarrowPhase::testGJK_EPA(const Shape* shapeA, const glm::vec3& posA, const glm::quat& oriA, const Shape* shapeB, const glm::vec3& posB, const glm::quat& oriB) const
 {
 	GJKResult gjk = gjk_runGJK(shapeA, posA, oriA, shapeB, posB, oriB);
 
@@ -200,7 +200,7 @@ RaycastHit NarrowPhase::raycastCapsule(const Ray& ray, const CapsuleShape& capsu
 	return RaycastHit();
 }
 
-ShapecastHit NarrowPhase::conservativeAdvancement(const Ray& ray, const IShape* queryShape, const glm::vec3& queryPos, const glm::quat& queryOri, const IShape* targetShape, const glm::vec3& targetPos, const glm::quat& targetOri) const
+ShapecastHit NarrowPhase::conservativeAdvancement(const Ray& ray, const Shape* queryShape, const glm::vec3& queryPos, const glm::quat& queryOri, const Shape* targetShape, const glm::vec3& targetPos, const glm::quat& targetOri) const
 {
 	const float TOLERANCE = 0.004f;
 	const int MAX_ITERATIONS = 12;

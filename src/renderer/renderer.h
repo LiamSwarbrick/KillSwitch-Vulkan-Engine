@@ -53,6 +53,7 @@ typedef struct CameraInfo
     float near_plane;
     float far_plane;
     float lens_distortion;
+    float screenshake;  // 0.0 is off, 1.0 is high, but it can go as high as your heart desires
 }
 CameraInfo;
 
@@ -62,11 +63,16 @@ void Renderer_PushLight(C_Light light, glm::vec3 position, glm::vec3 direction, 
 void Renderer_DrawFrame(CameraInfo main_camera);
 
 
+////////
+// NOTE(Liam): TODO: Rework UI with actual renderpasses and proper usage of internal resource system.
+// START: NANSONG'S UI 
+//
+
 // UI TEXTURE for game-side ImGui
 
 typedef struct Renderer_UITexture
 {
-    u64         imgui_texture_id;  // Cast to ImTextureID at call site
+    uint64_t    imgui_texture_id;  // Cast to ImTextureID at call site
     uint32_t    width;
     uint32_t    height;
 }
@@ -74,6 +80,9 @@ Renderer_UITexture;
 
 // Loads an image and register it with ImGui Vulkan backend.
 bool Renderer_LoadUITexture(const char* filepath, bool nearest_sampling, Renderer_UITexture* out_texture);
+
+// END OF NANSONG'S UI CODE
+///////////////////////////////
 
 
 // SCENE API (On scene change resources for GPU)

@@ -92,6 +92,7 @@ typedef struct RenderState
     
 
     CameraInfo main_camera;
+    glm::mat4 main_camera_fullscreen_proj;
     uint32_t debug_rendermode;  // As per shared_constants.glsl
 
     // Renderer execution state:
@@ -100,8 +101,6 @@ typedef struct RenderState
     // Scene Assets
     b32 is_next_scene_set;
     Scene_InitInfo next_scene_info;
-
-
 
 
     // IMGUI

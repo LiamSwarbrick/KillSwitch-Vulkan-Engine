@@ -5,7 +5,7 @@
 
 #include "core/utils/enum_bitmask.h"
 
-#include "physics_settings.h"
+#include "physics/physics_settings.h"
 
 #include "glm/glm.hpp"
 #include "glm/gtc/quaternion.hpp"
@@ -16,6 +16,15 @@
 
 // For floats
 constexpr float F_EPSILON = 1e-6f;
+
+// Important for a fix
+template<typename T>
+struct Slot
+{
+    T body;
+    bool occupied = false;
+};
+using BodySlot = Slot<RigidBody>;
 
 // ------------------
 // SHAPES RELATED
@@ -165,8 +174,8 @@ enum class ShapeType : uint8_t
 
 struct ShapeDesc
 {
-    glm::vec3 localOffset;
-    glm::quat localOrientation;
+    glm::vec3 localOffset = glm::vec3(0.0f);
+    glm::quat localOrientation = glm::identity<glm::quat>();
 
     ShapeType type;
 

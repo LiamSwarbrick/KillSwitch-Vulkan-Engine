@@ -7,7 +7,7 @@
 #include "renderer/shadersrc/common/shared.glsl"
 
 #define MAX_SWAPCHAIN_IMAGE_COUNT 10
-#define NUM_FRAMES_IN_FLIGHT 2
+#define NUM_FRAMES_IN_FLIGHT 5
 
 
 typedef struct ThreadStagingObjects

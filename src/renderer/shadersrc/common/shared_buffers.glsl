@@ -15,6 +15,7 @@
 #define CLUSTER_GRID_SIZE_Z 24
 #define CLUSTER_COUNT (CLUSTER_GRID_SIZE_X * CLUSTER_GRID_SIZE_Y * CLUSTER_GRID_SIZE_Z)
 #define CLUSTER_INDEX(x, y, z) ((x) + (y)*CLUSTER_GRID_SIZE_X + (z)*CLUSTER_GRID_SIZE_X*CLUSTER_GRID_SIZE_Y)
+#define MAX_LIGHTS_PER_CLUSTER 256  // Max lights of a single type, so 128 point lights + 128 spotlights
 
 // NOTE: On the C++ side, mat and vec types here are not glm types, they are float arrays defined in shared_types.glsl
 struct SceneData
@@ -33,6 +34,7 @@ struct SceneData
 
     uvec2 rendertarget_size;
     float inv_log_far_over_near;  // For getting the Z bin in clustered shading (1.0f / log(far / near))
+    float screenshake;  // 0.0 is off, 1.0 is max
 };
 
 struct ObjectData
@@ -80,7 +82,6 @@ struct Cluster
 {
     uint32_t point_count;
     uint32_t point_offset;
-
     uint32_t spot_count;
     uint32_t spot_offset;
 };

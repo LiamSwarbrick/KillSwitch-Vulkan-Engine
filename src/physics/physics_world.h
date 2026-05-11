@@ -7,7 +7,7 @@
 #include "core/ecs/sparse_set.h"
 
 #include "physics/core/types.h"
-#include "physics/core/physics_settings.h"
+#include "physics/physics_settings.h"
 
 #include "physics/collision/broadphase/broadphase.h"
 #include "physics/collision/narrowphase/narrowphase.h"
@@ -72,7 +72,7 @@ public:
 	float getGravityScale(RigidBodyHandle r);
 	uint32_t getForceLayers(RigidBodyHandle r);
 	ShapeHandle getShapeHandle(RigidBodyHandle r);
-	IShape* getShape(RigidBodyHandle r); // extra
+	Shape* getShape(RigidBodyHandle r); // extra
 
 	void teleportBody(RigidBodyHandle r, const glm::vec3& worldPosition);
 	void setVelocity(RigidBodyHandle r, const glm::vec3& velocity);
@@ -122,8 +122,8 @@ public:
 	ShapeHandle createShape(const ShapeDesc& desc);
 	// Destroy shape should only be called for shape queries, it is automatically called on body deletion
 	void destroyShape(ShapeHandle handle); 
-	IShape* getShape(ShapeHandle handle);
-	const IShape* getShape(ShapeHandle handle) const;
+	Shape* getShape(ShapeHandle handle);
+	const Shape* getShape(ShapeHandle handle) const;
 
 	// ------------------------------
 	// PLANE MANAGEMENT (because we have a floor. it could be terrain, but would change things)
@@ -232,7 +232,9 @@ private:
 
 	// --- POOLS (to refactor ECS to remove namespace and move definitions to .cpp)
 	// Fairly similar to the ECS registry, we will just have a couple sparse sets for shapes (though planes is a little bit overkill)
-	SparseSet<RigidBody> bodies;
+	// Templating it in case we might need to use it on characters too, or any others
+	// Slot<T> and BodySlot are defined in physics/core/types.h
+	std::vector<BodySlot> bodyPool;
 	std::vector<uint32_t> freeBodyIndices;
 
 	SparseSet<PhysicsCharacter> characters;
@@ -245,7 +247,7 @@ private:
 	// we're not going to iterate over shapes, they are going to be accesed from rigidbodies
 	struct ShapeRef
 	{
-		IShape* shape = nullptr;
+		Shape* shape = nullptr;
 		uint32_t refCount = 0;
 	};
 

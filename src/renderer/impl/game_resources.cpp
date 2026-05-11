@@ -298,7 +298,7 @@ void create_startup_resources()
             ResourceCreateInfo point_light_indices_buf_info = {
                 .buffer_create_info = {
                     .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
-                    .size  = sizeof(uint32_t) * MAX_POINTLIGHTS * CLUSTER_COUNT,
+                    .size  = sizeof(uint32_t) * MAX_LIGHTS_PER_CLUSTER * CLUSTER_COUNT,
                     .usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT
                         | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT
                         | VK_BUFFER_USAGE_TRANSFER_DST_BIT
@@ -315,7 +315,7 @@ void create_startup_resources()
             ResourceCreateInfo spot_light_indices_buf_info = {
                 .buffer_create_info = {
                     .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
-                    .size  = sizeof(uint32_t) * MAX_SPOTLIGHTS * CLUSTER_COUNT,
+                    .size  = sizeof(uint32_t) * MAX_LIGHTS_PER_CLUSTER * CLUSTER_COUNT,
                     .usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT
                         | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT
                         | VK_BUFFER_USAGE_TRANSFER_DST_BIT

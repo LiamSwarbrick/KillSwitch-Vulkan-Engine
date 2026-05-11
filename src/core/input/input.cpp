@@ -31,6 +31,8 @@ static ActionState     s_actions[ACTION_COUNT]   = {};
 
 // Keyboard bool values from SDL_GetKeyboardState
 static const bool*     s_keyboard_state = nullptr;
+static bool            s_prev_keyboard_state[SDL_SCANCODE_COUNT] = {};
+static bool            s_keyboard_just_pressed[SDL_SCANCODE_COUNT] = {};
 
 // Mouse related values
 static float           s_mouse_dx = 0.0f;
@@ -38,13 +40,24 @@ static float           s_mouse_dy = 0.0f;
 static float           s_mouse_accum_x = 0.0f;
 static float           s_mouse_accum_y = 0.0f;
 static uint32_t        s_mouse_buttons = 0;
+static uint32_t        s_prev_mouse_buttons = 0;
 
 // Gamepad connection state
 static SDL_Gamepad*    s_gamepad = nullptr;
 static SDL_JoystickID  s_gamepad_id = 0;
+static bool            s_prev_gamepad_buttons[SDL_GAMEPAD_BUTTON_COUNT] = {};
+static bool            s_gamepad_buttons_just_pressed[SDL_GAMEPAD_BUTTON_COUNT] = {};
+static bool            s_any_input_just_pressed = false;
+static InputBinding    s_pending_keyboard_mouse_binding = {};
+static bool            s_has_pending_keyboard_mouse_binding = false;
+static InputBinding    s_pending_gamepad_binding = {};
+static bool            s_has_pending_gamepad_binding = false;
+static bool            s_rebind_gamepad_axis_pos_active[SDL_GAMEPAD_AXIS_COUNT] = {};
+static bool            s_rebind_gamepad_axis_neg_active[SDL_GAMEPAD_AXIS_COUNT] = {};
 
 // Axis default deadzone, for now just keeped hardcoded here, can be made configurable if needed
 static constexpr float AXIS_DEADZONE = 0.20f;
+static constexpr float REBIND_AXIS_CAPTURE_THRESHOLD = 0.60f;
 
 // Action name table — generated directly from INPUT_ACTIONS_LIST in input_actions.h.
 // Always in sync with the enum; no manual maintenance needed.
@@ -93,9 +106,9 @@ static void set_default_bindings()
     add_binding(ACTION_MOVE_BACKWARD, BIND_GAMEPAD_AXIS_POS, SDL_GAMEPAD_AXIS_LEFTY);
     add_binding(ACTION_MOVE_LEFT,     BIND_GAMEPAD_AXIS_NEG, SDL_GAMEPAD_AXIS_LEFTX);
     add_binding(ACTION_MOVE_RIGHT,    BIND_GAMEPAD_AXIS_POS, SDL_GAMEPAD_AXIS_LEFTX);
-    add_binding(ACTION_SPRINT,        BIND_GAMEPAD_BUTTON,   SDL_GAMEPAD_BUTTON_LEFT_STICK);
+    add_binding(ACTION_SPRINT,        BIND_GAMEPAD_BUTTON,   SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER);
     add_binding(ACTION_JUMP,          BIND_GAMEPAD_BUTTON,   SDL_GAMEPAD_BUTTON_SOUTH);
-    add_binding(ACTION_CROUCH,        BIND_GAMEPAD_BUTTON,   SDL_GAMEPAD_BUTTON_EAST);
+    add_binding(ACTION_CROUCH,        BIND_GAMEPAD_BUTTON,   SDL_GAMEPAD_BUTTON_LEFT_SHOULDER);
 
     // Camera – keyboard
     add_binding(ACTION_CAMERA_UP,   BIND_KEYBOARD, SDL_SCANCODE_UP);
@@ -115,9 +128,10 @@ static void set_default_bindings()
     add_binding(ACTION_INTERACT, BIND_KEYBOARD,        SDL_SCANCODE_F);
     add_binding(ACTION_INTERACT, BIND_GAMEPAD_BUTTON,  SDL_GAMEPAD_BUTTON_WEST);
     add_binding(ACTION_ATTACK,   BIND_MOUSE_BUTTON,    SDL_BUTTON_LEFT);
-    add_binding(ACTION_ATTACK,   BIND_GAMEPAD_BUTTON,  SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER);
+    add_binding(ACTION_ATTACK,   BIND_KEYBOARD,        SDL_SCANCODE_RSHIFT);  // NOTE(Liam): Just for me, since I wanna test on my laptop using just the arrow key camera controls lol :P
+    add_binding(ACTION_ATTACK,   BIND_GAMEPAD_AXIS_POS, SDL_GAMEPAD_AXIS_RIGHT_TRIGGER);
     add_binding(ACTION_AIM,      BIND_MOUSE_BUTTON,    SDL_BUTTON_RIGHT);
-    add_binding(ACTION_AIM,      BIND_GAMEPAD_BUTTON,  SDL_GAMEPAD_BUTTON_LEFT_SHOULDER);
+    add_binding(ACTION_AIM,      BIND_GAMEPAD_AXIS_POS, SDL_GAMEPAD_AXIS_LEFT_TRIGGER);
 
     // UI
     add_binding(ACTION_PAUSE,        BIND_KEYBOARD,       SDL_SCANCODE_ESCAPE);
@@ -153,6 +167,9 @@ static void close_gamepad()
         s_gamepad_id = 0;
         SDL_Log("Input: Gamepad disconnected");
     }
+
+    memset(s_rebind_gamepad_axis_pos_active, 0, sizeof(s_rebind_gamepad_axis_pos_active));
+    memset(s_rebind_gamepad_axis_neg_active, 0, sizeof(s_rebind_gamepad_axis_neg_active));
 }
 
 //  Binding evaluation
@@ -337,9 +354,15 @@ void Input_Init(const char* bindings_path)
 {
     memset(s_actions,  0, sizeof(s_actions));   // Clear all action states
     memset(s_bindings, 0, sizeof(s_bindings));  // Clear all bindings
+    memset(s_prev_keyboard_state, 0, sizeof(s_prev_keyboard_state));
+    memset(s_keyboard_just_pressed, 0, sizeof(s_keyboard_just_pressed));
+    memset(s_prev_gamepad_buttons, 0, sizeof(s_prev_gamepad_buttons));
+    memset(s_gamepad_buttons_just_pressed, 0, sizeof(s_gamepad_buttons_just_pressed));
     s_mouse_dx = s_mouse_dy = 0.0f;             // Clear mouse state
     s_mouse_accum_x = s_mouse_accum_y = 0.0f;   // Clear mouse accumulators
     s_mouse_buttons = 0;                        // Clear mouse buttons
+    s_prev_mouse_buttons = 0;
+    s_any_input_just_pressed = false;
 
     set_default_bindings();
 
@@ -352,6 +375,10 @@ void Input_Init(const char* bindings_path)
     try_open_gamepad();
 
     SDL_Log("Input: Initialized (%d actions)", ACTION_COUNT);
+    s_has_pending_keyboard_mouse_binding = false;
+    s_has_pending_gamepad_binding = false;
+    memset(s_rebind_gamepad_axis_pos_active, 0, sizeof(s_rebind_gamepad_axis_pos_active));
+    memset(s_rebind_gamepad_axis_neg_active, 0, sizeof(s_rebind_gamepad_axis_neg_active));
 }
 
 void Input_Shutdown()
@@ -366,9 +393,68 @@ void Input_ProcessEvent(const SDL_Event& event)
 {
     switch (event.type)
     {
+    case SDL_EVENT_KEY_DOWN:
+        if (!event.key.repeat)
+        {
+            s_pending_keyboard_mouse_binding = {};
+            s_pending_keyboard_mouse_binding.source = BIND_KEYBOARD;
+            s_pending_keyboard_mouse_binding.scancode = event.key.scancode;
+            s_has_pending_keyboard_mouse_binding = true;
+        }
+        break;
+
+    case SDL_EVENT_MOUSE_BUTTON_DOWN:
+        s_pending_keyboard_mouse_binding = {};
+        s_pending_keyboard_mouse_binding.source = BIND_MOUSE_BUTTON;
+        s_pending_keyboard_mouse_binding.mouse_button = (uint8_t)event.button.button;
+        s_has_pending_keyboard_mouse_binding = true;
+        break;
+
     case SDL_EVENT_MOUSE_MOTION:
         s_mouse_accum_x += event.motion.xrel;
         s_mouse_accum_y += event.motion.yrel;
+        break;
+
+    case SDL_EVENT_GAMEPAD_BUTTON_DOWN:
+        if (s_gamepad && event.gbutton.which == s_gamepad_id)
+        {
+            s_pending_gamepad_binding = {};
+            s_pending_gamepad_binding.source = BIND_GAMEPAD_BUTTON;
+            s_pending_gamepad_binding.pad_button = (SDL_GamepadButton)event.gbutton.button;
+            s_has_pending_gamepad_binding = true;
+        }
+        break;
+
+    case SDL_EVENT_GAMEPAD_AXIS_MOTION:
+        if (s_gamepad && event.gaxis.which == s_gamepad_id)
+        {
+            const int axis = (int)event.gaxis.axis;
+            if (axis >= 0 && axis < SDL_GAMEPAD_AXIS_COUNT)
+            {
+                const float raw = event.gaxis.value / 32767.0f;
+                const bool pos_active = raw > REBIND_AXIS_CAPTURE_THRESHOLD;
+                const bool neg_active = raw < -REBIND_AXIS_CAPTURE_THRESHOLD;
+
+                if (pos_active && !s_rebind_gamepad_axis_pos_active[axis])
+                {
+                    s_pending_gamepad_binding = {};
+                    s_pending_gamepad_binding.source = BIND_GAMEPAD_AXIS_POS;
+                    s_pending_gamepad_binding.pad_axis = (SDL_GamepadAxis)axis;
+                    s_has_pending_gamepad_binding = true;
+                }
+
+                if (neg_active && !s_rebind_gamepad_axis_neg_active[axis])
+                {
+                    s_pending_gamepad_binding = {};
+                    s_pending_gamepad_binding.source = BIND_GAMEPAD_AXIS_NEG;
+                    s_pending_gamepad_binding.pad_axis = (SDL_GamepadAxis)axis;
+                    s_has_pending_gamepad_binding = true;
+                }
+
+                s_rebind_gamepad_axis_pos_active[axis] = pos_active;
+                s_rebind_gamepad_axis_neg_active[axis] = neg_active;
+            }
+        }
         break;
 
     case SDL_EVENT_GAMEPAD_ADDED:
@@ -389,9 +475,46 @@ void Input_Update()
 {
     // Keyboard state
     s_keyboard_state = SDL_GetKeyboardState(NULL);
+    s_any_input_just_pressed = false;
+
+    if (s_keyboard_state)
+    {
+        for (int key = 0; key < SDL_SCANCODE_COUNT; ++key)
+        {
+            bool is_down = s_keyboard_state[key];
+            s_keyboard_just_pressed[key] = is_down && !s_prev_keyboard_state[key];
+            if (s_keyboard_just_pressed[key])
+                s_any_input_just_pressed = true;
+            s_prev_keyboard_state[key] = is_down;
+        }
+    }
+    else
+    {
+        memset(s_keyboard_just_pressed, 0, sizeof(s_keyboard_just_pressed));
+    }
 
     // Mouse button state
+    s_prev_mouse_buttons = s_mouse_buttons;
     s_mouse_buttons = SDL_GetMouseState(NULL, NULL);
+    if ((s_mouse_buttons & ~s_prev_mouse_buttons) != 0)
+        s_any_input_just_pressed = true;
+
+    if (s_gamepad)
+    {
+        for (int button = 0; button < SDL_GAMEPAD_BUTTON_COUNT; ++button)
+        {
+            bool is_down = SDL_GetGamepadButton(s_gamepad, (SDL_GamepadButton)button);
+            s_gamepad_buttons_just_pressed[button] = is_down && !s_prev_gamepad_buttons[button];
+            if (s_gamepad_buttons_just_pressed[button])
+                s_any_input_just_pressed = true;
+            s_prev_gamepad_buttons[button] = is_down;
+        }
+    }
+    else
+    {
+        memset(s_prev_gamepad_buttons, 0, sizeof(s_prev_gamepad_buttons));
+        memset(s_gamepad_buttons_just_pressed, 0, sizeof(s_gamepad_buttons_just_pressed));
+    }
 
     // Finalize mouse delta
     s_mouse_dx = s_mouse_accum_x;
@@ -417,6 +540,37 @@ void Input_Update()
 
 // Queries
 
+bool Input_PollPendingBinding(InputBindingDeviceGroup device_group, InputBinding* out_binding)
+{
+    if (device_group == INPUT_BINDING_DEVICE_KEYBOARD_MOUSE)
+    {
+        if (!s_has_pending_keyboard_mouse_binding)
+            return false;
+        if (out_binding)
+            *out_binding = s_pending_keyboard_mouse_binding;
+        s_has_pending_keyboard_mouse_binding = false;
+        return true;
+    }
+
+    if (device_group == INPUT_BINDING_DEVICE_GAMEPAD)
+    {
+        if (!s_has_pending_gamepad_binding)
+            return false;
+        if (out_binding)
+            *out_binding = s_pending_gamepad_binding;
+        s_has_pending_gamepad_binding = false;
+        return true;
+    }
+
+    return false;
+}
+
+void Input_ClearPendingBindingCapture()
+{
+    s_has_pending_keyboard_mouse_binding = false;
+    s_has_pending_gamepad_binding = false;
+}
+
 bool Input_IsActionPressed(InputAction action)
 {
     if (action >= ACTION_COUNT) return false;
@@ -435,6 +589,25 @@ bool Input_IsActionJustReleased(InputAction action)
     return !s_actions[action].pressed && s_actions[action].prev_pressed;
 }
 
+bool Input_WasAnyInputJustPressed()
+{
+    return s_any_input_just_pressed;
+}
+
+bool Input_IsKeyJustPressed(SDL_Scancode scancode)
+{
+    if ((int)scancode < 0 || scancode >= SDL_SCANCODE_COUNT)
+        return false;
+    return s_keyboard_just_pressed[scancode];
+}
+
+bool Input_IsGamepadButtonJustPressed(SDL_GamepadButton button)
+{
+    if ((int)button < 0 || button >= SDL_GAMEPAD_BUTTON_COUNT)
+        return false;
+    return s_gamepad_buttons_just_pressed[button];
+}
+
 float Input_GetActionValue(InputAction action)
 {
     if (action >= ACTION_COUNT) return 0.0f;
@@ -450,6 +623,14 @@ void Input_GetMouseDelta(float* dx, float* dy)
 bool Input_IsGamepadConnected()
 {
     return s_gamepad != nullptr;
+}
+
+bool Input_RumbleGamepad(Uint16 low_frequency_rumble, Uint16 high_frequency_rumble, Uint32 duration_ms)
+{
+    if (!s_gamepad)
+        return false;
+
+    return SDL_RumbleGamepad(s_gamepad, low_frequency_rumble, high_frequency_rumble, duration_ms);
 }
 
 // Binding management

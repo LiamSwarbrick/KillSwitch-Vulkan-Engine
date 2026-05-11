@@ -7,7 +7,7 @@
 
 #include "glm/glm.hpp"
 
-class CapsuleShape : public IShape
+class CapsuleShape : public Shape
 {
 public:
 	float radius;
@@ -15,7 +15,7 @@ public:
 
 public:
 	explicit CapsuleShape(float radius, float halfHeight)
-		: IShape(ShapeType::Capsule), radius(radius), halfHeight(halfHeight)
+		: Shape(ShapeType::Capsule), radius(radius), halfHeight(halfHeight)
 	{
 	}
 
@@ -90,8 +90,8 @@ public:
         // Test hemisphere caps — each cap is a sphere at the endpoint
         SphereShape capSphere(radius);
 
-        RaycastHit tipHit = capSphere.intersectsRay(ray, tip, glm::quat());
-        RaycastHit baseHit = capSphere.intersectsRay(ray, base, glm::quat());
+        RaycastHit tipHit = capSphere.intersectsRay(ray, tip, glm::identity<glm::quat>());
+        RaycastHit baseHit = capSphere.intersectsRay(ray, base, glm::identity<glm::quat>());
 
         if (tipHit.isValid() && baseHit.isValid())
             return tipHit.t < baseHit.t ? tipHit : baseHit;

@@ -16,7 +16,7 @@ PhysicsWorld::PhysicsWorld(uint8_t numBodyLayers, uint32_t expectedBodies)
 	bodyLayerFilter.StartUp(numBodyLayers);
 	broadPhase = BroadPhase(&bodyLayerFilter);
 
-	bodies.Reserve(expectedBodies);
+	bodyPool.reserve(expectedBodies);
 	shapes.Reserve(expectedBodies);
 	characters.Reserve(300);
 	planes.Reserve(100);
@@ -35,9 +35,15 @@ PhysicsWorld::~PhysicsWorld()
 
 void PhysicsWorld::clear()
 {
-	bodies.Clear();
+	bodyPool.clear();
 	clearShapeRefs();
+	characters.Clear();
 	planes.Clear();
+
+	freeBodyIndices.clear();
+	freeShapeIndices.clear();
+	freeCharacterIndices.clear();
+	freePlaneIndices.clear();
 }
 
 void PhysicsWorld::clearShapeRefs()
@@ -113,7 +119,7 @@ uint32_t PhysicsWorld::getForceLayers(RigidBodyHandle r)
 	return b->forceLayers;
 }
 
-IShape* PhysicsWorld::getShape(RigidBodyHandle r)
+Shape* PhysicsWorld::getShape(RigidBodyHandle r)
 {
 	RigidBody* b = getBody(r);
 	return getShape(b->shapeHandle);
@@ -251,16 +257,18 @@ RigidBodyHandle PhysicsWorld::addBody(const RigidBodyDesc& desc)
 	// Check the index
 	uint32_t index;
 	// If we don't have recyclable entities
-	if (freeBodyIndices.size() == 0)
+	if (freeBodyIndices.empty())
 	{
-		if (bodies.Size() == UINT32_MAX)
+		if (bodyPool.size() == UINT32_MAX)
 		{
 			// SDL_ log (not logarithm) ("Max number of entities reached");
 			SDL_assert(false && "RigidBody count has reached its limit, can't insert more");
 		}
 
 		// Get the next index (so bodies.size());
-		index = bodies.Size();
+		index = bodyPool.size();
+		// And also emplace back a new empty slot, which we're going to fill the data with just now
+		bodyPool.emplace_back();
 	}
 	else
 	{
@@ -269,8 +277,11 @@ RigidBodyHandle PhysicsWorld::addBody(const RigidBodyDesc& desc)
 		freeBodyIndices.pop_back();
 	}
 
+	BodySlot& slot = bodyPool[index];
+	slot.occupied = true;
+	RigidBody& body = slot.body;
+
 	// Build the body based on the descriptor
-	RigidBody body;
 
 	body.position = desc.position;
 	body.orientation = desc.orientation; 
@@ -307,17 +318,14 @@ RigidBodyHandle PhysicsWorld::addBody(const RigidBodyDesc& desc)
 	// Retain shape ref
 	retainShape(desc.shape);
 
-	bodies.Set(index, std::move(body));
-
-	RigidBody* bodyPtr = bodies.GetPtr(index);
-
+	//bodies.Set(index, std::move(body));
 	// TODO: reminder to insert and remove into broadphase
-	broadPhase.insert(bodies.GetPtr(index));
+	broadPhase.insert(&body);
 
 	// Extra: create character if body.isCharacter
-	if (bodyPtr->isCharacter)
+	if (body.isCharacter)
 	{
-		addCharacter(bodyPtr);
+		addCharacter(&body);
 	}
 
 	return { index };
@@ -327,33 +335,36 @@ void PhysicsWorld::removeBody(RigidBodyHandle handle)
 {
 	SDL_assert(handle.isValid() && "Trying to remove a body with invalid handle");
 
-	RigidBody* body = bodies.GetPtr(handle.index);
+	// Quick fix to the bodies // because we're going to swap
+	BodySlot& slot = bodyPool[handle.index];
+	RigidBody& body = slot.body;
 
+	
 	// remove from broad-phase
-	broadPhase.remove(body);
+	broadPhase.remove(&body);
 	// remove from forceRegistry
-	forceRegistry.removeAll(body);
+	forceRegistry.removeAll(&body);
 	// remove body from the previous pairs, not to take them into account for next frame
-	std::erase_if(previousCollisionPairs, [body](const BodyPair& pair)
+	std::erase_if(previousCollisionPairs, [&body](const BodyPair& pair)
 		{
-			return pair.bodyA == body || pair.bodyB == body;
+			return pair.bodyA == &body || pair.bodyB == &body;
 		});
-	std::erase_if(previousTriggerPairs, [body](const BodyPair& pair)
+	std::erase_if(previousTriggerPairs, [&body](const BodyPair& pair)
 		{
-			return pair.bodyA == body || pair.bodyB == body;
+			return pair.bodyA == &body || pair.bodyB == &body;
 		});
 
 	// release shape ref before deleting
-	releaseShape(body->shapeHandle);
+	releaseShape(body.shapeHandle);
 
 	// Before deleting the body, delete the character info if it is a character
-	if (body->isCharacter)
+	if (body.isCharacter)
 	{
 		removeCharacter(handle);
 	}
 
 	// SparseSet.Delete() has internal check of a handle.
-	bodies.Delete(handle.index);
+	slot.occupied = false;
 	freeBodyIndices.push_back(handle.index);
 }
 
@@ -362,7 +373,8 @@ RigidBody* PhysicsWorld::getBody(RigidBodyHandle handle)
 	SDL_assert(handle.isValid() && "BodyHandle is invalid");
 	if (!handle.isValid()) return nullptr;
 
-	return bodies.GetPtr(handle.index);
+	BodySlot& slot = bodyPool[handle.index];
+	return &slot.body;
 }
 
 const RigidBody* PhysicsWorld::getBody(RigidBodyHandle handle) const
@@ -370,15 +382,17 @@ const RigidBody* PhysicsWorld::getBody(RigidBodyHandle handle) const
 	SDL_assert(handle.isValid() && "BodyHandle is invalid");
 	if (!handle.isValid()) return nullptr;
 
-	return bodies.GetPtr(handle.index);
+	const BodySlot& slot = bodyPool[handle.index];
+	return &slot.body;
 }
 
 void PhysicsWorld::setBodyShape(RigidBodyHandle bodyHandle, ShapeHandle shapeHandle)
 {
-	RigidBody* body = bodies.GetPtr(bodyHandle.index);
+	BodySlot& slot = bodyPool[bodyHandle.index];
+	RigidBody* body = &slot.body;
 	if (shapeHandle == body->shapeHandle || !shapeHandle.isValid()) return;
 
-	IShape* shape = shapes.GetPtr(shapeHandle.index)->shape;
+	Shape* shape = shapes.GetPtr(shapeHandle.index)->shape;
 	if (!body || !shape) return;
 
 	// Doing retain first just in case our newHandle is the oldHandle
@@ -456,8 +470,8 @@ void PhysicsWorld::removeCharacter(RigidBodyHandle r)
 
 	if (!cHandle.isValid()) return;
 
-	characters.Delete(r.index);
-	freeCharacterIndices.push_back(r.index);
+	characters.Delete(cHandle.index);
+	freeCharacterIndices.push_back(cHandle.index);
 	bodyToCharacter.erase(r);
 }
 
@@ -573,16 +587,23 @@ void PhysicsWorld::destroyShape(ShapeHandle handle)
 	freeShapeIndices.push_back(handle.index);
 }
 
-IShape* PhysicsWorld::getShape(ShapeHandle handle)
+Shape* PhysicsWorld::getShape(ShapeHandle handle)
 {
 	if (!handle.isValid()) return nullptr;
 
 	return shapes.GetPtr(handle.index)->shape;
 }
 
-const IShape* PhysicsWorld::getShape(ShapeHandle handle) const
+const Shape* PhysicsWorld::getShape(ShapeHandle handle) const
 {
 	if (!handle.isValid()) return nullptr;
+	
+	const ShapeRef* ret = shapes.GetPtr(handle.index);
+	if (!ret)
+	{
+		return nullptr;
+		shapes.GetPtr(handle.index);
+	}
 
 	return shapes.GetPtr(handle.index)->shape;
 }
@@ -716,7 +737,7 @@ ShapecastHit PhysicsWorld::shapecast(const Ray& ray, ShapeHandle shape, const gl
 	//}
 	//if (!target) return ShapecastHit::none();
 
-	const IShape* queryShape = getShape(shape);
+	const Shape* queryShape = getShape(shape);
 	if (!queryShape) return ShapecastHit::none();
 
 	glm::vec3 shapePosition; glm::quat shapeOrientation;
@@ -739,7 +760,7 @@ ShapecastHit PhysicsWorld::shapecast(const Ray& ray, ShapeHandle shape, const gl
 
 	for (RigidBody* body : candidates)
 	{
-		const IShape* targetShape = getShape(body->shapeHandle);
+		const Shape* targetShape = getShape(body->shapeHandle);
 
 		glm::vec3 targetPosition; glm::quat targetOrientation;
 		narrowPhase.resolveShapeTransform(targetShape, body->position, body->orientation, targetPosition, targetOrientation);
@@ -763,7 +784,7 @@ std::vector<RigidBodyHandle> PhysicsWorld::shapeIntersects(ShapeHandle shapeHand
 	std::vector<RigidBody*> broadHits;
 	std::vector<RigidBodyHandle> hits;
 
-	const IShape* shape = getShape(shapeHandle);
+	const Shape* shape = getShape(shapeHandle);
 	// TODO: keep going
 	// Let's create an AABB out of the shape, check on broadphase and then
 	glm::vec3 shapePosition;
@@ -838,7 +859,7 @@ void PhysicsWorld::step(float dt)
 
 void PhysicsWorld::applyForces(float dt)
 {
-	forceRegistry.applyAll(bodies.Data(), dt);
+	forceRegistry.applyAll(bodyPool, dt);
 }
 
 void PhysicsWorld::integrate(float dt)
@@ -853,8 +874,10 @@ void PhysicsWorld::integrate(float dt)
 	}
 	// Now the forces should be ready to be added to the bodies' velocities
 
-	for (RigidBody& body : bodies.Data())
+	for (BodySlot& slot : bodyPool)
 	{
+		if (!slot.occupied) continue;
+		RigidBody& body = slot.body;
 		integrator.integrate(body, dt);
 	}
 }
@@ -864,12 +887,14 @@ void PhysicsWorld::updateBroadPhase()
 	// Updating here cause we want the broadphase to NOT care about the bodies's shapes
 	// Just the AABBs
 
-	for (RigidBody& body : bodies.Data())
+	for (BodySlot& slot : bodyPool)
 	{
+		if (!slot.occupied) continue;
+		RigidBody& body = slot.body;
 		if (body.sleeping || body.isStatic || body.isTrigger) continue;
 
 		// Not calling calculateAABB(&body) because we're not fattening the newAABB
-		IShape* shape = getShape(body.shapeHandle);
+		Shape* shape = getShape(body.shapeHandle);
 		if (!shape) continue;
 
 		glm::vec3 shapePosition;
@@ -913,8 +938,10 @@ void PhysicsWorld::testPlanes()
 {
 	for (const PlaneShape& plane : planes.Data())
 	{
-		for (const RigidBody& body : bodies.Data())
+		for (BodySlot& slot : bodyPool)
 		{
+			if (!slot.occupied) continue;
+			RigidBody& body = slot.body;
 			if (body.sleeping || body.isStatic || body.isKinematic || body.isTrigger) continue;
 
 			Contact contact = narrowPhase.testPlane(body, plane, *this);
@@ -931,8 +958,10 @@ void PhysicsWorld::solve(float dt)
 
 void PhysicsWorld::updateSleep(float dt)
 {
-	for (RigidBody& body : bodies.Data())
+	for (BodySlot& slot : bodyPool)
 	{
+		if (!slot.occupied) continue;
+		RigidBody& body = slot.body;
 		if (body.sleeping || body.isStatic || body.isKinematic || body.isTrigger) continue;
 
 		float kineticEnergy = 0.5f * body.mass * glm::dot(body.velocity, body.velocity); // velocity squared, we can just square the threshold
@@ -1040,7 +1069,7 @@ void PhysicsWorld::dispatchEvents()
 
 void PhysicsWorld::calculateAABB(RigidBody* body)
 {
-	IShape* shape = getShape(body->shapeHandle);
+	Shape* shape = getShape(body->shapeHandle);
 	if (shape)
 	{
 		glm::vec3 shapePosition;
@@ -1072,8 +1101,10 @@ void PhysicsWorld::teleportBodyRaw(RigidBody* body, const glm::vec3& worldPositi
 
 void PhysicsWorld::wakeAllBodies()
 {
-	for (RigidBody& body : bodies.Data())
+	for (BodySlot& slot : bodyPool)
 	{
+		if (!slot.occupied) continue;
+		RigidBody& body = slot.body;
 		body.wakeUp();
 	}
 }

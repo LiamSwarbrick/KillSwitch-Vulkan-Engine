@@ -51,19 +51,20 @@ namespace DebugUI
         float speed = MOVE_SPEED * dt;
         if (io.KeyShift) speed *= SPRINT_MULT;
 
-        if (ImGui::IsKeyDown(ImGuiKey_I)) cam.pos += fwd   * speed;
-        if (ImGui::IsKeyDown(ImGuiKey_K)) cam.pos -= fwd   * speed;
-        if (ImGui::IsKeyDown(ImGuiKey_J)) cam.pos -= right * speed;
-        if (ImGui::IsKeyDown(ImGuiKey_L)) cam.pos += right * speed;
-        if (ImGui::IsKeyDown(ImGuiKey_O)) cam.pos += up    * speed;
-        if (ImGui::IsKeyDown(ImGuiKey_U)) cam.pos -= up    * speed;
+        if (ImGui::IsKeyDown(ImGuiKey_W)) cam.pos += fwd   * speed;
+        if (ImGui::IsKeyDown(ImGuiKey_S)) cam.pos -= fwd   * speed;
+        if (ImGui::IsKeyDown(ImGuiKey_A)) cam.pos -= right * speed;
+        if (ImGui::IsKeyDown(ImGuiKey_D)) cam.pos += right * speed;
+        if (ImGui::IsKeyDown(ImGuiKey_E)) cam.pos += up    * speed;
+        if (ImGui::IsKeyDown(ImGuiKey_Q)) cam.pos -= up    * speed;
 
         return CameraInfo{
-            .view             = glm::lookAt(cam.pos, cam.pos + fwd, up),
+            .view             = glm::lookAtRH(cam.pos, cam.pos + fwd, up),
             .position         = cam.pos,
             .near_plane       = 0.1f,
-            .far_plane        = 100.0f,
-            .lens_distortion  = 0.0f
+            .far_plane        = 200.0f,
+            .lens_distortion  = 0.0f,
+            .screenshake      = 0.0f
         };
     }
 

@@ -131,10 +131,11 @@ vec3 apply_dithered_fog(
     float dither
 )
 {
-    const float fog_start = 5.0;
-    const float fog_length = 40.0;
+    const float fog_start = 3.0;
+    const float fog_length = 20.0;
     
     float fog = clamp((z_linear - fog_start) / fog_length, 0.0, 1.0);
+    fog *= 0.5;
     float fog_step = fog > dither ? 1.0 : 0.0;
 
     vec3 fog_color = vec3(0.005, 0.005, 0.025);
@@ -158,6 +159,12 @@ void main()
     vec4 base_color     = sample_texture2d_with_fallback(uv, mat.texture_idx_basecolor, mat.sampler_idx, mat.base_color);
     vec4 emissive_color = sample_texture2d_with_fallback(uv, mat.texture_idx_emissive,  mat.sampler_idx, vec4(mat.emissive_factor, 0.0));
     // base_color = vec4(1.0);
+
+    if (DEBUG_RENDERMODE == DEBUG_RENDERMODE_UNLIT)
+    {
+        out_color = base_color;
+        return;
+    }
 
     if (!IS_CHARACTER)
     {
@@ -194,7 +201,7 @@ void main()
     uint tile_y = uint(screen_uv.y * float(CLUSTER_GRID_SIZE_Y));
 
     vec4 view_pos = scene.view * vec4(world_pos, 1.0);
-    float depth =  -view_pos.z;
+    float depth =  abs(-view_pos.z);  // NOTE: DO NOT NEED abs() if we actually use LookAtRH(), but some of the code used LookAt and it took me hours to find this bug, so I'm keeping abs() in case  this shit happens again
     depth = clamp(depth, scene.near_plane, scene.far_plane);
 
     // Get z bin (clusters get exponentially bigger away from the camera)
@@ -208,7 +215,6 @@ void main()
     // Fetch cluster
     uint cluster_index = CLUSTER_INDEX(tile_x, tile_y, tile_z);
     Cluster cluster = clusters.clusters[cluster_index];
-
 
     if (DEBUG_RENDERMODE == DEBUG_RENDERMODE_CLUSTERED_SHADING_HEATMAP)
     {
@@ -230,18 +236,9 @@ void main()
         );
         out_color = vec4(grid, 1.0);
         return;
-
-        // uint cid = cluster_index;
-        // vec3 debug_color = vec3(
-        //     float((cid * 97u) % 255u) / 255.0,
-        //     float((cid * 57u) % 255u) / 255.0,
-        //     float((cid * 23u) % 255u) / 255.0
-        // );
-        // out_color = vec4(debug_color, 1.0);
-        // return;
     }
 
-    const uint max_lights_per_pixel = 64;
+    const uint max_lights_per_pixel = MAX_LIGHTS_PER_CLUSTER;
     
     for (uint i = 0; i < min(cluster.point_count, max_lights_per_pixel); ++i)
     {
@@ -276,7 +273,7 @@ void main()
         SpotLight sl = sl_buf.spot_lights[light_index];
 
         float shadow_factor = 1.0;
-        int spotlight_shadowmap_index = sl_shadow_map_indices.spotlight_shadowmap_index[i];  // One slot per light, with -1 set when spotlight i does not have a shadowmap
+        int spotlight_shadowmap_index = sl_shadow_map_indices.spotlight_shadowmap_index[light_index];  // One slot per light, with -1 set when spotlight i does not have a shadowmap
         if (spotlight_shadowmap_index >= 0)  // If shadow map is available for this light
         {
             // SHADOW MAPPING
@@ -357,7 +354,7 @@ void main()
     // Fog
     lit_rgb = apply_dithered_fog(
         lit_rgb,
-        -view_pos.z,
+        depth,
         dith_threshold
     );
 

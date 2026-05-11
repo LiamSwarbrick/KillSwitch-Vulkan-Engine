@@ -39,6 +39,7 @@ SceneData MakeSpotLightSceneData(SpotLight spotlight, VkExtent2D extent)
     data.far_plane = far_plane;
     data.aspect = aspect;
     data.lens_distortion = 0.0f;  // Doesn't do anything in shadowmaps btw
+    data.screenshake = 0.0f;
 
     memcpy(data.rendertarget_size, glm::value_ptr(extent_uvec2), sizeof(glm::uvec2));
 
@@ -70,6 +71,7 @@ SceneData MakeSceneData(CameraInfo cam, VkExtent2D extent)
     data.far_plane = cam.far_plane;
     data.aspect = aspect;
     data.lens_distortion = cam.lens_distortion;
+    data.screenshake = cam.screenshake;
 
     memcpy(data.rendertarget_size, glm::value_ptr(extent_uvec2), sizeof(glm::uvec2));
     data.inv_log_far_over_near = 1.0f / log(cam.far_plane / cam.near_plane);

@@ -46,16 +46,6 @@ static inline b32 compute_light_cluster_bounds(
     else 
     {
         // AABB Projection to screen
-        // glm::vec3 min_v = light_view_pos - glm::vec3(r);
-        // glm::vec3 max_v = light_view_pos + glm::vec3(r);
-
-        // glm::vec3 corners[8] = {
-        //     {min_v.x, min_v.y, min_v.z}, {max_v.x, min_v.y, min_v.z},
-        //     {min_v.x, max_v.y, min_v.z}, {max_v.x, max_v.y, min_v.z},
-        //     {min_v.x, min_v.y, max_v.z}, {max_v.x, min_v.y, max_v.z},
-        //     {min_v.x, max_v.y, max_v.z}, {max_v.x, max_v.y, max_v.z}
-        // };
-
         // NOTE: Handle the near plane properly, you can't project things behind the near plane
         //       So get the right/left/top/bottom/front/back points of the light's sphere
         //       which we'll then clamp the  of the light to the near plane
@@ -107,7 +97,7 @@ static inline b32 compute_light_cluster_bounds(
     *z_index_min = (int)floorf(logf(min_depth / near) * inv_log_far_over_near * (float)CLUSTER_GRID_SIZE_Z);
     *z_index_max = (int)floorf(logf(max_depth / near) * inv_log_far_over_near * (float)CLUSTER_GRID_SIZE_Z);
 
-    // Final safety clamps for array indexing
+    // Final clamps to prevent indexing out of cluster bounds
     *tile_min_x = SDL_clamp(*tile_min_x, 0, CLUSTER_GRID_SIZE_X - 1);
     *tile_max_x = SDL_clamp(*tile_max_x, 0, CLUSTER_GRID_SIZE_X - 1);
     *tile_min_y = SDL_clamp(*tile_min_y, 0, CLUSTER_GRID_SIZE_Y - 1);
@@ -130,22 +120,32 @@ void ClusteredShading_CPULightAssignmentToMappedBuffer()
     // TODO: To test the aspect ratio is correct, use cluster grid of like 16x9xwhatever
     //       and it should be square shaped on a 16:9 monitor
 
-    // Reset cluster staging arenas (no need to reset staging_light_indices arena though)
-    memset(renderstate.renderables_arena.staging_point_light_indices, 0, sizeof(uint32_t) * MAX_POINTLIGHTS * CLUSTER_COUNT);
-    memset(renderstate.renderables_arena.staging_cluster_offsets, 0, sizeof(Cluster) * CLUSTER_COUNT);
+    // Reset cluster staging memory
+    // memset(renderstate.renderables_arena.staging_point_light_indices, 0, sizeof(uint32_t) * MAX_LIGHTS_PER_CLUSTER * CLUSTER_COUNT);
+    // memset(renderstate.renderables_arena.staging_spot_light_indices, 0,  sizeof(uint32_t) * MAX_LIGHTS_PER_CLUSTER * CLUSTER_COUNT);
+    for (uint32_t c = 0; c < CLUSTER_COUNT; ++c)
+    {
+        renderstate.renderables_arena.staging_cluster_offsets[c].point_count = 0;
+        renderstate.renderables_arena.staging_cluster_offsets[c].point_offset = 0;
+        renderstate.renderables_arena.staging_cluster_offsets[c].spot_count = 0;
+        renderstate.renderables_arena.staging_cluster_offsets[c].spot_offset = 0;
+    }
 
 
     glm::vec3 cam_pos  = renderstate.main_camera.position;
     glm::mat4 cam_view = renderstate.main_camera.view;
     
     // NOTE: Assuming swapchain's aspect ratio for the projection matrix here:
-    float width  = (float)renderstate.swapchain_extent.width;
-    float height = (float)renderstate.swapchain_extent.height;
-    float aspect =  width / height;
     float near   = renderstate.main_camera.near_plane;
     float far    = renderstate.main_camera.far_plane;
-    glm::mat4 cam_proj = MakeProjectionMatrix(glm::radians(renderstate.settings.fov_y), aspect, near, far);
-    float inv_log_far_over_near = 1.0f / log(far / near);
+    glm::mat4 cam_proj = renderstate.main_camera_fullscreen_proj;
+    // printf("cam_proj:\n%f %f %f %f\n%f %f %f %f\n%f %f %f %f\n%f %f %f %f\n",
+    //     cam_proj[0][0], cam_proj[1][0], cam_proj[2][0], cam_proj[3][0],
+    //     cam_proj[0][1], cam_proj[1][1], cam_proj[2][1], cam_proj[3][1],
+    //     cam_proj[0][2], cam_proj[1][2], cam_proj[2][2], cam_proj[3][2],
+    //     cam_proj[0][3], cam_proj[1][3], cam_proj[2][3], cam_proj[3][3]
+    // );
+    float inv_log_far_over_near = 1.0f / logf(far / near);
 
     for (uint32_t i = 0; i < renderstate.renderables_arena.num_point_lights; ++i)
     {
@@ -169,10 +169,14 @@ void ClusteredShading_CPULightAssignmentToMappedBuffer()
         for (int x = tile_min_x;  x <= tile_max_x;  ++x)
         {
             uint32_t cluster_index = CLUSTER_INDEX(x, y, z);
-            
+            Cluster* c = &renderstate.renderables_arena.staging_cluster_offsets[cluster_index];
+
             // Add light to cluster
-            uint32_t light_indices_index = renderstate.renderables_arena.staging_cluster_offsets[cluster_index].point_count++;
-            renderstate.renderables_arena.staging_point_light_indices[cluster_index * MAX_POINTLIGHTS + light_indices_index] = i;
+            if (c->point_count < MAX_LIGHTS_PER_CLUSTER)
+            {
+                uint32_t local_idx = c->point_count++;
+                renderstate.renderables_arena.staging_point_light_indices[cluster_index * MAX_LIGHTS_PER_CLUSTER + local_idx] = i;
+            }
         }
     }
 
@@ -200,12 +204,15 @@ void ClusteredShading_CPULightAssignmentToMappedBuffer()
         for (int x = tile_min_x;  x <= tile_max_x;  ++x)
         {
             uint32_t cluster_index = CLUSTER_INDEX(x, y, z);
+            Cluster* c = &renderstate.renderables_arena.staging_cluster_offsets[cluster_index];
 
             // Add light to cluster
-            uint32_t light_indices_index = renderstate.renderables_arena.staging_cluster_offsets[cluster_index].spot_count++;
-            renderstate.renderables_arena.staging_spot_light_indices[cluster_index * MAX_SPOTLIGHTS + light_indices_index] = i;
+            if (c->spot_count < MAX_LIGHTS_PER_CLUSTER)
+            {
+                uint32_t local_idx = c->spot_count++;
+                renderstate.renderables_arena.staging_spot_light_indices[cluster_index * MAX_LIGHTS_PER_CLUSTER + local_idx] = i;
+            }
         }
-
     }
     
     // Copy to GPU....
@@ -242,14 +249,16 @@ void ClusteredShading_CPULightAssignmentToMappedBuffer()
         Cluster cluster = renderstate.renderables_arena.staging_cluster_offsets[c];
         memcpy(
             &mapped_point_light_indices[cluster.point_offset],
-            &renderstate.renderables_arena.staging_point_light_indices[c * MAX_POINTLIGHTS],
+            &renderstate.renderables_arena.staging_point_light_indices[c * MAX_LIGHTS_PER_CLUSTER],
             cluster.point_count * sizeof(uint32_t)
         );
         memcpy(
             &mapped_spot_light_indices[cluster.spot_offset],
-            &renderstate.renderables_arena.staging_spot_light_indices[c * MAX_SPOTLIGHTS],
+            &renderstate.renderables_arena.staging_spot_light_indices[c * MAX_LIGHTS_PER_CLUSTER],
             cluster.spot_count * sizeof(uint32_t)
         );
+
+        // printf("Cluster %d: point offset %u, plcount %u, spotoffset %u, spot count %u\n", c, cluster.point_offset, cluster.point_count, cluster.spot_offset, cluster.spot_count);
 
         // Copy cluster metadata
         mapped_clusters[c] = cluster;

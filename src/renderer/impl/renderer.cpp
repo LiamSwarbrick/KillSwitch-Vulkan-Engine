@@ -2,24 +2,16 @@
 #include "internal_state.h"
 #include "renderpasses/metadata.h"
 
+#include <float.h>
 #include "SDL3/SDL_vulkan.h"
 #include "imgui.h"
 #include "imgui_impl_sdl3.h"
 #include "imgui_impl_vulkan.h"
 #include "debug_ui/debug_ui.h"
+#include "renderer/shadersrc/common/shared.glsl"
 
 RenderState renderstate;
 
-// 2d image resource creator for game-side ImGui
-uint32_t create_mipmapped_texture2d_resource(
-    const char*       debug_name,
-    FG_ResourceFlags  flags,
-    const uint8_t*    data,
-    uint64_t          data_size,
-    uint32_t          width,
-    uint32_t          height,
-    VkFormat          format
-);
 
 // STB DS for hash maps (pipeilne hashing), with the main thread alloc tracker.
 void* external_malloc(size_t size) { return L_calloc(1, size, &renderstate.main.tt); }
@@ -572,8 +564,8 @@ void Renderer_Init(const Renderer_InitInfo* info)
         .is_spotlight_shadowed = (b32*)L_calloc(MAX_SPOTLIGHTS, sizeof(b32), &renderstate.main.tt),
 
         // Clustered shading
-        .staging_point_light_indices = (uint32_t*)L_calloc(CLUSTER_COUNT * MAX_POINTLIGHTS, sizeof(uint32_t), &renderstate.main.tt),
-        .staging_spot_light_indices  = (uint32_t*)L_calloc(CLUSTER_COUNT * MAX_SPOTLIGHTS, sizeof(uint32_t), &renderstate.main.tt),
+        .staging_point_light_indices = (uint32_t*)L_calloc(CLUSTER_COUNT * MAX_LIGHTS_PER_CLUSTER, sizeof(uint32_t), &renderstate.main.tt),
+        .staging_spot_light_indices  = (uint32_t*)L_calloc(CLUSTER_COUNT * MAX_LIGHTS_PER_CLUSTER, sizeof(uint32_t), &renderstate.main.tt),
         .staging_cluster_offsets = (Cluster*)L_calloc(CLUSTER_COUNT, sizeof(Cluster), &renderstate.main.tt),
     };
 
@@ -635,8 +627,13 @@ void Renderer_Init(const Renderer_InitInfo* info)
         ImGui::CreateContext();
         ImGuiIO& io = ImGui::GetIO();
         io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
+        io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;
         io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
         io.IniFilename = nullptr;
+
+        ImGuiStyle& style = ImGui::GetStyle();
+        style.Colors[ImGuiCol_NavCursor] = ImVec4(1.0f, 1.0f, 1.0f, 0.90f);
+        style.Colors[ImGuiCol_NavWindowingHighlight] = ImVec4(1.0f, 1.0f, 1.0f, 0.75f);
 
         // SDL3 backend
         ImGui_ImplSDL3_InitForVulkan(renderstate.window);
@@ -904,6 +901,24 @@ void Renderer_PushLight(C_Light light, glm::vec3 position, glm::vec3 direction, 
         default: SDL_assert(0 && "Invalid light type"); abort();
     }
 }
+
+// NOTE(Liam): THIS IS NANSONG'S UI CODE:
+// (won't be relevant once the renderer has it's own 2D pass, or after I move the renderer into it's own project)
+// (what the helly)
+// START
+
+// 2d image resource creator for game-side ImGui
+uint32_t create_mipmapped_texture2d_resource(
+    const char*       debug_name,
+    FG_ResourceFlags  flags,
+    const uint8_t*    data,
+    uint64_t          data_size,
+    uint32_t          width,
+    uint32_t          height,
+    VkFormat          format
+);
+
+
 // Loads a image and creates a GPU resource
 bool Renderer_LoadUITexture(const char* filepath, bool nearest_sampling, Renderer_UITexture* out_texture)
 {
@@ -942,7 +957,7 @@ bool Renderer_LoadUITexture(const char* filepath, bool nearest_sampling, Rendere
     FG_Resource* tex_res = &renderstate.registry.resources[rid];
     VkSampler sampler = renderstate.heap.samplers[
         nearest_sampling ? FG_SAMPLER_NEAREST_REPEAT : FG_SAMPLER_LINEAR_REPEAT
-    ]; // claude did this choosing between them
+    ];
 
     ImTextureID imgui_tex = (ImTextureID)ImGui_ImplVulkan_AddTexture(
         sampler,
@@ -957,6 +972,10 @@ bool Renderer_LoadUITexture(const char* filepath, bool nearest_sampling, Rendere
     return true;
 }
 
+//
+// END
+// //////
+
 void Renderer_DrawFrame(CameraInfo main_camera)
 {
     /*  Get current swapchain image, and wait on sync structures
@@ -970,6 +989,110 @@ void Renderer_DrawFrame(CameraInfo main_camera)
     // frame's command buffer before the GPU has done with the current frame's one.
     renderstate.frame_in_flight = renderstate.frame_number % NUM_FRAMES_IN_FLIGHT;
     
+
+    // Set main camera
+    renderstate.main_camera = main_camera;
+
+    // NOTE: Assuming swapchain's aspect ratio for the projection matrix here:
+    float width  = (float)renderstate.swapchain_extent.width;
+    float height = (float)renderstate.swapchain_extent.height;
+    float aspect =  width / height;
+    float near   = renderstate.main_camera.near_plane;
+    float far    = renderstate.main_camera.far_plane;
+    renderstate.main_camera_fullscreen_proj = MakeProjectionMatrix(glm::radians(renderstate.settings.fov_y), aspect, near, far);
+
+
+
+    /* Sort Drawcalls into arrays per shader
+
+        Example, Renderable r with MAT_PBR_WITH_OUTLINE:
+        r could be added to many different shaders: (pseudocode)
+            renderables_per_shader[SHADER_PBR].append(r);
+            renderables_per_shader[SHADER_OUTLINE].append(r);
+            renderables_per_shader[SHADER_SHADOWMAP].append(r);
+        
+        Importantly, renderables have per frame data like transforms etc.
+        For instance, an outline effect should be togglable in gameplay code. Same with visibility.
+    */
+
+    BeginDrawCalls();
+
+    for (uint32_t i = 0; i < renderstate.renderables_arena.num_renderables; ++i)
+    {
+        AddDrawCall(&renderstate.renderables_arena.items[i]);
+    }
+
+
+    // Get N closest spotlights (where N is MAX_SHADOWMAPS)
+    // Comparing based on squared distance to main camera
+    // Then we only shadow the nearest spotlights
+    uint32_t num_closest_spotlights = 0;
+    uint32_t closest_spotlight_indices[MAX_SHADOWMAPS];
+    float closest_spotlight_dist2s[MAX_SHADOWMAPS];
+    for (uint32_t i = 0; i < MAX_SHADOWMAPS; ++i) closest_spotlight_dist2s[i] = 1e20f;
+
+    for (uint32_t i = 0; i < renderstate.renderables_arena.num_spot_lights; ++i)
+    {
+        if (renderstate.renderables_arena.is_spotlight_shadowed[i])
+        {
+            glm::vec3 v = glm::vec3(
+                renderstate.renderables_arena.spot_lights[i].pos_and_radius[0],
+                renderstate.renderables_arena.spot_lights[i].pos_and_radius[1],
+                renderstate.renderables_arena.spot_lights[i].pos_and_radius[2]
+            ) - renderstate.main_camera.position;
+
+            float dist2 = v.x*v.x + v.y*v.y + v.z*v.z;
+
+            // Buffer not full yet: append directly
+            if (num_closest_spotlights < MAX_SHADOWMAPS)
+            {
+                closest_spotlight_indices[num_closest_spotlights] = i;
+                closest_spotlight_dist2s[num_closest_spotlights] = dist2;
+                num_closest_spotlights++;
+                continue;
+            }
+
+            // Get index in closest indices of the largest value in that array
+            uint32_t largest_current_idx = 0;
+
+            for (uint32_t j = 1; j < MAX_SHADOWMAPS; ++j)
+            {
+                if (closest_spotlight_dist2s[j] >
+                    closest_spotlight_dist2s[largest_current_idx])
+                {
+                    largest_current_idx = j;
+                }
+            }
+
+            // Now we can replace that largest value if the dist for spotlight i is smaller
+            if (dist2 > closest_spotlight_dist2s[largest_current_idx])
+            {
+                continue;
+            }
+
+            // Replace the current largest closest spotlight found with the new even closer one
+            closest_spotlight_indices[largest_current_idx] = i;
+            closest_spotlight_dist2s[largest_current_idx] = dist2;
+        }
+    }
+
+    
+    // Saturate shadow maps with spotlights
+    renderstate.num_shadowed_spotlights = num_closest_spotlights;
+    memset(renderstate.shadowed_spotlight_indices, 0, sizeof(renderstate.shadowed_spotlight_indices));
+    for (uint32_t i = 0; i < num_closest_spotlights; ++i)
+    {
+        renderstate.shadowed_spotlight_indices[i] = closest_spotlight_indices[i];
+    }
+
+    EndDrawCalls();
+
+
+
+
+
+
+
 
     // Wait for rendering to be complete for this frame in flight.
     // NOTE: We don't reset the fence until after we know the swapchain does not need recreating.
@@ -1021,56 +1144,6 @@ void Renderer_DrawFrame(CameraInfo main_camera)
     
     // Reset command buffers by resetting the entire pool
     vkResetCommandPool(renderstate.device, renderstate.frames[renderstate.frame_in_flight].graphics_command_pool, 0);
-
-
-
-
-
-    /* Sort Drawcalls into arrays per shader
-
-        Example, Renderable r with MAT_PBR_WITH_OUTLINE:
-        r could be added to many different shaders: (pseudocode)
-            renderables_per_shader[SHADER_PBR].append(r);
-            renderables_per_shader[SHADER_OUTLINE].append(r);
-            renderables_per_shader[SHADER_SHADOWMAP].append(r);
-        
-        Importantly, renderables have per frame data like transforms etc.
-        For instance, an outline effect should be togglable in gameplay code. Same with visibility.
-    */
-
-    BeginDrawCalls();
-
-    for (uint32_t i = 0; i < renderstate.renderables_arena.num_renderables; ++i)
-    {
-        AddDrawCall(&renderstate.renderables_arena.items[i]);
-    }
-    
-    // Saturate shadow maps with spotlights
-    // TODO: Use nearest lights or some shit instead of just the first shadowed spotlights we come across
-    renderstate.num_shadowed_spotlights = 0;
-    memset(renderstate.shadowed_spotlight_indices, 0, sizeof(renderstate.shadowed_spotlight_indices));
-    for (uint32_t i = 0; i < renderstate.renderables_arena.num_spot_lights; ++i)
-    {
-        if (renderstate.renderables_arena.is_spotlight_shadowed[i])
-        {
-            renderstate.shadowed_spotlight_indices[renderstate.num_shadowed_spotlights++] = i;
-        }
-
-        if (renderstate.num_shadowed_spotlights == MAX_SHADOWMAPS)
-        {
-            break;
-        }
-    }
-
-    EndDrawCalls();
-
-    
-
-    // Set main camera
-    renderstate.main_camera = main_camera;
-
-
-
 
 
 
@@ -1217,7 +1290,7 @@ void Renderer_DrawFrame(CameraInfo main_camera)
                 .load_op = VK_ATTACHMENT_LOAD_OP_CLEAR,
                 .store_op = use_msaa ? VK_ATTACHMENT_STORE_OP_DONT_CARE : VK_ATTACHMENT_STORE_OP_STORE,  // DO NOT STORE MSAA TARGETS BACK TO MAIN MEMORY (Applies to tiled architectures)
                 // .clear_value = { .color = { .float32 = { 0.392f, 0.584f, 0.929f, 0.0f } } }  // Cornflower blue
-                .clear_value = { .color = { .float32 = { 0.0f, 0.0f, 0.0f, 0.0f } } }
+                .clear_value = { .color = { .float32 = { 0.0f, 0.0f, 0.0f, 0.0f, } } }
             },
 
             // Depth attachment (preloading with depth from the prepass)

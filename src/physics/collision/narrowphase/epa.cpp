@@ -72,8 +72,6 @@ static EPAFace epa_makeEPAFace(const std::vector<SimplexPoint>& vertices, const 
 	glm::vec3 normal = glm::normalize(glm::cross(ab, ac));
 	float distance = glm::dot(normal, vertices[a].point);
 
-	// TODO: Remove assertion once checked the winding order is correct (and following IF clause)
-	SDL_assert(distance >= 0.0f && "Incorrect winding order found");
 	// Just in case we have an incorrect winding order for some reason (and we are in release mode)
 	if (distance < 0.0f)
 	{
@@ -140,8 +138,8 @@ const int EPA_MAX_FACES = 64;
 const float EPA_TOLERANCE = 0.001f;
 
 EPAResult epa_runEPA(
-	const IShape* shapeA, const glm::vec3& posA, const glm::quat& oriA, 
-	const IShape* shapeB, const glm::vec3& posB, const glm::quat& oriB, 
+	const Shape* shapeA, const glm::vec3& posA, const glm::quat& oriA, 
+	const Shape* shapeB, const glm::vec3& posB, const glm::quat& oriB, 
 	GJKResult& gjk)
 {
 	EPAResult result;
