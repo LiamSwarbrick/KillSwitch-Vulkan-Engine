@@ -39,6 +39,7 @@ constexpr float kDefaultMinDistance = 1.0f;
 constexpr float kDefaultMaxDistance = 50.0f;
 constexpr float kDefaultLowPassCutoff = 20000.0f;
 constexpr ma_uint32 kListenerIndex = 0;
+constexpr size_t kMaxActiveOneShotVoices = 64;
 
 struct AudioClipRecord
 {
@@ -70,9 +71,26 @@ struct AudioClipRecord
    b32 sound_initialized = 0;
 };
 
+struct AudioOneShotVoice
+{
+   AudioClipHandle source_handle = 0;
+   AudioClipCategory category = AUDIO_CLIP_CATEGORY_SFX;
+   float clip_volume = kDefaultVolume;
+   float playback_volume = kDefaultVolume;
+   b32 spatialized = 0;
+   float position_x = 0.0f;
+   float position_y = 0.0f;
+   float position_z = 0.0f;
+   float min_distance = kDefaultMinDistance;
+   float max_distance = kDefaultMaxDistance;
+   ma_sound sound = {};
+   b32 sound_initialized = 0;
+};
+
 struct AudioSystemImpl
 {
    std::vector<std::unique_ptr<AudioClipRecord>> clips;
+   std::vector<std::unique_ptr<AudioOneShotVoice>> one_shot_voices;
    ma_context context = {};
    b32 context_initialized = 0;
    ma_device device = {};
@@ -565,6 +583,21 @@ compute_effective_volume(const AudioSystemImpl* impl, const AudioClipRecord* cli
    );
 }
 
+static float
+compute_effective_voice_volume(const AudioSystemImpl* impl, const AudioOneShotVoice* voice)
+{
+   if (impl == nullptr || voice == nullptr)
+   {
+       return 0.0f;
+   }
+
+   return clamp_volume(
+       get_category_volume(impl, voice->category) *
+       voice->clip_volume *
+       voice->playback_volume
+   );
+}
+
 static void
 apply_master_volume(AudioSystem* system)
 {
@@ -592,6 +625,59 @@ apply_clip_settings(AudioSystem* system, AudioClipRecord* clip)
    ma_sound_set_position(&clip->sound, clip->position_x, clip->position_y, clip->position_z);
    ma_sound_set_min_distance(&clip->sound, clip->min_distance);
    ma_sound_set_max_distance(&clip->sound, clip->max_distance);
+}
+
+static void
+apply_voice_settings(AudioSystemImpl* impl, AudioOneShotVoice* voice)
+{
+   if (impl == nullptr || voice == nullptr || !voice->sound_initialized)
+   {
+       return;
+   }
+
+   ma_sound_set_volume(&voice->sound, compute_effective_voice_volume(impl, voice));
+   ma_sound_set_looping(&voice->sound, MA_FALSE);
+   ma_sound_set_spatialization_enabled(&voice->sound, voice->spatialized ? MA_TRUE : MA_FALSE);
+   ma_sound_set_position(&voice->sound, voice->position_x, voice->position_y, voice->position_z);
+   ma_sound_set_min_distance(&voice->sound, voice->min_distance);
+   ma_sound_set_max_distance(&voice->sound, voice->max_distance);
+}
+
+static void
+uninit_one_shot_voice(std::unique_ptr<AudioOneShotVoice>& voice)
+{
+   if (voice != nullptr && voice->sound_initialized)
+   {
+       (void)ma_sound_stop(&voice->sound);
+       ma_sound_uninit(&voice->sound);
+       voice->sound_initialized = 0;
+   }
+}
+
+static void
+cleanup_finished_one_shots(AudioSystemImpl* impl)
+{
+   if (impl == nullptr)
+   {
+       return;
+   }
+
+   impl->one_shot_voices.erase(
+       std::remove_if(
+           impl->one_shot_voices.begin(),
+           impl->one_shot_voices.end(),
+           [](std::unique_ptr<AudioOneShotVoice>& voice)
+           {
+               if (voice == nullptr || !voice->sound_initialized || !ma_sound_is_playing(&voice->sound))
+               {
+                   uninit_one_shot_voice(voice);
+                   return true;
+               }
+
+               return false;
+           }),
+       impl->one_shot_voices.end()
+   );
 }
 
 static void
@@ -627,6 +713,11 @@ refresh_all_live_volumes(AudioSystem* system)
    {
        apply_clip_settings(system, clip.get());
    }
+
+   for (const std::unique_ptr<AudioOneShotVoice>& voice : impl->one_shot_voices)
+   {
+       apply_voice_settings(impl, voice.get());
+   }
 }
 
 static void
@@ -650,6 +741,23 @@ stop_clip_internal(AudioSystem* system, AudioClipRecord* clip)
    {
        impl->current_soundtrack_handle = 0;
    }
+
+   impl->one_shot_voices.erase(
+       std::remove_if(
+           impl->one_shot_voices.begin(),
+           impl->one_shot_voices.end(),
+           [clip](std::unique_ptr<AudioOneShotVoice>& voice)
+           {
+               if (voice != nullptr && voice->source_handle == clip->handle)
+               {
+                   uninit_one_shot_voice(voice);
+                   return true;
+               }
+
+               return false;
+           }),
+       impl->one_shot_voices.end()
+   );
 }
 
 static b32
@@ -700,6 +808,69 @@ play_clip_internal(AudioSystem* system, AudioClipRecord* clip, float volume, b32
        impl->current_soundtrack_handle = clip->handle;
    }
 
+   return 1;
+}
+
+static b32
+play_one_shot_voice_internal(AudioSystem* system, AudioClipRecord* clip, float volume)
+{
+   AudioSystemImpl* impl = get_impl(system);
+   if (impl == nullptr || clip == nullptr || !clip->sound_initialized)
+   {
+       return 0;
+   }
+
+   if (!is_category_enabled(impl, clip->category))
+   {
+       return 0;
+   }
+
+   cleanup_finished_one_shots(impl);
+   if (impl->one_shot_voices.size() >= kMaxActiveOneShotVoices)
+   {
+       uninit_one_shot_voice(impl->one_shot_voices.front());
+       impl->one_shot_voices.erase(impl->one_shot_voices.begin());
+   }
+
+   std::unique_ptr<AudioOneShotVoice> voice(new (std::nothrow) AudioOneShotVoice());
+   if (!voice)
+   {
+       SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "AudioSystem: failed to allocate one-shot voice for '%s'.", clip->logical_name.c_str());
+       return play_clip_internal(system, clip, volume, 0);
+   }
+
+   const ma_result copy_result = ma_sound_init_copy(&impl->engine, &clip->sound, 0, NULL, &voice->sound);
+   if (copy_result != MA_SUCCESS)
+   {
+       SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "AudioSystem: failed to copy one-shot '%s' (%d); falling back to shared clip.", clip->logical_name.c_str(), (int)copy_result);
+       return play_clip_internal(system, clip, volume, 0);
+   }
+
+   voice->sound_initialized = 1;
+   voice->source_handle = clip->handle;
+   voice->category = clip->category;
+   voice->clip_volume = clip->clip_volume;
+   voice->playback_volume = clamp_volume(volume);
+   voice->spatialized = clip->spatialized;
+   voice->position_x = clip->position_x;
+   voice->position_y = clip->position_y;
+   voice->position_z = clip->position_z;
+   voice->min_distance = clip->min_distance;
+   voice->max_distance = clip->max_distance;
+
+   ma_sound_reset_stop_time_and_fade(&voice->sound);
+   (void)ma_sound_seek_to_pcm_frame(&voice->sound, 0);
+   apply_voice_settings(impl, voice.get());
+
+   const ma_result start_result = ma_sound_start(&voice->sound);
+   if (start_result != MA_SUCCESS)
+   {
+       SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "AudioSystem: failed to start one-shot '%s' (%d).", clip->logical_name.c_str(), (int)start_result);
+       uninit_one_shot_voice(voice);
+       return 0;
+   }
+
+   impl->one_shot_voices.push_back(std::move(voice));
    return 1;
 }
 
@@ -858,6 +1029,12 @@ AudioSystem_Destroy(AudioSystem* system)
 
    AudioSystem_StopAll(system);
 
+   for (std::unique_ptr<AudioOneShotVoice>& voice : impl->one_shot_voices)
+   {
+       uninit_one_shot_voice(voice);
+   }
+   impl->one_shot_voices.clear();
+
    for (const std::unique_ptr<AudioClipRecord>& clip : impl->clips)
    {
        if (clip != nullptr && clip->sound_initialized)
@@ -894,6 +1071,8 @@ AudioSystem_Update(AudioSystem* system, float dt)
    {
        refresh_clip_state(system, clip.get());
    }
+
+   cleanup_finished_one_shots(impl);
 }
 
 AudioClipHandle
@@ -1017,7 +1196,7 @@ AudioSystem_LoadClipEx(
 b32
 AudioSystem_PlayOneShot(AudioSystem* system, AudioClipHandle handle, float volume)
 {
-   return play_clip_internal(system, get_clip_mut(system, handle), volume, 0);
+   return play_one_shot_voice_internal(system, get_clip_mut(system, handle), volume);
 }
 
 b32
@@ -1045,6 +1224,12 @@ AudioSystem_StopAll(AudioSystem* system)
    {
        stop_clip_internal(system, clip.get());
    }
+
+   for (std::unique_ptr<AudioOneShotVoice>& voice : impl->one_shot_voices)
+   {
+       uninit_one_shot_voice(voice);
+   }
+   impl->one_shot_voices.clear();
 }
 
 b32
@@ -1381,7 +1566,29 @@ AudioSystem_IsClipPlaying(const AudioSystem* system, AudioClipHandle handle)
    }
 
    refresh_clip_state(const_cast<AudioSystem*>(system), clip);
-   return clip->is_playing;
+   if (clip->is_playing)
+   {
+       return 1;
+   }
+
+   const AudioSystemImpl* impl = get_impl_const(system);
+   if (impl == nullptr)
+   {
+       return 0;
+   }
+
+   for (const std::unique_ptr<AudioOneShotVoice>& voice : impl->one_shot_voices)
+   {
+       if (voice != nullptr &&
+           voice->source_handle == handle &&
+           voice->sound_initialized &&
+           ma_sound_is_playing(&voice->sound))
+       {
+           return 1;
+       }
+   }
+
+   return 0;
 }
 
 void
