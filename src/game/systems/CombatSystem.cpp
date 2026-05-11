@@ -19,9 +19,27 @@ void CombatSystem::Update(float dt) const
             // WRITE TO: C_CombatInfo !!!!!!
 
             // FIRST OF ALL, REDUCE THE TIMERS
-            combatInfo.attackTimer -= dt;
-            combatInfo.bufferTimer -= dt;
-            combatInfo.windowTimer -= dt;
+            if (combatInfo.attackTimer >= 0.0f)
+            {
+                combatInfo.attackTimer -= dt;
+                combatInfo.bufferTimer -= dt;
+                combatInfo.windowTimer -= dt;
+            }
+            if (combatInfo.staggeredTimer >= 0.0f)
+            {
+                combatInfo.staggeredTimer -= dt;
+            }
+            
+
+            if (combatInfo.attackTimer < 0.0f)
+            {
+                combatInfo.isFiring = false;
+                combatInfo.isAttacking = false;
+            }
+            if (combatInfo.staggeredTimer < 0.0f)
+            {
+                combatInfo.isStaggered = false;
+            }
 
             bool shouldProcessMelee = false;
             bool shouldProcessRanged = false;
@@ -82,7 +100,7 @@ void CombatSystem::Update(float dt) const
                 else if (shouldProcessMelee)
                 {
                     glm::vec3 lookDir = Math::QuatToViewDir(rotation);
-                    ProcessMelee(bodyHandle.handle, position, lookDir, combatInput, combatInfo, meleeStats, C_Faction::FactionDamageMask(faction.type));
+                    ProcessMelee(entity, bodyHandle.handle, position, lookDir, combatInput, combatInfo, meleeStats, C_Faction::FactionDamageMask(faction.type));
                 }
             }
             
@@ -91,23 +109,115 @@ void CombatSystem::Update(float dt) const
         
 }
 
-void CombatSystem::ProcessMelee(RigidBodyHandle bodyHandle, const glm::vec3& position, const glm::vec3& lookDir, const C_CombatInput& combatInput, C_CombatInfo& combatInfo, const C_CombatMeleeStats& meleeStats, FactionType damageMask) const
+void CombatSystem::ProcessMelee(EntityID ourID, RigidBodyHandle bodyHandle, const glm::vec3& position, const glm::vec3& lookDir, const C_CombatInput& combatInput, C_CombatInfo& combatInfo, const C_CombatMeleeStats& meleeStats, FactionType damageMask) const
 {
-    if(combatInfo.activeCombo == -1)
+    if (combatInfo.activeCombo < 0 /* or == -1 */)
+    {
+        // If we do not have a current combo find a combo
         combatInfo.activeCombo = FindCombo(combatInput, meleeStats, combatInfo);
+        combatInfo.currentStep = 0;
+    }
+    else
+    {
+        // Increment the combo step if we have a combo
+        combatInfo.currentStep++;
+    }
+        
 
     if (combatInfo.activeCombo == -1)
+    {
+        SDL_assert(false && "Could not find melee combo for the current entity");
         return;
+    }
 
+    // Prepare attack so it comes in handy 
+    const C_CombatMeleeStats::Combo& currentCombo = meleeStats.combos[combatInfo.activeCombo];
+    const C_CombatMeleeStats::Attack& currentAttack = currentCombo.attacks[combatInfo.currentStep];
 
+    // Before doing anything else, reset the combo if we are on the last step (not the current one but the future one)
+    if (combatInfo.currentStep == currentCombo.attacks.size() - 1)
+    {
+        combatInfo.activeCombo = -1;
+    }
+
+    // SET THE ATTACK TIMERS 
+    combatInfo.isAttacking = true;
+    combatInfo.attackTimer = currentAttack.duration;
+    combatInfo.windowTimer = currentAttack.comboWindow;
+    combatInfo.bufferTimer = currentAttack.bufferWindow; // Not using buffered input for now cause no time
+
+    // Get the shape of the current attacking entity to determine minimum attack range based on radius
     Shape* ourShape = physics->getShape(bodyHandle);
     CapsuleShape* ourCapsuleShape = static_cast<CapsuleShape*>(ourShape);
-
-
+    float radiusOffset = ourCapsuleShape->radius;
 
     // ShapeIntersects in front of us depending on meleeStats.range
     // We'll make a box as wide as our radius, half the height
-    ShapeDesc shapeDesc = ShapeDesc::makeBox(glm::vec3(ourCapsuleShape->radius, ourCapsuleShape->getHeight() * 0.8f, meleeStats.range));
+    //ShapeDesc attackShapeDesc = ShapeDesc::makeCapsule(meleeStats.range * 0.5f, ourCapsuleShape->getHeight());
+    ShapeDesc attackShapeDesc = ShapeDesc::makeBox(glm::vec3(ourCapsuleShape->radius, ourCapsuleShape->getHeight() * 0.5f, meleeStats.range*0.5f));
+    //ShapeDesc attackShapeDesc = ShapeDesc::makeSphere(meleeStats.range);
+    ShapeHandle attackShapeHandle = physics->createShape(attackShapeDesc);
+
+    // Create the filter (it will ignore us and target only dynamic entities)
+    QueryFilter filter = {
+        .bodyToIgnore = bodyHandle,
+        .hasLayerOfQuery = true,
+        .layerOfQuery = (uint8_t) BodyLayer::AFFECT_ONLY_CHARACTER
+    };
+
+    // Offset the target position by the radius in the look direction
+    // And set the orientation to be the look direction we have at the moment 
+    // TODO: to be able to aim upwards so we can hit a player that is up
+    glm::quat targetOrientation = Math::ViewDirToQuat(lookDir);
+    glm::vec3 targetPositionOffset = lookDir * (radiusOffset + meleeStats.range * 0.5f);
+    glm::vec3 targetPosition = position + targetPositionOffset;
+    targetPosition.y += ourCapsuleShape->localOffset.y;
+
+    std::vector<EntityShapeIntersectsHit> entitiesHit = physics->shapeIntersects(attackShapeHandle, targetPosition, targetOrientation, filter);
+
+    for (EntityShapeIntersectsHit hit : entitiesHit)
+    {
+        if (ecs->Has<C_Faction>(hit.entity))
+        {
+            //PlayGameplaySFXAt(&audio_system, gameplay_audio.zombie_attack, 0.72f, hit.point, 1.0f, 35.0f);
+            auto& faction = ecs->GetComponent<C_Faction>(hit.entity);
+            if (faction.type == (faction.type & damageMask))
+            {
+                C_Health& targetHealth = ecs->GetComponent<C_Health>(hit.entity);
+                targetHealth.currentHealth -= std::lroundf(((float) meleeStats.damage * currentAttack.damageMultiplier));
+                
+                C_CombatInfo& targetCombatInfo = ecs->GetComponent<C_CombatInfo>(hit.entity);
+
+                if (targetHealth.currentHealth <= 0)
+                {
+                    // Despawn the enemy? idk
+                    // Add bullets back if we have a weapon
+                    // Check if we have a weapon socket, if we do, check if we have a weapon, if we do, add bullets back
+                    if (ecs->Has<C_WeaponSocket>(ourID))
+                    {
+                        auto& socket = ecs->GetComponent<C_WeaponSocket>(ourID);
+                        // IF we have a weapon AND its equipped
+                        if (socket.weapon_entity != NULL_ENTITY && ecs->IsEntityValid(socket.weapon_entity)) 
+                        {
+                            auto& weapon = ecs->GetComponent<C_WeaponRanged>(socket.weapon_entity);
+                            weapon.reloadableBullets = std::min((short) (weapon.reloadableBullets + 1), weapon.maxBullets);
+                        } // If our weapon socket has a valid entity
+                    } // If we have a weapon socket
+
+                    targetCombatInfo.isDead = true;
+                } // If the target health is lower than 0 -> apply things
+                else
+                { // If the target is alive
+                    // Only add stagger timer if the target is NOT staggered already
+                    if(!targetCombatInfo.isStaggered)
+                        targetCombatInfo.staggeredTimer = 0.5f; // TODO: add a stagger value to the attack, or tweak this value by default
+                    targetCombatInfo.isStaggered = true;
+
+                    physics->addVelocity(hit.entity, lookDir * 20.0f);
+                }
+            }
+        }
+    }
 }
 
 int CombatSystem::FindCombo(const C_CombatInput& combatInput, const C_CombatMeleeStats& meleeStats, const C_CombatInfo& combatInfo) const
@@ -118,7 +228,7 @@ int CombatSystem::FindCombo(const C_CombatInput& combatInput, const C_CombatMele
         return -1;
     }
 
-    if (meleeStats.combos.size() == 0) return 0;
+    if (meleeStats.combos.size() == 1) return 0;
 
     int bestMatch = -1;
     int bestScore = -1;
@@ -128,13 +238,14 @@ int CombatSystem::FindCombo(const C_CombatInput& combatInput, const C_CombatMele
     return bestMatch;
 }
 
-void CombatSystem::ProcessRanged(RigidBodyHandle bodyHandle, const glm::vec3& position, const glm::vec3& aimDir, C_CombatInfo& combatInfo, const C_WeaponRanged& weapon, FactionType damageMask) const
+void CombatSystem::ProcessRanged(RigidBodyHandle bodyHandle, const glm::vec3& position, const glm::vec3& aimDir, C_CombatInfo& combatInfo, C_WeaponRanged& weapon, FactionType damageMask) const
 {
     // Write timers first of all because we might exit early
     combatInfo.isFiring = true;
     combatInfo.attackTimer = weapon.shootMaxCooldown;
     combatInfo.bufferTimer = 0.0f;
     combatInfo.windowTimer = 0.0f;
+    weapon.currentBullets -= weapon.shotsPerFire;
 
     const CameraInfo& cam = InGameCam_GetGameplayCamera();
 
@@ -172,7 +283,7 @@ void CombatSystem::ProcessRanged(RigidBodyHandle bodyHandle, const glm::vec3& po
 
     Ray bodyRay;
     bodyRay.origin = bodyRayOrigin;
-    if (cosAngle > 0.8f)
+    if (cosAngle > 0.6f)
     {
         bodyRay.direction = glm::normalize(bodyToTarget);
         bodyRay.maxDistance = glm::length(bodyToTarget) + 0.5f; // camera is usually going to be behind the player so we might not need this
@@ -203,6 +314,14 @@ void CombatSystem::ProcessRanged(RigidBodyHandle bodyHandle, const glm::vec3& po
             {
                 C_Health& targetHealth = ecs->GetComponent<C_Health>(hit.entity);
                 targetHealth.currentHealth -= weapon.damage;
+
+                if (targetHealth.currentHealth <= 0)
+                {
+                    // Upgrade could have extraBulletsOnKill or something like that
+                    // or just reload the weapon.maxBullets
+                    //weapon.reloadableBullets = weapon.maxBullets;
+                    weapon.reloadableBullets = std::min((short) (weapon.reloadableBullets + 1), weapon.maxBullets);
+                }
             }
         }
     }

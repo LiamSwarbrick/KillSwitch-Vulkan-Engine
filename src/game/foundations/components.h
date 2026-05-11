@@ -166,6 +166,7 @@ struct C_MovementInput
 	bool wantsRun = false;
 	bool wantsCrouch = false;
 	bool wantsAim = false;
+	bool wantsReload = false;
 	glm::vec3 aimDir{ 0.0f }; // For now, to rotate optionally (this should be in an animation input component or something)
 };
 
@@ -311,6 +312,8 @@ struct C_WeaponRanged
 	int damage = 0;
 	short maxBullets = 0;
 	short currentBullets = 0;
+	// Quick fix to reloads
+	short reloadableBullets = 0;
 
 	float lastTimeSinceShot = 0.0f;
 	int shotsPerFire = 0; // shots per fire (for bursts or any other semi that shoots multiple things (double barrel shotgun or anything idk))
@@ -396,7 +399,7 @@ struct C_CombatMeleeStats
 	{
 		C_CombatMeleeStats stats;
 		stats.damage = 4;
-		stats.range = 0.4; // this range is from the outside of the capsule radius
+		stats.range = 1.0f; // this range is from the outside of the capsule radius
 		stats.combos.push_back(
 		{
 			"Default", // Combo name,
@@ -419,6 +422,8 @@ struct C_CombatMeleeStats
 	static C_CombatMeleeStats ZombieDefaultCombatStats()
 	{
 		C_CombatMeleeStats stats;
+		stats.damage = 4;
+		stats.range = 1.0f;
 		stats.combos.push_back({
 			"Default", // Combo name,
 			{
@@ -488,6 +493,8 @@ struct C_CombatInfo
 
 	bool isStaggered = false;
 	float staggeredTimer = 0.0f;
+
+	bool isDead = false;
 
 	// For melee & ranged
 	// Attack timer will serves as the shoot cooldown and as the attack cooldown
@@ -559,11 +566,9 @@ struct C_PlayerInfo
 
 	Upgrades upgrades;
 
-	// Unsure...
-	bool isMoving = false;
-	bool isGrounded = false;
-	bool isJumping = false;
+	bool isAiming = false;
 	bool isReloading = false;
+	float reloadTimer = 0.0f;
 
 	float idleTimer = 0.0f;
 };
@@ -653,7 +658,9 @@ struct C_EnemyAIInfo
 	// bool shouldAttack = false;
 
 	// Attack timers will be read from C_CombatInfo
-	/*float attackTimer = 0.0f;*/
+	//float attackTimer = 0.0f;
+	float startAttackDelay = 0.3f;
+	bool hasAttacked = false;
 
 	// Important addition (TODO: add turn speed calculations to turning)
 	glm::vec3 targetLookDirToLerp{ 0.0f };

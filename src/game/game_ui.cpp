@@ -212,7 +212,7 @@ static GameUIPlayingHUDState BuildPlayingHUDState(Scene& scene, EntityID player_
         {
             const C_WeaponRanged& weapon = ecs.GetComponent<C_WeaponRanged>(weapon_socket.weapon_entity);
             hud_state.loaded_bullets = weapon.currentBullets;
-            hud_state.backup_bullets = 0;
+            hud_state.backup_bullets = weapon.reloadableBullets;
         }
     }
 

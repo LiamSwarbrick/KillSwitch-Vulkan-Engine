@@ -174,8 +174,8 @@ enum class ShapeType : uint8_t
 
 struct ShapeDesc
 {
-    glm::vec3 localOffset;
-    glm::quat localOrientation;
+    glm::vec3 localOffset = glm::vec3(0.0f);
+    glm::quat localOrientation = glm::identity<glm::quat>();
 
     ShapeType type;
 

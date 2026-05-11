@@ -144,8 +144,6 @@ void EnemyAISystem::Update(float dt) const
                 rotation = Math::RotateTowardTarget(rotation, targetRotation, stats.turnSpeed, dt, Math::Smoothstep);
 
                 transform.matrix = glm::translate(glm::mat4(1.0f), position) * glm::mat4_cast(rotation) * glm::scale(glm::mat4(1.0f), scale);
-
-                combatInput.wantsMelee = true;
             }
             else if (info.currentState == info.Staggered)
             {
@@ -170,6 +168,15 @@ void EnemyAISystem::UpdateState(EntityID enemyID, const C_EnemyAIStats& stats, C
 
     ChaseOrAlertInfo chaseOrAlertInfo;
     bool shouldAttack;
+
+    if (combatInfo.isDead)
+        info.currentState = info.Dead;
+    else if (combatInfo.isStaggered)
+        info.currentState = info.Staggered;
+    else if (combatInfo.isAttacking)
+        info.currentState = info.Attack;
+
+
     switch (info.currentState)
     {
     case info.Idle:
@@ -306,9 +313,16 @@ void EnemyAISystem::UpdateState(EntityID enemyID, const C_EnemyAIStats& stats, C
         // Attacking (written from C_Combat hopefully)
         // Wait for attack to finish, go back to Chase also IF we should not attack, otherwise just keep attacking
         shouldAttack = ShouldAttack(stats, info, bodyHandle, position, lookDir, dt);
-        if (combatInfo.attackTimer < 0.0f && !shouldAttack)
+        if (combatInfo.attackTimer < 0.0f)
         {
-            info.currentState = info.Chase;
+            if (shouldAttack)
+            {
+
+            }
+            else
+            {
+                info.currentState = info.Chase;
+            }
         }
 
         break;
@@ -319,6 +333,10 @@ void EnemyAISystem::UpdateState(EntityID enemyID, const C_EnemyAIStats& stats, C
 
         // IMPORTANT: in case of hordes, i would recommend Staggered to apply a constant push (written to MovementInput), 
         // that way you might be able to displace zombies behind them (otherwise the zombie behind pushing forward will nullify the push backwards)
+        if (combatInfo.staggeredTimer < 0.0f)
+        {
+
+        }
 
         break;
     case info.Dead:

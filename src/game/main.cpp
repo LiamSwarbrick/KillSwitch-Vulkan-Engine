@@ -291,7 +291,7 @@ int main(int argc, char *argv[])
      Asset* many_prefab = scene.LoadPrefab("assets/levels/manylights.gltf");
     Asset* playground_prefab = scene.LoadPrefab("assets/levels/playground.gltf");
     //Asset* cube_prefab = scene.LoadPrefab("assets/props/simple_cube.gltf");
-    //Asset* sphere_prefab = scene.LoadPrefab("assets/props/simple_sphere.gltf");
+    Asset* sphere_prefab = scene.LoadPrefab("assets/props/simple_sphere.gltf");
     //Asset* capsule_prefab = scene.LoadPrefab("assets/props/zombie.gltf");
     //Asset* capsule_prefab = scene.LoadPrefab("assets/props/character_capsule.gltf");
     Asset* zombie_woman = scene.LoadPrefab("assets/animations/zombie_woman.gltf");
@@ -304,9 +304,20 @@ int main(int argc, char *argv[])
     scene.InstantiatePrefab(many_prefab, glm::vec3(0, 0, 0), glm::identity<glm::quat>());
     scene.InstantiatePrefab(room_prefab, glm::vec3(0.0f, 0.0f, -10.0f), glm::identity<glm::quat>());
     scene.InstantiatePrefab(playground_prefab, glm::vec3(0, 0, -10.0f), glm::identity<glm::quat>());
+    //scene.InstantiatePrefab(room_prefab, glm::vec3(0.0f, 0.0f, 0.0f), glm::identity<glm::quat>());
+    //scene.InstantiatePrefab(playground_prefab, glm::vec3(0, 0, 0.0f), glm::identity<glm::quat>());
+    //scene.InstantiatePrefab(playground_prefab, glm::vec3(0, 0, -5.0f), glm::identity<glm::quat>());
     // scene.InstantiatePrefab(cube_prefab, glm::vec3(0, 5.1, 0));
-    // scene.InstantiatePrefab(cube_prefab, glm::vec3(3, 4.9, 0));ss
-    
+    // scene.InstantiatePrefab(cube_prefab, glm::vec3(3, 4.9, 0));
+    /*for(int y = 0; y < 3; y++)
+    for (int x = -5; x < 4; x++)
+    {
+        for (int z = -5; z < 4; z++)
+        {
+            scene.InstantiatePrefab(sphere_prefab, glm::vec3(x+0.5f, y+3.0f, z+0.5f));
+            y += 0.5f;
+        }
+    }*/
     EntityID playerID = scene.InstantiatePrefab(player, glm::vec3(0, 0, 0), glm::identity<glm::quat>());
     scene.InstantiatePrefab(zombie_woman, glm::vec3(3, 0.0f, -11.5f), Math::ViewDirToQuat({0.0f ,0.0f, 1.0f}));
     scene.InstantiatePrefab(zombie_woman, glm::vec3(3, 0.0f, -7.5f), Math::ViewDirToQuat({ 0.0f ,0.0f, 1.0f }));

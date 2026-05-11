@@ -20,8 +20,8 @@ public:
 
 	void Update(float dt) const override;
 private:
-	void ProcessMelee(RigidBodyHandle bodyHandle, const glm::vec3& position, const glm::vec3& lookDir, const C_CombatInput& combatInput, C_CombatInfo& combatInfo, const C_CombatMeleeStats& meleeStats, FactionType damageMask) const;
-	void ProcessRanged(RigidBodyHandle bodyHandle, const glm::vec3& position, const glm::vec3& aimDir, C_CombatInfo& combatInfo, const C_WeaponRanged& weapon, FactionType damageMask) const;
+	void ProcessMelee(EntityID ourID, RigidBodyHandle bodyHandle, const glm::vec3& position, const glm::vec3& lookDir, const C_CombatInput& combatInput, C_CombatInfo& combatInfo, const C_CombatMeleeStats& meleeStats, FactionType damageMask) const;
+	void ProcessRanged(RigidBodyHandle bodyHandle, const glm::vec3& position, const glm::vec3& aimDir, C_CombatInfo& combatInfo, C_WeaponRanged& weapon, FactionType damageMask) const;
 
 	// We could add movement input to the combat & combos
 	int FindCombo(const C_CombatInput& combatInput, const C_CombatMeleeStats& meleeStats, const C_CombatInfo& combatInfo) const;
