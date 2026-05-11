@@ -213,7 +213,7 @@ namespace
 
         // find bound entity transform
         C_Transform* bound_transform = nullptr;
-        if (s_ecs && cam.bound_entity != NULL_ENTITY)
+        if (s_ecs && cam.bound_entity != NULL_ENTITY && s_ecs->IsEntityValid(cam.bound_entity))
             bound_transform = s_ecs->GetComponentPtr<C_Transform>(cam.bound_entity);
 
         if (!bound_transform)
@@ -274,7 +274,7 @@ namespace
         cam.forward = glm::normalize(forward);
         // find bound entity transform
         C_Transform* bound_transform = nullptr;
-        if (s_ecs && cam.bound_entity != NULL_ENTITY)
+        if (s_ecs && cam.bound_entity != NULL_ENTITY && s_ecs->IsEntityValid(cam.bound_entity))
             bound_transform = s_ecs->GetComponentPtr<C_Transform>(cam.bound_entity);
 
         if (!bound_transform)
@@ -288,7 +288,7 @@ namespace
         }
 
         bool is_aiming = false;
-        if (s_ecs && cam.bound_entity != NULL_ENTITY)
+        if (s_ecs && cam.bound_entity != NULL_ENTITY && s_ecs->IsEntityValid(cam.bound_entity))
         {
             if (const C_CombatInput* combatInput = s_ecs->GetComponentPtr<C_CombatInput>(cam.bound_entity))
                 is_aiming = combatInput->wantsAim;
@@ -369,7 +369,10 @@ namespace
             ray.maxDistance = desired_distance;
 
             QueryFilterExternal filter = {};
-            filter.bodyToIgnore = cam.bound_entity; // ignore the player
+            if (cam.bound_entity != NULL_ENTITY && s_ecs->IsEntityValid(cam.bound_entity))
+            {
+                filter.bodyToIgnore = cam.bound_entity;
+            }// ignore the player
             filter.hasLayerOfQuery = s_occlusion_settings.layered_query;
             filter.layerOfQuery = s_occlusion_settings.layer;
 

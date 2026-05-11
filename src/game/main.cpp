@@ -384,7 +384,7 @@ int main(int argc, char *argv[])
         Input_Update();
 
         if (GameUI_GetState() == GameState::Playing && Input_IsKeyJustPressed(SDL_SCANCODE_P)) //press p to test getting hit
-            GameUI_DebugDamagePlayer(scene, 1);
+            GameUI_DebugDamagePlayer(scene, 4);
 
         GameUI_Update();
 

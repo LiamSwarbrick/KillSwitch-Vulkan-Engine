@@ -196,7 +196,7 @@ static GameUIPlayingHUDState BuildPlayingHUDState(Scene& scene, EntityID player_
 
     if (const C_Health* health = TryGetPlayerHealth(scene, player_id))
     {
-        hud_state.life_count = (health->currentHealth < 0) ? 0 : health->currentHealth;
+        hud_state.life_count = (health->currentHealth < 0) ? 0 : health->currentHealth / 4;
         has_real_health = true;
     }
 
@@ -297,8 +297,8 @@ void GameUI_ApplyPlaceholderLevelStartSkill(Scene& scene, const LevelStartSkillS
         const EntityID player_id = FindFirstPlayerEntity(scene);
         if (C_Health* health = TryGetPlayerHealth(scene, player_id))
         {
-            ++health->maxHealth;
-            ++health->currentHealth;
+            health->maxHealth += 4;
+            health->currentHealth += 4;
         }
     }
 
@@ -322,8 +322,18 @@ static void GameUI_SetPlayingHUDState(const GameUIPlayingHUDState& state)
 
 void GameUI_UpdatePlayingHUD(Scene& scene)
 {
-    bool has_real_health = false;
+    ECS& ecs = scene.GetECS();
     const EntityID player_id = FindFirstPlayerEntity(scene);
+
+    if (s_state == GameState::Playing &&
+        (player_id == NULL_ENTITY || !ecs.IsEntityValid(player_id)))
+    {
+        GameUI_SetPlayingHUDState({});
+        GameUI_SetState(GameState::GameOver);
+        return;
+    }
+
+    bool has_real_health = false;
     const GameUIPlayingHUDState hud_state = BuildPlayingHUDState(scene, player_id, &has_real_health);
 
     GameUI_SetPlayingHUDState(hud_state);
