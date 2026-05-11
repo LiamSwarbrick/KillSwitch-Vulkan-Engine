@@ -202,12 +202,16 @@ void CombatSystem::ProcessMelee(EntityID ourID, RigidBodyHandle bodyHandle, cons
     // And set the orientation to be the look direction we have at the moment 
     // TODO: to be able to aim upwards so we can hit a player that is up
     glm::quat targetOrientation = Math::ViewDirToQuat(lookDir);
-    glm::vec3 targetPositionOffset = lookDir * (radiusOffset + meleeStats.range * 0.5f);
+    glm::vec3 targetPositionOffset = lookDir * (radiusOffset + meleeStats.range * 0.5f * currentAttack.rangeMultiplier);
     glm::vec3 targetPosition = position + targetPositionOffset;
     targetPosition.y += ourCapsuleShape->localOffset.y;
 
     std::vector<EntityShapeIntersectsHit> entitiesHit = physics->shapeIntersects(attackShapeHandle, targetPosition, targetOrientation, filter);
 
+
+    float knockback = meleeStats.knockback * currentAttack.knockbackMultiplier;
+    int damage = std::lroundf(((float)meleeStats.damage * currentAttack.damageMultiplier));
+    float staggerTime = currentAttack.staggerTime;
     for (EntityShapeIntersectsHit hit : entitiesHit)
     {
         if (ecs->Has<C_Faction>(hit.entity))
@@ -217,7 +221,7 @@ void CombatSystem::ProcessMelee(EntityID ourID, RigidBodyHandle bodyHandle, cons
             if (faction.type == (faction.type & damageMask))
             {
                 C_Health& targetHealth = ecs->GetComponent<C_Health>(hit.entity);
-                targetHealth.currentHealth -= std::lroundf(((float) meleeStats.damage * currentAttack.damageMultiplier));
+                targetHealth.currentHealth -= damage;
                 
                 C_CombatInfo& targetCombatInfo = ecs->GetComponent<C_CombatInfo>(hit.entity);
 
@@ -243,10 +247,10 @@ void CombatSystem::ProcessMelee(EntityID ourID, RigidBodyHandle bodyHandle, cons
                 { // If the target is alive
                     // Only add stagger timer if the target is NOT staggered already
                     if(!targetCombatInfo.isStaggered)
-                        targetCombatInfo.staggeredTimer = 0.5f; // TODO: add a stagger value to the attack, or tweak this value by default
+                        targetCombatInfo.staggeredTimer = staggerTime;
                     targetCombatInfo.isStaggered = true;
 
-                    physics->addVelocity(hit.entity, lookDir * 20.0f);
+                    physics->addVelocity(hit.entity, lookDir * knockback);
                 }
             }
         }
