@@ -274,16 +274,68 @@ void LevelGeneration::GenerateGrid(int width, int height, glm::ivec2 start, glm:
 		std::vector<glm::ivec2> updateRooms;
 		updateRooms.push_back(start);
 
-		UpdatePossibilities(updateRooms);
-
-		// Find room with lowest entropy, pick a room for it, update list of valid rooms for others
-		while (true)
+		// Collapsing goal cell
+		if (start != goal)
 		{
-			// Go through every grid cell and check how many rooms it could be (entropy)
-			int nextX = -1;
-			int nextY = -1;
-			int lowestEntropy = INT_MAX;
+			int gridIndex = goal.y * width + goal.x;
+			GridCell& startingCell = floor.grid[gridIndex];
+			int roomChoice = -1;
 
+			// Pick a random theme from themes and choose starting room
+			for (int i = 0; i < floor.palette.size(); ++i)
+				if (floor.palette[i].doorwayMask == goalDoorwayMask && floor.palette[i].theme == goalTheme)
+					roomChoice = i;
+
+			SDL_assert(roomChoice != -1);
+			startingCell.validRooms = { roomChoice };
+			startingCell.validThemes = { goalTheme };
+			startingCell.isCollapsed = true;
+			roomsPlaced++;
+
+			updateRooms.push_back(goal);
+		}
+
+		// For each cardinal direction, also make a room 2-5 cells away from the starting room
+		for (int i = 0; i < 1; ++i)
+		{
+			// Get random offset from start
+			std::uniform_int_distribution<int> dirDist(2, 5);
+			glm::ivec2 offset = neighbourOffsets[i] * dirDist(rng);
+			glm::ivec2 position = start + offset;
+
+			// Check the new position is within the grid bounds
+			if (position.x < 0 || position.x >= width || position.y < 0 || position.y >= height)
+				continue;
+
+			gridIndex = position.y * width + position.x;
+			GridCell& Cell = floor.grid[gridIndex];
+			if (Cell.isCollapsed)
+				continue;
+			roomChoice = -1;
+
+			// Pick a random theme 
+			std::uniform_int_distribution<int> theme(0, THEME_COUNT - 1);
+			Theme randomTheme = (Theme)(theme(rng));
+			for (int i = 0; i < floor.palette.size(); ++i)
+				if (floor.palette[i].doorwayMask == ((DOOR << NORTH) + (DOOR << EAST) + (DOOR << SOUTH) + (DOOR << WEST)) && floor.palette[i].theme == INSIDE)
+					roomChoice = i;
+
+			SDL_assert(roomChoice != -1);
+			Cell.validRooms = { roomChoice };
+			Cell.validThemes = { randomTheme };
+			Cell.isCollapsed = true;
+			roomsPlaced++;
+			updateRooms.push_back({ position.x, position.y });
+		}
+
+		UpdatePossibilities(floor, updateRooms);
+
+		// Place rooms connected by doors until the room limit is reached
+		while (roomsPlaced < maxRooms)
+		{
+			std::vector<glm::ivec2> leafRooms;
+
+			// For each cell, if its neighbour has an unconnected door or open side facing it, add to possible placements
 			for (int y = 0; y < height; ++y)
 			{
 				for (int x = 0; x < width; ++x)
@@ -415,4 +467,78 @@ uint8_t LevelGeneration::RotateMask(uint8_t mask, int rotations)
 		mask = shiftedMask & 0x0F;
 	}
 	return mask;
+}
+
+WallType LevelGeneration::GetWallType(uint16_t mask, DoorDirection direction)
+{
+	// Shifts the 2 direction bits to leftmost and returns them
+	return (WallType)((mask >> direction) & 0x03);
+}
+
+void LevelGeneration::SetWallType(uint16_t& mask, DoorDirection direction, WallType wallType)
+{
+	// Clear the correct bits, then assign the new wall type to them
+	mask &= ~(0x03 << direction);
+	mask |= wallType << direction;
+}
+
+// Just builds the palette from files in the folder and generates a full level
+LevelFloor LevelGeneration::CreateFullLevel(Scene* scene, const std::string& folder)
+{
+	std::vector<Asset*> roomAssets;
+
+	if (std::filesystem::exists(folder) && std::filesystem::is_directory(folder)) {
+		for (const auto& file : std::filesystem::directory_iterator(folder)) {
+			std::string path = file.path().string();
+			std::string extension = file.path().extension().string();
+
+			if (extension == ".gltf") {
+				Asset* a = scene->LoadPrefab(path.c_str());
+				if (a) {
+					roomAssets.push_back(a);
+				}
+			}
+		}
+	}
+	else {
+		SDL_Log("ERROR: Folder path %s not found!", folder.c_str());
+	}
+
+	BuildPalette(roomAssets);
+
+	LevelFloor floor = GenerateGrid(7, 7,
+		glm::ivec2({ 0,0 }), ((DOOR << NORTH) + (DOOR << EAST) + (WALL << SOUTH) + (WALL << WEST)), INSIDE,
+		glm::ivec2({ 0,6 }), ((WALL << NORTH) + (DOOR << EAST) + (DOOR << SOUTH) + (WALL << WEST)), INSIDE,
+		25, 1);
+
+	floor.worldOffset = { 0.0f, 0.0f, 0.0f };
+
+	return floor;
+}
+
+void LevelGeneration::GenerateNextFloor(Scene* scene)
+{
+	LevelFloor& prevFloor = activeFloors.back();
+	currentFloor++;
+
+	glm::vec3 newOffset = prevFloor.worldOffset + glm::vec3(0, 20.0f, -40.0f) + glm::vec3(0.0f, 0.0f, prevFloor.goalCoords.y * -10.0f);
+
+	//Asset* stairs = scene->LoadPrefab("assets/levels/STAIRSSHITTY.gltf");
+	//scene->InstantiatePrefab(stairs, newOffset + glm::vec3(prevFloor.goalCoords.x * 10.0f, -20.0f, 30.0f));
+	glm::ivec2 newStart(prevFloor.width / 2, 0);
+	glm::ivec2 newGoal(prevFloor.width / 2, prevFloor.height - 1);
+
+	LevelFloor newFloor = GenerateGrid(7, 7,
+		newStart, ((DOOR << NORTH) + (DOOR << EAST) + (DOOR << SOUTH) + (DOOR << WEST)), OUTSIDE,
+		newGoal, ((DOOR << NORTH) + (DOOR << EAST) + (DOOR << SOUTH) + (DOOR << WEST)), INSIDE,
+		20, currentFloor);
+	newFloor.worldOffset = newOffset;
+
+	InstantiateLevel(scene, newFloor);
+	activeFloors.push_back(newFloor);
+}
+
+void LevelGeneration::CleanupOldFloors(Scene* scene)
+{
+	SDL_Log("cleaning up old floors");
 }

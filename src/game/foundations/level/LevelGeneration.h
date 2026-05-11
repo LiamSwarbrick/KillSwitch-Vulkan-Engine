@@ -4,6 +4,22 @@
 #include "core/assetsys.h"
 #include "core/ecs.h"
 #include <map>
+#include <random>
+#include <filesystem>
+
+// Enum of room themes, add to this when making new theme
+enum Theme {
+    OUTSIDE = 0,
+    INSIDE = 1,
+    THEME_COUNT = 2
+};
+
+// Dedicating 2 bits for each type of wall
+enum WallType {
+    OPEN = 0,
+    DOOR = 1,
+    WALL = 2
+};
 
 // Dedicating bits for NESW to combine into a mask
 enum DoorDirection { 
@@ -45,7 +61,16 @@ public:
     void GenerateGrid(int width, int height, glm::ivec2 start, glm::ivec2 goal, uint8_t startDoorwayMask);
 
     // Should place the entities into the Scene, need scene for instantiate prefab
-    void InstantiateLevel(class Scene* scene);
+    void InstantiateLevel(class Scene* scene, LevelFloor& floor);
+
+    // Does all the handywork to create a single floor clearly from all assets in a folder
+    LevelFloor LevelGeneration::CreateFullLevel(Scene* scene, const std::string& folder);
+
+    void GenerateNextFloor(Scene* scene);
+    void CleanupOldFloors(Scene* scene);
+
+    std::vector<LevelFloor> activeFloors;
+    int currentFloor;
 
 private:
     int gridWidth;
