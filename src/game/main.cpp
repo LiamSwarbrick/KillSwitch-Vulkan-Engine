@@ -816,7 +816,7 @@ int main(int argc, char *argv[])
                 SDL_Log("Raycast hit entity %u at point (%f, %f, %f)", hit.entity, hit.point.x, hit.point.y, hit.point.z);
 
                 ECS& ecs = scene.GetECS();
-                if (ecs.Has<C_Faction>(hit.entity) && ecs.GetComponent<C_Faction>(hit.entity).type == C_Faction::Zombie)
+                if (ecs.Has<C_Faction>(hit.entity) && ecs.GetComponent<C_Faction>(hit.entity).type == FactionType::Zombie)
                 {
                     PlayGameplaySFXAt(&audio_system, gameplay_audio.weapon_hit_flesh, 0.58f, hit.point, 1.0f, 35.0f);
                 }
