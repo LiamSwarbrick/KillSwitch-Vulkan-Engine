@@ -2,6 +2,7 @@
 #include "core/input.h"
 #include "foundations/scene.h"
 #include "game/foundations/components.h"
+#include "ingame_cam.h"
 #include "renderer/renderer.h"
 #include "renderer/debug_ui_api.h"
 
@@ -704,6 +705,67 @@ static void DrawControlsDetailPanel()
     }
 }
 
+static float GetOptionsGameplayFovValue()
+{
+    const InGameCamSnapshot snapshot = InGameCam_GetSnapshot();
+    if (!snapshot.valid)
+        return TPCamState{}.fov_deg;
+
+    const float fp_fov = snapshot.fp_state.fov_deg;
+    const float tp_fov = snapshot.tp_state.fov_deg;
+    return (InGameCam_GetGameplayMode() == InGameCamGameplayMode::FPCam) ? fp_fov : tp_fov;
+}
+
+static void ApplyOptionsGameplayFovValue(float fov_value)
+{
+    DebugUICameraEdits edits = {};
+    const InGameCamSnapshot snapshot = InGameCam_GetSnapshot();
+
+    edits.apply_fp_state = true;
+    edits.fp_state = snapshot.valid ? snapshot.fp_state : FPCamState{};
+    edits.fp_state.fov_deg = fov_value;
+    edits.fp_state.fov_initialized = true;
+
+    edits.apply_tp_state = true;
+    edits.tp_state = snapshot.valid ? snapshot.tp_state : TPCamState{};
+    edits.tp_state.fov_deg = fov_value;
+    edits.tp_state.fov_initialized = true;
+
+    InGameCam_ApplyDebugEdits(edits);
+}
+
+static void DrawGameDetailPanel()
+{
+    ImGui::PushFont(GameUI_GetFont(GameFont::Body), 18.0f);
+    ImGui::PushStyleColor(ImGuiCol_FrameBg,           ImVec4(0.0f, 0.0f, 0.0f, 1.0f));
+    ImGui::PushStyleColor(ImGuiCol_FrameBgHovered,    ImVec4(1.0f, 1.0f, 1.0f, 0.08f));
+    ImGui::PushStyleColor(ImGuiCol_FrameBgActive,     ImVec4(1.0f, 1.0f, 1.0f, 0.12f));
+    ImGui::PushStyleColor(ImGuiCol_SliderGrab,        ImVec4(1.0f, 1.0f, 1.0f, 0.78f));
+    ImGui::PushStyleColor(ImGuiCol_SliderGrabActive,  ImVec4(1.0f, 1.0f, 1.0f, 1.0f));
+    ImGui::PushStyleColor(ImGuiCol_Border,            ImVec4(1.0f, 1.0f, 1.0f, 0.18f));
+    ImGui::PushStyleColor(ImGuiCol_Text,              ImVec4(1.0f, 1.0f, 1.0f, 1.0f));
+    ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 1.0f);
+    ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding,   0.0f);
+    ImGui::PushStyleVar(ImGuiStyleVar_GrabRounding,    0.0f);
+
+    float look_sensitivity = InGameCam_GetLookSensitivity();
+    ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x * 0.6f);
+    if (ImGui::SliderFloat("Look Sensitivity", &look_sensitivity, 0.0f, 3.00f, "%.2fx"))
+        InGameCam_SetLookSensitivity(look_sensitivity);
+
+    ImGui::Spacing();
+
+    float gameplay_fov = GetOptionsGameplayFovValue();
+    ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x * 0.6f);
+    if (ImGui::SliderFloat("FOV", &gameplay_fov, 2000.0f, 4000.0f, "%.1f"))
+        ApplyOptionsGameplayFovValue(gameplay_fov);
+
+    ImGui::PopStyleVar(3);
+    ImGui::PopStyleColor(7);
+
+    ImGui::PopFont();
+}
+
 static void OpenOptionsPanel(GameState return_state)
 {
     s_options_panel.active = true;
@@ -1052,6 +1114,10 @@ static void DrawOptionsPanel()
     if (s_options_panel.selected_section == OptionsPanelSection::Controls)
     {
         DrawControlsDetailPanel();
+    }
+    else if (s_options_panel.selected_section == OptionsPanelSection::Game)
+    {
+        DrawGameDetailPanel();
     }
     else
     {
