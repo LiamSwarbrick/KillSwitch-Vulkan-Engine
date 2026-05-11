@@ -20,6 +20,7 @@ public:
 
 	void Update(float dt) const override;
 private:
+	void PrepareMelee(const C_CombatInput& combatInput, const C_CombatMeleeStats& meleeStats, C_CombatInfo& combatInfo) const;
 	void ProcessMelee(EntityID ourID, RigidBodyHandle bodyHandle, const glm::vec3& position, const glm::vec3& lookDir, const C_CombatInput& combatInput, C_CombatInfo& combatInfo, const C_CombatMeleeStats& meleeStats, FactionType damageMask) const;
 	void ProcessRanged(RigidBodyHandle bodyHandle, const glm::vec3& position, const glm::vec3& aimDir, C_CombatInfo& combatInfo, C_WeaponRanged& weapon, FactionType damageMask) const;
 

@@ -22,67 +22,78 @@ void CombatSystem::Update(float dt) const
             if (combatInfo.attackTimer >= 0.0f)
             {
                 combatInfo.attackTimer -= dt;
-                combatInfo.bufferTimer -= dt;
-                combatInfo.windowTimer -= dt;
             }
+            // If we have an attack timer, we might have an attackDelayTimer
+            if (combatInfo.attackDelayTimer >= 0.0f)
+            {
+                combatInfo.attackDelayTimer -= dt;
+            }
+            // Staggered should probably not be part of this
             if (combatInfo.staggeredTimer >= 0.0f)
             {
                 combatInfo.staggeredTimer -= dt;
             }
             
-
-            if (combatInfo.attackTimer < 0.0f)
+            // Adding attackDelayTimer just in case an attack delay is bigger than animation time
+            if (combatInfo.attackTimer < 0.0f && combatInfo.attackDelayTimer < 0.0f)
             {
                 combatInfo.isFiring = false;
                 combatInfo.isAttacking = false;
+                combatInfo.hasAttacked = false;
+
+                if (combatInfo.windowTimer >= 0.0f)
+                {
+                    combatInfo.windowTimer -= dt;
+                }
             }
             if (combatInfo.staggeredTimer < 0.0f)
             {
                 combatInfo.isStaggered = false;
             }
 
+
+            // true when we get the first attack input. lower the delayTimer, once <0.0f then process the melee
+            bool shouldPrepareMelee = false; 
             bool shouldProcessMelee = false;
             bool shouldProcessRanged = false;
 
+            if (combatInfo.isAttacking && combatInfo.attackDelayTimer < 0.0f && !combatInfo.hasAttacked)
+            {
+                shouldProcessMelee = true; // processMelee will have max priority
+            }
+
             // For firing we don't have buffered input, do NOT check
             // Check if we want ranged AND if we're able to shoot ranged (weapon socket)
-            if (combatInfo.attackTimer < 0.0f && combatInput.wantsRanged && ecs->Has<C_WeaponSocket>(entity))
+            if (combatInfo.attackTimer < 0.0f)
             {
-                // Check if we have a weapon, then determine if we should process ranged attack
-                auto& socket = ecs->GetComponent<C_WeaponSocket>(entity);
-                // IF we have a weapon AND its equipped
-                shouldProcessRanged = (socket.weapon_entity != NULL_ENTITY && ecs->IsEntityValid(socket.weapon_entity))
-                    && socket.equipped;
-
-                // If we should process ranged, we should check if we have bullets, and default to melee instead
-                if (shouldProcessRanged)
+                if (combatInput.wantsRanged && ecs->Has<C_WeaponSocket>(entity))
                 {
-                    // Check the currently equipped weapon
-                    auto& weapon = ecs->GetComponent<C_WeaponRanged>(socket.weapon_entity);
-                    if (weapon.currentBullets <= 0)
+                    // Check if we have a weapon, then determine if we should process ranged attack
+                    auto& socket = ecs->GetComponent<C_WeaponSocket>(entity);
+                    // IF we have a weapon AND its equipped
+                    shouldProcessRanged = (socket.weapon_entity != NULL_ENTITY && ecs->IsEntityValid(socket.weapon_entity))
+                        && socket.equipped;
+
+                    // If we should process ranged, we should check if we have bullets, and default to melee instead
+                    if (shouldProcessRanged)
                     {
-                        // Process ranged to false so we process melee
-                        shouldProcessRanged = false;
+                        // Check the currently equipped weapon
+                        auto& weapon = ecs->GetComponent<C_WeaponRanged>(socket.weapon_entity);
+                        if (weapon.currentBullets <= 0)
+                        {
+                            // Process ranged to false so we process melee
+                            shouldProcessRanged = false;
+                        }
                     }
                 }
-            }
-            
-            if (combatInput.wantsMelee && !shouldProcessRanged)
-            {
-                // Check if we should process melee check the timers and buffers
-                // If we are above the attackTimer
-                if (combatInfo.attackTimer > 0.0f)
+                
+                if (combatInput.wantsMelee && !shouldProcessRanged)
                 {
-                    // TODO: implement buffering damn
-                    combatInfo.inputBuffered = true;
-                }
-                else
-                {
-                    shouldProcessMelee = true;
+                    shouldPrepareMelee = true;
                 }
             }
 
-            if (shouldProcessMelee || shouldProcessRanged)
+            if (shouldProcessMelee)
             {
                 glm::vec3 scale;
                 glm::quat rotation;
@@ -91,38 +102,50 @@ void CombatSystem::Update(float dt) const
                 glm::vec4 perspective;
                 glm::decompose(transform.matrix, scale, rotation, position, skew, perspective);
 
-                if (shouldProcessRanged)
-                {
-                    auto& socket = ecs->GetComponent<C_WeaponSocket>(entity);
-                    C_WeaponRanged& weapon = ecs->GetComponent<C_WeaponRanged>(socket.weapon_entity);
-                    ProcessRanged(bodyHandle.handle, position, combatInput.aimDir, combatInfo, weapon, C_Faction::FactionDamageMask(faction.type));
-                }
-                else if (shouldProcessMelee)
-                {
-                    glm::vec3 lookDir = Math::QuatToViewDir(rotation);
-                    ProcessMelee(entity, bodyHandle.handle, position, lookDir, combatInput, combatInfo, meleeStats, C_Faction::FactionDamageMask(faction.type));
-                }
+                glm::vec3 lookDir = Math::QuatToViewDir(rotation);
+
+                ProcessMelee(entity, bodyHandle.handle, position, lookDir, combatInput, combatInfo, meleeStats, C_Faction::FactionDamageMask(faction.type));
             }
+            else if (shouldProcessRanged)
+            {
+                glm::vec3 scale;
+                glm::quat rotation;
+                glm::vec3 position;
+                glm::vec3 skew;
+                glm::vec4 perspective;
+                glm::decompose(transform.matrix, scale, rotation, position, skew, perspective);
+
+
+                auto& socket = ecs->GetComponent<C_WeaponSocket>(entity);
+                C_WeaponRanged& weapon = ecs->GetComponent<C_WeaponRanged>(socket.weapon_entity);
+                ProcessRanged(bodyHandle.handle, position, combatInput.aimDir, combatInfo, weapon, C_Faction::FactionDamageMask(faction.type));
+            }
+            else if (shouldPrepareMelee)
+            {
+                // Preparing the melee will set the timers to then process the melee attack
+                PrepareMelee(combatInput, meleeStats, combatInfo);
+            }
+
             
         });
 
         
 }
 
-void CombatSystem::ProcessMelee(EntityID ourID, RigidBodyHandle bodyHandle, const glm::vec3& position, const glm::vec3& lookDir, const C_CombatInput& combatInput, C_CombatInfo& combatInfo, const C_CombatMeleeStats& meleeStats, FactionType damageMask) const
+void CombatSystem::PrepareMelee(const C_CombatInput& combatInput, const C_CombatMeleeStats& meleeStats, C_CombatInfo& combatInfo) const
 {
-    if (combatInfo.activeCombo < 0 /* or == -1 */)
+    // If we do not have a current combo or the window timer has expired (for us to link the next attack)
+    if (combatInfo.activeCombo < 0 || combatInfo.windowTimer < 0.0f)
     {
-        // If we do not have a current combo find a combo
         combatInfo.activeCombo = FindCombo(combatInput, meleeStats, combatInfo);
         combatInfo.currentStep = 0;
     }
     else
     {
-        // Increment the combo step if we have a combo
+        // Increment the combo step if we have a combo and we have attacked in the window time
         combatInfo.currentStep++;
     }
-        
+
 
     if (combatInfo.activeCombo == -1)
     {
@@ -134,17 +157,27 @@ void CombatSystem::ProcessMelee(EntityID ourID, RigidBodyHandle bodyHandle, cons
     const C_CombatMeleeStats::Combo& currentCombo = meleeStats.combos[combatInfo.activeCombo];
     const C_CombatMeleeStats::Attack& currentAttack = currentCombo.attacks[combatInfo.currentStep];
 
+    // SET THE ATTACK TIMERS 
+    combatInfo.isAttacking = true;
+    combatInfo.attackTimer = currentAttack.duration;
+    combatInfo.attackDelayTimer = currentAttack.delay;
+    combatInfo.windowTimer = currentAttack.comboWindow; // Set this now but do NOT decrement until we're done with the currentAttackTimer
+}
+
+void CombatSystem::ProcessMelee(EntityID ourID, RigidBodyHandle bodyHandle, const glm::vec3& position, const glm::vec3& lookDir, const C_CombatInput& combatInput, C_CombatInfo& combatInfo, const C_CombatMeleeStats& meleeStats, FactionType damageMask) const
+{
+    // Set hasAttacked so we don't attack again on the current attack.
+    combatInfo.hasAttacked = true;
+
+    // Prepare attack so it comes in handy 
+    const C_CombatMeleeStats::Combo& currentCombo = meleeStats.combos[combatInfo.activeCombo];
+    const C_CombatMeleeStats::Attack& currentAttack = currentCombo.attacks[combatInfo.currentStep];
+
     // Before doing anything else, reset the combo if we are on the last step (not the current one but the future one)
     if (combatInfo.currentStep == currentCombo.attacks.size() - 1)
     {
         combatInfo.activeCombo = -1;
     }
-
-    // SET THE ATTACK TIMERS 
-    combatInfo.isAttacking = true;
-    combatInfo.attackTimer = currentAttack.duration;
-    combatInfo.windowTimer = currentAttack.comboWindow;
-    combatInfo.bufferTimer = currentAttack.bufferWindow; // Not using buffered input for now cause no time
 
     // Get the shape of the current attacking entity to determine minimum attack range based on radius
     Shape* ourShape = physics->getShape(bodyHandle);

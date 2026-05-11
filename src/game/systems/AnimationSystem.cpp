@@ -16,8 +16,8 @@ void AnimationSystem::Update(float dt) const
 
 void AnimationSystem::UpdatePlayer(float dt) const
 {
-    auto view = ecs->GetView<C_Transform, C_PlayerInfo, C_MovementInput, C_MovementInfo, C_CombatInput, C_AnimatedMesh>();
-    view.ForEach([&](EntityID entity, C_Transform& transform, C_PlayerInfo& playerInfo, C_MovementInput& moveInput, C_MovementInfo& moveInfo, C_CombatInput& combatInput, C_AnimatedMesh& animatedMesh)
+    auto view = ecs->GetView<C_Transform, C_MovementInput, C_MovementInfo, C_CombatInput, C_CombatInfo, C_AnimatedMesh>();
+    view.ForEach([&](EntityID entity, C_Transform& transform, C_MovementInput& moveInput, C_MovementInfo& moveInfo, C_CombatInput& combatInput, C_CombatInfo& combatInfo, C_AnimatedMesh& animatedMesh)
     {
         animatedMesh.playbackSpeed = 1.0f;
         bool hasWeapon = false;
@@ -118,8 +118,11 @@ void AnimationSystem::UpdatePlayer(float dt) const
 
         std::string reloadAnimName = "reload";
         int reloadAnimId = GetAnimationIdFromName(animatedMesh, reloadAnimName.c_str());
+        std::string meleeAnimName = "melee";
+        int meleeAnimId = GetAnimationIdFromName(animatedMesh, meleeAnimName.c_str());
 
-        if (playerInfo.isReloading)
+        // upperbody animations
+        if (combatInfo.isReloading)
         {
             if (animatedMesh.upperBodyLayer.currentAnimation != reloadAnimId || !animatedMesh.isUpperLayerActive)
             {
@@ -127,13 +130,25 @@ void AnimationSystem::UpdatePlayer(float dt) const
                 SetLooping(animatedMesh, animatedMesh.upperBodyLayer, false);
             }
         }
+        else if (combatInfo.isAttacking)
+        {
+            if (animatedMesh.upperBodyLayer.currentAnimation != meleeAnimId ||
+                !animatedMesh.isUpperLayerActive)
+            {
+                PlayUpperBodyAnim(animatedMesh, meleeAnimName.c_str(), 0.1f);
+                SetLooping(animatedMesh, animatedMesh.upperBodyLayer, false);
+            }
+        }
         else
         {
-            if (animatedMesh.isUpperLayerActive && animatedMesh.upperBodyLayer.currentAnimation == reloadAnimId)
+            // Make sure we stop blending if either animation was previously playing
+            if (animatedMesh.isUpperLayerActive && (animatedMesh.upperBodyLayer.currentAnimation == reloadAnimId || animatedMesh.upperBodyLayer.currentAnimation == meleeAnimId))
             {
                 StopUpperBodyAnim(animatedMesh, 0.2f);
             }
         }
+
+
         if (moveInfo.isJumping || !moveInfo.isGrounded)
         {
             std::string animName = std::string(prefix) + "jump";
