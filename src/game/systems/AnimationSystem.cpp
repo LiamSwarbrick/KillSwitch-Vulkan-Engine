@@ -116,7 +116,27 @@ void AnimationSystem::UpdatePlayer(float dt) const
 
         const char* prefix = hasWeapon ? "pistol" : "";
 
-        if (moveInfo.isJumping)
+        std::string reloadAnimName = "reload";
+        int reloadAnimId = GetAnimationIdFromName(animatedMesh, reloadAnimName.c_str());
+
+        if (moveInfo.isReloading && reloadAnimId != -1)
+        {
+            SDL_Log("curururu");
+            if (animatedMesh.upperBodyLayer.currentAnimation != reloadAnimId)
+            {
+                SDL_Log("curururu");
+                PlayUpperBodyAnim(animatedMesh, reloadAnimName.c_str(), 0.2f);
+                SetLooping(animatedMesh, animatedMesh.upperBodyLayer, false);
+            }
+        }
+        else
+        {
+            if (animatedMesh.isUpperLayerActive && animatedMesh.upperBodyLayer.currentAnimation == reloadAnimId)
+            {
+                StopUpperBodyAnim(animatedMesh, 0.2f);
+            }
+        }
+        if (moveInfo.isJumping || !moveInfo.isGrounded)
         {
             std::string animName = std::string(prefix) + "jump";
 
@@ -129,12 +149,6 @@ void AnimationSystem::UpdatePlayer(float dt) const
             }
 
             animatedMesh.playbackSpeed = 0.6f;
-
-            float dur = GetAnimationDuration(animatedMesh, jumpAnimId);
-            if (animatedMesh.lowerBodyLayer.currentAnimationTime >= dur)
-            {
-                animatedMesh.lowerBodyLayer.currentAnimationTime = dur;
-            }
         }
         else if (moveInfo.isMoving)
         {
@@ -147,9 +161,15 @@ void AnimationSystem::UpdatePlayer(float dt) const
                 else if (dirInput.isMovingBackward)
                     animName = "pistolwalkbackwards";
                 else if (dirInput.isMovingLeft)
+                {
                     animName = "pistolstrafeleft";
+                    animatedMesh.playbackSpeed = 0.75f;
+                }
                 else if (dirInput.isMovingRight)
+                {
                     animName = "pistolstraferight";
+                    animatedMesh.playbackSpeed = 0.75f;
+                }
                 else
                     animName = "pistolwalk";
             }
