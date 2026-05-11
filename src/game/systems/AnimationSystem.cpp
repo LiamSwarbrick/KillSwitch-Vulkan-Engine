@@ -16,8 +16,8 @@ void AnimationSystem::Update(float dt) const
 
 void AnimationSystem::UpdatePlayer(float dt) const
 {
-    auto view = ecs->GetView<C_Transform, C_MovementInput, C_MovementInfo, C_CombatInput, C_AnimatedMesh>();
-    view.ForEach([&](EntityID entity, C_Transform& transform, C_MovementInput& moveInput, C_MovementInfo& moveInfo, C_CombatInput& combatInput, C_AnimatedMesh& animatedMesh)
+    auto view = ecs->GetView<C_Transform, C_PlayerInfo, C_MovementInput, C_MovementInfo, C_CombatInput, C_AnimatedMesh>();
+    view.ForEach([&](EntityID entity, C_Transform& transform, C_PlayerInfo& playerInfo, C_MovementInput& moveInput, C_MovementInfo& moveInfo, C_CombatInput& combatInput, C_AnimatedMesh& animatedMesh)
     {
         animatedMesh.playbackSpeed = 1.0f;
         bool hasWeapon = false;
@@ -119,12 +119,10 @@ void AnimationSystem::UpdatePlayer(float dt) const
         std::string reloadAnimName = "reload";
         int reloadAnimId = GetAnimationIdFromName(animatedMesh, reloadAnimName.c_str());
 
-        if (moveInfo.isReloading && reloadAnimId != -1)
+        if (playerInfo.isReloading)
         {
-            SDL_Log("curururu");
-            if (animatedMesh.upperBodyLayer.currentAnimation != reloadAnimId)
+            if (animatedMesh.upperBodyLayer.currentAnimation != reloadAnimId || !animatedMesh.isUpperLayerActive)
             {
-                SDL_Log("curururu");
                 PlayUpperBodyAnim(animatedMesh, reloadAnimName.c_str(), 0.2f);
                 SetLooping(animatedMesh, animatedMesh.upperBodyLayer, false);
             }

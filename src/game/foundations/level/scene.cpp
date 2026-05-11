@@ -341,7 +341,7 @@ EntityID Scene::InstantiatePrefab(Asset* prefab, glm::vec3 spawnPosition, glm::q
                     C_AnimatedMesh animMesh{ mesh, prefab };
                     animMesh.joint_count = joint_count;
                     animMesh.idleAnimationName = "idle";
-                    animMesh.splitJointName = "SPINE";
+                    animMesh.splitJointName = "mixamorig:Spine";
                     OnStartAnim(animMesh, animMesh.idleAnimationName); // Start with idle animation by default
 
                     if (joint_count > 0)
