@@ -15,6 +15,7 @@
 
 #include "SDL3/SDL.h"
 #include "SDL3/SDL_main.h"
+#include "foundations/level/LevelGeneration.h"
 
 struct GameplayAudioClips
 {
@@ -646,7 +647,7 @@ int main(int argc, char *argv[])
     Scene scene{};
     scene.StartUp();
 
-     Asset* room_prefab = scene.LoadPrefab("assets/levels/testroom_new.gltf");
+    //Asset* room_prefab = scene.LoadPrefab("assets/testing_gen/3DInGreen.gltf");
     //Asset* room_prefab = scene.LoadPrefab("assets/levels/testroom-liamrandomtest-Untitled.gltf");
      Asset* many_prefab = scene.LoadPrefab("assets/levels/manylights.gltf");
     Asset* playground_prefab = scene.LoadPrefab("assets/levels/playground.gltf");
@@ -659,11 +660,32 @@ int main(int argc, char *argv[])
     // TODO: Change the following 2 prefabs so they can be imported (add the boolean "Is ECS Entity" with the new script where it is needed)
     // Asset* catPrefab = scene.LoadPrefab("assets/animations/zomboUntitled.gltf");
     // Asset* catPrefab = scene.LoadPrefab("assets/animations/flatzombo.gltf");
+
+    // scene.InstantiatePrefab(room_prefab, glm::vec3(0, 0, 0), glm::identity<glm::quat>());
+    // scene.InstantiatePrefab(cube_prefab, glm::vec3(0, 5.1, 0), glm::identity<glm::quat>());
+    // scene.InstantiatePrefab(cube_prefab, glm::vec3(3, 4.9, 0), glm::identity<glm::quat>());
+    // scene.InstantiatePrefab(capsule_prefab, glm::vec3(0, 5, 2), glm::identity<glm::quat>());
+    // scene.InstantiatePrefab(sphere_prefab, glm::vec3(4.7, 7, 0.1), glm::identity<glm::quat>());
+    // scene.InstantiatePrefab(sphere_prefab, glm::vec3(-4.7, 7, -0.1), glm::identity<glm::quat>());
+    // scene.InstantiatePrefab(sphere_prefab, glm::vec3(0.1, 7, -4.7), glm::identity<glm::quat>());
+    // scene.InstantiatePrefab(sphere_prefab, glm::vec3(-0.1, 7, 4.7), glm::identity<glm::quat>());
+    // scene.InstantiatePrefab(catPrefab, glm::vec3(0, 0, 0), glm::identity<glm::quat>());
+    // scene.InstantiatePrefab(animationPrefab, glm::vec3(5, 20, 0), glm::identity<glm::quat>());
+    // // render a second cat
+    // EntityID playerEntity = scene.InstantiatePrefab(catPrefab, glm::vec3(10, 0, 10), glm::identity<glm::quat>());
+
+
+    LevelGeneration generator;
+    LevelFloor floor1 = generator.CreateFullLevel(&scene, "assets/testing_gen/");
+    generator.InstantiateLevel(&scene, floor1);
+
+
+
     //Asset* animationPrefab = scene.LoadPrefab("assets/animations/cat.gltf");
     
-    scene.InstantiatePrefab(many_prefab, glm::vec3(0, 0, 0), glm::identity<glm::quat>());
-    scene.InstantiatePrefab(room_prefab, glm::vec3(0.0f, 0.0f, -10.0f), glm::identity<glm::quat>());
-    scene.InstantiatePrefab(playground_prefab, glm::vec3(0, 0, -10.0f), glm::identity<glm::quat>());
+    //scene.InstantiatePrefab(many_prefab, glm::vec3(0, 0, 0), glm::identity<glm::quat>());
+    //scene.InstantiatePrefab(room_prefab, glm::vec3(0.0f, 0.0f, -10.0f), glm::identity<glm::quat>());
+    //scene.InstantiatePrefab(playground_prefab, glm::vec3(0, 0, -10.0f), glm::identity<glm::quat>());
     //scene.InstantiatePrefab(room_prefab, glm::vec3(0.0f, 0.0f, 0.0f), glm::identity<glm::quat>());
     //scene.InstantiatePrefab(playground_prefab, glm::vec3(0, 0, 0.0f), glm::identity<glm::quat>());
     //scene.InstantiatePrefab(playground_prefab, glm::vec3(0, 0, -5.0f), glm::identity<glm::quat>());
