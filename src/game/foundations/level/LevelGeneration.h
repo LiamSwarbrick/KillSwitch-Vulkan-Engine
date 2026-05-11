@@ -87,7 +87,7 @@ public:
     void InstantiateLevel(class Scene* scene, LevelFloor& floor);
 
     // Does all the handywork to create a single floor clearly from all assets in a folder
-    LevelFloor LevelGeneration::CreateFullLevel(Scene* scene, const std::string& folder);
+    LevelFloor CreateFullLevel(Scene* scene, const std::string& folder);
 
     void GenerateNextFloor(Scene* scene);
     void CleanupOldFloors(Scene* scene);
