@@ -160,6 +160,12 @@ void main()
     vec4 emissive_color = sample_texture2d_with_fallback(uv, mat.texture_idx_emissive,  mat.sampler_idx, vec4(mat.emissive_factor, 0.0));
     // base_color = vec4(1.0);
 
+    if (DEBUG_RENDERMODE == DEBUG_RENDERMODE_UNLIT)
+    {
+        out_color = base_color;
+        return;
+    }
+
     if (!IS_CHARACTER)
     {
         float variation = sin(world_pos.x * 0.1) * cos(world_pos.z * 0.1);

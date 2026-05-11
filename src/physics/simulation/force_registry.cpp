@@ -88,3 +88,30 @@ void ForceRegistry::applyAll(std::vector<RigidBody>& bodies, float dt)
 	}
 
 }
+
+void ForceRegistry::applyAll(std::vector<BodySlot>& bodies, float dt)
+{
+	for (BodySlot& slot : bodies)
+	{
+		if (!slot.occupied) continue;
+		RigidBody& body = slot.body;
+		if (body.sleeping || body.isStatic || body.isTrigger || body.isKinematic) continue;
+
+		for (IForceGenerator* gen : globalGenerators)
+		{
+			if (!(body.forceLayers & gen->targetLayers)) continue;
+			gen->apply(body, dt);
+		}
+	}
+
+	for (PairedEntry& entry : pairedGenerators)
+	{
+		RigidBody& body = *entry.body;
+		if (body.sleeping || body.isStatic || body.isTrigger || body.isKinematic) continue;
+		// We skip the check of 
+		// 
+		// , because its a pair
+		entry.generator->apply(body, dt);
+	}
+
+}

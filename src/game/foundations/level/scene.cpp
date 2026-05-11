@@ -16,6 +16,9 @@
 #include "game/systems/MovementSystem.h"
 #include "game/systems/PhysicsSystem.h"
 #include "game/systems/AnimationSystem.h"
+#include "game/systems/CombatSystem.h"
+#include "game/systems/HealthSystem.h"
+#include "game/systems/DespawnSystem.h"
 
 // types from physics
 #include "physics/core/types.h"
@@ -36,7 +39,7 @@ void Scene::StartUp()
     m_ecs.RegisterComponent<C_StaticMesh>();
     m_ecs.RegisterComponent<C_AnimatedMesh>();
     //m_ecs.RegisterComponent<C_PlayerController>();
-    m_ecs.RegisterComponent<C_PlayerInput>();
+    //m_ecs.RegisterComponent<C_PlayerInput>();
     m_ecs.RegisterComponent<C_EnemyAIInfo>();
     m_ecs.RegisterComponent<C_RigidBody>();
     m_ecs.RegisterComponent<C_MovementInput>();
@@ -279,12 +282,18 @@ EntityID Scene::InstantiatePrefab(Asset* prefab, glm::vec3 spawnPosition, glm::q
                 if (components.HasMember("PlayerInput"))
                 {
                     m_ecs.AddComponent<C_PlayerInput>(eID);
+                    m_ecs.AddComponent<C_PlayerInfo>(eID);
+
                     m_ecs.AddComponent<C_WeaponSocket>(eID, {
                         .equipped = false,
                         .attach_bone_name = "hand"
                     });
+
                     m_ecs.AddComponent<C_MovementStats>(eID, C_MovementStats::DefaultPlayerStats());
-                    m_ecs.AddComponent<C_Faction>(eID, { C_Faction::Player });
+                    m_ecs.AddComponent<C_Faction>(eID, { FactionType::Player });
+                    m_ecs.AddComponent<C_CombatMeleeStats>(eID, C_CombatMeleeStats::PlayerDefaultCombatStats());
+                    m_ecs.AddComponent<C_Health>(eID, C_Health::PlayerDefaultHealth());
+
                 }
                 if (components.HasMember("ZombieInput"))
                 {
@@ -292,16 +301,15 @@ EntityID Scene::InstantiatePrefab(Asset* prefab, glm::vec3 spawnPosition, glm::q
                     m_ecs.AddComponent<C_EnemyAIStats>(eID);
                     m_ecs.AddComponent<C_EnemyAIInfo>(eID);
                     m_ecs.AddComponent<C_MovementStats>(eID, C_MovementStats::DefaultZombieStats());
-                    m_ecs.AddComponent<C_Faction>(eID, { C_Faction::Zombie });
+                    m_ecs.AddComponent<C_Faction>(eID, { FactionType::Zombie });
+                    m_ecs.AddComponent<C_CombatMeleeStats>(eID, C_CombatMeleeStats::ZombieDefaultCombatStats());
+                    m_ecs.AddComponent<C_Health>(eID, C_Health::ZombieDefaultHealth());
                 }
 
                 m_ecs.AddComponent<C_MovementInput>(eID);
                 m_ecs.AddComponent<C_MovementInfo>(eID);
                 m_ecs.AddComponent<C_CombatInput>(eID);
-
-                //m_ecs.AddComponent<C_PlayerController>(eID, {
-                //    /*.move_speed = 0.3f*/
-                //});
+                m_ecs.AddComponent<C_CombatInfo>(eID);
             }
 
             if (components.HasMember("WeaponComponent"))
@@ -333,7 +341,7 @@ EntityID Scene::InstantiatePrefab(Asset* prefab, glm::vec3 spawnPosition, glm::q
                     C_AnimatedMesh animMesh{ mesh, prefab };
                     animMesh.joint_count = joint_count;
                     animMesh.idleAnimationName = "idle";
-                    animMesh.splitJointName = "SPINE";
+                    animMesh.splitJointName = "mixamorig:Spine";
                     OnStartAnim(animMesh, animMesh.idleAnimationName); // Start with idle animation by default
 
                     if (joint_count > 0)
@@ -496,6 +504,9 @@ void Scene::InitSystems()
     // Then process the movement based on those inputs
     RegisterSystem<MovementSystem>();
 
+    // Process combat right after
+    RegisterSystem<CombatSystem>();
+
     // Process combat before physics update (so we attack what we see)
     // Maybe do a Player/ZombieCombatSystem, but CombatSystem can process both anyway (like animation has UpdatePlayer(dt);)
     //RegisterSystem<CombatSystem>();
@@ -505,6 +516,9 @@ void Scene::InitSystems()
 
     // Animation System always in the end
     RegisterSystem<AnimationSystem>();
+    
+    RegisterSystem<HealthSystem>();
+    RegisterSystem<DespawnSystem>();
 }
 
 

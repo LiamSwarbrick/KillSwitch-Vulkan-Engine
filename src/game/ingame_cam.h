@@ -25,6 +25,8 @@ void InGameCam_SetGameplayMode(InGameCamGameplayMode mode);
 InGameCamGameplayMode InGameCam_GetGameplayMode();
 void InGameCam_ToggleGameplayMode();
 void InGameCam_ToggleShoulder();
+void InGameCam_SetLookSensitivity(float sensitivity_scale);
+float InGameCam_GetLookSensitivity();
 
 void InGameCam_ApplyDebugEdits(const InGameCamDebugEdits& edits);
 InGameCamSnapshot InGameCam_GetSnapshot();

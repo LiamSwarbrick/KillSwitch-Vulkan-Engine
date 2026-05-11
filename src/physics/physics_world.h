@@ -232,7 +232,9 @@ private:
 
 	// --- POOLS (to refactor ECS to remove namespace and move definitions to .cpp)
 	// Fairly similar to the ECS registry, we will just have a couple sparse sets for shapes (though planes is a little bit overkill)
-	SparseSet<RigidBody> bodies;
+	// Templating it in case we might need to use it on characters too, or any others
+	// Slot<T> and BodySlot are defined in physics/core/types.h
+	std::vector<BodySlot> bodyPool;
 	std::vector<uint32_t> freeBodyIndices;
 
 	SparseSet<PhysicsCharacter> characters;

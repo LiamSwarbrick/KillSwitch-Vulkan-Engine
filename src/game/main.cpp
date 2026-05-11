@@ -16,25 +16,6 @@
 #include "SDL3/SDL.h"
 #include "SDL3/SDL_main.h"
 
-static void ApplyPlaceholderLevelStartSkill(Scene& scene, const LevelStartSkillSelection& selection)
-{
-    ECS& ecs = scene.GetECS();
-    (void)ecs;
-
-    SDL_Log(
-        "GameUI: selected level-start skill [level=%d, slot=%d, id=%s, name=%s]",
-        selection.level_index,
-        selection.selected_index,
-        selection.selected_option.skill_id ? selection.selected_option.skill_id : "<null>",
-        selection.selected_option.display_name ? selection.selected_option.display_name : "<null>");
-
-    // TODO: Apply real gameplay modifications here.
-    // Suggested future integrations:
-    // - mutate gameplay components through scene.GetECS()
-    // - drive presentation through PlayAnim / PlayUpperBodyAnim on animated entities
-    // - store persistent run modifiers in scene-owned gameplay state
-}
-
 struct GameplayAudioClips
 {
     static constexpr int FootstepVariantCount = 3;
@@ -670,7 +651,7 @@ int main(int argc, char *argv[])
      Asset* many_prefab = scene.LoadPrefab("assets/levels/manylights.gltf");
     Asset* playground_prefab = scene.LoadPrefab("assets/levels/playground.gltf");
     //Asset* cube_prefab = scene.LoadPrefab("assets/props/simple_cube.gltf");
-    //Asset* sphere_prefab = scene.LoadPrefab("assets/props/simple_sphere.gltf");
+    Asset* sphere_prefab = scene.LoadPrefab("assets/props/simple_sphere.gltf");
     //Asset* capsule_prefab = scene.LoadPrefab("assets/props/zombie.gltf");
     //Asset* capsule_prefab = scene.LoadPrefab("assets/props/character_capsule.gltf");
     Asset* zombie_woman = scene.LoadPrefab("assets/animations/zombie_woman.gltf");
@@ -683,9 +664,20 @@ int main(int argc, char *argv[])
     scene.InstantiatePrefab(many_prefab, glm::vec3(0, 0, 0), glm::identity<glm::quat>());
     scene.InstantiatePrefab(room_prefab, glm::vec3(0.0f, 0.0f, -10.0f), glm::identity<glm::quat>());
     scene.InstantiatePrefab(playground_prefab, glm::vec3(0, 0, -10.0f), glm::identity<glm::quat>());
+    //scene.InstantiatePrefab(room_prefab, glm::vec3(0.0f, 0.0f, 0.0f), glm::identity<glm::quat>());
+    //scene.InstantiatePrefab(playground_prefab, glm::vec3(0, 0, 0.0f), glm::identity<glm::quat>());
+    //scene.InstantiatePrefab(playground_prefab, glm::vec3(0, 0, -5.0f), glm::identity<glm::quat>());
     // scene.InstantiatePrefab(cube_prefab, glm::vec3(0, 5.1, 0));
-    // scene.InstantiatePrefab(cube_prefab, glm::vec3(3, 4.9, 0));ss
-    
+    // scene.InstantiatePrefab(cube_prefab, glm::vec3(3, 4.9, 0));
+    /*for(int y = 0; y < 3; y++)
+    for (int x = -5; x < 4; x++)
+    {
+        for (int z = -5; z < 4; z++)
+        {
+            scene.InstantiatePrefab(sphere_prefab, glm::vec3(x+0.5f, y+3.0f, z+0.5f));
+            y += 0.5f;
+        }
+    }*/
     EntityID playerID = scene.InstantiatePrefab(player, glm::vec3(0, 0, 0), glm::identity<glm::quat>());
     scene.InstantiatePrefab(zombie_woman, glm::vec3(3, 0.0f, -11.5f), Math::ViewDirToQuat({0.0f ,0.0f, 1.0f}));
     scene.InstantiatePrefab(zombie_woman, glm::vec3(3, 0.0f, -7.5f), Math::ViewDirToQuat({ 0.0f ,0.0f, 1.0f }));
@@ -712,10 +704,8 @@ int main(int argc, char *argv[])
 
     scene.SetPlayer(playerID);
     scene.BuildRendererScene();
-    GameUI_SetLevelStartSkillApplyCallback(&scene, ApplyPlaceholderLevelStartSkill);
+    GameUI_SetLevelStartSkillApplyCallback(&scene, GameUI_ApplyPlaceholderLevelStartSkill);
 
-    // TODO: Debug UI is built around the idea of 1 asset at the moment.
-    //       This must change with the new scene system that can load many asset prefabs.
     DebugUI_SetECS(&scene.GetECS());
     DebugUI_SetAsset(&scene.m_prefabs);
     InGameCam_Init(&scene.GetECS(), &scene.GetPhysicsManager(), playerID);
@@ -764,6 +754,10 @@ int main(int argc, char *argv[])
         }
 
         Input_Update();
+
+        if (GameUI_GetState() == GameState::Playing && Input_IsKeyJustPressed(SDL_SCANCODE_P)) //press p to test getting hit
+            GameUI_DebugDamagePlayer(scene, 4);
+
         GameUI_Update();
 
         GameState current_ui_state = GameUI_GetState();
@@ -836,6 +830,8 @@ int main(int argc, char *argv[])
         {
             PlayGameplaySFX(&audio_system, gameplay_audio.weapon_dry_fire, 0.48f);
         }
+        
+
         // Only capture mouse while playing (release it on pause), keep relative mouse when debug UI toggled.
         const bool right_mouse_down = (SDL_GetMouseState(nullptr, nullptr) & SDL_BUTTON_MASK(SDL_BUTTON_RIGHT)) != 0;
         SDL_SetWindowRelativeMouseMode(window, (gameplay_input_enabled && !DebugUI_IsOpen()) || (DebugUI_IsOpen() && right_mouse_down));
@@ -865,17 +861,31 @@ int main(int argc, char *argv[])
         // Movement always follows camera forward.
         scene.SetMovementCameraForward(InGameCam_GetMovementForward());
 
-        // Game ticks
-        scene.Update(dt);
-        UpdatePlayerMovementAudio(scene, &audio_system, gameplay_audio, dt, gameplay_world_audio_enabled);
-        UpdateZombieAudio(scene, &audio_system, gameplay_audio, dt, gameplay_world_audio_enabled);
+    // Game ticks
+if (current_ui_state == GameState::Playing && !GameUI_IsLevelStartSkillSelectionOpen()) // freeze game when not playing
+{
+    scene.Update(dt);
 
-        // Update in-game camera
-        InGameCam_Update(dt, gameplay_input_enabled, DebugUI_IsOpen(), right_mouse_down, DebugUI_GetCameraMode());
-        // pass camera snapshot to debug UI
-        const InGameCamSnapshot ingame_cam_snapshot = InGameCam_GetSnapshot();
-        DebugUI_SetInGameCameraSnapshot(&ingame_cam_snapshot);
+    UpdatePlayerMovementAudio(scene, &audio_system, gameplay_audio, dt, gameplay_world_audio_enabled);
 
+    UpdateZombieAudio(
+        scene,
+        &audio_system,
+        gameplay_audio,
+        dt,
+        current_ui_state == GameState::Playing
+    );
+
+    // Update in-game camera
+    InGameCam_Update(dt, gameplay_input_enabled, DebugUI_IsOpen(), right_mouse_down, DebugUI_GetCameraMode());
+
+    // pass camera snapshot to debug UI
+    const InGameCamSnapshot ingame_cam_snapshot = InGameCam_GetSnapshot();
+    DebugUI_SetInGameCameraSnapshot(&ingame_cam_snapshot);
+
+    GameUI_UpdatePlayingHUD(scene);
+}
+        
         // update spatial audio with audio position
         glm::vec3 listener_pos = InGameCam_GetGameplayCamera().position;
         glm::vec3 listener_forward = glm::normalize(glm::vec3(

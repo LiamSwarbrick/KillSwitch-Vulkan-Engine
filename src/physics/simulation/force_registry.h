@@ -19,6 +19,7 @@ public:
 	void removeAll(IForceGenerator* gen);
 
 	void applyAll(std::vector<RigidBody>& bodies, float dt);
+	void applyAll(std::vector<BodySlot>& bodies, float dt);
 
 private:
 
