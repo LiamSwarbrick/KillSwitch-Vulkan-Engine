@@ -134,8 +134,13 @@ EntityID Scene::InstantiatePrefab(Asset* prefab, glm::vec3 spawnPosition, glm::q
         glm::quat localRotation = glm::quat(node->rotation[3], node->rotation[0], node->rotation[1], node->rotation[2]);
         glm::mat4 localTransform = glm::translate(glm::mat4(1.0f), localPosition) * glm::mat4_cast(localRotation);
         t.matrix = rootMatrix * localTransform;
-        localPosition += spawnPosition;
-        localRotation = spawnRotation * localRotation;
+        
+        glm::vec3 scale;
+        glm::quat rotation;
+        glm::vec3 translation;
+        glm::vec3 skew;
+        glm::vec4 perspective;
+        glm::decompose(t.matrix, scale, rotation, translation, skew, perspective);
 
         if (node->light_index >= 0)
         {
@@ -226,8 +231,8 @@ EntityID Scene::InstantiatePrefab(Asset* prefab, glm::vec3 spawnPosition, glm::q
 
                 RigidBodyDesc rbDesc;
 
-                rbDesc.position = localPosition; // from the transform
-                rbDesc.orientation = localRotation; // from the transform
+                rbDesc.position = translation; // from the transform
+                rbDesc.orientation = rotation; // from the transform
                 rbDesc.mass = importedRigidbody.mass;
                 rbDesc.gravityScale = importedRigidbody.gravity_scale;
                 rbDesc.damping = importedRigidbody.damping;
