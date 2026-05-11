@@ -31,6 +31,9 @@ struct C_Light
 	float radius;
 	float spot_inner_cone_angle;  // <- Spotlights only
 	float spot_outer_cone_angle;
+	
+	glm::vec3 local_position = glm::vec3(0.0f, 0.0f, 0.0f);
+	glm::vec3 local_forward_dir = glm::vec3(0.0f, 0.0f, -1.0f);  // Only needed when light is a component of another entity
 };
 
 struct C_StaticMesh
