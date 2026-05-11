@@ -647,7 +647,7 @@ int main(int argc, char *argv[])
     Scene scene{};
     scene.StartUp();
 
-     Asset* room_prefab = scene.LoadPrefab("assets/levels/testroom_new.gltf");
+    //Asset* room_prefab = scene.LoadPrefab("assets/testing_gen/3DInGreen.gltf");
     //Asset* room_prefab = scene.LoadPrefab("assets/levels/testroom-liamrandomtest-Untitled.gltf");
      Asset* many_prefab = scene.LoadPrefab("assets/levels/manylights.gltf");
     Asset* playground_prefab = scene.LoadPrefab("assets/levels/playground.gltf");
@@ -676,76 +676,16 @@ int main(int argc, char *argv[])
 
 
     LevelGeneration generator;
-    std::vector<Asset*> roomAssets;
-    roomAssets.push_back(scene.LoadPrefab("assets/levels/4-Door_Room.gltf"));
-    roomAssets.push_back(scene.LoadPrefab("assets/levels/3-Door_Room.gltf"));
-    roomAssets.push_back(scene.LoadPrefab("assets/levels/2-OP-Door_Room.gltf"));
-    roomAssets.push_back(scene.LoadPrefab("assets/levels/2-AD-Door_Room.gltf"));
-    roomAssets.push_back(scene.LoadPrefab("assets/levels/2-Door-Corridor_Room.gltf"));
-    roomAssets.push_back(scene.LoadPrefab("assets/levels/1-Door_Room.gltf"));
-    roomAssets.push_back(scene.LoadPrefab("assets/levels/4_Door_Inside_Room.gltf"));
-    roomAssets.push_back(scene.LoadPrefab("assets/levels/3_Door_Inside_Room.gltf"));
-    roomAssets.push_back(scene.LoadPrefab("assets/levels/2_OP_Door_Inside_Room.gltf"));
-    roomAssets.push_back(scene.LoadPrefab("assets/levels/2_AD_Door_Inside_Room.gltf"));
-    roomAssets.push_back(scene.LoadPrefab("assets/levels/1_Door_Inside_Room.gltf"));
-    roomAssets.push_back(scene.LoadPrefab("assets/levels/Solid_Room.gltf"));
-    roomAssets.push_back(scene.LoadPrefab("assets/levels/4_Open_Room.gltf"));
-    roomAssets.push_back(scene.LoadPrefab("assets/levels/3_Open_1_Wall_Room.gltf"));
-    roomAssets.push_back(scene.LoadPrefab("assets/levels/3_Open_1_Door_Room.gltf"));
-    roomAssets.push_back(scene.LoadPrefab("assets/levels/2_Opp_Open_Right_Door_Room.gltf"));
-    roomAssets.push_back(scene.LoadPrefab("assets/levels/2_Opp_Open_Left_Door_Room.gltf"));
-    roomAssets.push_back(scene.LoadPrefab("assets/levels/2_Opp_Open_2_Wall_Room.gltf"));
-    roomAssets.push_back(scene.LoadPrefab("assets/levels/2_Opp_Open_2_Door_Room.gltf"));
-    roomAssets.push_back(scene.LoadPrefab("assets/levels/2_Open_Right_Door_Room.gltf"));
-    roomAssets.push_back(scene.LoadPrefab("assets/levels/2_Open_Left_Door_Room.gltf"));
-    roomAssets.push_back(scene.LoadPrefab("assets/levels/2_Open_2_Wall_Room.gltf"));
-    roomAssets.push_back(scene.LoadPrefab("assets/levels/2_Open_2_Door_Room.gltf"));
-    roomAssets.push_back(scene.LoadPrefab("assets/levels/1_Open_West_Door_Room.gltf"));
-    roomAssets.push_back(scene.LoadPrefab("assets/levels/1_Open_North_Door_Room.gltf"));
-    roomAssets.push_back(scene.LoadPrefab("assets/levels/1_Open_East_Door_Room.gltf"));
-    roomAssets.push_back(scene.LoadPrefab("assets/levels/1_Open_3_Wall_Room.gltf"));
-    roomAssets.push_back(scene.LoadPrefab("assets/levels/1_Open_3_Door_Room.gltf"));
-    roomAssets.push_back(scene.LoadPrefab("assets/levels/1_Open_2_Door_West_Wall_Room.gltf"));
-    roomAssets.push_back(scene.LoadPrefab("assets/levels/1_Open_2_Door_North_Wall_Room.gltf"));
-    roomAssets.push_back(scene.LoadPrefab("assets/levels/1_Open_2_Door_East_Wall_Room.gltf"));
-    roomAssets.push_back(scene.LoadPrefab("assets/levels/4_Open_Inside_Room.gltf"));
-    roomAssets.push_back(scene.LoadPrefab("assets/levels/3_Open_1_Wall_Inside_Room.gltf"));
-    roomAssets.push_back(scene.LoadPrefab("assets/levels/3_Open_1_Door_Inside_Room.gltf"));
-    roomAssets.push_back(scene.LoadPrefab("assets/levels/2_Opp_Open_Right_Door_Inside_Room.gltf"));
-    roomAssets.push_back(scene.LoadPrefab("assets/levels/2_Opp_Open_Left_Door_Inside_Room.gltf"));
-    roomAssets.push_back(scene.LoadPrefab("assets/levels/2_Opp_Open_2_Wall_Inside_Room.gltf"));
-    roomAssets.push_back(scene.LoadPrefab("assets/levels/2_Opp_Open_2_Door_Inside_Room.gltf"));
-    roomAssets.push_back(scene.LoadPrefab("assets/levels/2_Open_Right_Door_Inside_Room.gltf"));
-    roomAssets.push_back(scene.LoadPrefab("assets/levels/2_Open_Left_Door_Inside_Room.gltf"));
-    roomAssets.push_back(scene.LoadPrefab("assets/levels/2_Open_2_Wall_Inside_Room.gltf"));
-    roomAssets.push_back(scene.LoadPrefab("assets/levels/2_Open_2_Door_Inside_Room.gltf"));
-    roomAssets.push_back(scene.LoadPrefab("assets/levels/1_Open_West_Door_Inside_Room.gltf"));
-    roomAssets.push_back(scene.LoadPrefab("assets/levels/1_Open_North_Door_Inside_Room.gltf"));
-    roomAssets.push_back(scene.LoadPrefab("assets/levels/1_Open_East_Door_Inside_Room.gltf"));
-    roomAssets.push_back(scene.LoadPrefab("assets/levels/1_Open_3_Wall_Inside_Room.gltf"));
-    roomAssets.push_back(scene.LoadPrefab("assets/levels/1_Open_3_Door_Inside_Room.gltf"));
-    roomAssets.push_back(scene.LoadPrefab("assets/levels/1_Open_2_Door_West_Wall_Inside_Room.gltf"));
-    roomAssets.push_back(scene.LoadPrefab("assets/levels/1_Open_2_Door_North_Wall_Inside_Room.gltf"));
-    roomAssets.push_back(scene.LoadPrefab("assets/levels/1_Open_2_Door_East_Wall_Inside_Room.gltf"));
-    generator.BuildPalette(roomAssets);
-    LevelFloor floor1 = generator.GenerateGrid(7, 7, 
-        glm::ivec2({ 3,0 }), ((DOOR << NORTH) + (DOOR << EAST) + (DOOR << SOUTH) + (DOOR << WEST)), OUTSIDE, 
-        glm::ivec2({ 3,6 }), ((DOOR << NORTH) + (DOOR << EAST) + (DOOR << SOUTH) + (DOOR << WEST)), INSIDE, 
-            25, 1);
-    generator.currentFloor = 1;
-    floor1.worldOffset = { 0.0f, 0.0f, 0.0f };
+    LevelFloor floor1 = generator.CreateFullLevel(&scene, "assets/testing_gen/");
     generator.InstantiateLevel(&scene, floor1);
-    generator.activeFloors.push_back(floor1);
-    generator.GenerateNextFloor(&scene);
-    generator.GenerateNextFloor(&scene);
-    generator.GenerateNextFloor(&scene);
+
 
 
     //Asset* animationPrefab = scene.LoadPrefab("assets/animations/cat.gltf");
     
-    scene.InstantiatePrefab(many_prefab, glm::vec3(0, 0, 0), glm::identity<glm::quat>());
-    scene.InstantiatePrefab(room_prefab, glm::vec3(0.0f, 0.0f, -10.0f), glm::identity<glm::quat>());
-    scene.InstantiatePrefab(playground_prefab, glm::vec3(0, 0, -10.0f), glm::identity<glm::quat>());
+    //scene.InstantiatePrefab(many_prefab, glm::vec3(0, 0, 0), glm::identity<glm::quat>());
+    //scene.InstantiatePrefab(room_prefab, glm::vec3(0.0f, 0.0f, -10.0f), glm::identity<glm::quat>());
+    //scene.InstantiatePrefab(playground_prefab, glm::vec3(0, 0, -10.0f), glm::identity<glm::quat>());
     //scene.InstantiatePrefab(room_prefab, glm::vec3(0.0f, 0.0f, 0.0f), glm::identity<glm::quat>());
     //scene.InstantiatePrefab(playground_prefab, glm::vec3(0, 0, 0.0f), glm::identity<glm::quat>());
     //scene.InstantiatePrefab(playground_prefab, glm::vec3(0, 0, -5.0f), glm::identity<glm::quat>());

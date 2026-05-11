@@ -5,6 +5,7 @@
 #include "core/ecs.h"
 #include <map>
 #include <random>
+#include <filesystem>
 
 // Enum of room themes, add to this when making new theme
 enum Theme {
@@ -84,6 +85,9 @@ public:
 
     // Should place the entities into the Scene, need scene for instantiate prefab
     void InstantiateLevel(class Scene* scene, LevelFloor& floor);
+
+    // Does all the handywork to create a single floor clearly from all assets in a folder
+    LevelFloor LevelGeneration::CreateFullLevel(Scene* scene, const std::string& folder);
 
     void GenerateNextFloor(Scene* scene);
     void CleanupOldFloors(Scene* scene);

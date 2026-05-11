@@ -466,7 +466,7 @@ LevelFloor LevelGeneration::GenerateGrid(int width, int height, glm::ivec2 start
 			std::uniform_int_distribution<int> theme(0, THEME_COUNT - 1);
 			Theme randomTheme = (Theme)(theme(rng));
 			for (int i = 0; i < floor.palette.size(); ++i)
-				if (floor.palette[i].doorwayMask == ((DOOR << NORTH) + (DOOR << EAST) + (DOOR << SOUTH) + (DOOR << WEST)) && floor.palette[i].theme == randomTheme)
+				if (floor.palette[i].doorwayMask == ((DOOR << NORTH) + (DOOR << EAST) + (DOOR << SOUTH) + (DOOR << WEST)) && floor.palette[i].theme == INSIDE)
 					roomChoice = i;
 
 			SDL_assert(roomChoice != -1);
@@ -728,6 +728,40 @@ void LevelGeneration::SetWallType(uint16_t& mask, DoorDirection direction, WallT
 	// Clear the correct bits, then assign the new wall type to them
 	mask &= ~(0x03 << direction);
 	mask |= wallType << direction;
+}
+
+// Just builds the palette from files in the folder and generates a full level
+LevelFloor LevelGeneration::CreateFullLevel(Scene* scene, const std::string& folder)
+{
+	std::vector<Asset*> roomAssets;
+
+	if (std::filesystem::exists(folder) && std::filesystem::is_directory(folder)) {
+		for (const auto& file : std::filesystem::directory_iterator(folder)) {
+			std::string path = file.path().string();
+			std::string extension = file.path().extension().string();
+
+			if (extension == ".gltf") {
+				Asset* a = scene->LoadPrefab(path.c_str());
+				if (a) {
+					roomAssets.push_back(a);
+				}
+			}
+		}
+	}
+	else {
+		SDL_Log("ERROR: Folder path %s not found!", folder.c_str());
+	}
+
+	BuildPalette(roomAssets);
+
+	LevelFloor floor = GenerateGrid(7, 7,
+		glm::ivec2({ 0,0 }), ((DOOR << NORTH) + (DOOR << EAST) + (WALL << SOUTH) + (WALL << WEST)), INSIDE,
+		glm::ivec2({ 0,6 }), ((WALL << NORTH) + (DOOR << EAST) + (DOOR << SOUTH) + (WALL << WEST)), INSIDE,
+		25, 1);
+
+	floor.worldOffset = { 0.0f, 0.0f, 0.0f };
+
+	return floor;
 }
 
 void LevelGeneration::GenerateNextFloor(Scene* scene)
