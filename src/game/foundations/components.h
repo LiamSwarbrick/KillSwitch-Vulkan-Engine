@@ -290,6 +290,22 @@ struct C_Equipment
 //	float currentDurabiliy = 0.0f;
 //};
 
+
+// .color = glm::vec3(1.0f, 0.852f, 0.409f),
+	// .color = glm::vec3(0.373f, 0.494f, 1.0f),
+	// .color = glm::vec3(0.274f, 0.412f, 1.0f),
+	// .color = glm::vec3(0.05f, 0.05f, 0.25f),
+#define FLASHLIGHT_C_LIGHT { \
+	.type = LIGHT_COMPONENT_SPOTLIGHT, \
+	.color = glm::vec3(0.05f, 0.05f, 0.25f), \
+	.intensity = 90.0f, \
+	.radius = 12.0f, \
+	.spot_inner_cone_angle = 0.317872f, \
+	.spot_outer_cone_angle = 0.4f, \
+	.local_position = glm::vec3(0.0f, 0.0f, -0.2f), \
+	.local_forward_dir = glm::vec3(0.0f, 0.0f, 1.0f) \
+}
+
 struct C_WeaponRanged
 {
 	enum Type
