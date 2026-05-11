@@ -93,7 +93,20 @@ void CombatSystem::Update(float dt) const
                 }
             }
 
-            if (shouldProcessRanged)
+            if (shouldProcessMelee)
+            {
+                glm::vec3 scale;
+                glm::quat rotation;
+                glm::vec3 position;
+                glm::vec3 skew;
+                glm::vec4 perspective;
+                glm::decompose(transform.matrix, scale, rotation, position, skew, perspective);
+
+                glm::vec3 lookDir = Math::QuatToViewDir(rotation);
+
+                ProcessMelee(entity, bodyHandle.handle, position, lookDir, combatInput, combatInfo, meleeStats, C_Faction::FactionDamageMask(faction.type));
+            }
+            else if (shouldProcessRanged)
             {
                 glm::vec3 scale;
                 glm::quat rotation;
@@ -113,19 +126,6 @@ void CombatSystem::Update(float dt) const
                 PrepareMelee(combatInput, meleeStats, combatInfo);
             }
 
-            if (shouldProcessMelee)
-            {
-                glm::vec3 scale;
-                glm::quat rotation;
-                glm::vec3 position;
-                glm::vec3 skew;
-                glm::vec4 perspective;
-                glm::decompose(transform.matrix, scale, rotation, position, skew, perspective);
-
-                glm::vec3 lookDir = Math::QuatToViewDir(rotation);
-
-                ProcessMelee(entity, bodyHandle.handle, position, lookDir, combatInput, combatInfo, meleeStats, C_Faction::FactionDamageMask(faction.type));
-            }
             
         });
 

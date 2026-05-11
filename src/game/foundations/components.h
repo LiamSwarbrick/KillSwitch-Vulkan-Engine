@@ -496,22 +496,16 @@ struct C_CombatInfo
 	float windowTimer = 0.0f; // time left to chain the next hit
 	bool inputBuffered = false; // next attack was pressed during buffer
 
+	bool isDead = false;
 	bool isAttacking = false;
-
-	float attackDelayTimer = 0.0f;
-	bool hasAttacked = false; // For the delay
-
-	// For ranged (attackTimer will be firingTimer)
 	bool isFiring = false;
-
+	bool isReloading = false;
 	bool isStaggered = false;
 	float staggeredTimer = 0.0f;
 
-	bool isDead = false;
-
-	// For melee & ranged
-	// Attack timer will serves as the shoot cooldown and as the attack cooldown
-	float attackTimer = 0.0f; // how far into the current attack animation (for melee) (and could be for ranged too)
+	float attackTimer = 0.0f; // how far into the current attack animation (for melee) (and could be for ranged too
+	float attackDelayTimer = 0.0f;
+	bool hasAttacked = false; // To only attack once after the delay is done
 
 };
 
