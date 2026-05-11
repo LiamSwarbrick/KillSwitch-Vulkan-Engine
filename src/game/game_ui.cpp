@@ -1362,7 +1362,7 @@ static void DrawMainMenu()
 
     // Full-screen black background
     ImDrawList* dl = ImGui::GetBackgroundDrawList();
-    dl->AddRectFilled(ImVec2(0, 0), ImVec2(sw, sh), IM_COL32(0, 0, 0, 255));
+    dl->AddRectFilled(ImVec2(0, 0), ImVec2(sw, sh), IM_COL32(0, 0, 0, 180));
 
     float title_y_center = sh * 0.36f;
     float title_y_top = sh * 0.22f;
@@ -1457,7 +1457,7 @@ static void DrawGameOverMenu()
         menu_alpha = 1.0f;
 
     ImDrawList* dl = ImGui::GetBackgroundDrawList();
-    dl->AddRectFilled(ImVec2(0, 0), ImVec2(sw, sh), IM_COL32(0, 0, 0, 180));
+    dl->AddRectFilled(ImVec2(0, 0), ImVec2(sw, sh), IM_COL32(0, 0, 0, 255));
 
     ImGui::SetNextWindowPos(ImVec2(sw * 0.5f, sh * 0.28f), ImGuiCond_Always, ImVec2(0.5f, 0.5f));
     ImGui::SetNextWindowSize(ImVec2(0, 0));
