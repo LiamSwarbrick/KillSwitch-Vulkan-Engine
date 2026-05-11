@@ -198,6 +198,10 @@ void PlayerInputSystem::Update(float dt) const
             }
             if (playerInfo.reloadTimer < 0.0f)
             {
+                // RELOAD THE WEAPON 
+                weapon->currentBullets = weapon->reloadableBullets;
+                weapon->reloadableBullets = 0;
+
                 // Change to aiming if we're aiming
                 if (input.aim)
                 {

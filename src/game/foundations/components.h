@@ -659,8 +659,6 @@ struct C_EnemyAIInfo
 
 	// Attack timers will be read from C_CombatInfo
 	//float attackTimer = 0.0f;
-	float startAttackDelay = 0.3f;
-	bool hasAttacked = false;
 
 	// Important addition (TODO: add turn speed calculations to turning)
 	glm::vec3 targetLookDirToLerp{ 0.0f };

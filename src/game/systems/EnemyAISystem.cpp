@@ -144,6 +144,9 @@ void EnemyAISystem::Update(float dt) const
                 rotation = Math::RotateTowardTarget(rotation, targetRotation, stats.turnSpeed, dt, Math::Smoothstep);
 
                 transform.matrix = glm::translate(glm::mat4(1.0f), position) * glm::mat4_cast(rotation) * glm::scale(glm::mat4(1.0f), scale);
+           
+                // Instead of true, should attack
+                combatInput.wantsMelee = ShouldAttack(stats, info, bodyHandle, position, lookDir, dt);
             }
             else if (info.currentState == info.Staggered)
             {
@@ -251,6 +254,7 @@ void EnemyAISystem::UpdateState(EntityID enemyID, const C_EnemyAIStats& stats, C
         {
             //info.previousState = info.Chase;
             info.currentState = info.Attack;
+
         }
         else if (chaseOrAlertInfo = ShouldChaseOrGetAlerted(stats, info, bodyHandle, position, lookDir, dt);
             chaseOrAlertInfo.shouldChase || chaseOrAlertInfo.shouldGetAlerted)
@@ -312,14 +316,10 @@ void EnemyAISystem::UpdateState(EntityID enemyID, const C_EnemyAIStats& stats, C
     case info.Attack:
         // Attacking (written from C_Combat hopefully)
         // Wait for attack to finish, go back to Chase also IF we should not attack, otherwise just keep attacking
-        shouldAttack = ShouldAttack(stats, info, bodyHandle, position, lookDir, dt);
         if (combatInfo.attackTimer < 0.0f)
         {
-            if (shouldAttack)
-            {
-
-            }
-            else
+            shouldAttack = ShouldAttack(stats, info, bodyHandle, position, lookDir, dt);
+            if (!shouldAttack)
             {
                 info.currentState = info.Chase;
             }
@@ -331,11 +331,43 @@ void EnemyAISystem::UpdateState(EntityID enemyID, const C_EnemyAIStats& stats, C
         // Wait for stagger to finish, fall back to previous state if Chase, otherwise Alerted towards the entity that hit it
         // That way if the zombie's hit on the back, once they stop being staggered they will go back to 
 
-        // IMPORTANT: in case of hordes, i would recommend Staggered to apply a constant push (written to MovementInput), 
-        // that way you might be able to displace zombies behind them (otherwise the zombie behind pushing forward will nullify the push backwards)
+        // VERY IMPORTANT!!!!! WE NEED TO ASSIGN THE C_EnemyAIInfo. target to the attacker (in case we attack a zombie from behind)
+        // INSTEAD: 
         if (combatInfo.staggeredTimer < 0.0f)
         {
+            if (combatInfo.attackTimer <= 0.0f && ShouldAttack(stats, info, bodyHandle, position, lookDir, dt))
+            {
+                //info.previousState = info.Chase;
+                info.currentState = info.Attack;
 
+            }
+            else if (chaseOrAlertInfo = ShouldChaseOrGetAlerted(stats, info, bodyHandle, position, lookDir, dt);
+                chaseOrAlertInfo.shouldChase || chaseOrAlertInfo.shouldGetAlerted)
+            {
+                // If we should keep chasing we update 
+                if (chaseOrAlertInfo.shouldChase)
+                {
+                    info.target = chaseOrAlertInfo.target;
+                    info.activeTargetID = chaseOrAlertInfo.targetID; // Might be NULL_ENTITY and that's fine
+                    info.hasTarget = chaseOrAlertInfo.hasTarget;
+                }
+                else
+                {
+                    // Otherwise if we do not have to chase, go to search mode and the previous frame's target will be our target
+
+                    // The current target will stay there
+                    info.currentState = info.Search;
+                    info.reachTheTargetTimer = info.reachTheTargetMaxTime;
+                    info.hasReachedTarget = false;
+                }
+            }
+            else
+            {
+                // The current target will stay there
+                info.currentState = info.Search;
+                info.reachTheTargetTimer = info.reachTheTargetMaxTime;
+                info.hasReachedTarget = false;
+            }
         }
 
         break;
