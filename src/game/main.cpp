@@ -243,6 +243,13 @@ int main(int argc, char *argv[])
         {
             if (event.type == SDL_EVENT_QUIT) running = false;
 
+            static b32 window_is_fullscreen = 0;
+            if (event.type == SDL_EVENT_KEY_DOWN && event.key.scancode == SDL_SCANCODE_F11)
+            {
+                window_is_fullscreen = !window_is_fullscreen;
+                SDL_SetWindowFullscreen(window, window_is_fullscreen);
+            }
+
             Renderer_ListenToWindowEvent(event);
             Input_ProcessEvent(event);
         }
