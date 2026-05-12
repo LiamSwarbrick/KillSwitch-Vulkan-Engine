@@ -17,6 +17,7 @@ public:
 	void Update(float dt) const override;
 private:
 	void UpdatePlayer(float dt) const;
+	void UpdateZombie(float dt) const;
 };
 
 

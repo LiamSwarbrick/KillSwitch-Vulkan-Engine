@@ -10,14 +10,15 @@ void AnimationSystem::Update(float dt) const
 {
     // Update player animations
     UpdatePlayer(dt);
+    UpdateZombie(dt);
 
     // Update zombie animations
 }
 
 void AnimationSystem::UpdatePlayer(float dt) const
 {
-    auto view = ecs->GetView<C_Transform, C_MovementInput, C_MovementInfo, C_CombatInput, C_CombatInfo, C_AnimatedMesh>();
-    view.ForEach([&](EntityID entity, C_Transform& transform, C_MovementInput& moveInput, C_MovementInfo& moveInfo, C_CombatInput& combatInput, C_CombatInfo& combatInfo, C_AnimatedMesh& animatedMesh)
+    auto view = ecs->GetView<C_Transform, C_MovementInput, C_PlayerInfo, C_MovementInfo, C_CombatInput, C_CombatInfo, C_AnimatedMesh>();
+    view.ForEach([&](EntityID entity, C_Transform& transform, C_MovementInput& moveInput, C_PlayerInfo& playerInfo, C_MovementInfo& moveInfo, C_CombatInput& combatInput, C_CombatInfo& combatInfo, C_AnimatedMesh& animatedMesh)
     {
         animatedMesh.playbackSpeed = 1.0f;
         bool hasWeapon = false;
@@ -67,10 +68,10 @@ void AnimationSystem::UpdatePlayer(float dt) const
             if (combatInput.wantsAim)
             {
                 animatedMesh.aimPitch = -glm::degrees(asinf(facingDir.y));
-                //animatedMesh.aimYaw = 0.0f;
+                animatedMesh.aimYaw = 0.0f;
             }
         }
-        animatedMesh.isAiming = combatInput.wantsAim;
+        animatedMesh.isAiming = combatInput.wantsAim || combatInfo.isAttacking;
 
         glm::vec3 movingDir = moveInput.desiredDir;
         glm::vec3 forwardDir = Math::QuatToViewDir(rotation); // Might be the same as moveDir
@@ -132,12 +133,13 @@ void AnimationSystem::UpdatePlayer(float dt) const
         }
         else if (combatInfo.isAttacking)
         {
-            if (animatedMesh.upperBodyLayer.currentAnimation != meleeAnimId ||
-                !animatedMesh.isUpperLayerActive)
+            if (animatedMesh.upperBodyLayer.currentAnimation != meleeAnimId || !animatedMesh.isUpperLayerActive)
             {
                 PlayUpperBodyAnim(animatedMesh, meleeAnimName.c_str(), 0.1f);
                 SetLooping(animatedMesh, animatedMesh.upperBodyLayer, false);
             }
+
+            animatedMesh.aimYaw = 25.0f * (float)animatedMesh.upperBodyLayerWeight;
         }
         else
         {
@@ -304,4 +306,69 @@ void AnimationSystem::UpdatePlayer(float dt) const
             }
         }
     });
+}
+
+void AnimationSystem::UpdateZombie(float dt) const
+{
+    auto view = ecs->GetView<C_EnemyAIInfo, C_MovementInfo, C_AnimatedMesh>();
+    view.ForEach([&](EntityID entity, C_EnemyAIInfo& info, C_MovementInfo& moveInfo, C_AnimatedMesh& animatedMesh)
+        {
+            const char* idleAnims[] = { "idle", "idle1", "idle2" };
+            const char* walkAnims[] = { "walk", "walk1" };
+            const char* deathAnims[] = { "death", "death1" };
+            const char* attackAnims[] = { "attack", "attack" };
+
+            // semi random numbers for variation in animations
+            int idleIdx = entity % 3;
+            int walkIdx = (entity * 7) % 2;
+            int deathIdx = (entity * 11) % 2;
+            int attackIdx = (entity * 13) % 2;
+
+            std::string animName = idleAnims[idleIdx];
+            bool loop = true;
+            float blendDuration = 0.15f;
+            float speed = 1.0f;
+
+            if (info.currentState == info.Staggered)
+            {
+                animName = "pushed";
+                loop = false;
+                blendDuration = 0.1f;
+                speed = 1.4f;
+            }
+            else if (info.currentState == info.Attack)
+            {
+                animName = attackAnims[attackIdx];
+                loop = false;
+                blendDuration = 0.1f;
+                speed = 1.4f;
+            }
+            else if (info.currentState == info.Dead)
+            {
+                animName = deathAnims[deathIdx];
+                loop = false;
+                blendDuration = 0.05f;
+                animatedMesh.idleAnimationName = (char*)deathAnims[deathIdx];
+            }
+            else if (moveInfo.isMoving)
+            {
+                if (moveInfo.state == MoveState::Sprint)
+                {
+                    animName = "run";
+                }
+                else
+                {
+                    animName = walkAnims[walkIdx];
+                }
+            }
+
+            int animId = GetAnimationIdFromName(animatedMesh, animName.c_str());
+
+            if (animId != -1 && animatedMesh.lowerBodyLayer.currentAnimation != animId)
+            {
+                PlayAnim(animatedMesh, animName.c_str(), blendDuration);
+                animatedMesh.lowerBodyLayer.isCurrentLooping = loop;
+                animatedMesh.playbackSpeed = speed;
+            }
+        });
 }

@@ -107,6 +107,7 @@ int main(int argc, char *argv[])
                 //Asset* capsule_prefab = scene.LoadPrefab("assets/props/zombie.gltf");
                 //Asset* capsule_prefab = scene.LoadPrefab("assets/props/character_capsule.gltf");
     Asset* zombie_woman = scene.LoadPrefab("assets/animations/zombie_woman.gltf");
+    Asset* zombie = scene.LoadPrefab("assets/animations/zombie.gltf");
     Asset* player = scene.LoadPrefab("assets/animations/player.gltf");
             // TODO: Change the following 2 prefabs so they can be imported (add the boolean "Is ECS Entity" with the new script where it is needed)
             // Asset* catPrefab = scene.LoadPrefab("assets/animations/zomboUntitled.gltf");

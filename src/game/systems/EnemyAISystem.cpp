@@ -24,7 +24,7 @@ void EnemyAISystem::Update(float dt) const
             glm::vec3 lookDir = rotation * glm::vec3(0.0f, 0.0f, -1.0f);
             lookDir = Math::QuatToViewDir(rotation);
 
-            UpdateState(entity, stats, info, combatInfo, bodyHandle, position, lookDir, dt); // We might not need to pass entity (we have the position)
+            UpdateState(entity, stats, info, combatInfo, moveInput, combatInput, bodyHandle, position, lookDir, dt); // We might not need to pass entity (we have the position)
 
             // Before updating inputs, reset them
             moveInput.desiredDir = glm::vec3(0.0f);
@@ -166,7 +166,7 @@ void EnemyAISystem::Update(float dt) const
         });
 }
 
-void EnemyAISystem::UpdateState(EntityID enemyID, const C_EnemyAIStats& stats, C_EnemyAIInfo& info, const C_CombatInfo& combatInfo, const C_RigidBody& bodyHandle, const glm::vec3& position, const glm::vec3& lookDir, float dt) const
+void EnemyAISystem::UpdateState(EntityID enemyID, const C_EnemyAIStats& stats, C_EnemyAIInfo& info, const C_CombatInfo& combatInfo, C_MovementInput& moveInput, C_CombatInput& combatInput, const C_RigidBody& bodyHandle, const glm::vec3& position, const glm::vec3& lookDir, float dt) const
 {
 
     ChaseOrAlertInfo chaseOrAlertInfo;
@@ -374,7 +374,12 @@ void EnemyAISystem::UpdateState(EntityID enemyID, const C_EnemyAIStats& stats, C
     case info.Dead:
         // Here in case the zombie should be a ragdoll (write null input at all), have a dead timer then despawn
         // Otherwise just despawn on health come to 0
+        moveInput.moveAmount = 0.0f;
+        moveInput.desiredDir = glm::vec3(0.0f);
 
+        combatInput.wantsMelee = false;
+        combatInput.wantsAim = false;
+        combatInput.wantsRanged = false;
         break;
     default:
         break;

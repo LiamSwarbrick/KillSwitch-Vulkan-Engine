@@ -241,6 +241,7 @@ void CombatSystem::ProcessMelee(EntityID ourID, RigidBodyHandle bodyHandle, cons
                         } // If our weapon socket has a valid entity
                     } // If we have a weapon socket
 
+
                     targetCombatInfo.isDead = true;
                 } // If the target health is lower than 0 -> apply things
                 else
@@ -357,6 +358,8 @@ void CombatSystem::ProcessRanged(RigidBodyHandle bodyHandle, const glm::vec3& po
                     // Upgrade could have extraBulletsOnKill or something like that
                     // or just reload the weapon.maxBullets
                     //weapon.reloadableBullets = weapon.maxBullets;
+                    C_CombatInfo& targetCombatInfo = ecs->GetComponent<C_CombatInfo>(hit.entity);
+                    targetCombatInfo.isDead = true;
                     weapon.reloadableBullets = std::min((short) (weapon.reloadableBullets + 1), weapon.maxBullets);
                 }
             }

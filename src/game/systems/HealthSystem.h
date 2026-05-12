@@ -22,35 +22,27 @@ public:
 	{
 		ecs->GetView<C_Health, C_Faction>().ForEach([&](EntityID entity, C_Health& health, C_Faction& faction)
 			{
-				bool isBeingDespawned = false;
-				// If want a despawn timer, just add 
-				//ecs->AddComponent<C_DespawnTimer>(entity, C_DespawnTimer{ .timer = 2.0f });
-
-				if (health.currentHealth <= 0)
-				{
-					
-					if (faction.type == FactionType::Player)
+				ecs->GetView<C_Health, C_Faction>().ForEach([&](EntityID entity, C_Health& health, C_Faction& faction)
 					{
-						// Game over !!!!
-						isBeingDespawned = true;
-					}
-					else if (faction.type == FactionType::Zombie)
-					{
-						isBeingDespawned = true;
-					}
-				}
+						if (health.currentHealth <= 0)
+						{
+							// make sure we only trigger once by checking if we already have the timer
+							if (!ecs->Has<C_DespawnTimer>(entity))
+							{
+								if (faction.type == FactionType::Player)
+								{
+									ecs->AddComponent<C_DespawnTimer>(entity, C_DespawnTimer{ 3.0f });
+								}
+								else if (faction.type == FactionType::Zombie)
+								{
+									ecs->AddComponent<C_DespawnTimer>(entity, C_DespawnTimer{ 15.5f });
+								}
+							}
+						}
 
-				if (isBeingDespawned)
-				{
-					if (ecs->Has<C_RigidBody>(entity))
-						physics->destroyBody(entity);
-
-					ecs->DeleteEntity(entity);
-				}
-
+					});
 			});
 	}
 };
-
 #endif //!GAME_SYSTEMS_HEALTH_SYSTEM_H
 
