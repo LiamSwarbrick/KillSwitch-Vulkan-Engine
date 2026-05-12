@@ -325,14 +325,14 @@ struct C_WeaponRanged
 	Type type;
 	FiringMode firingMode;
 
-	int damage = 0;
+	short damage = 0;
 	short maxBullets = 0;
 	short currentBullets = 0;
 	// Quick fix to reloads
 	short reloadableBullets = 0;
 
 	float lastTimeSinceShot = 0.0f;
-	int shotsPerFire = 0; // shots per fire (for bursts or any other semi that shoots multiple things (double barrel shotgun or anything idk))
+	short shotsPerFire = 0; // shots per fire (for bursts or any other semi that shoots multiple things (double barrel shotgun or anything idk))
 	float shootMaxCooldown = 0.0f; // the time between each shot
 	float reloadTime = 0.0f;
 
@@ -360,8 +360,8 @@ struct C_WeaponRanged
 // Player will have hearts, each heart will be 1 health
 struct C_Health
 {
-	int currentHealth; 
-	int maxHealth;
+	short currentHealth; 
+	short maxHealth;
 
 	static C_Health PlayerDefaultHealth()
 	{
@@ -409,7 +409,7 @@ struct C_CombatMeleeStats
 	};
 
 	// We will have these base stats, and each attack will have a multiplier to them
-	int damage;
+	short damage;
 	float range;
 	float knockback;
 	std::vector<Combo> combos;
@@ -564,14 +564,15 @@ struct C_DespawnTimer
 struct Upgrades
 {
 	// Upgrades
-	int extraHealth = 0;
-	int extraHealthGainedPerKills = 0;
-	int extraPierce = 0;
+	short extraHealth = 0;
+	short extraHealthGainedPerKills = 0;
+	short extraPierce = 0;
+
 	//int extraDamage = 0; // or damageMultiplier
 	float damageMultiplier = 1.0f; // damage multiplier
 	float speedMultiplier = 1.0f; // run faster
 	float extraReloadSpeed = 1.0f; // reload faster 
-	float extraFiringSpeed = 0; // fire faster
+	float extraFiringSpeed = 1.0f; // fire faster
 };
 
 struct C_PlayerInfo

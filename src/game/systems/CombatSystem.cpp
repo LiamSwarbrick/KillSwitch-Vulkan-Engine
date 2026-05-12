@@ -210,7 +210,7 @@ void CombatSystem::ProcessMelee(EntityID ourID, RigidBodyHandle bodyHandle, cons
 
 
     float knockback = meleeStats.knockback * currentAttack.knockbackMultiplier;
-    int damage = std::lroundf(((float)meleeStats.damage * currentAttack.damageMultiplier));
+    short damage = std::lroundf(((float)meleeStats.damage * currentAttack.damageMultiplier));
     float staggerTime = currentAttack.staggerTime;
     for (EntityShapeIntersectsHit hit : entitiesHit)
     {
