@@ -58,6 +58,7 @@ void  Input_GetMouseDelta(float* dx, float* dy);
 
     // Gamepad connection
 bool  Input_IsGamepadConnected();
+bool  Input_RumbleGamepad(Uint16 low_frequency_rumble, Uint16 high_frequency_rumble, Uint32 duration_ms);
 
     // Binding management
 void  Input_SetBinding(InputAction action, int slot, InputBinding binding);

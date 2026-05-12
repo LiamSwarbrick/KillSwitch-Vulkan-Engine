@@ -191,12 +191,14 @@ void PlayerInputSystem::Update(float dt) const
         case playerInfo.Reloading:
             playerInfo.reloadTimer -= dt;
             playerInfo.isReloading = true;
+            combatInfo.isReloading = true;
             if (input.attack)
             {
                 // Cancel the reload if melee (if we're inputting aim we will still trigger melee
                 playerInfo.state = playerInfo.Attacking;
                 playerInfo.reloadTimer = 0.0f;
                 playerInfo.isReloading = false;
+                combatInfo.isReloading = false;
             }
             if (playerInfo.reloadTimer < 0.0f)
             {
@@ -204,6 +206,7 @@ void PlayerInputSystem::Update(float dt) const
                 weapon->currentBullets = weapon->reloadableBullets;
                 weapon->reloadableBullets = 0;
                 playerInfo.isReloading = false;
+                combatInfo.isReloading = false;
 
                 // Change to aiming if we're aiming
                 if (input.aim)

@@ -372,16 +372,18 @@ struct C_CombatMeleeStats
 {
 	struct Attack
 	{
-		std::string animationID;
+		std::string animationID; // so we could play different animations, but no need to use
 		// WeaponMelee defines the base damage, knockback, etc so we only have multipliers here
 		float damageMultiplier = 1.0f;
 		float rangeMultiplier = 1.0f;
 		float knockbackMultiplier = 1.0f;
-		//float speedMultiplier = 1.0f;
+		float staggerTime = 0.0f;
 
-		float duration; // how long the attack animation takes
-		float bufferWindow; // when in duration a follow-up can buffer
-		float comboWindow; // how long player has to chain the next hit
+		float duration = 1.0f; // how long the attack animation takes
+		float delay = 0.5f; // when the attack should hit from the start of the animation (yes, we're doing single hit)
+		float comboWindow = 0.0f; // how long player has to chain the next hit
+		// The idea is to set duration and delay at the same time, reduce both, once delay hits 0.0f then we process the attack,
+		// we set combatInfo.hasAttacked so we don't trigger the again.
 	};
 
 	struct Combo
@@ -390,9 +392,10 @@ struct C_CombatMeleeStats
 		std::vector<Attack> attacks; // sequence of attacks in this combo
 	};
 
-	// We will have 
+	// We will have these base stats, and each attack will have a multiplier to them
 	int damage;
 	float range;
+	float knockback;
 	std::vector<Combo> combos;
 
 	static C_CombatMeleeStats PlayerDefaultCombatStats()
@@ -400,17 +403,19 @@ struct C_CombatMeleeStats
 		C_CombatMeleeStats stats;
 		stats.damage = 4;
 		stats.range = 1.0f; // this range is from the outside of the capsule radius
+		stats.knockback = 10.0f;
 		stats.combos.push_back(
 		{
 			"Default", // Combo name,
 			{
 				// Vector of attacks
 				Attack {
-				// Attack 1
-				.animationID = "pistol_whip", // animationID (don't know the name)
-				.duration = 0.6f, // duration
-				.bufferWindow = 0.0f,
-				.comboWindow = 0.0f
+					// Attack 1
+					.animationID = "pistol_whip", // animationID (don't know the name)
+					.staggerTime = 0.4f,
+					.duration = 0.6f, // duration
+					.delay = 0.3f,
+					.comboWindow = 0.0f,
 				},
 				// Attack 2 if there was one
 			}
@@ -424,6 +429,7 @@ struct C_CombatMeleeStats
 		C_CombatMeleeStats stats;
 		stats.damage = 4;
 		stats.range = 1.0f;
+		stats.knockback = 10.0f;
 		stats.combos.push_back({
 			"Default", // Combo name,
 			{
@@ -431,9 +437,10 @@ struct C_CombatMeleeStats
 				Attack {
 					// Attack 1
 					.animationID = "zombie_swipe", // animationID (don't know the name)
+					.staggerTime = 0.4f,
 					.duration = 1.0f, // duration
-					.bufferWindow = 0.0f,
-					.comboWindow = 0.0f
+					.delay = 0.5f,
+					.comboWindow = 0.0f,
 				}
 				// Attack 2 if there was one
 			}
@@ -447,27 +454,30 @@ struct C_CombatMeleeStats
 	{
 		C_CombatMeleeStats stats;
 		stats.damage = 4;
-		stats.range = 5;
+		stats.range = 1.0f;
+		stats.knockback = 10.0f;
 		stats.combos.push_back({
 			"Default", // Combo name,
 			{
 				// Vector of attacks
 				Attack {
-					// Attack 1
-					.animationID = "zombie_swipe", // animationID (don't know the name)
-					.damageMultiplier = 0.75f,
-					.duration = 0.7f, // duration
-					.bufferWindow = 0.7f, // always buffer the second hit
-					.comboWindow = 0.7f // always link the next hit
-				},
-				// Attack 2 if there was one
-				Attack {
-					// Attack 2
-					.animationID = "zombie_swipe", // animationID (don't know the name)
-					.damageMultiplier = 0.75f,
-					.duration = 0.3f, // duration
-					.bufferWindow = 0.0f, // end of window
-					.comboWindow = 0.0f // end of window
+				// Attack 1
+				.animationID = "zombie_swipe", // animationID (don't know the name)
+				.damageMultiplier = 0.75f,
+				.staggerTime = 0.1f,
+				.duration = 0.7f, // duration
+				.delay = 0.3f,
+				.comboWindow = 0.1f, // time to get the second hit of the combo going
+			},
+			// Attack 2 if there was one
+			Attack {
+				// Attack 2
+				.animationID = "zombie_swipe", // animationID (don't know the name)
+				.damageMultiplier = 0.75f,
+				.staggerTime = 0.0f,
+				.duration = 0.3f, // duration
+				.delay = 0.1f,
+				.comboWindow = 0.0f,
 				},
 			}
 		});
@@ -486,19 +496,17 @@ struct C_CombatInfo
 	float windowTimer = 0.0f; // time left to chain the next hit
 	bool inputBuffered = false; // next attack was pressed during buffer
 
+	bool isDead = false;
 	bool isAttacking = false;
-
-	// For ranged (attackTimer will be firingTimer)
 	bool isFiring = false;
-
+	bool isReloading = false;
 	bool isStaggered = false;
 	float staggeredTimer = 0.0f;
 
-	bool isDead = false;
+	float attackTimer = 0.0f; // how far into the current attack animation (for melee) (and could be for ranged too
+	float attackDelayTimer = 0.0f;
+	bool hasAttacked = false; // To only attack once after the delay is done
 
-	// For melee & ranged
-	// Attack timer will serves as the shoot cooldown and as the attack cooldown
-	float attackTimer = 0.0f; // how far into the current attack animation (for melee) (and could be for ranged too)
 };
 
 struct C_WeaponSocket
@@ -589,7 +597,7 @@ struct C_EnemyAIStats
 	float alertDistance = 6.0f; // We probably should NOT have these, but the player having alertDistances on walk, run, jump and then read them from the zombie
 
 	// Attack ranges
-	float attackDistance = 1.0f;
+	float attackDistance = 0.8f;
 
 	// Patrol (unsure where the patrol thingy should go. should it go on stats?, we could have target be the current patrol point)
 	std::vector<glm::vec3> patrolPoints;

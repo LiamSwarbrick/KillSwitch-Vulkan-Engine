@@ -134,8 +134,13 @@ EntityID Scene::InstantiatePrefab(Asset* prefab, glm::vec3 spawnPosition, glm::q
         glm::quat localRotation = glm::quat(node->rotation[3], node->rotation[0], node->rotation[1], node->rotation[2]);
         glm::mat4 localTransform = glm::translate(glm::mat4(1.0f), localPosition) * glm::mat4_cast(localRotation);
         t.matrix = rootMatrix * localTransform;
-        localPosition += spawnPosition;
-        localRotation = spawnRotation * localRotation;
+        
+        glm::vec3 scale;
+        glm::quat rotation;
+        glm::vec3 translation;
+        glm::vec3 skew;
+        glm::vec4 perspective;
+        glm::decompose(t.matrix, scale, rotation, translation, skew, perspective);
 
         if (node->light_index >= 0)
         {
@@ -226,8 +231,8 @@ EntityID Scene::InstantiatePrefab(Asset* prefab, glm::vec3 spawnPosition, glm::q
 
                 RigidBodyDesc rbDesc;
 
-                rbDesc.position = localPosition; // from the transform
-                rbDesc.orientation = localRotation; // from the transform
+                rbDesc.position = translation; // from the transform
+                rbDesc.orientation = rotation; // from the transform
                 rbDesc.mass = importedRigidbody.mass;
                 rbDesc.gravityScale = importedRigidbody.gravity_scale;
                 rbDesc.damping = importedRigidbody.damping;
@@ -316,6 +321,20 @@ EntityID Scene::InstantiatePrefab(Asset* prefab, glm::vec3 spawnPosition, glm::q
             {
                 // Add the default pistol for now (we don't have other weapons
                 m_ecs.AddComponent<C_WeaponRanged>(eID, C_WeaponRanged::DefaultPistol());
+
+                m_ecs.AddComponent<C_Light>(eID, {
+                    .type = LIGHT_COMPONENT_SPOTLIGHT,
+                    // .color = glm::vec3(1.0f, 0.852f, 0.409f),
+                    // .color = glm::vec3(0.373f, 0.494f, 1.0f),
+                    .color = glm::vec3(0.274f, 0.412f, 1.0f),
+                    .intensity = 543.0f,
+                    .radius = 12.0f,
+                    .spot_inner_cone_angle = 0.257872f,
+                    .spot_outer_cone_angle = 0.3927f,
+                    
+                    .local_position = glm::vec3(0.0f, 0.0f, -0.2f),
+                    .local_forward_dir = glm::vec3(0.0f, 0.0f, 1.0f)
+                });
             }
 
             // -- MESH
@@ -447,8 +466,10 @@ void Scene::Render()
     // Push light components (or light entities?) this frame
     m_ecs.GetView<C_Transform, C_Light>().ForEach([&](C_Transform& transform, C_Light& light)
     {
-        glm::vec3 position = glm::vec3(transform.matrix[3]);
-        glm::quat rotation = glm::quat_cast(transform.matrix);
+        glm::quat local_rot = glm::quatLookAt(light.local_forward_dir, glm::vec3(0.0f, 1.0f, 0.0f));
+        glm::quat rotation = glm::quat_cast(transform.matrix) * local_rot;
+        glm::vec3 position = glm::vec3(transform.matrix[3]) + (rotation * light.local_position);
+        
         glm::vec3 direction = rotation * glm::vec3(0.0f, 0.0f, -1.0f);
         b32 is_shadowed = light.type == LIGHT_COMPONENT_SPOTLIGHT;
         Renderer_PushLight(light, position, direction, is_shadowed);

@@ -128,11 +128,10 @@ static void set_default_bindings()
     add_binding(ACTION_INTERACT, BIND_KEYBOARD,        SDL_SCANCODE_F);
     add_binding(ACTION_INTERACT, BIND_GAMEPAD_BUTTON,  SDL_GAMEPAD_BUTTON_WEST);
     add_binding(ACTION_ATTACK,   BIND_MOUSE_BUTTON,    SDL_BUTTON_LEFT);
+    add_binding(ACTION_ATTACK,   BIND_KEYBOARD,        SDL_SCANCODE_RSHIFT);  // NOTE(Liam): Just for me, since I wanna test on my laptop using just the arrow key camera controls lol :P
     add_binding(ACTION_ATTACK,   BIND_GAMEPAD_AXIS_POS, SDL_GAMEPAD_AXIS_RIGHT_TRIGGER);
     add_binding(ACTION_AIM,      BIND_MOUSE_BUTTON,    SDL_BUTTON_RIGHT);
     add_binding(ACTION_AIM,      BIND_GAMEPAD_AXIS_POS, SDL_GAMEPAD_AXIS_LEFT_TRIGGER);
-    add_binding(ACTION_RELOAD,   BIND_GAMEPAD_BUTTON,  SDL_GAMEPAD_BUTTON_WEST);
-    add_binding(ACTION_RELOAD,   BIND_KEYBOARD,        SDL_SCANCODE_R);
 
     // UI
     add_binding(ACTION_PAUSE,        BIND_KEYBOARD,       SDL_SCANCODE_ESCAPE);
@@ -624,6 +623,14 @@ void Input_GetMouseDelta(float* dx, float* dy)
 bool Input_IsGamepadConnected()
 {
     return s_gamepad != nullptr;
+}
+
+bool Input_RumbleGamepad(Uint16 low_frequency_rumble, Uint16 high_frequency_rumble, Uint32 duration_ms)
+{
+    if (!s_gamepad)
+        return false;
+
+    return SDL_RumbleGamepad(s_gamepad, low_frequency_rumble, high_frequency_rumble, duration_ms);
 }
 
 // Binding management
