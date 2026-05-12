@@ -334,8 +334,8 @@ struct C_WeaponRanged
 			.currentBullets = 1,
 			.lastTimeSinceShot = 0.0f,
 			.shotsPerFire = 1,
-			.shootMaxCooldown = 1.0f,
-			.reloadTime = 3.0f,
+			.shootMaxCooldown = 0.4f,
+			.reloadTime = 2.0f,
 			.dispersionRecoveryCooldown = 1.5f
 		};
 	}
@@ -414,7 +414,7 @@ struct C_CombatMeleeStats
 					.animationID = "pistol_whip", // animationID (don't know the name)
 					.staggerTime = 0.4f,
 					.duration = 0.6f, // duration
-					.delay = 0.3f,
+					.delay = 0.5f,
 					.comboWindow = 0.0f,
 				},
 				// Attack 2 if there was one
@@ -439,7 +439,7 @@ struct C_CombatMeleeStats
 					.animationID = "zombie_swipe", // animationID (don't know the name)
 					.staggerTime = 0.4f,
 					.duration = 1.0f, // duration
-					.delay = 0.5f,
+					.delay = 0.7f,
 					.comboWindow = 0.0f,
 				}
 				// Attack 2 if there was one
@@ -464,9 +464,10 @@ struct C_CombatMeleeStats
 				// Attack 1
 				.animationID = "zombie_swipe", // animationID (don't know the name)
 				.damageMultiplier = 0.75f,
+				.knockbackMultiplier = 0.1f, // small knockback so zombie can land the second hit
 				.staggerTime = 0.1f,
 				.duration = 0.7f, // duration
-				.delay = 0.3f,
+				.delay = 0.5f,
 				.comboWindow = 0.1f, // time to get the second hit of the combo going
 			},
 			// Attack 2 if there was one
@@ -476,7 +477,7 @@ struct C_CombatMeleeStats
 				.damageMultiplier = 0.75f,
 				.staggerTime = 0.0f,
 				.duration = 0.3f, // duration
-				.delay = 0.1f,
+				.delay = 0.15f,
 				.comboWindow = 0.0f,
 				},
 			}
@@ -553,7 +554,7 @@ struct Upgrades
 	//int extraDamage = 0; // or damageMultiplier
 	float damageMultiplier = 1.0f; // damage multiplier
 	float speedMultiplier = 1.0f; // run faster
-	float extraReloadSpeed = 0; // reload faster
+	float extraReloadSpeed = 1.0f; // reload faster 
 	float extraFiringSpeed = 0; // fire faster
 };
 

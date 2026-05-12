@@ -17,6 +17,13 @@ public:
 	}
 
 	void Update(float dt) const override;
+private:
+
+	inline void ChangeToReloading(C_PlayerInfo& playerInfo, const C_WeaponRanged& weapon) const
+	{
+		playerInfo.state = playerInfo.Reloading;
+		playerInfo.reloadTimer = weapon.reloadTime / playerInfo.upgrades.extraReloadSpeed; // division :sob:
+	}
 };
 
 #endif //!GAME_SYSTEMS_PLAYER_INPUT_SYSTEM_H

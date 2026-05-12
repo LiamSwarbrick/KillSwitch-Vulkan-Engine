@@ -12,106 +12,104 @@ void PlayerInputSystem::Update(float dt) const
 {
     auto view = ecs->GetView<C_PlayerInfo, C_MovementInput, C_CombatInput, C_CombatInfo, C_WeaponSocket>();
     view.ForEach([&](EntityID entity, C_PlayerInfo& playerInfo, C_MovementInput& moveInput, C_CombatInput& combatInput, C_CombatInfo& combatInfo, C_WeaponSocket& weaponSocket)
-    {
-        // Might be dumb and redundant to read from Player Input, if we had an input manager then we would read from it instead of having that.
-        // READ FROM: Raw input from the manager, CombatInfo for attack timers
-        // WRITE TO: PlayerInfo, MovementInput, CombatInput
-        C_PlayerInput input;
-        input.move_forward = Input_IsActionPressed(ACTION_MOVE_FORWARD);
-        input.forward = Input_GetActionValue(ACTION_MOVE_FORWARD);
-
-        input.move_backward = Input_IsActionPressed(ACTION_MOVE_BACKWARD);
-        input.backward = Input_GetActionValue(ACTION_MOVE_BACKWARD);
-
-        input.move_left = Input_IsActionPressed(ACTION_MOVE_LEFT);
-        input.left = Input_GetActionValue(ACTION_MOVE_LEFT);
-
-        input.move_right = Input_IsActionPressed(ACTION_MOVE_RIGHT);
-        input.right = Input_GetActionValue(ACTION_MOVE_RIGHT);
-
-        input.jump = Input_IsActionJustPressed(ACTION_JUMP);
-        input.crouch = Input_IsActionPressed(ACTION_CROUCH);
-        input.run = Input_IsActionPressed(ACTION_SPRINT);
-        input.aim = Input_IsActionPressed(ACTION_AIM);
-        input.attack = Input_IsActionJustPressed(ACTION_ATTACK);
-        input.reload = Input_IsActionJustPressed(ACTION_RELOAD);
-
-        // Flatten the camera forward vector so physicsCharacter movement stays horizontal.
-        auto flattenDirection = [](const glm::vec3& direction)
         {
-            glm::vec3 flattened = glm::vec3(direction.x, 0.0f, direction.z);
-            float len = glm::length(flattened);
-            if (len <= 0.0001f)
-                return glm::vec3(0.0f, 0.0f, -1.0f);
+            // Might be dumb and redundant to read from Player Input, if we had an input manager then we would read from it instead of having that.
+            // READ FROM: Raw input from the manager, CombatInfo for attack timers
+            // WRITE TO: PlayerInfo, MovementInput, CombatInput
+            C_PlayerInput input;
+            input.move_forward = Input_IsActionPressed(ACTION_MOVE_FORWARD);
+            input.forward = Input_GetActionValue(ACTION_MOVE_FORWARD);
 
-            return flattened / len;
-        };
+            input.move_backward = Input_IsActionPressed(ACTION_MOVE_BACKWARD);
+            input.backward = Input_GetActionValue(ACTION_MOVE_BACKWARD);
 
-        // moving forward is now relative to the camera
-        glm::vec3 cameraForward = InGameCam_GetMovementForward();
+            input.move_left = Input_IsActionPressed(ACTION_MOVE_LEFT);
+            input.left = Input_GetActionValue(ACTION_MOVE_LEFT);
 
-        glm::vec3 flattenedForward = -flattenDirection(cameraForward);
-        glm::vec3 flattenedRight = glm::normalize(glm::cross(flattenedForward, glm::vec3(0.0f, 1.0f, 0.0f)));
+            input.move_right = Input_IsActionPressed(ACTION_MOVE_RIGHT);
+            input.right = Input_GetActionValue(ACTION_MOVE_RIGHT);
 
-        glm::vec3 horizontalRawMove(0.0f); // we will not operate with 
-        float moveAmount = 0.0f;
+            input.jump = Input_IsActionJustPressed(ACTION_JUMP);
+            input.crouch = Input_IsActionPressed(ACTION_CROUCH);
+            input.run = Input_IsActionPressed(ACTION_SPRINT);
+            input.aim = Input_IsActionPressed(ACTION_AIM);
+            input.attack = Input_IsActionJustPressed(ACTION_ATTACK);
+            input.reload = Input_IsActionJustPressed(ACTION_RELOAD);
 
-        // SHOULD ONLY USE THIS IF WE'RE MOVING
-        glm::vec3 desiredDir(0.0f);
-
-        if (input.move_forward)
-            horizontalRawMove -= flattenedForward * input.forward;
-        if (input.move_backward)
-            horizontalRawMove += flattenedForward * input.backward;
-        if (input.move_left)
-            horizontalRawMove += flattenedRight * input.left;
-        if (input.move_right)
-            horizontalRawMove -= flattenedRight * input.right;
-
-        desiredDir = glm::normalize(horizontalRawMove);
-        moveAmount = std::min(glm::length(horizontalRawMove), 1.0f);
-        bool isMoving = moveAmount > 0.0f;
-
-        C_WeaponRanged* weapon = nullptr;
-        bool hasWeapon = ecs->Has<C_WeaponRanged>(weaponSocket.weapon_entity);
-        if(hasWeapon)
-            weapon = ecs->GetComponentPtr<C_WeaponRanged>(weaponSocket.weapon_entity);
-
-
-        // UPDATE THE STATE
-        // If in any state, we're firing, change to firing
-        if (combatInfo.isDead)
-            playerInfo.state = playerInfo.Dead;
-        else if (combatInfo.isStaggered)
-            playerInfo.state = playerInfo.Staggered;
-        else if (combatInfo.isFiring)
-            playerInfo.state = playerInfo.Firing;
-        else if (combatInfo.isAttacking)
-            playerInfo.state = playerInfo.Attacking;
-
-        // State machine update
-        switch (playerInfo.state)
-        {
-        case playerInfo.Free:
-            if (input.aim)
-            {
-                playerInfo.state = playerInfo.Aiming;
-            }
-            else if (input.attack)
-            {
-                // Change to attack if the attack timer is done
-                if(combatInfo.attackTimer < 0.0f)
-                    playerInfo.state = playerInfo.Attacking;
-            }
-            else if (input.reload)
-            {
-                if (hasWeapon 
-                    && (weapon->currentBullets < weapon->maxBullets)
-                    && (weapon->reloadableBullets > 0))
+            // Flatten the camera forward vector so physicsCharacter movement stays horizontal.
+            auto flattenDirection = [](const glm::vec3& direction)
                 {
-                    playerInfo.state = playerInfo.Reloading;
-                    playerInfo.reloadTimer = weapon->reloadTime;
+                    glm::vec3 flattened = glm::vec3(direction.x, 0.0f, direction.z);
+                    float len = glm::length(flattened);
+                    if (len <= 0.0001f)
+                        return glm::vec3(0.0f, 0.0f, -1.0f);
+
+                    return flattened / len;
+                };
+
+            // moving forward is now relative to the camera
+            glm::vec3 cameraForward = InGameCam_GetMovementForward();
+
+            glm::vec3 flattenedForward = -flattenDirection(cameraForward);
+            glm::vec3 flattenedRight = glm::normalize(glm::cross(flattenedForward, glm::vec3(0.0f, 1.0f, 0.0f)));
+
+            glm::vec3 horizontalRawMove(0.0f); // we will not operate with 
+            float moveAmount = 0.0f;
+
+            // SHOULD ONLY USE THIS IF WE'RE MOVING
+            glm::vec3 desiredDir(0.0f);
+
+            if (input.move_forward)
+                horizontalRawMove -= flattenedForward * input.forward;
+            if (input.move_backward)
+                horizontalRawMove += flattenedForward * input.backward;
+            if (input.move_left)
+                horizontalRawMove += flattenedRight * input.left;
+            if (input.move_right)
+                horizontalRawMove -= flattenedRight * input.right;
+
+            desiredDir = glm::normalize(horizontalRawMove);
+            moveAmount = std::min(glm::length(horizontalRawMove), 1.0f);
+            bool isMoving = moveAmount > 0.0f;
+
+            C_WeaponRanged* weapon = nullptr;
+            bool hasWeapon = ecs->Has<C_WeaponRanged>(weaponSocket.weapon_entity);
+            if (hasWeapon)
+                weapon = ecs->GetComponentPtr<C_WeaponRanged>(weaponSocket.weapon_entity);
+
+            bool shouldReload = hasWeapon
+                && (weapon->currentBullets < weapon->maxBullets)
+                && (weapon->reloadableBullets > 0);
+
+
+            // UPDATE THE STATE
+            // If in any state, we're firing, change to firing
+            if (combatInfo.isDead)
+                playerInfo.state = playerInfo.Dead;
+            else if (combatInfo.isStaggered)
+                playerInfo.state = playerInfo.Staggered;
+            else if (combatInfo.isFiring)
+                playerInfo.state = playerInfo.Firing;
+            else if (combatInfo.isAttacking)
+                playerInfo.state = playerInfo.Attacking;
+
+            // State machine update
+            switch (playerInfo.state)
+            {
+            case playerInfo.Free:
+                if (input.aim)
+                {
+                    playerInfo.state = playerInfo.Aiming;
                 }
+                else if (input.attack)
+                {
+                    // Change to attack if the attack timer is done
+                    if (combatInfo.attackTimer < 0.0f)
+                        playerInfo.state = playerInfo.Attacking;
+                }
+                else if (input.reload && shouldReload)
+                {
+                    ChangeToReloading(playerInfo, *weapon);
             }
             break;
         case playerInfo.Attacking:
@@ -122,15 +120,9 @@ void PlayerInputSystem::Update(float dt) const
                 {
                     playerInfo.state = playerInfo.Aiming;
                 }
-                else if (input.reload)
+                else if (input.reload && shouldReload)
                 {
-                    if (hasWeapon 
-                        && (weapon->currentBullets < weapon->maxBullets)
-                        && (weapon->reloadableBullets > 0))
-                    {
-                        playerInfo.state = playerInfo.Reloading;
-                        playerInfo.reloadTimer = weapon->reloadTime;
-                    }
+                    ChangeToReloading(playerInfo, *weapon);
                 }
                 // if we're not doing attack input, change
                 else if (!input.attack)
@@ -148,15 +140,9 @@ void PlayerInputSystem::Update(float dt) const
             {
                 playerInfo.state = playerInfo.Attacking;
             }
-            else if (input.reload)
+            else if (input.reload && shouldReload)
             {
-                if (hasWeapon 
-                    && (weapon->currentBullets < weapon->maxBullets)
-                    && (weapon->reloadableBullets > 0))
-                {
-                    playerInfo.state = playerInfo.Reloading;
-                    playerInfo.reloadTimer = weapon->reloadTime;
-                }
+                ChangeToReloading(playerInfo, *weapon);
             }
             else
             {
@@ -166,8 +152,12 @@ void PlayerInputSystem::Update(float dt) const
         case playerInfo.Firing:
             if (combatInfo.attackTimer < 0.0f)
             {
-                // Change to aiming if we're aiming
-                if (input.aim)
+                // First check if we have to reload, and auto-reload
+                if (shouldReload)
+                {
+                    ChangeToReloading(playerInfo, *weapon);
+                }
+                else if (input.aim)
                 {
                     playerInfo.state = playerInfo.Aiming;
                 }
@@ -176,15 +166,10 @@ void PlayerInputSystem::Update(float dt) const
                 {
                     playerInfo.state = playerInfo.Attacking;
                 }
-                else if (input.reload)
+                else if (input.reload && shouldReload)
                 {
-                    if (hasWeapon 
-                        && (weapon->currentBullets < weapon->maxBullets)
-                        && (weapon->reloadableBullets > 0))
-                    {
-                        playerInfo.state = playerInfo.Reloading;
-                        playerInfo.reloadTimer = weapon->reloadTime;
-                    }
+                    playerInfo.state = playerInfo.Reloading;
+                    playerInfo.reloadTimer = weapon->reloadTime;
                 }
             }
             break;
@@ -268,7 +253,7 @@ void PlayerInputSystem::Update(float dt) const
         else if (playerInfo.state == playerInfo.Attacking)
         {
             // do not allow to move, or allow less move when attacking
-            moveInput.moveAmount = std::min(moveAmount, 0.0f);
+            moveInput.moveAmount = std::min(moveAmount, 0.6f);
             moveInput.wantsJump = false;
             moveInput.wantsRun = false;
 
@@ -290,12 +275,8 @@ void PlayerInputSystem::Update(float dt) const
         else if (playerInfo.state == playerInfo.Reloading)
         {
             playerInfo.isReloading = true;
-            moveInput.moveAmount = std::min(moveAmount, 0.1f);
-
+            //moveInput.moveAmount = std::min(moveAmount, 0.1f); // dont slow down when reloading
             combatInput.wantsRanged = false;
-
-            // if we wanted to not allow some sort of movement
-
         }
         else if (playerInfo.state == playerInfo.Staggered || playerInfo.state == playerInfo.Dead)
         {
@@ -314,6 +295,9 @@ void PlayerInputSystem::Update(float dt) const
 
             playerInfo.isReloading = false;
             playerInfo.isAiming = false;
+            playerInfo.reloadTimer = 0.0f;
+            playerInfo.isReloading = false;
+            combatInfo.isReloading = false;
         }
 
 
