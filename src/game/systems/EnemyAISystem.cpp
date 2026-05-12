@@ -161,6 +161,7 @@ void EnemyAISystem::Update(float dt) const
             {
                 // Here in case the zombie should be a ragdoll (write null input at all), have a dead timer then despawn
                 // Otherwise just despawn on health come to 0
+                combatInfo.isDead = true;
             }
 
         });

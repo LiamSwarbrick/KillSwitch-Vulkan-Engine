@@ -17,14 +17,15 @@ void CombatSystem::Update(float dt) const
             // READ FROM: CombatInput & CombatStats (for melee combos & damage)
             //              if ranged, get C_WeaponSocket, if not C_WeaponSocket fallback to melee
             // WRITE TO: C_CombatInfo !!!!!!
+            
 
             // FIRST OF ALL, REDUCE THE TIMERS
-            if (combatInfo.attackTimer >= 0.0f)
+            if (combatInfo.attackTimer >= 0.0f && !combatInfo.isDead)
             {
                 combatInfo.attackTimer -= dt;
             }
             // If we have an attack timer, we might have an attackDelayTimer
-            if (combatInfo.attackDelayTimer >= 0.0f)
+            if (combatInfo.attackDelayTimer >= 0.0f && !combatInfo.isDead)
             {
                 combatInfo.attackDelayTimer -= dt;
             }

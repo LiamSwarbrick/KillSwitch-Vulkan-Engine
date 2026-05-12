@@ -115,8 +115,11 @@ void PlayerInputSystem::Update(float dt) const
         case playerInfo.Attacking:
             if (combatInfo.attackTimer < 0.0f)
             {
-                // Change to aiming if we're aiming
-                if (input.aim)
+                if (shouldReload)
+                {
+                    ChangeToReloading(playerInfo, *weapon);
+                }
+                else if (input.aim)
                 {
                     playerInfo.state = playerInfo.Aiming;
                 }
@@ -217,6 +220,7 @@ void PlayerInputSystem::Update(float dt) const
             break;
         case playerInfo.Dead:
             // Don't change state
+            combatInfo.isDead = true;
             break;
         default:
             break;
