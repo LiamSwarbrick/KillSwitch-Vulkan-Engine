@@ -655,6 +655,7 @@ int main(int argc, char *argv[])
     //Asset* capsule_prefab = scene.LoadPrefab("assets/props/zombie.gltf");
     //Asset* capsule_prefab = scene.LoadPrefab("assets/props/character_capsule.gltf");
     Asset* zombie_woman = scene.LoadPrefab("assets/animations/zombie_woman.gltf");
+    Asset* zombie = scene.LoadPrefab("assets/animations/zombie.gltf");
     Asset* player = scene.LoadPrefab("assets/animations/player.gltf");
     // TODO: Change the following 2 prefabs so they can be imported (add the boolean "Is ECS Entity" with the new script where it is needed)
     // Asset* catPrefab = scene.LoadPrefab("assets/animations/zomboUntitled.gltf");
@@ -679,9 +680,9 @@ int main(int argc, char *argv[])
         }
     }*/
     EntityID playerID = scene.InstantiatePrefab(player, glm::vec3(0, 0, 0), glm::identity<glm::quat>());
-    scene.InstantiatePrefab(zombie_woman, glm::vec3(3, 0.0f, -11.5f), Math::ViewDirToQuat({0.0f ,0.0f, 1.0f}));
+    scene.InstantiatePrefab(zombie, glm::vec3(3, 0.0f, -11.5f), Math::ViewDirToQuat({0.0f ,0.0f, 1.0f}));
     scene.InstantiatePrefab(zombie_woman, glm::vec3(3, 0.0f, -7.5f), Math::ViewDirToQuat({ 0.0f ,0.0f, 1.0f }));
-    scene.InstantiatePrefab(zombie_woman, glm::vec3(-3, 0.0f, -11.5f), Math::ViewDirToQuat({ 0.0f ,0.0f, 1.0f }));
+    scene.InstantiatePrefab(zombie, glm::vec3(-3, 0.0f, -11.5f), Math::ViewDirToQuat({ 0.0f ,0.0f, 1.0f }));
     // scene.InstantiatePrefab(sphere_prefab, glm::vec3(4.7, 7, 0.1));
     // scene.InstantiatePrefab(sphere_prefab, glm::vec3(-4.7, 7, -0.1));
     // scene.InstantiatePrefab(sphere_prefab, glm::vec3(0.1, 7, -4.7));
