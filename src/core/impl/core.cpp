@@ -20,7 +20,7 @@ SDL_Window* Core_Init(Core_InitInfo init_info)
         SDL_LogError(SDL_LOG_CATEGORY_ERROR, "Failed to create window: %s\n", SDL_GetError());
         return NULL;
     }
-
+    SDL_SetWindowFullscreen(window, true);
     SDL_Log("Core Initialized\n");
     return window;
 }
