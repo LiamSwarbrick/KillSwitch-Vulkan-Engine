@@ -65,6 +65,12 @@ AudioClipHandle AudioSystem_LoadClipEx(
    AudioClipCategory category
 );
 
+AudioClipHandle AudioSystem_CloneClip(
+   AudioSystem* system,
+   AudioClipHandle source_handle,
+   const char* logical_name
+);
+
 b32 AudioSystem_PlayOneShot(AudioSystem* system, AudioClipHandle handle, float volume);
 b32 AudioSystem_PlayLoop(AudioSystem* system, AudioClipHandle handle, float volume);
 void AudioSystem_StopClip(AudioSystem* system, AudioClipHandle handle);

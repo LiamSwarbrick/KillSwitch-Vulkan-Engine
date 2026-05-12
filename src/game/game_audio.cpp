@@ -22,8 +22,15 @@ struct GameplayAudioClips
 struct EnemyAudioRuntime
 {
     C_EnemyAIInfo::State last_state = C_EnemyAIInfo::Idle;
+    float alert_cooldown_timer = 0.0f;
     float footstep_timer = 0.08f;
+    AudioClipHandle groan_handle = 0;
+    bool groan_loop_active = false;
 };
+
+static constexpr float kZombieAlertCooldown = 1.25f;
+static constexpr float kZombieGroanMinDistance = 1.5f;
+static constexpr float kZombieGroanMaxDistance = 5.0f;
 
 struct GameAudio
 {
@@ -34,10 +41,6 @@ struct GameAudio
     bool player_was_reloading = false;
     EntityID player_weapon_entity = NULL_ENTITY;
     int player_last_bullets = -1;
-    float zombie_groan_timer = 2.0f;
-    EntityID zombie_alert_emitter = NULL_ENTITY;
-    EntityID zombie_groan_emitter = NULL_ENTITY;
-    EntityID zombie_step_emitter = NULL_ENTITY;
     std::unordered_map<EntityID, EnemyAudioRuntime> enemy_runtime = {};
 };
 
@@ -67,11 +70,12 @@ static GameplayAudioClips LoadGameplayAudio(AudioSystem* audio_system)
         "zombie_alert",
         "assets/sounds/game_sound/zombie/zombie_spotted.wav",
         AUDIO_CLIP_CATEGORY_SFX);
-    clips.zombie_groan = AudioSystem_LoadClipEx(
-        audio_system,
-        "zombie_groan",
-        "assets/sounds/game_sound/zombie/zombie_wandering.wav",
-        AUDIO_CLIP_CATEGORY_SFX);
+    // clips.zombie_groan = AudioSystem_LoadClipEx(
+    //     audio_system,
+    //     "zombie_groan",
+    //     "assets/sounds/game_sound/zombie/zombie_wandering.wav",
+    //     AUDIO_CLIP_CATEGORY_SFX);
+    clips.zombie_groan = 0;
     clips.zombie_step = 0;
 
     if (clips.soundtrack_loop == 0)
@@ -86,10 +90,10 @@ static GameplayAudioClips LoadGameplayAudio(AudioSystem* audio_system)
     {
         SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "GameplayAudio: failed to load 'zombie_alert' from 'assets/sounds/game_sound/zombie/zombie_spotted.mp3'.");
     }
-    if (clips.zombie_groan == 0)
-    {
-        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "GameplayAudio: failed to load 'zombie_groan' from 'assets/sounds/game_sound/zombie/zombie_wandering.wav'.");
-    }
+    // if (clips.zombie_groan == 0)
+    // {
+    //     SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "GameplayAudio: failed to load 'zombie_groan' from 'assets/sounds/game_sound/zombie/zombie_wandering.wav'.");
+    // }
     if (clips.weapon_reload == 0)
     {
         SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "GameplayAudio: failed to load 'weapon_reload' from 'assets/sounds/game_sound/weapon/weapon_cocking.wav'.");
@@ -137,68 +141,57 @@ static void PlayGameplaySFX(AudioSystem* audio_system, AudioClipHandle handle, f
     AudioSystem_PlaySFXOneShot(audio_system, handle, volume);
 }
 
-static void StopTrackedZombieClip(GameAudio* audio, AudioClipHandle handle, EntityID& emitter)
+static void StopZombieGroanLoop(GameAudio* audio, EnemyAudioRuntime& runtime)
 {
-    if (handle != 0)
+    if (runtime.groan_handle != 0 && runtime.groan_loop_active)
     {
-        AudioSystem_StopClip(&audio->system, handle);
+        AudioSystem_StopClip(&audio->system, runtime.groan_handle);
     }
 
-    emitter = NULL_ENTITY;
+    runtime.groan_loop_active = false;
 }
 
-static void StopZombieAudioForEntity(GameAudio* audio, EntityID entity)
+static bool IsZombieAudioEntityActive(ECS& ecs, EntityID entity)
 {
-    if (entity == NULL_ENTITY)
+    if (entity == NULL_ENTITY ||
+        !ecs.IsEntityValid(entity) ||
+        !ecs.Has<C_EnemyAIInfo>(entity) ||
+        !ecs.Has<C_Faction>(entity) ||
+        !ecs.Has<C_CombatInfo>(entity) ||
+        ecs.GetComponent<C_Faction>(entity).type != FactionType::Zombie ||
+        ecs.Has<C_DespawnTimer>(entity))
     {
-        return;
+        return false;
     }
 
-    if (audio->zombie_alert_emitter == entity)
-    {
-        StopTrackedZombieClip(audio, audio->clips.zombie_alert, audio->zombie_alert_emitter);
-    }
-
-    if (audio->zombie_groan_emitter == entity)
-    {
-        StopTrackedZombieClip(audio, audio->clips.zombie_groan, audio->zombie_groan_emitter);
-    }
-
-    if (audio->zombie_step_emitter == entity)
-    {
-        StopTrackedZombieClip(audio, audio->clips.zombie_step, audio->zombie_step_emitter);
-    }
+    const C_CombatInfo& combat_info = ecs.GetComponent<C_CombatInfo>(entity);
+    const C_EnemyAIInfo& enemy_info = ecs.GetComponent<C_EnemyAIInfo>(entity);
+    return !combat_info.isDead && enemy_info.currentState != C_EnemyAIInfo::Dead;
 }
 
-static void PlayTrackedZombieSFXAt(
-    GameAudio* audio,
-    AudioClipHandle handle,
-    EntityID entity,
-    EntityID& emitter,
-    float volume,
-    const glm::vec3& position,
-    float min_distance,
-    float max_distance)
+static AudioClipHandle EnsureZombieGroanHandle(GameAudio* audio, EntityID entity, EnemyAudioRuntime& runtime)
 {
-    if (handle == 0 || entity == NULL_ENTITY)
+    if (audio->clips.zombie_groan == 0)
     {
-        return;
+        return 0;
     }
 
-    AudioSystem_StopClip(&audio->system, handle);
-    if (AudioSystem_PlayEntitySFXAt(
-            &audio->system,
-            handle,
-            volume,
-            position.x, position.y, position.z,
-            min_distance,
-            max_distance))
+    if (runtime.groan_handle != 0)
     {
-        emitter = entity;
-        return;
+        return runtime.groan_handle;
     }
 
-    emitter = NULL_ENTITY;
+    char logical_name[64] = {};
+    SDL_snprintf(logical_name, sizeof(logical_name), "zombie_groan_loop_%u", entity);
+    runtime.groan_handle = AudioSystem_CloneClip(&audio->system, audio->clips.zombie_groan, logical_name);
+    return runtime.groan_handle;
+}
+
+static bool CanZombieEmitGroan(ECS& ecs, EntityID entity, const C_EnemyAIInfo& info, const C_Faction& faction)
+{
+    return faction.type == FactionType::Zombie &&
+        info.currentState != C_EnemyAIInfo::Patrol &&
+        IsZombieAudioEntityActive(ecs, entity);
 }
 
 static void ApplyUISoundtrackMix(GameAudio* audio, GameState state)
@@ -240,12 +233,9 @@ static void CleanupEnemyAudioRuntime(GameAudio* audio, ECS& ecs)
 {
     for (auto it = audio->enemy_runtime.begin(); it != audio->enemy_runtime.end();)
     {
-        if (!ecs.IsEntityValid(it->first) ||
-            !ecs.Has<C_EnemyAIInfo>(it->first) ||
-            !ecs.Has<C_Faction>(it->first) ||
-            ecs.GetComponent<C_Faction>(it->first).type != FactionType::Zombie)
+        if (!IsZombieAudioEntityActive(ecs, it->first))
         {
-            StopZombieAudioForEntity(audio, it->first);
+            StopZombieGroanLoop(audio, it->second);
             it = audio->enemy_runtime.erase(it);
             continue;
         }
@@ -388,19 +378,28 @@ static void UpdateZombieAudio(
 
     if (!gameplay_audio_enabled)
     {
+        for (auto& entry : audio->enemy_runtime)
+        {
+            StopZombieGroanLoop(audio, entry.second);
+        }
         return;
     }
 
-    bool played_state_entry_sound = false;
     ecs.GetView<C_Transform, C_EnemyAIInfo, C_Faction>().ForEach(
         [&](EntityID entity, C_Transform& transform, C_EnemyAIInfo& info, C_Faction& faction)
         {
-            if (faction.type != FactionType::Zombie)
+            if (faction.type != FactionType::Zombie || !IsZombieAudioEntityActive(ecs, entity))
             {
                 return;
             }
 
             EnemyAudioRuntime& runtime = audio->enemy_runtime[entity];
+            runtime.alert_cooldown_timer -= dt;
+            if (runtime.alert_cooldown_timer < 0.0f)
+            {
+                runtime.alert_cooldown_timer = 0.0f;
+            }
+
             if (info.currentState == runtime.last_state)
             {
                 return;
@@ -409,11 +408,11 @@ static void UpdateZombieAudio(
             const bool became_threat =
                 info.currentState == C_EnemyAIInfo::Alerted;
 
-            if (!played_state_entry_sound && audio->clips.zombie_alert != 0 && became_threat)
+            if (audio->clips.zombie_alert != 0 && became_threat && runtime.alert_cooldown_timer <= 0.0f)
             {
                 const glm::vec3 position = glm::vec3(transform.matrix[3]);
-                PlayTrackedZombieSFXAt(audio, audio->clips.zombie_alert, entity, audio->zombie_alert_emitter, 0.65f, position, 1.0f, 35.0f);
-                played_state_entry_sound = true;
+                PlayGameplaySFXAt(&audio->system, audio->clips.zombie_alert, 0.65f, position, 1.0f, 5.0f);
+                runtime.alert_cooldown_timer = kZombieAlertCooldown;
             }
 
             runtime.last_state = info.currentState;
@@ -422,7 +421,7 @@ static void UpdateZombieAudio(
     ecs.GetView<C_Transform, C_EnemyAIInfo, C_MovementInfo, C_Faction>().ForEach(
         [&](EntityID entity, C_Transform& transform, C_EnemyAIInfo& info, C_MovementInfo& move_info, C_Faction& faction)
         {
-            if (faction.type != FactionType::Zombie)
+            if (faction.type != FactionType::Zombie || !IsZombieAudioEntityActive(ecs, entity))
             {
                 return;
             }
@@ -448,39 +447,42 @@ static void UpdateZombieAudio(
 
             const glm::vec3 position = glm::vec3(transform.matrix[3]);
             const bool chasing = info.currentState == C_EnemyAIInfo::Chase;
-            PlayTrackedZombieSFXAt(audio, audio->clips.zombie_step, entity, audio->zombie_step_emitter, chasing ? 0.38f : 0.26f, position, 1.0f, 30.0f);
+            PlayGameplaySFXAt(&audio->system, audio->clips.zombie_step, chasing ? 0.38f : 0.26f, position, 1.0f, 5.0f);
             runtime.footstep_timer = chasing ? 0.45f : 0.62f;
         });
 
-    audio->zombie_groan_timer -= dt;
-    if (audio->zombie_groan_timer > 0.0f)
-    {
-        return;
-    }
-
-    bool played_idle_groan = false;
     ecs.GetView<C_Transform, C_EnemyAIInfo, C_Faction>().ForEach(
         [&](EntityID entity, C_Transform& transform, C_EnemyAIInfo& info, C_Faction& faction)
         {
-            if (played_idle_groan ||
-                faction.type != FactionType::Zombie ||
-                info.currentState == C_EnemyAIInfo::Patrol)
+            EnemyAudioRuntime& runtime = audio->enemy_runtime[entity];
+            if (!CanZombieEmitGroan(ecs, entity, info, faction))
+            {
+                StopZombieGroanLoop(audio, runtime);
+                return;
+            }
+
+            const AudioClipHandle groan_handle = EnsureZombieGroanHandle(audio, entity, runtime);
+            if (groan_handle == 0)
             {
                 return;
             }
 
             const glm::vec3 position = glm::vec3(transform.matrix[3]);
-            if (audio->clips.zombie_groan == 0)
-            {
-                return;
-            }
+            AudioSystem_SetClipSpatialized(&audio->system, groan_handle, 1);
+            AudioSystem_SetClipPosition(&audio->system, groan_handle, position.x, position.y, position.z);
+            AudioSystem_SetClipMinMaxDistance(&audio->system, groan_handle, kZombieGroanMinDistance, kZombieGroanMaxDistance);
 
             const float volume = (info.currentState == C_EnemyAIInfo::Chase) ? 0.58f : 0.38f;
-            PlayTrackedZombieSFXAt(audio, audio->clips.zombie_groan, entity, audio->zombie_groan_emitter, volume, position, 1.5f, 40.0f);
-            played_idle_groan = true;
-        });
+            AudioSystem_SetClipVolume(&audio->system, groan_handle, volume);
 
-    audio->zombie_groan_timer = played_idle_groan ? 6.0f : 2.0f;
+            if (!runtime.groan_loop_active)
+            {
+                if (AudioSystem_PlaySpatialLoop(&audio->system, groan_handle, volume, position.x, position.y, position.z))
+                {
+                    runtime.groan_loop_active = true;
+                }
+            }
+        });
 }
 
 GameAudio* GameAudio_Init()

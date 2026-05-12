@@ -1193,6 +1193,69 @@ AudioSystem_LoadClipEx(
    return impl->clips.back()->handle;
 }
 
+AudioClipHandle
+AudioSystem_CloneClip(AudioSystem* system, AudioClipHandle source_handle, const char* logical_name)
+{
+    AudioSystemImpl* impl = get_impl(system);
+    AudioClipRecord* source_clip = get_clip_mut(system, source_handle);
+    if (impl == nullptr || source_clip == nullptr || !source_clip->sound_initialized)
+    {
+        return 0;
+    }
+
+    if (logical_name != nullptr && logical_name[0] != '\0')
+    {
+        const AudioClipHandle existing_handle = AudioSystem_FindClipByName(system, logical_name);
+        if (existing_handle != 0)
+        {
+            return existing_handle;
+        }
+    }
+
+    std::unique_ptr<AudioClipRecord> clip(new (std::nothrow) AudioClipRecord());
+    if (!clip)
+    {
+        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "AudioSystem: failed to allocate cloned clip state.");
+        return 0;
+    }
+
+    clip->handle = static_cast<AudioClipHandle>(impl->clips.size() + 1);
+    clip->logical_name = (logical_name != nullptr && logical_name[0] != '\0')
+        ? logical_name
+        : (source_clip->logical_name + "_clone_" + std::to_string(clip->handle));
+    clip->source_path = source_clip->source_path;
+    clip->resolved_path = source_clip->resolved_path;
+    clip->clip_volume = source_clip->clip_volume;
+    clip->category = source_clip->category;
+    clip->spatialized = source_clip->spatialized;
+    clip->min_distance = source_clip->min_distance;
+    clip->max_distance = source_clip->max_distance;
+    clip->low_pass_enabled = source_clip->low_pass_enabled;
+    clip->low_pass_cutoff_hz = source_clip->low_pass_cutoff_hz;
+
+    const ma_result result = ma_sound_init_from_file(
+        &impl->engine,
+        clip->resolved_path.c_str(),
+        0,
+        NULL,
+        NULL,
+        &clip->sound
+    );
+    if (result != MA_SUCCESS)
+    {
+        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "AudioSystem: failed to clone '%s' with miniaudio (%d).", clip->resolved_path.c_str(), (int)result);
+        return 0;
+    }
+
+    SDL_Log("AudioSystem: cloned '%s' from '%s'.", clip->logical_name.c_str(), clip->resolved_path.c_str());
+
+    clip->sound_initialized = 1;
+    apply_clip_settings(system, clip.get());
+
+    impl->clips.push_back(std::move(clip));
+    return impl->clips.back()->handle;
+}
+
 b32
 AudioSystem_PlayOneShot(AudioSystem* system, AudioClipHandle handle, float volume)
 {
