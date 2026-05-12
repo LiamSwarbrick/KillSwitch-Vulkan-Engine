@@ -475,7 +475,7 @@ init_audio_device(AudioSystemImpl* impl, const char* label)
 #if defined(_WIN32)
    device_config.playback.shareMode = ma_share_mode_shared;
 #endif
-   device_config.performanceProfile = ma_performance_profile_conservative;
+    device_config.performanceProfile = ma_performance_profile_low_latency;
    device_config.dataCallback = audio_device_data_callback;
    device_config.notificationCallback = audio_device_notification_callback;
    device_config.pUserData = impl;

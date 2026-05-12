@@ -647,7 +647,6 @@ struct C_EnemyAIInfo
 
 	State currentState = State::Idle;
 	State previousState = State::Idle;
-	State lastAudioState = State::Idle;
 	float stateTimer = 0.0f;
 
 	// Vision & alert
@@ -682,7 +681,6 @@ struct C_EnemyAIInfo
 
 	// Timers
 	float attackTimer = 0.0f;
-	float audioFootstepTimer = 0.0f;
 
 	// Important addition (TODO: add turn speed calculations to turning)
 	glm::vec3 targetLookDirToLerp{ 0.0f };
