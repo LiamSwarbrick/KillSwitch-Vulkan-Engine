@@ -6,6 +6,8 @@
 #include "renderer/renderer.h"
 #include "renderer/debug_ui_api.h"
 
+#include "game/game_restart_hack.h"
+
 #include "imgui.h"
 
 #include <cmath>
@@ -1505,7 +1507,10 @@ static void DrawGameOverMenu()
     ImGui::PushFont(GameUI_GetFont(GameFont::Body), 30.0f);
 
     if (ImGui::Button("Restart", ImVec2(btn_w, btn_h)))
+    {
         GameUI_SetState(GameState::Playing);
+        restart_program = true;
+    }
     ImGui::SetItemDefaultFocus();
 
     ImGui::Dummy(ImVec2(0, gap));

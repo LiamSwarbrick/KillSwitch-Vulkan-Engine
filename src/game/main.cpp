@@ -18,6 +18,8 @@
 #include "foundations/level/LevelGeneration.h"
 
 
+#define GMH_IMPL
+#include "game/game_restart_hack.h"
 
 int main(int argc, char *argv[])
 {
@@ -238,7 +240,10 @@ int main(int argc, char *argv[])
             GameUI_DebugDamagePlayer(scene, 4);
 
         GameUI_Update();
-
+        if (restart_program)
+        {
+            break;
+        }
 
 
         // JANK ASS WAVE SPAWNING/TRACKING //////////////////////////////////////////////////////////////////////////// FIX THE NEXT WAVE BEING INVISIBLE!!!
@@ -344,22 +349,22 @@ int main(int argc, char *argv[])
         // Movement always follows camera forward.
         scene.SetMovementCameraForward(InGameCam_GetMovementForward());
 
-    // Game ticks
-    if (current_ui_state == GameState::Playing && !GameUI_IsLevelStartSkillSelectionOpen()) // freeze game when not playing
-    {
-        
-        scene.Update(dt);
+        // Game ticks
+        if (current_ui_state == GameState::Playing && !GameUI_IsLevelStartSkillSelectionOpen()) // freeze game when not playing
+        {
+            
+            scene.Update(dt);
 
-        // Update in-game camera
-        InGameCam_Update(dt, gameplay_input_enabled, DebugUI_IsOpen(), right_mouse_down, DebugUI_GetCameraMode());
+            // Update in-game camera
+            InGameCam_Update(dt, gameplay_input_enabled, DebugUI_IsOpen(), right_mouse_down, DebugUI_GetCameraMode());
 
-        // pass camera snapshot to debug UI
-        const InGameCamSnapshot ingame_cam_snapshot = InGameCam_GetSnapshot();
-        DebugUI_SetInGameCameraSnapshot(&ingame_cam_snapshot);
+            // pass camera snapshot to debug UI
+            const InGameCamSnapshot ingame_cam_snapshot = InGameCam_GetSnapshot();
+            DebugUI_SetInGameCameraSnapshot(&ingame_cam_snapshot);
 
-        GameUI_UpdatePlayingHUD(scene);
-    }
-    GameAudio_Update(game_audio, scene, InGameCam_GetGameplayCamera(), dt);
+            GameUI_UpdatePlayingHUD(scene);
+        }
+        GameAudio_Update(game_audio, scene, InGameCam_GetGameplayCamera(), dt);
 
         // Rendering
         uint32_t flags = SDL_GetWindowFlags(window);
@@ -379,6 +384,13 @@ int main(int argc, char *argv[])
     Input_Shutdown();
     Renderer_Shutdown();
     Core_Shutdown(window);
+
+    if (restart_program)
+    {
+        restart_program = false;
+        main(0, NULL);
+    }
+
 
     return 0;
 }
