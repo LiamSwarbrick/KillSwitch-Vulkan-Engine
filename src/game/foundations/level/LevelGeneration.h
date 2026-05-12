@@ -84,7 +84,7 @@ public:
     LevelFloor GenerateGrid(int width, int height, glm::ivec2 start, uint16_t startDoorwayMask, Theme startTheme, glm::ivec2 goal, uint16_t goalDoorwayMask, Theme goalTheme, int maxRooms, int floorNum);
 
     // Should place the entities into the Scene, need scene for instantiate prefab
-    void InstantiateLevel(class Scene* scene, LevelFloor& floor);
+    void InstantiateLevel(class Scene* scene, LevelFloor& floor, Asset* zombieAsset, int &levelsSpawned, int wave);
 
     // Does all the handywork to create a single floor clearly from all assets in a folder
     LevelFloor CreateFullLevel(Scene* scene, const std::string& folder);

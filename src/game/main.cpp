@@ -647,7 +647,7 @@ int main(int argc, char *argv[])
     Scene scene{};
     scene.StartUp();
 
-            //Asset* room_prefab = scene.LoadPrefab("assets/testing_gen/3DInGreen.gltf");
+    Asset* room_prefab = scene.LoadPrefab("assets/Final_Levels/SUPERINSIDEROOM.gltf");
             //Asset* room_prefab = scene.LoadPrefab("assets/levels/testroom-liamrandomtest-Untitled.gltf");
     //  Asset* many_prefab = scene.LoadPrefab("assets/levels/manylights.gltf");
     // Asset* playground_prefab = scene.LoadPrefab("assets/levels/playground.gltf");
@@ -677,14 +677,16 @@ int main(int argc, char *argv[])
 
     LevelGeneration generator;
     LevelFloor floor1 = generator.CreateFullLevel(&scene, "assets/testing_gen/");
-    generator.InstantiateLevel(&scene, floor1);
+    int levelsSpawned = 0, wave = 1;
+    bool zombiesWereSpawned = false;
+    generator.InstantiateLevel(&scene, floor1, zombie_woman, levelsSpawned, wave);
 
 
 
     //Asset* animationPrefab = scene.LoadPrefab("assets/animations/cat.gltf");
     
     //scene.InstantiatePrefab(many_prefab, glm::vec3(0, 0, 0), glm::identity<glm::quat>());
-    //scene.InstantiatePrefab(room_prefab, glm::vec3(0.0f, 0.0f, -10.0f), glm::identity<glm::quat>());
+    //scene.InstantiatePrefab(room_prefab, glm::vec3(0.0f, 0.0f, 3.0f), glm::identity<glm::quat>());
     //scene.InstantiatePrefab(playground_prefab, glm::vec3(0, 0, -10.0f), glm::identity<glm::quat>());
     //scene.InstantiatePrefab(room_prefab, glm::vec3(0.0f, 0.0f, 0.0f), glm::identity<glm::quat>());
     //scene.InstantiatePrefab(playground_prefab, glm::vec3(0, 0, 0.0f), glm::identity<glm::quat>());
@@ -700,10 +702,11 @@ int main(int argc, char *argv[])
             y += 0.5f;
         }
     }*/
-    EntityID playerID = scene.InstantiatePrefab(player, glm::vec3(0, 0, 0), glm::identity<glm::quat>());
-    scene.InstantiatePrefab(zombie_woman, glm::vec3(3, 0.0f, -11.5f), Math::ViewDirToQuat({0.0f ,0.0f, 1.0f}));
-    scene.InstantiatePrefab(zombie_woman, glm::vec3(3, 0.0f, -7.5f), Math::ViewDirToQuat({ 0.0f ,0.0f, 1.0f }));
-    scene.InstantiatePrefab(zombie_woman, glm::vec3(-3, 0.0f, -11.5f), Math::ViewDirToQuat({ 0.0f ,0.0f, 1.0f }));
+    EntityID playerID = scene.InstantiatePrefab(player, glm::vec3(30, 0, -30), glm::identity<glm::quat>());
+    //scene.InstantiatePrefab(zombie_woman, glm::vec3(3, -10.0f, -11.5f), Math::ViewDirToQuat({0.0f ,0.0f, 1.0f}));
+    //scene.InstantiatePrefab(zombie_woman, glm::vec3(3, 0.0f, -7.5f), Math::ViewDirToQuat({ 0.0f ,0.0f, 1.0f }));
+    //scene.InstantiatePrefab(zombie_woman, glm::vec3(-3, 0.0f, -11.5f), Math::ViewDirToQuat({ 0.0f ,0.0f, 1.0f }));
+    //scene.InstantiatePrefab(zombie_woman, glm::vec3(-3, 0.0f, -3.5f), Math::ViewDirToQuat({ 0.0f ,0.0f, 1.0f }));
     // scene.InstantiatePrefab(sphere_prefab, glm::vec3(4.7, 7, 0.1));
     // scene.InstantiatePrefab(sphere_prefab, glm::vec3(-4.7, 7, -0.1));
     // scene.InstantiatePrefab(sphere_prefab, glm::vec3(0.1, 7, -4.7));
@@ -727,7 +730,7 @@ int main(int argc, char *argv[])
     scene.SetPlayer(playerID);
     scene.BuildRendererScene();
     GameUI_SetLevelStartSkillApplyCallback(&scene, GameUI_ApplyPlaceholderLevelStartSkill);
-
+    
     DebugUI_SetECS(&scene.GetECS());
     DebugUI_SetAsset(&scene.m_prefabs);
     InGameCam_Init(&scene.GetECS(), &scene.GetPhysicsManager(), playerID);
@@ -781,6 +784,35 @@ int main(int argc, char *argv[])
             GameUI_DebugDamagePlayer(scene, 4);
 
         GameUI_Update();
+
+
+
+        // JANK ASS WAVE SPAWNING/TRACKING
+        int aliveZombies = 0;
+
+        scene.GetECS().GetView<C_Faction, C_Health>().ForEach([&](EntityID e, C_Faction& faction, C_Health& health) {
+            if (faction.type == FactionType::Zombie) {
+                // Only count them if they actually have health left
+                if (health.currentHealth > 0) {
+                    aliveZombies++;
+                }
+            }
+            });
+
+        // Dont mess up before starting
+        if (aliveZombies > 0) {
+            zombiesWereSpawned = true;
+        }
+
+        // If all killed, put a message and go next wave
+        if (zombiesWereSpawned && aliveZombies == 1) {
+            SDL_Log("WAVE %d CLEAR: All zombies were eliminated...", wave);
+            wave++;
+            generator.InstantiateLevel(&scene, floor1, zombie_woman, levelsSpawned, 1);
+
+        }
+
+
 
         GameState current_ui_state = GameUI_GetState();
         bool current_skill_choice_open = GameUI_IsLevelStartSkillSelectionOpen();

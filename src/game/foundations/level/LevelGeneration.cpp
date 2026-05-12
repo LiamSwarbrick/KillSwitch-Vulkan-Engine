@@ -5,6 +5,7 @@
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/quaternion.hpp>
 #include <core/components.h>
+#include <core/utils/math_utils.h>
 
 /*
 TO ENSURE THIS WORKS CORRECTLY, EMPTY DOORWAY NODES SHOULD PLACED AND NAMED AS FOLLOWS:
@@ -448,7 +449,7 @@ LevelFloor LevelGeneration::GenerateGrid(int width, int height, glm::ivec2 start
 		for (int i = 0; i < 1; ++i)
 		{
 			// Get random offset from start
-			std::uniform_int_distribution<int> dirDist(2, 5);
+			std::uniform_int_distribution<int> dirDist(2, 2);
 			glm::ivec2 offset = neighbourOffsets[i] * dirDist(rng);
 			glm::ivec2 position = start + offset;
 
@@ -622,8 +623,24 @@ LevelFloor LevelGeneration::GenerateGrid(int width, int height, glm::ivec2 start
 	return floor;
 }
 
-void LevelGeneration::InstantiateLevel(Scene* scene, LevelFloor& floor)
+void LevelGeneration::InstantiateLevel(Scene* scene, LevelFloor& floor, Asset* zombieAsset, int &levelsSpawned, int wave)
 {
+	// Local RNG for spawning
+	std::mt19937 spawnRng(std::random_device{}());
+	std::uniform_int_distribution<int> zombieNum(0, wave);
+	// Offset range to keep zombies away from walls
+	std::uniform_real_distribution<float> offset(-4.0f, 4.0f);
+
+	//MeshPrefab zombieMaster = {};
+	//if (levelsSpawned > 0 && zombieAsset) {
+	//	scene->GetECS().GetView<C_AnimatedMesh>().ForEach([&](C_AnimatedMesh& mesh) {
+	//		// If this entity uses the zombie asset and has valid GPU data
+	//		if (mesh.asset == zombieAsset && mesh.renderer_prefab.mesh_rids.primitive_count > 0) {
+	//			zombieMaster = mesh.renderer_prefab;
+	//		}
+	//		});
+	//}
+
 	// For every grid cell, spawn the chosen room in its position with the necessary rotation
 	for (int y = 0; y < floor.height; ++y)
 	{
@@ -644,11 +661,54 @@ void LevelGeneration::InstantiateLevel(Scene* scene, LevelFloor& floor)
 
 			glm::vec3 localPos(x * 10.0f, 0.0f, y * -10.0f);
 			glm::vec3 worldPos = floor.worldOffset + localPos;
-			glm::quat rotation = glm::angleAxis(glm::radians(room.rotation), glm::vec3(0, 1, 0));
-			EntityID roomEntity = scene->InstantiatePrefab(room.asset, worldPos, rotation);
-			floor.roomEntities.push_back(roomEntity);
+
+			if (!levelsSpawned)
+			{
+				glm::quat rotation = glm::angleAxis(glm::radians(room.rotation), glm::vec3(0, 1, 0));
+				EntityID roomEntity = scene->InstantiatePrefab(room.asset, worldPos, rotation);
+				floor.roomEntities.push_back(roomEntity);
+			}
+
+			// Spawn Zombies, but not in starting room
+			if (x == floor.startCoords.x && y == floor.startCoords.y)
+				continue;
+
+			if (zombieAsset)
+			{
+				int numZombies = zombieNum(spawnRng); // randomly spawns 0-wave zombies in a room
+				if (!levelsSpawned)
+					numZombies = 1;
+
+				for (int i = 0; i < numZombies; i++) {
+
+					// cannot be in center or might get stuck in obelisk
+					float offX, offZ;
+					bool valid = false;
+					while (!valid) {
+						offX = offset(spawnRng);
+						offZ = offset(spawnRng);
+						if (!(std::abs(offX) < 1.5f && std::abs(offZ) < 1.5f)) {
+							valid = true;
+						}
+					}
+
+					glm::vec3 spawnPos = worldPos + glm::vec3(offX, 0.0f, offZ);
+
+					// Instantiate the zombie woman
+					EntityID zEntity = scene->InstantiatePrefab(zombieAsset, spawnPos, Math::ViewDirToQuat({ 0.0f, 0.0f, 1.0f }));
+
+					// If this is a later wave (levelsSpawned > 0), the zombie will be invisible
+					//if (zEntity != MAX_ENTITIES && zombieMaster.mesh_rids.primitive_count > 0) {
+					//	if (scene->GetECS().Has<C_AnimatedMesh>(zEntity)) {
+					//		auto& animMesh = scene->GetECS().GetComponent<C_AnimatedMesh>(zEntity);
+					//		animMesh.renderer_prefab = zombieMaster;
+					//	}
+					//}
+				}
+			}
 		}
 	}
+	levelsSpawned++;
 }
 
 
@@ -755,36 +815,36 @@ LevelFloor LevelGeneration::CreateFullLevel(Scene* scene, const std::string& fol
 	BuildPalette(roomAssets);
 
 	LevelFloor floor = GenerateGrid(7, 7,
-		glm::ivec2({ 0,0 }), ((DOOR << NORTH) + (DOOR << EAST) + (WALL << SOUTH) + (WALL << WEST)), INSIDE,
-		glm::ivec2({ 0,6 }), ((WALL << NORTH) + (DOOR << EAST) + (DOOR << SOUTH) + (WALL << WEST)), INSIDE,
-		25, 1);
+		glm::ivec2({ 3,3 }), ((DOOR << NORTH) + (DOOR << EAST) + (DOOR << SOUTH) + (DOOR << WEST)), INSIDE,
+		glm::ivec2({ 3,3 }), ((DOOR << NORTH) + (DOOR << EAST) + (DOOR << SOUTH) + (DOOR << WEST)), INSIDE,
+		5, 1);
 
 	floor.worldOffset = { 0.0f, 0.0f, 0.0f };
 
 	return floor;
 }
 
-void LevelGeneration::GenerateNextFloor(Scene* scene)
-{
-	LevelFloor& prevFloor = activeFloors.back();
-	currentFloor++;
-
-	glm::vec3 newOffset = prevFloor.worldOffset + glm::vec3(0, 20.0f, -40.0f) + glm::vec3(0.0f, 0.0f, prevFloor.goalCoords.y * -10.0f);
-
-	//Asset* stairs = scene->LoadPrefab("assets/levels/STAIRSSHITTY.gltf");
-	//scene->InstantiatePrefab(stairs, newOffset + glm::vec3(prevFloor.goalCoords.x * 10.0f, -20.0f, 30.0f));
-	glm::ivec2 newStart(prevFloor.width / 2, 0);
-	glm::ivec2 newGoal(prevFloor.width / 2, prevFloor.height - 1);
-
-	LevelFloor newFloor = GenerateGrid(7, 7,
-		newStart, ((DOOR << NORTH) + (DOOR << EAST) + (DOOR << SOUTH) + (DOOR << WEST)), OUTSIDE,
-		newGoal, ((DOOR << NORTH) + (DOOR << EAST) + (DOOR << SOUTH) + (DOOR << WEST)), INSIDE,
-		20, currentFloor);
-	newFloor.worldOffset = newOffset;
-
-	InstantiateLevel(scene, newFloor);
-	activeFloors.push_back(newFloor);
-}
+//void LevelGeneration::GenerateNextFloor(Scene* scene)
+//{
+//	LevelFloor& prevFloor = activeFloors.back();
+//	currentFloor++;
+//
+//	glm::vec3 newOffset = prevFloor.worldOffset + glm::vec3(0, 20.0f, -40.0f) + glm::vec3(0.0f, 0.0f, prevFloor.goalCoords.y * -10.0f);
+//
+//	//Asset* stairs = scene->LoadPrefab("assets/levels/STAIRSSHITTY.gltf");
+//	//scene->InstantiatePrefab(stairs, newOffset + glm::vec3(prevFloor.goalCoords.x * 10.0f, -20.0f, 30.0f));
+//	glm::ivec2 newStart(prevFloor.width / 2, 0);
+//	glm::ivec2 newGoal(prevFloor.width / 2, prevFloor.height - 1);
+//
+//	LevelFloor newFloor = GenerateGrid(7, 7,
+//		newStart, ((DOOR << NORTH) + (DOOR << EAST) + (DOOR << SOUTH) + (DOOR << WEST)), OUTSIDE,
+//		newGoal, ((DOOR << NORTH) + (DOOR << EAST) + (DOOR << SOUTH) + (DOOR << WEST)), INSIDE,
+//		20, currentFloor);
+//	newFloor.worldOffset = newOffset;
+//
+//	InstantiateLevel(scene, newFloor);
+//	activeFloors.push_back(newFloor);
+//}
 
 void LevelGeneration::CleanupOldFloors(Scene* scene)
 {
