@@ -36,7 +36,8 @@ private:
 		EntityID enemyID, 
 		const C_EnemyAIStats& stats, C_EnemyAIInfo& info, 
 		const C_CombatInfo& combatInfo,
-		const C_RigidBody& bodyHandle, const glm::vec3& position, const glm::vec3& lookDir, 
+		C_MovementInput& moveInput, C_CombatInput& combatInput,
+		const C_RigidBody& bodyHandle, const glm::vec3& position, const glm::vec3& lookDir,
 		float dt) const;
 	ChaseOrAlertInfo ShouldChaseOrGetAlerted(
 		const C_EnemyAIStats& stats, C_EnemyAIInfo& info, 
