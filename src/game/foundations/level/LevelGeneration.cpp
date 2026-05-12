@@ -698,7 +698,7 @@ void LevelGeneration::InstantiateLevel(Scene* scene, LevelFloor& floor, std::vec
 					EntityID zEntity = scene->InstantiatePrefab(zombieAssets[zomb_num], spawnPos, Math::ViewDirToQuat({0.0f, 0.0f, 1.0f}));
 				
 					// If this is a later wave (levelsSpawned > 0), the zombie will be invisible
-					if (!levelsSpawned)
+					if (levelsSpawned)
 					{
 						if (scene->GetECS().Has<C_AnimatedMesh>(zEntity)) {
 							auto& animMesh = scene->GetECS().GetComponent<C_AnimatedMesh>(zEntity);
