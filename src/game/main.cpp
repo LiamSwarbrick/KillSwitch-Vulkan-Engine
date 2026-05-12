@@ -647,7 +647,7 @@ int main(int argc, char *argv[])
     Scene scene{};
     scene.StartUp();
 
-    Asset* room_prefab = scene.LoadPrefab("assets/Final_Levels/SUPERINSIDEROOM.gltf");
+    // Asset* room_prefab = scene.LoadPrefab("assets/testing_gen/1O0DOut.gltf");
             //Asset* room_prefab = scene.LoadPrefab("assets/levels/testroom-liamrandomtest-Untitled.gltf");
     //  Asset* many_prefab = scene.LoadPrefab("assets/levels/manylights.gltf");
     // Asset* playground_prefab = scene.LoadPrefab("assets/levels/playground.gltf");
@@ -655,7 +655,11 @@ int main(int argc, char *argv[])
     // Asset* sphere_prefab = scene.LoadPrefab("assets/props/simple_sphere.gltf");
                 //Asset* capsule_prefab = scene.LoadPrefab("assets/props/zombie.gltf");
                 //Asset* capsule_prefab = scene.LoadPrefab("assets/props/character_capsule.gltf");
+    std::vector<Asset*> zombies;
+    Asset* zombie = scene.LoadPrefab("assets/animations/zombie.gltf");
+    zombies.push_back(zombie);
     Asset* zombie_woman = scene.LoadPrefab("assets/animations/zombie_woman.gltf");
+    zombies.push_back(zombie_woman);
     Asset* player = scene.LoadPrefab("assets/animations/player.gltf");
             // TODO: Change the following 2 prefabs so they can be imported (add the boolean "Is ECS Entity" with the new script where it is needed)
             // Asset* catPrefab = scene.LoadPrefab("assets/animations/zomboUntitled.gltf");
@@ -676,17 +680,17 @@ int main(int argc, char *argv[])
 
 
     LevelGeneration generator;
-    LevelFloor floor1 = generator.CreateFullLevel(&scene, "assets/testing_gen/");
+    LevelFloor floor1 = generator.CreateFullLevel(&scene, "assets/Final_Levels/");
     int levelsSpawned = 0, wave = 1;
     bool zombiesWereSpawned = false;
-    generator.InstantiateLevel(&scene, floor1, zombie_woman, levelsSpawned, wave);
+    generator.InstantiateLevel(&scene, floor1, zombies, levelsSpawned, wave);
 
 
 
     //Asset* animationPrefab = scene.LoadPrefab("assets/animations/cat.gltf");
     
     //scene.InstantiatePrefab(many_prefab, glm::vec3(0, 0, 0), glm::identity<glm::quat>());
-    //scene.InstantiatePrefab(room_prefab, glm::vec3(0.0f, 0.0f, 3.0f), glm::identity<glm::quat>());
+    //.InstantiatePrefab(room_prefab, glm::vec3(0.0f, 0.0f, 3.0f), glm::identity<glm::quat>());
     //scene.InstantiatePrefab(playground_prefab, glm::vec3(0, 0, -10.0f), glm::identity<glm::quat>());
     //scene.InstantiatePrefab(room_prefab, glm::vec3(0.0f, 0.0f, 0.0f), glm::identity<glm::quat>());
     //scene.InstantiatePrefab(playground_prefab, glm::vec3(0, 0, 0.0f), glm::identity<glm::quat>());
@@ -702,7 +706,7 @@ int main(int argc, char *argv[])
             y += 0.5f;
         }
     }*/
-    EntityID playerID = scene.InstantiatePrefab(player, glm::vec3(30, 0, -30), glm::identity<glm::quat>());
+    EntityID playerID = scene.InstantiatePrefab(player, glm::vec3(30, 0, -28), glm::identity<glm::quat>());
     //scene.InstantiatePrefab(zombie_woman, glm::vec3(3, -10.0f, -11.5f), Math::ViewDirToQuat({0.0f ,0.0f, 1.0f}));
     //scene.InstantiatePrefab(zombie_woman, glm::vec3(3, 0.0f, -7.5f), Math::ViewDirToQuat({ 0.0f ,0.0f, 1.0f }));
     //scene.InstantiatePrefab(zombie_woman, glm::vec3(-3, 0.0f, -11.5f), Math::ViewDirToQuat({ 0.0f ,0.0f, 1.0f }));
@@ -787,7 +791,7 @@ int main(int argc, char *argv[])
 
 
 
-        // JANK ASS WAVE SPAWNING/TRACKING
+        // JANK ASS WAVE SPAWNING/TRACKING //////////////////////////////////////////////////////////////////////////// FIX THE NEXT WAVE BEING INVISIBLE!!!
         int aliveZombies = 0;
 
         scene.GetECS().GetView<C_Faction, C_Health>().ForEach([&](EntityID e, C_Faction& faction, C_Health& health) {
@@ -808,7 +812,7 @@ int main(int argc, char *argv[])
         if (zombiesWereSpawned && aliveZombies == 1) {
             SDL_Log("WAVE %d CLEAR: All zombies were eliminated...", wave);
             wave++;
-            generator.InstantiateLevel(&scene, floor1, zombie_woman, levelsSpawned, 1);
+            generator.InstantiateLevel(&scene, floor1, zombies, levelsSpawned, 1);
 
         }
 

@@ -623,11 +623,12 @@ LevelFloor LevelGeneration::GenerateGrid(int width, int height, glm::ivec2 start
 	return floor;
 }
 
-void LevelGeneration::InstantiateLevel(Scene* scene, LevelFloor& floor, Asset* zombieAsset, int &levelsSpawned, int wave)
+void LevelGeneration::InstantiateLevel(Scene* scene, LevelFloor& floor, std::vector<Asset*> zombieAssets, int &levelsSpawned, int wave)
 {
 	// Local RNG for spawning
 	std::mt19937 spawnRng(std::random_device{}());
 	std::uniform_int_distribution<int> zombieNum(0, wave);
+	std::uniform_int_distribution<int> zombieType(0, 1);
 	// Offset range to keep zombies away from walls
 	std::uniform_real_distribution<float> offset(-4.0f, 4.0f);
 
@@ -673,11 +674,9 @@ void LevelGeneration::InstantiateLevel(Scene* scene, LevelFloor& floor, Asset* z
 			if (x == floor.startCoords.x && y == floor.startCoords.y)
 				continue;
 
-			if (zombieAsset)
+			if (zombieAssets.size() == 2)
 			{
 				int numZombies = zombieNum(spawnRng); // randomly spawns 0-wave zombies in a room
-				if (!levelsSpawned)
-					numZombies = 1;
 
 				for (int i = 0; i < numZombies; i++) {
 
@@ -695,7 +694,7 @@ void LevelGeneration::InstantiateLevel(Scene* scene, LevelFloor& floor, Asset* z
 					glm::vec3 spawnPos = worldPos + glm::vec3(offX, 0.0f, offZ);
 
 					// Instantiate the zombie woman
-					EntityID zEntity = scene->InstantiatePrefab(zombieAsset, spawnPos, Math::ViewDirToQuat({ 0.0f, 0.0f, 1.0f }));
+					EntityID zEntity = scene->InstantiatePrefab(zombieAssets[zombieType(spawnRng)], spawnPos, Math::ViewDirToQuat({0.0f, 0.0f, 1.0f}));
 
 					// If this is a later wave (levelsSpawned > 0), the zombie will be invisible
 					//if (zEntity != MAX_ENTITIES && zombieMaster.mesh_rids.primitive_count > 0) {
@@ -815,9 +814,9 @@ LevelFloor LevelGeneration::CreateFullLevel(Scene* scene, const std::string& fol
 	BuildPalette(roomAssets);
 
 	LevelFloor floor = GenerateGrid(7, 7,
+		glm::ivec2({ 3,3 }), ((OPEN << NORTH) + (OPEN << EAST) + (OPEN << SOUTH) + (OPEN << WEST)), OUTSIDE,
 		glm::ivec2({ 3,3 }), ((DOOR << NORTH) + (DOOR << EAST) + (DOOR << SOUTH) + (DOOR << WEST)), INSIDE,
-		glm::ivec2({ 3,3 }), ((DOOR << NORTH) + (DOOR << EAST) + (DOOR << SOUTH) + (DOOR << WEST)), INSIDE,
-		5, 1);
+		8, 1);
 
 	floor.worldOffset = { 0.0f, 0.0f, 0.0f };
 
