@@ -90,7 +90,7 @@ void MovementSystem::Update(float dt) const
             moveProfile = &moveStats.GetGroundProfile(moveInfo.state);
 
 
-        float maxSpeed = moveProfile->maxSpeed;
+        float maxSpeed = moveProfile->maxSpeed * moveAmount;
         if (moveInput.wantsAim && moveInfo.state == MoveState::Walk)
             maxSpeed *= 0.5f;
 
