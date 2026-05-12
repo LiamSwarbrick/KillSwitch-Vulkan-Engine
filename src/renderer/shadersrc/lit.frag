@@ -357,11 +357,12 @@ void main()
         depth,
         dith_threshold
     );
-
+    
     vec4 final_color = vec4(lit_rgb, 1.0);
+
     out_color = vec4(
         final_color.rgb,
-        process_alpha(final_color.a, mat.alpha_cutoff)
+        process_alpha(base_color.a, mat.alpha_cutoff)
     );
 
     // out_color += vec4(1.0);
