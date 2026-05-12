@@ -251,7 +251,7 @@ void CombatSystem::ProcessMelee(EntityID ourID, RigidBodyHandle bodyHandle, cons
                         targetCombatInfo.staggeredTimer = staggerTime;
                     targetCombatInfo.isStaggered = true;
 
-                    physics->addVelocity(hit.entity, glm::vec3(lookDir.x + 0.0f, fabsf(lookDir.y) + 1.0f, lookDir.z + 0.0f) * knockback);
+                    physics->addVelocity(hit.entity, glm::vec3(lookDir.x + 0.0f, lookDir.y + 0.3f, lookDir.z + 0.0f) * knockback);
                 }
             }
         }
