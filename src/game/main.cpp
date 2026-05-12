@@ -647,19 +647,19 @@ int main(int argc, char *argv[])
     Scene scene{};
     scene.StartUp();
 
-    //Asset* room_prefab = scene.LoadPrefab("assets/testing_gen/3DInGreen.gltf");
-    //Asset* room_prefab = scene.LoadPrefab("assets/levels/testroom-liamrandomtest-Untitled.gltf");
-     Asset* many_prefab = scene.LoadPrefab("assets/levels/manylights.gltf");
-    Asset* playground_prefab = scene.LoadPrefab("assets/levels/playground.gltf");
-    //Asset* cube_prefab = scene.LoadPrefab("assets/props/simple_cube.gltf");
-    Asset* sphere_prefab = scene.LoadPrefab("assets/props/simple_sphere.gltf");
-    //Asset* capsule_prefab = scene.LoadPrefab("assets/props/zombie.gltf");
-    //Asset* capsule_prefab = scene.LoadPrefab("assets/props/character_capsule.gltf");
+            //Asset* room_prefab = scene.LoadPrefab("assets/testing_gen/3DInGreen.gltf");
+            //Asset* room_prefab = scene.LoadPrefab("assets/levels/testroom-liamrandomtest-Untitled.gltf");
+    //  Asset* many_prefab = scene.LoadPrefab("assets/levels/manylights.gltf");
+    // Asset* playground_prefab = scene.LoadPrefab("assets/levels/playground.gltf");
+                //Asset* cube_prefab = scene.LoadPrefab("assets/props/simple_cube.gltf");
+    // Asset* sphere_prefab = scene.LoadPrefab("assets/props/simple_sphere.gltf");
+                //Asset* capsule_prefab = scene.LoadPrefab("assets/props/zombie.gltf");
+                //Asset* capsule_prefab = scene.LoadPrefab("assets/props/character_capsule.gltf");
     Asset* zombie_woman = scene.LoadPrefab("assets/animations/zombie_woman.gltf");
     Asset* player = scene.LoadPrefab("assets/animations/player.gltf");
-    // TODO: Change the following 2 prefabs so they can be imported (add the boolean "Is ECS Entity" with the new script where it is needed)
-    // Asset* catPrefab = scene.LoadPrefab("assets/animations/zomboUntitled.gltf");
-    // Asset* catPrefab = scene.LoadPrefab("assets/animations/flatzombo.gltf");
+            // TODO: Change the following 2 prefabs so they can be imported (add the boolean "Is ECS Entity" with the new script where it is needed)
+            // Asset* catPrefab = scene.LoadPrefab("assets/animations/zomboUntitled.gltf");
+            // Asset* catPrefab = scene.LoadPrefab("assets/animations/flatzombo.gltf");
 
     // scene.InstantiatePrefab(room_prefab, glm::vec3(0, 0, 0), glm::identity<glm::quat>());
     // scene.InstantiatePrefab(cube_prefab, glm::vec3(0, 5.1, 0), glm::identity<glm::quat>());
