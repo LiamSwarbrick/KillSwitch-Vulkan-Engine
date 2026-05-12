@@ -623,7 +623,7 @@ LevelFloor LevelGeneration::GenerateGrid(int width, int height, glm::ivec2 start
 	return floor;
 }
 
-void LevelGeneration::InstantiateLevel(Scene* scene, LevelFloor& floor, std::vector<Asset*> zombieAssets, int &levelsSpawned, int wave)
+void LevelGeneration::InstantiateLevel(Scene* scene, LevelFloor& floor, std::vector<Asset*> zombieAssets, int &levelsSpawned, int wave, MeshPrefab z1_mesh, MeshPrefab z2_mesh)
 {
 	// Local RNG for spawning
 	std::mt19937 spawnRng(std::random_device{}());
@@ -694,15 +694,17 @@ void LevelGeneration::InstantiateLevel(Scene* scene, LevelFloor& floor, std::vec
 					glm::vec3 spawnPos = worldPos + glm::vec3(offX, 0.0f, offZ);
 
 					// Instantiate the zombie woman
-					EntityID zEntity = scene->InstantiatePrefab(zombieAssets[zombieType(spawnRng)], spawnPos, Math::ViewDirToQuat({0.0f, 0.0f, 1.0f}));
-
+					int zomb_num = zombieType(spawnRng);
+					EntityID zEntity = scene->InstantiatePrefab(zombieAssets[zomb_num], spawnPos, Math::ViewDirToQuat({0.0f, 0.0f, 1.0f}));
+				
 					// If this is a later wave (levelsSpawned > 0), the zombie will be invisible
-					//if (zEntity != MAX_ENTITIES && zombieMaster.mesh_rids.primitive_count > 0) {
-					//	if (scene->GetECS().Has<C_AnimatedMesh>(zEntity)) {
-					//		auto& animMesh = scene->GetECS().GetComponent<C_AnimatedMesh>(zEntity);
-					//		animMesh.renderer_prefab = zombieMaster;
-					//	}
-					//}
+					if (!levelsSpawned)
+					{
+						if (scene->GetECS().Has<C_AnimatedMesh>(zEntity)) {
+							auto& animMesh = scene->GetECS().GetComponent<C_AnimatedMesh>(zEntity);
+							animMesh.renderer_prefab = zomb_num ? z2_mesh : z1_mesh;
+						}
+					}
 				}
 			}
 		}

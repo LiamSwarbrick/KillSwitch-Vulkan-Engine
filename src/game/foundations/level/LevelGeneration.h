@@ -6,6 +6,7 @@
 #include <map>
 #include <random>
 #include <filesystem>
+#include "game/foundations/scene.h"
 
 // Enum of room themes, add to this when making new theme
 enum Theme {
@@ -84,7 +85,8 @@ public:
     LevelFloor GenerateGrid(int width, int height, glm::ivec2 start, uint16_t startDoorwayMask, Theme startTheme, glm::ivec2 goal, uint16_t goalDoorwayMask, Theme goalTheme, int maxRooms, int floorNum);
 
     // Should place the entities into the Scene, need scene for instantiate prefab
-    void InstantiateLevel(class Scene* scene, LevelFloor& floor, std::vector<Asset*> zombieAssets, int &levelsSpawned, int wave);
+    // void InstantiateLevel(class Scene* scene, LevelFloor& floor, std::vector<Asset*> zombieAssets, int &levelsSpawned, int wave);
+    void InstantiateLevel(Scene* scene, LevelFloor& floor, std::vector<Asset*> zombieAssets, int &levelsSpawned, int wave, MeshPrefab z1_mesh, MeshPrefab z2_mesh);
 
     // Does all the handywork to create a single floor clearly from all assets in a folder
     LevelFloor CreateFullLevel(Scene* scene, const std::string& folder);

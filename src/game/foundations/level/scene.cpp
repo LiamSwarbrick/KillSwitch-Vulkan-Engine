@@ -493,6 +493,8 @@ void Scene::Render()
 
         Renderer_PushRenderable(r);
     });
+
+    // SDL_Log("%u drawing anims %d\n", num_anims, SDL_GetTicks());
 }
 
 void Scene::InitSystemContext()

@@ -136,7 +136,7 @@ int main(int argc, char *argv[])
     LevelFloor floor1 = generator.CreateFullLevel(&scene, "assets/Final_Levels/");
     int levelsSpawned = 0, wave = 1;
     bool zombiesWereSpawned = false;
-    generator.InstantiateLevel(&scene, floor1, zombies, levelsSpawned, wave);
+    generator.InstantiateLevel(&scene, floor1, zombies, levelsSpawned, wave, {}, {});
 
 
 
@@ -186,6 +186,19 @@ int main(int argc, char *argv[])
 
     scene.SetPlayer(playerID);
     scene.BuildRendererScene();
+
+    MeshPrefab z1_mesh, z2_mesh;
+    scene.GetECS().GetView<C_AnimatedMesh>().ForEach([&](C_AnimatedMesh& mesh) {
+        // If this entity uses the zombie asset and has valid GPU data
+        if (mesh.asset == zombie_woman) {
+            z2_mesh = mesh.renderer_prefab;
+        }
+        else if (mesh.asset == zombie)
+        {
+            z1_mesh = mesh.renderer_prefab;
+        }
+    });
+
     GameUI_SetLevelStartSkillApplyCallback(&scene, GameUI_ApplyPlaceholderLevelStartSkill);
     
     DebugUI_SetECS(&scene.GetECS());
@@ -267,7 +280,7 @@ int main(int argc, char *argv[])
         if (zombiesWereSpawned && aliveZombies == 1) {
             SDL_Log("WAVE %d CLEAR: All zombies were eliminated...", wave);
             wave++;
-            generator.InstantiateLevel(&scene, floor1, zombies, levelsSpawned, 1);
+            generator.InstantiateLevel(&scene, floor1, zombies, levelsSpawned, 1, z1_mesh, z2_mesh);
 
         }
 
