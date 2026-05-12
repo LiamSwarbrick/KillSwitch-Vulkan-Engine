@@ -430,7 +430,7 @@ struct C_CombatMeleeStats
 					.animationID = "pistol_whip", // animationID (don't know the name)
 					.staggerTime = 0.4f,
 					.duration = 0.6f, // duration
-					.delay = 0.3f,
+					.delay = 0.4f,
 					.comboWindow = 0.0f,
 				},
 				// Attack 2 if there was one
@@ -454,8 +454,8 @@ struct C_CombatMeleeStats
 					// Attack 1
 					.animationID = "zombie_swipe", // animationID (don't know the name)
 					.staggerTime = 0.4f,
-					.duration = 1.0f, // duration
-					.delay = 0.5f,
+					.duration = 2.0f, // duration
+					.delay = 1.5f,
 					.comboWindow = 0.0f,
 				}
 				// Attack 2 if there was one
