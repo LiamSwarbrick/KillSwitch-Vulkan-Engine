@@ -43,14 +43,14 @@ float process_alpha(float alpha, float cutoff)
 {
     if (CURRENT_BLEND_MODE == BLEND_MODE_MASKED)
     {
-        // if (MSAA_SAMPLE_COUNT > 1)
-        // {
-        //     // Sharpen for Alpha to Coverage (source: https://bgolus.medium.com/anti-aliased-alpha-test-the-esoteric-alpha-to-coverage-8b177335ae4f)
-        //     alpha = (alpha - cutoff) / max(fwidth(alpha), 0.0001) + 0.5;
+        if (MSAA_SAMPLE_COUNT > 1)
+        {
+            // Sharpen for Alpha to Coverage (source: https://bgolus.medium.com/anti-aliased-alpha-test-the-esoteric-alpha-to-coverage-8b177335ae4f)
+            alpha = (alpha - cutoff) / max(fwidth(alpha), 0.0001) + 0.5;
 
-        //     // TODO: Mipmap adjustment for far folliage to look nice with A2C.
-        //     // Unnecessary for now, bcuz we are doing close quarters stuff.
-        // }
+            // TODO: Mipmap adjustment for far folliage to look nice with A2C.
+            // Unnecessary for now, bcuz we are doing close quarters stuff.
+        }
 
         if (alpha < cutoff)
         {

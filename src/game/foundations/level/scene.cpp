@@ -322,19 +322,7 @@ EntityID Scene::InstantiatePrefab(Asset* prefab, glm::vec3 spawnPosition, glm::q
                 // Add the default pistol for now (we don't have other weapons
                 m_ecs.AddComponent<C_WeaponRanged>(eID, C_WeaponRanged::DefaultPistol());
 
-                m_ecs.AddComponent<C_Light>(eID, {
-                    .type = LIGHT_COMPONENT_SPOTLIGHT,
-                    // .color = glm::vec3(1.0f, 0.852f, 0.409f),
-                    // .color = glm::vec3(0.373f, 0.494f, 1.0f),
-                    .color = glm::vec3(0.274f, 0.412f, 1.0f),
-                    .intensity = 543.0f,
-                    .radius = 12.0f,
-                    .spot_inner_cone_angle = 0.257872f,
-                    .spot_outer_cone_angle = 0.3927f,
-                    
-                    .local_position = glm::vec3(0.0f, 0.0f, -0.2f),
-                    .local_forward_dir = glm::vec3(0.0f, 0.0f, 1.0f)
-                });
+                m_ecs.AddComponent<C_Light>(eID, FLASHLIGHT_C_LIGHT);
             }
 
             // -- MESH

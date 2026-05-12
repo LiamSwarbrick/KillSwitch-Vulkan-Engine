@@ -290,6 +290,22 @@ struct C_Equipment
 //	float currentDurabiliy = 0.0f;
 //};
 
+
+// .color = glm::vec3(1.0f, 0.852f, 0.409f),
+	// .color = glm::vec3(0.373f, 0.494f, 1.0f),
+	// .color = glm::vec3(0.274f, 0.412f, 1.0f),
+	// .color = glm::vec3(0.05f, 0.05f, 0.25f),
+#define FLASHLIGHT_C_LIGHT { \
+	.type = LIGHT_COMPONENT_SPOTLIGHT, \
+	.color = glm::vec3(0.05f, 0.05f, 0.25f), \
+	.intensity = 90.0f, \
+	.radius = 12.0f, \
+	.spot_inner_cone_angle = 0.317872f, \
+	.spot_outer_cone_angle = 0.4f, \
+	.local_position = glm::vec3(0.0f, 0.0f, -0.2f), \
+	.local_forward_dir = glm::vec3(0.0f, 0.0f, 1.0f) \
+}
+
 struct C_WeaponRanged
 {
 	enum Type
@@ -309,14 +325,14 @@ struct C_WeaponRanged
 	Type type;
 	FiringMode firingMode;
 
-	int damage = 0;
+	short damage = 0;
 	short maxBullets = 0;
 	short currentBullets = 0;
 	// Quick fix to reloads
 	short reloadableBullets = 0;
 
 	float lastTimeSinceShot = 0.0f;
-	int shotsPerFire = 0; // shots per fire (for bursts or any other semi that shoots multiple things (double barrel shotgun or anything idk))
+	short shotsPerFire = 0; // shots per fire (for bursts or any other semi that shoots multiple things (double barrel shotgun or anything idk))
 	float shootMaxCooldown = 0.0f; // the time between each shot
 	float reloadTime = 0.0f;
 
@@ -344,8 +360,8 @@ struct C_WeaponRanged
 // Player will have hearts, each heart will be 1 health
 struct C_Health
 {
-	int currentHealth; 
-	int maxHealth;
+	short currentHealth; 
+	short maxHealth;
 
 	static C_Health PlayerDefaultHealth()
 	{
@@ -393,7 +409,7 @@ struct C_CombatMeleeStats
 	};
 
 	// We will have these base stats, and each attack will have a multiplier to them
-	int damage;
+	short damage;
 	float range;
 	float knockback;
 	std::vector<Combo> combos;
@@ -403,7 +419,7 @@ struct C_CombatMeleeStats
 		C_CombatMeleeStats stats;
 		stats.damage = 4;
 		stats.range = 1.0f; // this range is from the outside of the capsule radius
-		stats.knockback = 10.0f;
+		stats.knockback = 40.0f;
 		stats.combos.push_back(
 		{
 			"Default", // Combo name,
@@ -547,14 +563,15 @@ struct C_DespawnTimer
 struct Upgrades
 {
 	// Upgrades
-	int extraHealth = 0;
-	int extraHealthGainedPerKills = 0;
-	int extraPierce = 0;
+	short extraHealth = 0;
+	short extraHealthGainedPerKills = 0;
+	short extraPierce = 0;
+
 	//int extraDamage = 0; // or damageMultiplier
 	float damageMultiplier = 1.0f; // damage multiplier
 	float speedMultiplier = 1.0f; // run faster
 	float extraReloadSpeed = 1.0f; // reload faster 
-	float extraFiringSpeed = 0; // fire faster
+	float extraFiringSpeed = 1.0f; // fire faster
 };
 
 struct C_PlayerInfo

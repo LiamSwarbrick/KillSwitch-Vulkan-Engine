@@ -210,7 +210,7 @@ void CombatSystem::ProcessMelee(EntityID ourID, RigidBodyHandle bodyHandle, cons
 
 
     float knockback = meleeStats.knockback * currentAttack.knockbackMultiplier;
-    int damage = std::lroundf(((float)meleeStats.damage * currentAttack.damageMultiplier));
+    short damage = std::lroundf(((float)meleeStats.damage * currentAttack.damageMultiplier));
     float staggerTime = currentAttack.staggerTime;
     for (EntityShapeIntersectsHit hit : entitiesHit)
     {
@@ -251,7 +251,7 @@ void CombatSystem::ProcessMelee(EntityID ourID, RigidBodyHandle bodyHandle, cons
                         targetCombatInfo.staggeredTimer = staggerTime;
                     targetCombatInfo.isStaggered = true;
 
-                    physics->addVelocity(hit.entity, lookDir * knockback);
+                    physics->addVelocity(hit.entity, glm::vec3(lookDir.x + 0.0f, fabsf(lookDir.y) + 1.0f, lookDir.z + 0.0f) * knockback);
                 }
             }
         }
@@ -328,7 +328,7 @@ void CombatSystem::ProcessRanged(RigidBodyHandle bodyHandle, const glm::vec3& po
     }
     else
     {
-        SDL_assert(false && "Checkpoint to see if it hits here, it should");
+        // SDL_assert(false && "Checkpoint to see if it hits here, it should");
         bodyRay.direction = cameraRay.direction;
         bodyRay.maxDistance = cameraRay.maxDistance; // camera is usually going to be behind the player so we might not need this
     }

@@ -253,9 +253,9 @@ void PlayerInputSystem::Update(float dt) const
         else if (playerInfo.state == playerInfo.Attacking)
         {
             // do not allow to move, or allow less move when attacking
-            moveInput.moveAmount = std::min(moveAmount, 0.6f);
-            moveInput.wantsJump = false;
-            moveInput.wantsRun = false;
+            moveInput.moveAmount = std::min(moveAmount, 0.3f);
+            // moveInput.wantsJump = false;
+            // moveInput.wantsRun = false;
 
             // Do not let the player shoot while attacking (combat system would deny it anyways)
             combatInput.wantsAim = false;
