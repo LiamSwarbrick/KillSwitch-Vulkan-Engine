@@ -419,7 +419,7 @@ struct C_CombatMeleeStats
 		C_CombatMeleeStats stats;
 		stats.damage = 4;
 		stats.range = 1.0f; // this range is from the outside of the capsule radius
-		stats.knockback = 10.0f;
+		stats.knockback = 40.0f;
 		stats.combos.push_back(
 		{
 			"Default", // Combo name,
