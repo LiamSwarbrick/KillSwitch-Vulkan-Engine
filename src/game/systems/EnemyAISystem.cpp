@@ -200,7 +200,7 @@ void EnemyAISystem::UpdateState(EntityID enemyID, const C_EnemyAIStats& stats, C
             }
             else
             {
-                info.currentState = info.Alerted;
+                //info.currentState = info.Alerted;
             }
         }
 
@@ -453,7 +453,7 @@ EnemyAISystem::ChaseOrAlertInfo EnemyAISystem::ShouldChaseOrGetAlerted(const C_E
                 && playerMoveInfo.state != MoveState::Crouch)
             {
                 closestTargetDistance = distanceToPlayer;
-                shouldGetAlerted = true;
+                //shouldGetAlerted = true;
 
                 closestTargetPos = playerPosition;
             } 

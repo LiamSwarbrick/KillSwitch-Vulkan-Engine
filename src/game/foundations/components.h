@@ -608,7 +608,7 @@ struct C_AIInput
 struct C_EnemyAIStats
 {
 	// Vision & alert
-	float visionDistance = 10.0f;
+	float visionDistance = 0.0f;
 	float visionMaxAngle = glm::radians(90.0f); // The max angle to where we're looking
 
 	float alertDistance = 6.0f; // We probably should NOT have these, but the player having alertDistances on walk, run, jump and then read them from the zombie

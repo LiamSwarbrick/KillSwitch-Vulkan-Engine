@@ -76,8 +76,8 @@ void CombatSystem::Update(float dt) const
                     shouldProcessRanged = (socket.weapon_entity != NULL_ENTITY && ecs->IsEntityValid(socket.weapon_entity))
                         && socket.equipped;
 
-                    // If we should process ranged, we should check if we have bullets, and default to melee instead
-                    if (shouldProcessRanged)
+                    // I1f we should process ranged, we should check if we have bullets, and default to melee instead
+                    if (!shouldProcessRanged)
                     {
                         // Check the currently equipped weapon
                         auto& weapon = ecs->GetComponent<C_WeaponRanged>(socket.weapon_entity);

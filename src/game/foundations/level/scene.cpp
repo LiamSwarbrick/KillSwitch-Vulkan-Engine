@@ -479,7 +479,7 @@ void Scene::Render()
         Renderer_PushRenderable(r);
     });
 
-    m_ecs.GetView<C_Transform, C_AnimatedMesh>().ForEach([&](C_Transform& transform, C_AnimatedMesh& mesh)
+    m_ecs.GetView<C_Transform, C_AnimatedMesh, C_EnemyAIInfo>().ForEach([&](C_Transform& transform, C_AnimatedMesh& mesh, C_EnemyAIInfo& info)
     {
         // Skip invalid / not-yet-uploaded meshes
         if (mesh.renderer_prefab.mesh_rids.primitive_count == 0)

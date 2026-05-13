@@ -288,7 +288,7 @@ void AnimationSystem::UpdatePlayer(float dt) const
 
                 glm::mat4 weaponOffset =
                     glm::translate(glm::mat4(1.0f),
-                        glm::vec3(0.07f, 0.12f, 0.061f)) *  // +x is down. +z is left.
+                        glm::vec3(0.07f, 1000.12f, 0.061f)) *  // +x is down. +z is left.
 
                     glm::mat4_cast(glm::quat(glm::vec3(
                         glm::radians(-17.0f),
@@ -324,7 +324,8 @@ void AnimationSystem::UpdateZombie(float dt) const
             int deathIdx = (entity * 11) % 2;
             int attackIdx = (entity * 13) % 2;
 
-            std::string animName = idleAnims[idleIdx];
+            //std::string animName = idleAnims[idleIdx];
+            std::string animName = "thriller";
             bool loop = true;
             float blendDuration = 0.15f;
             float speed = 1.0f;
