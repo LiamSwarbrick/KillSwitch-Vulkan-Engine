@@ -89,7 +89,8 @@ void main()
     
 
     // Slight contrast curvyness
-    const float mids_factor = 0.9;
+    // const float mids_factor = 0.9;  // Previous
+    const float mids_factor = 0.8;
     color = pow(color, vec3(mids_factor));  // <1 apparently brightens mids a bit
 
     // DO NOT GAMMA CORRECT: That is done automatically

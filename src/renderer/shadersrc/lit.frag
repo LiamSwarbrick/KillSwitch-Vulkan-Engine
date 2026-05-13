@@ -150,7 +150,8 @@ vec3 apply_dithered_fog(
     float fog_step = fog > dither ? 1.0 : 0.0;
 
     // vec3 fog_color = vec3(0.005, 0.005, 0.025);  // Original fog color
-    vec3 fog_color = vec3(0.01, 0.01, 0.05);  // Tried making it brighter for the shittier monitors to still have readability
+    vec3 fog_color = vec3(0.005, 0.008, 0.04);  // Original fog color
+    // vec3 fog_color = vec3(0.01, 0.01, 0.05);  // Tried making it brighter for the shittier monitors to still have readability
     
     vec3 fogged_color = fog_color * fog_step;
 
