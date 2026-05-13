@@ -108,7 +108,7 @@ int main(int argc, char *argv[])
     Scene scene{};
     scene.StartUp();
 
-    // Asset* room_prefab = scene.LoadPrefab("assets/testing_gen/1O0DOut.gltf");
+     Asset* room_prefab = scene.LoadPrefab("assets/levels/testroom_new.gltf");
             //Asset* room_prefab = scene.LoadPrefab("assets/levels/testroom-liamrandomtest-Untitled.gltf");
     //  Asset* many_prefab = scene.LoadPrefab("assets/levels/manylights.gltf");
     // Asset* playground_prefab = scene.LoadPrefab("assets/levels/playground.gltf");
@@ -144,14 +144,14 @@ int main(int argc, char *argv[])
     LevelFloor floor1 = generator.CreateFullLevel(&scene, "assets/Final_Levels/");
     int levelsSpawned = 0, wave = 1;
     bool zombiesWereSpawned = false;
-    generator.InstantiateLevel(&scene, floor1, zombies, levelsSpawned, wave, {}, {});
+    //generator.InstantiateLevel(&scene, floor1, zombies, levelsSpawned, wave, {}, {});
 
 
 
     //Asset* animationPrefab = scene.LoadPrefab("assets/animations/cat.gltf");
     
     //scene.InstantiatePrefab(many_prefab, glm::vec3(0, 0, 0), glm::identity<glm::quat>());
-    //.InstantiatePrefab(room_prefab, glm::vec3(0.0f, 0.0f, 3.0f), glm::identity<glm::quat>());
+    scene.InstantiatePrefab(room_prefab, glm::vec3(0.0f, 0.0f, 0.0f), glm::identity<glm::quat>());
     //scene.InstantiatePrefab(playground_prefab, glm::vec3(0, 0, -10.0f), glm::identity<glm::quat>());
     //scene.InstantiatePrefab(room_prefab, glm::vec3(0.0f, 0.0f, 0.0f), glm::identity<glm::quat>());
     //scene.InstantiatePrefab(playground_prefab, glm::vec3(0, 0, 0.0f), glm::identity<glm::quat>());
@@ -167,11 +167,11 @@ int main(int argc, char *argv[])
             y += 0.5f;
         }
     }*/
-    EntityID playerID = scene.InstantiatePrefab(player, glm::vec3(30, 0, -28), glm::identity<glm::quat>());
-    //scene.InstantiatePrefab(zombie_woman, glm::vec3(3, -10.0f, -11.5f), Math::ViewDirToQuat({0.0f ,0.0f, 1.0f}));
-    //scene.InstantiatePrefab(zombie_woman, glm::vec3(3, 0.0f, -7.5f), Math::ViewDirToQuat({ 0.0f ,0.0f, 1.0f }));
-    //scene.InstantiatePrefab(zombie_woman, glm::vec3(-3, 0.0f, -11.5f), Math::ViewDirToQuat({ 0.0f ,0.0f, 1.0f }));
-    //scene.InstantiatePrefab(zombie_woman, glm::vec3(-3, 0.0f, -3.5f), Math::ViewDirToQuat({ 0.0f ,0.0f, 1.0f }));
+    EntityID playerID = scene.InstantiatePrefab(player, glm::vec3(0, 0, 0), glm::identity<glm::quat>());
+    scene.InstantiatePrefab(zombie_woman, glm::vec3(3, 0.0f, -3), Math::ViewDirToQuat({0.0f ,0.0f, 1.0f}));
+    scene.InstantiatePrefab(zombie_woman, glm::vec3(1, 0.0f, -3), Math::ViewDirToQuat({ 0.0f ,0.0f, 1.0f }));
+    scene.InstantiatePrefab(zombie_woman, glm::vec3(-1, 0.0f, -3), Math::ViewDirToQuat({ 0.0f ,0.0f, 1.0f }));
+    scene.InstantiatePrefab(zombie_woman, glm::vec3(-3, 0.0f, -3), Math::ViewDirToQuat({ 0.0f ,0.0f, 1.0f }));
     // scene.InstantiatePrefab(sphere_prefab, glm::vec3(4.7, 7, 0.1));
     // scene.InstantiatePrefab(sphere_prefab, glm::vec3(-4.7, 7, -0.1));
     // scene.InstantiatePrefab(sphere_prefab, glm::vec3(0.1, 7, -4.7));

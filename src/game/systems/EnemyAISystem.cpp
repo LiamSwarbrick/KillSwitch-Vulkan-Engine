@@ -73,7 +73,7 @@ void EnemyAISystem::Update(float dt) const
                 // Chase the player if we see him, otherwise
                 glm::vec3 facingDir = glm::normalize(info.target - position);
                 float distanceToTarget = glm::length(info.target - position);
-                
+
                 // To possibly be changed in the next if
                 moveInput.moveAmount = 1.0f;
 
@@ -84,12 +84,12 @@ void EnemyAISystem::Update(float dt) const
                 {
                     moveInput.moveAmount = 0.0f;
                 }
-                    
+
                 moveInput.desiredDir = facingDir;
                 moveInput.wantsRun = true;
-                
+
                 glm::vec3 targetFacingDir = glm::normalize(info.target - position);
-                    
+
                 float yawDeg = glm::degrees(atan2f(targetFacingDir.x, targetFacingDir.z));
                 glm::quat targetRotation = glm::angleAxis(glm::radians(yawDeg), glm::vec3(0.0f, 1.0f, 0.0f));
 
@@ -144,7 +144,7 @@ void EnemyAISystem::Update(float dt) const
                 rotation = Math::RotateTowardTarget(rotation, targetRotation, stats.turnSpeed, dt, Math::Smoothstep);
 
                 transform.matrix = glm::translate(glm::mat4(1.0f), position) * glm::mat4_cast(rotation) * glm::scale(glm::mat4(1.0f), scale);
-           
+
                 // Instead of true, should attack
                 combatInput.wantsMelee = ShouldAttack(stats, info, bodyHandle, position, lookDir, dt);
             }
@@ -200,7 +200,7 @@ void EnemyAISystem::UpdateState(EntityID enemyID, const C_EnemyAIStats& stats, C
             }
             else
             {
-                info.currentState = info.Alerted;
+                //info.currentState = info.Alerted;
             }
         }
 
@@ -223,7 +223,7 @@ void EnemyAISystem::UpdateState(EntityID enemyID, const C_EnemyAIStats& stats, C
     case info.Alerted:
         // Look at the alert (should be written by another action bc it made an alert-able action (e.g. noise, walk, etc))
         info.alertedTimer -= dt;
-        
+
         if (chaseOrAlertInfo = ShouldChaseOrGetAlerted(stats, info, bodyHandle, position, lookDir, dt);
             chaseOrAlertInfo.shouldChase || chaseOrAlertInfo.shouldGetAlerted)
         {
@@ -420,14 +420,14 @@ EnemyAISystem::ChaseOrAlertInfo EnemyAISystem::ShouldChaseOrGetAlerted(const C_E
             glm::vec3 enemyToPlayer = playerPosition + negatedPosition;
             glm::vec3 enemyToPlayerDir = glm::normalize(enemyToPlayer);
             float distanceToPlayer = glm::length(playerPosition + negatedPosition);
-        
+
             // Get the angle from the current look direction
             float enemyToPlayerAngle = glm::acos(glm::dot(enemyToPlayerDir, lookDir));
 
             // Check if we have to chase is within the AI's vision
             // AND also if it is closer than the closestTargetDistance (early out)
-            if (distanceToPlayer <= stats.visionDistance 
-                && enemyToPlayerAngle <= stats.visionMaxAngle 
+            if (distanceToPlayer <= stats.visionDistance
+                && enemyToPlayerAngle <= stats.visionMaxAngle
                 && distanceToPlayer < closestTargetDistance)
             {
                 // If it's within distance, raycast into player and check if we see him
@@ -440,7 +440,7 @@ EnemyAISystem::ChaseOrAlertInfo EnemyAISystem::ShouldChaseOrGetAlerted(const C_E
                     closestTargetPos = playerPosition;
                 }
             }
-            
+
             // If we are not chasing AND we're in range to be alerted 
             // AND the distance to the player is in alertDistance
             // (to be done) AND the player distance is in the player's move.alertDistance (this is to have sprint distance alert more than walking)
@@ -453,14 +453,14 @@ EnemyAISystem::ChaseOrAlertInfo EnemyAISystem::ShouldChaseOrGetAlerted(const C_E
                 && playerMoveInfo.state != MoveState::Crouch)
             {
                 closestTargetDistance = distanceToPlayer;
-                shouldGetAlerted = true;
+                //shouldGetAlerted = true;
 
                 closestTargetPos = playerPosition;
-            } 
+            }
         });
 
-    if (shouldChase) 
-    { 
+    if (shouldChase)
+    {
         // Fill the target values
         returnInfo.target = closestTargetPos;
         returnInfo.hasTarget = true;
@@ -558,7 +558,7 @@ bool EnemyAISystem::IsEntityVisible(RigidBodyHandle enemyHandle, C_EnemyAIInfo& 
         // here you can manually skip any Entities by checking ECS
 
         // For example, we're going to exclude those entities that are zombies -> C_Faction.type == Zombie (because we still want to chase the player if we see it)
-        if (ecs->Has<C_Faction>(hit.entity) && (ecs->GetComponent<C_Faction>(hit.entity).type ==  FactionType::Zombie))
+        if (ecs->Has<C_Faction>(hit.entity) && (ecs->GetComponent<C_Faction>(hit.entity).type == FactionType::Zombie))
             continue;
 
         // Get the closest Hit that passes the filters
@@ -576,7 +576,7 @@ bool EnemyAISystem::IsEntityVisible(RigidBodyHandle enemyHandle, C_EnemyAIInfo& 
         return false;
     }
     EntityRaycastHit& closestHit = hits[closestIndex];
-    
+
     // We return true if the closest filtered handle equals the target handle
     return closestHit.body->bodyID == targetHandle.index;
 }
