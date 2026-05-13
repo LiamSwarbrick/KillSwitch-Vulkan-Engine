@@ -18,8 +18,15 @@
 #include "foundations/level/LevelGeneration.h"
 
 
+// Hacky fix
 #define GMH_IMPL
 #include "game/game_restart_hack.h"
+
+#include "game/game_state.h"
+
+InternalGameState gamestate = {
+    .num_zombies_killed = 0
+};
 
 int main(int argc, char *argv[])
 {
@@ -42,8 +49,8 @@ int main(int argc, char *argv[])
         .window = window,
         .enable_validation = enabled_validation_layers,
         .preferred_initial_settings = {  // Will fallback if these aren't possible
-            .uncapped_fps = 1,  // NOTE: <- Enable when gathering FPS metrics
-            .msaa_sample_count = 4,
+            .uncapped_fps = 0,  // NOTE: <- Enable when gathering FPS metrics
+            .msaa_sample_count = 1,
             .fov_y = 50.0f
         }
     };
