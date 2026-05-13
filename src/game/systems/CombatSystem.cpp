@@ -8,6 +8,7 @@
 
 // Have to include it here bc its not a class so we cannot add it to the System context
 #include "game/ingame_cam.h"
+#include "game/game_state.h"
 
 void CombatSystem::Update(float dt) const
 {
@@ -244,6 +245,7 @@ void CombatSystem::ProcessMelee(EntityID ourID, RigidBodyHandle bodyHandle, cons
 
 
                     targetCombatInfo.isDead = true;
+                    gamestate.num_zombies_killed++;
                 } // If the target health is lower than 0 -> apply things
                 else
                 { // If the target is alive
@@ -362,6 +364,7 @@ void CombatSystem::ProcessRanged(RigidBodyHandle bodyHandle, const glm::vec3& po
                     C_CombatInfo& targetCombatInfo = ecs->GetComponent<C_CombatInfo>(hit.entity);
                     targetCombatInfo.isDead = true;
                     weapon.reloadableBullets = std::min((short) (weapon.reloadableBullets + 1), weapon.maxBullets);
+                    gamestate.num_zombies_killed++;
                 }
             }
         }

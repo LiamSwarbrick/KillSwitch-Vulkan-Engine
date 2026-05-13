@@ -128,18 +128,31 @@ float dither_threshold(vec2 screen_pos)
 vec3 apply_dithered_fog(
     vec3 color,
     float z_linear,
-    float dither
+    float dither,
+    vec3 cam_worldpos
 )
 {
-    const float fog_start = 3.0;
-    const float fog_length = 20.0;
+    float fog_start = 3.0;
+    float fog_length = 20.0;
+
+    // In the horizontal plane, I want the fog to be based on distance to the camera.
+    // But for the megastructure, I want the fog to be entirely based on world height difference to camera
+    // which makes the fact we secretly have a ceiling invisible.
+    float height_differential = max(abs(world_pos.y - cam_worldpos.y), 1.0);
+    fog_start = fog_start * height_differential / 8.0;
+    float x = mix(z_linear, height_differential, height_differential/20.0);
+    float fog_base = max(x - fog_start, 0.0) / fog_length;
+    float f2 = fog_base*fog_base;
+    fog_base = mix(fog_base, f2, f2);
     
-    float fog = clamp((z_linear - fog_start) / fog_length, 0.0, 1.0);
-    fog *= 0.5;
+    float fog = clamp(fog_base, 0.0, 1.0);
+    fog *= 0.5;  // This is because I want the furthest bayer differ to not be a solid color.
     float fog_step = fog > dither ? 1.0 : 0.0;
 
-    vec3 fog_color = vec3(0.005, 0.005, 0.025);
-    // vec3 fog_color = vec3(0.005, 0.007, 0.03);
+    // vec3 fog_color = vec3(0.005, 0.005, 0.025);  // Original fog color
+    vec3 fog_color = vec3(0.005, 0.008, 0.04);  // Original fog color
+    // vec3 fog_color = vec3(0.01, 0.01, 0.05);  // Tried making it brighter for the shittier monitors to still have readability
+    
     vec3 fogged_color = fog_color * fog_step;
 
     return mix(color, fogged_color, fog);
@@ -355,7 +368,8 @@ void main()
     lit_rgb = apply_dithered_fog(
         lit_rgb,
         depth,
-        dith_threshold
+        dith_threshold,
+        scene.cam_position
     );
     
     vec4 final_color = vec4(lit_rgb, 1.0);

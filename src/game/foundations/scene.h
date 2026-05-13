@@ -34,6 +34,7 @@ private:
 
 public:
     std::vector<Asset*> m_prefabs;
+
 private:
     //bool LoadAsset(const char* fileName);
     bool FreeAsset(Asset* asset);

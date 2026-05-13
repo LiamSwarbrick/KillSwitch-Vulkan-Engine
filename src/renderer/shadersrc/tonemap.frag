@@ -43,6 +43,16 @@ vec3 tonemap_reinhard(vec3 x)
     return x / (1.0 + x);
 }
 
+// vec3 tonemap_aces(vec3 x)
+// {
+//     const float a = 2.51;
+//     const float b = 0.03;
+//     const float c = 2.43;
+//     const float d = 0.59;
+//     const float e = 0.14;
+//     return clamp((x * (a * x + b)) / (x * (c * x + d) + e), 0.0, 1.0);
+// }
+
 void main()
 {
     // LENS DISTORTION
@@ -75,9 +85,12 @@ void main()
     float exposure = 2.0;
     vec3 color = hdr * exposure;
     color = tonemap_reinhard(color);
+    // color = tonemap_aces(color);  // <- Pure trash, but showcases that it looks bad for our game in the report
+    
 
     // Slight contrast curvyness
-    const float mids_factor = 0.9;
+    // const float mids_factor = 0.9;  // Previous
+    const float mids_factor = 0.8;
     color = pow(color, vec3(mids_factor));  // <1 apparently brightens mids a bit
 
     // DO NOT GAMMA CORRECT: That is done automatically

@@ -7,6 +7,7 @@
 #include "renderer/debug_ui_api.h"
 
 #include "game/game_restart_hack.h"
+#include "game/game_state.h"
 
 #include "imgui.h"
 
@@ -425,6 +426,9 @@ static ImVec2 GetTextureSizeForHeight(const Renderer_UITexture& texture, float t
 
 static void DrawPlayingHUD()
 {
+    if (gamestate.disable_hud)
+        return;
+
     ImGuiIO& io = ImGui::GetIO();
     ImDrawList* dl = ImGui::GetBackgroundDrawList();
 
@@ -505,6 +509,10 @@ static void DrawPlayingHUD()
             ImVec2(1.0f, 1.0f),
             IM_COL32(255, 255, 255, static_cast<int>(255.0f * flash_alpha)));
     }
+
+    char zombies_killed_text[64] = {};
+    snprintf(zombies_killed_text, sizeof(zombies_killed_text), "%d Kills", gamestate.num_zombies_killed);
+    // dl->AddText(hud_font, ammo_font_size, { 0.0f, 0.0f }, ammo_text_col, zombies_killed_text);
 }
 
 static bool IsBindingInDeviceGroup(const InputBinding& binding, InputBindingDeviceGroup device_group)
