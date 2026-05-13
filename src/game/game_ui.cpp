@@ -512,7 +512,7 @@ static void DrawPlayingHUD()
 
     char zombies_killed_text[64] = {};
     snprintf(zombies_killed_text, sizeof(zombies_killed_text), "%d Kills", gamestate.num_zombies_killed);
-    dl->AddText(hud_font, ammo_font_size, { 0.0f, 0.0f }, ammo_text_col, zombies_killed_text);
+    // dl->AddText(hud_font, ammo_font_size, { 0.0f, 0.0f }, ammo_text_col, zombies_killed_text);
 }
 
 static bool IsBindingInDeviceGroup(const InputBinding& binding, InputBindingDeviceGroup device_group)
