@@ -13,6 +13,7 @@
 
 typedef struct InternalGameState
 {
+    b32 disable_hud;
     uint32_t num_zombies_killed;
 }
 InternalGameState;

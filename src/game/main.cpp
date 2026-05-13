@@ -25,6 +25,7 @@
 #include "game/game_state.h"
 
 InternalGameState gamestate = {
+    .disable_hud = 0,
     .num_zombies_killed = 0
 };
 
@@ -49,8 +50,8 @@ int main(int argc, char *argv[])
         .window = window,
         .enable_validation = enabled_validation_layers,
         .preferred_initial_settings = {  // Will fallback if these aren't possible
-            .uncapped_fps = 0,  // NOTE: <- Enable when gathering FPS metrics
-            .msaa_sample_count = 1,
+            .uncapped_fps = 1,  // NOTE: <- Enable when gathering FPS metrics
+            .msaa_sample_count = 4,
             .fov_y = 50.0f
         }
     };
@@ -255,6 +256,10 @@ int main(int argc, char *argv[])
             {
                 window_is_fullscreen = !window_is_fullscreen;
                 SDL_SetWindowFullscreen(window, window_is_fullscreen);
+            }
+            if (event.type == SDL_EVENT_KEY_DOWN && event.key.scancode == SDL_SCANCODE_F1)
+            {
+                gamestate.disable_hud = !gamestate.disable_hud;
             }
 
             Renderer_ListenToWindowEvent(event);

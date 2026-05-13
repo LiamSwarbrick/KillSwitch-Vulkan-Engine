@@ -426,6 +426,9 @@ static ImVec2 GetTextureSizeForHeight(const Renderer_UITexture& texture, float t
 
 static void DrawPlayingHUD()
 {
+    if (gamestate.disable_hud)
+        return;
+
     ImGuiIO& io = ImGui::GetIO();
     ImDrawList* dl = ImGui::GetBackgroundDrawList();
 
