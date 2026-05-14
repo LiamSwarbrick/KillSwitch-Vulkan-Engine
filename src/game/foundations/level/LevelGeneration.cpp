@@ -632,16 +632,6 @@ void LevelGeneration::InstantiateLevel(Scene* scene, LevelFloor& floor, std::vec
 	// Offset range to keep zombies away from walls
 	std::uniform_real_distribution<float> offset(-4.0f, 4.0f);
 
-	//MeshPrefab zombieMaster = {};
-	//if (levelsSpawned > 0 && zombieAsset) {
-	//	scene->GetECS().GetView<C_AnimatedMesh>().ForEach([&](C_AnimatedMesh& mesh) {
-	//		// If this entity uses the zombie asset and has valid GPU data
-	//		if (mesh.asset == zombieAsset && mesh.renderer_prefab.mesh_rids.primitive_count > 0) {
-	//			zombieMaster = mesh.renderer_prefab;
-	//		}
-	//		});
-	//}
-
 	// For every grid cell, spawn the chosen room in its position with the necessary rotation
 	for (int y = 0; y < floor.height; ++y)
 	{
@@ -792,7 +782,7 @@ void LevelGeneration::SetWallType(uint16_t& mask, DoorDirection direction, WallT
 }
 
 // Just builds the palette from files in the folder and generates a full level
-LevelFloor LevelGeneration::CreateFullLevel(Scene* scene, const std::string& folder)
+void LevelGeneration::LoadAssetsAndBuildPalette(Scene* scene, const std::string& folder)
 {
 	std::vector<Asset*> roomAssets;
 
@@ -814,15 +804,6 @@ LevelFloor LevelGeneration::CreateFullLevel(Scene* scene, const std::string& fol
 	}
 
 	BuildPalette(roomAssets);
-
-	LevelFloor floor = GenerateGrid(7, 7,
-		glm::ivec2({ 3,3 }), ((OPEN << NORTH) + (OPEN << EAST) + (OPEN << SOUTH) + (OPEN << WEST)), OUTSIDE,
-		glm::ivec2({ 3,3 }), ((DOOR << NORTH) + (DOOR << EAST) + (DOOR << SOUTH) + (DOOR << WEST)), INSIDE,
-		8, 1);
-
-	floor.worldOffset = { 0.0f, 0.0f, 0.0f };
-
-	return floor;
 }
 
 //void LevelGeneration::GenerateNextFloor(Scene* scene)
@@ -847,7 +828,7 @@ LevelFloor LevelGeneration::CreateFullLevel(Scene* scene, const std::string& fol
 //	activeFloors.push_back(newFloor);
 //}
 
-void LevelGeneration::CleanupOldFloors(Scene* scene)
-{
-	SDL_Log("cleaning up old floors");
-}
+//void LevelGeneration::CleanupOldFloors(Scene* scene)
+//{
+//	SDL_Log("cleaning up old floors");
+//}

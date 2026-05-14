@@ -141,10 +141,14 @@ int main(int argc, char *argv[])
 
 
     LevelGeneration generator;
-    LevelFloor floor1 = generator.CreateFullLevel(&scene, "assets/Final_Levels/");
+    generator.LoadAssetsAndBuildPalette(&scene, "assets/Final_Levels/");
     int levelsSpawned = 0, wave = 1;
-    bool zombiesWereSpawned = false;
-    generator.InstantiateLevel(&scene, floor1, zombies, levelsSpawned, wave, {}, {});
+    bool zombiesWereSpawned = false, isLevelGenerating = true;
+    LevelFloor floor;
+    std::future<LevelFloor> pendingFloor = std::async(std::launch::async, &LevelGeneration::GenerateGrid, &generator, 7, 7,
+        glm::ivec2({ 3,3 }), ((OPEN << NORTH) + (OPEN << EAST) + (OPEN << SOUTH) + (OPEN << WEST)), OUTSIDE,
+        glm::ivec2({ 3,3 }), ((DOOR << NORTH) + (DOOR << EAST) + (DOOR << SOUTH) + (DOOR << WEST)), INSIDE,
+        8, 1);
 
 
 
@@ -278,7 +282,34 @@ int main(int argc, char *argv[])
         }
 
 
-        // JANK ASS WAVE SPAWNING/TRACKING //////////////////////////////////////////////////////////////////////////// FIX THE NEXT WAVE BEING INVISIBLE!!!
+        // Async level generation and spawning
+        if (isLevelGenerating && pendingFloor.valid())
+        {
+            if (pendingFloor.wait_for(std::chrono::seconds(0)) == std::future_status::ready)
+            {
+                floor = pendingFloor.get();
+                floor.worldOffset = { 0,0,0 };
+
+                generator.InstantiateLevel(&scene, floor, zombies, levelsSpawned, wave, {}, {});
+                generator.activeFloors.push_back(floor);
+                isLevelGenerating = false;
+                scene.BuildRendererScene();
+                SDL_Log("Level asynchronously generated!");
+
+                scene.GetECS().GetView<C_AnimatedMesh>().ForEach([&](C_AnimatedMesh& mesh) {
+                    // If this entity uses the zombie asset and has valid GPU data
+                    if (mesh.asset == zombie_woman) {
+                        z2_mesh = mesh.renderer_prefab;
+                    }
+                    else if (mesh.asset == zombie)
+                    {
+                        z1_mesh = mesh.renderer_prefab;
+                    }
+                });
+            }
+        }
+
+        // Zombie wave spawning
         int aliveZombies = 0;
 
         scene.GetECS().GetView<C_Faction, C_Health>().ForEach([&](EntityID e, C_Faction& faction, C_Health& health) {
@@ -296,10 +327,10 @@ int main(int argc, char *argv[])
         }
 
         // If all killed, put a message and go next wave
-        if (zombiesWereSpawned && aliveZombies == 1) {
+        if (zombiesWereSpawned && aliveZombies <= 1) {
             SDL_Log("WAVE %d CLEAR: All zombies were eliminated...", wave);
             wave++;
-            generator.InstantiateLevel(&scene, floor1, zombies, levelsSpawned, 1, z1_mesh, z2_mesh);
+            generator.InstantiateLevel(&scene, floor, zombies, levelsSpawned, wave, z1_mesh, z2_mesh);
 
         }
 

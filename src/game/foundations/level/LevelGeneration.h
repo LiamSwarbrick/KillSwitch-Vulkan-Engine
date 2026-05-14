@@ -6,6 +6,8 @@
 #include <map>
 #include <random>
 #include <filesystem>
+#include <future>
+#include <chrono>
 #include "game/foundations/scene.h"
 
 // Enum of room themes, add to this when making new theme
@@ -89,10 +91,10 @@ public:
     void InstantiateLevel(Scene* scene, LevelFloor& floor, std::vector<Asset*> zombieAssets, int &levelsSpawned, int wave, MeshPrefab z1_mesh, MeshPrefab z2_mesh);
 
     // Does all the handywork to create a single floor clearly from all assets in a folder
-    LevelFloor CreateFullLevel(Scene* scene, const std::string& folder);
+    void LoadAssetsAndBuildPalette(Scene* scene, const std::string& folder);
 
-    void GenerateNextFloor(Scene* scene);
-    void CleanupOldFloors(Scene* scene);
+    //void GenerateNextFloor(Scene* scene);
+    //void CleanupOldFloors(Scene* scene);
 
     std::vector<LevelFloor> activeFloors;
     int currentFloor;
