@@ -111,9 +111,11 @@ int main(int argc, char *argv[])
     // Asset* room_prefab = scene.LoadPrefab("assets/testing_gen/1O0DOut.gltf");
             //Asset* room_prefab = scene.LoadPrefab("assets/levels/testroom-liamrandomtest-Untitled.gltf");
     //  Asset* many_prefab = scene.LoadPrefab("assets/levels/manylights.gltf");
+    Asset* room_prefab = scene.LoadPrefab("assets/levels/testroom_new.gltf");
     // Asset* playground_prefab = scene.LoadPrefab("assets/levels/playground.gltf");
                 //Asset* cube_prefab = scene.LoadPrefab("assets/props/simple_cube.gltf");
-    // Asset* sphere_prefab = scene.LoadPrefab("assets/props/simple_sphere.gltf");
+     Asset* sphere_prefab = scene.LoadPrefab("assets/props/simple_sphere.gltf");
+     Asset* small_sphere_prefab = scene.LoadPrefab("assets/props/small_sphere.gltf");
                 //Asset* capsule_prefab = scene.LoadPrefab("assets/props/zombie.gltf");
                 //Asset* capsule_prefab = scene.LoadPrefab("assets/props/character_capsule.gltf");
     std::vector<Asset*> zombies;
@@ -126,14 +128,14 @@ int main(int argc, char *argv[])
             // Asset* catPrefab = scene.LoadPrefab("assets/animations/zomboUntitled.gltf");
             // Asset* catPrefab = scene.LoadPrefab("assets/animations/flatzombo.gltf");
 
-    // scene.InstantiatePrefab(room_prefab, glm::vec3(0, 0, 0), glm::identity<glm::quat>());
+     scene.InstantiatePrefab(room_prefab, glm::vec3(0, 0, 0), glm::identity<glm::quat>());
     // scene.InstantiatePrefab(cube_prefab, glm::vec3(0, 5.1, 0), glm::identity<glm::quat>());
     // scene.InstantiatePrefab(cube_prefab, glm::vec3(3, 4.9, 0), glm::identity<glm::quat>());
     // scene.InstantiatePrefab(capsule_prefab, glm::vec3(0, 5, 2), glm::identity<glm::quat>());
-    // scene.InstantiatePrefab(sphere_prefab, glm::vec3(4.7, 7, 0.1), glm::identity<glm::quat>());
-    // scene.InstantiatePrefab(sphere_prefab, glm::vec3(-4.7, 7, -0.1), glm::identity<glm::quat>());
-    // scene.InstantiatePrefab(sphere_prefab, glm::vec3(0.1, 7, -4.7), glm::identity<glm::quat>());
-    // scene.InstantiatePrefab(sphere_prefab, glm::vec3(-0.1, 7, 4.7), glm::identity<glm::quat>());
+     scene.InstantiatePrefab(sphere_prefab, glm::vec3(4.7, 7, 0.1), glm::identity<glm::quat>());
+     scene.InstantiatePrefab(sphere_prefab, glm::vec3(-4.7, 7, -0.1), glm::identity<glm::quat>());
+     scene.InstantiatePrefab(sphere_prefab, glm::vec3(0.1, 7, -4.7), glm::identity<glm::quat>());
+     scene.InstantiatePrefab(sphere_prefab, glm::vec3(-0.1, 7, 4.7), glm::identity<glm::quat>());
     // scene.InstantiatePrefab(catPrefab, glm::vec3(0, 0, 0), glm::identity<glm::quat>());
     // scene.InstantiatePrefab(animationPrefab, glm::vec3(5, 20, 0), glm::identity<glm::quat>());
     // // render a second cat
@@ -141,10 +143,10 @@ int main(int argc, char *argv[])
 
 
     LevelGeneration generator;
-    LevelFloor floor1 = generator.CreateFullLevel(&scene, "assets/Final_Levels/");
+    //LevelFloor floor1 = generator.CreateFullLevel(&scene, "assets/Final_Levels/");
     int levelsSpawned = 0, wave = 1;
     bool zombiesWereSpawned = false;
-    generator.InstantiateLevel(&scene, floor1, zombies, levelsSpawned, wave, {}, {});
+    //generator.InstantiateLevel(&scene, floor1, zombies, levelsSpawned, wave, {}, {});
 
 
 
@@ -299,7 +301,7 @@ int main(int argc, char *argv[])
         if (zombiesWereSpawned && aliveZombies == 1) {
             SDL_Log("WAVE %d CLEAR: All zombies were eliminated...", wave);
             wave++;
-            generator.InstantiateLevel(&scene, floor1, zombies, levelsSpawned, 1, z1_mesh, z2_mesh);
+            //generator.InstantiateLevel(&scene, floor1, zombies, levelsSpawned, 1, z1_mesh, z2_mesh);
 
         }
 
