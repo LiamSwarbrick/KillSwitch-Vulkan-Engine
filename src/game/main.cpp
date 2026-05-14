@@ -169,9 +169,9 @@ int main(int argc, char *argv[])
     }*/
     EntityID playerID = scene.InstantiatePrefab(player, glm::vec3(0, 0, 0), glm::identity<glm::quat>());
     scene.InstantiatePrefab(zombie_woman, glm::vec3(3, 0.0f, -3), Math::ViewDirToQuat({0.0f ,0.0f, 1.0f}));
-    scene.InstantiatePrefab(zombie_woman, glm::vec3(1, 0.0f, -3), Math::ViewDirToQuat({ 0.0f ,0.0f, 1.0f }));
+    scene.InstantiatePrefab(zombie, glm::vec3(1, 0.0f, -3), Math::ViewDirToQuat({ 0.0f ,0.0f, 1.0f }));
     scene.InstantiatePrefab(zombie_woman, glm::vec3(-1, 0.0f, -3), Math::ViewDirToQuat({ 0.0f ,0.0f, 1.0f }));
-    scene.InstantiatePrefab(zombie_woman, glm::vec3(-3, 0.0f, -3), Math::ViewDirToQuat({ 0.0f ,0.0f, 1.0f }));
+    scene.InstantiatePrefab(zombie, glm::vec3(-3, 0.0f, -3), Math::ViewDirToQuat({ 0.0f ,0.0f, 1.0f }));
     // scene.InstantiatePrefab(sphere_prefab, glm::vec3(4.7, 7, 0.1));
     // scene.InstantiatePrefab(sphere_prefab, glm::vec3(-4.7, 7, -0.1));
     // scene.InstantiatePrefab(sphere_prefab, glm::vec3(0.1, 7, -4.7));
