@@ -112,8 +112,10 @@ int main(int argc, char *argv[])
             //Asset* room_prefab = scene.LoadPrefab("assets/levels/testroom-liamrandomtest-Untitled.gltf");
     //  Asset* many_prefab = scene.LoadPrefab("assets/levels/manylights.gltf");
     Asset* room_prefab = scene.LoadPrefab("assets/levels/testroom_new.gltf");
-    // Asset* playground_prefab = scene.LoadPrefab("assets/levels/playground.gltf");
-                //Asset* cube_prefab = scene.LoadPrefab("assets/props/simple_cube.gltf");
+     Asset* playground_prefab = scene.LoadPrefab("assets/levels/playground_new.gltf");
+    Asset* cube_prefab = scene.LoadPrefab("assets/props/simple_cube.gltf");
+    Asset* small_cube_prefab = scene.LoadPrefab("assets/props/small_cube.gltf");
+    //Asset* platform_prefab = scene.LoadPrefab("assets/props/platform.gltf");
      Asset* sphere_prefab = scene.LoadPrefab("assets/props/simple_sphere.gltf");
      Asset* small_sphere_prefab = scene.LoadPrefab("assets/props/small_sphere.gltf");
                 //Asset* capsule_prefab = scene.LoadPrefab("assets/props/zombie.gltf");
@@ -128,7 +130,13 @@ int main(int argc, char *argv[])
             // Asset* catPrefab = scene.LoadPrefab("assets/animations/zomboUntitled.gltf");
             // Asset* catPrefab = scene.LoadPrefab("assets/animations/flatzombo.gltf");
 
-     scene.InstantiatePrefab(room_prefab, glm::vec3(0, 0, 0), glm::identity<glm::quat>());
+    EntityID playerID = scene.InstantiatePrefab(player, glm::vec3(0, 0, 0), glm::identity<glm::quat>());
+    scene.InstantiatePrefab(playground_prefab, glm::vec3(0, 0, 0), glm::identity<glm::quat>());
+    scene.InstantiatePrefab(zombie, glm::vec3(3, 0, 0), Math::ViewDirToQuat({-1.0f, 0.0f, 0.0f}));
+    scene.InstantiatePrefab(zombie, glm::vec3(3, 0, 1), Math::ViewDirToQuat({ -1.0f, 0.0f, 0.0f }));
+    scene.InstantiatePrefab(zombie, glm::vec3(3, 0, -1), Math::ViewDirToQuat({ -1.0f, 0.0f, 0.0f }));
+    //EntityID platformID = scene.InstantiatePrefab(platform_prefab, glm::vec3(-5.1, 0, -6.7), glm::identity<glm::quat>());
+        scene.InstantiatePrefab(room_prefab, glm::vec3(0, 0, 0), glm::identity<glm::quat>());
     // scene.InstantiatePrefab(cube_prefab, glm::vec3(0, 5.1, 0), glm::identity<glm::quat>());
     // scene.InstantiatePrefab(cube_prefab, glm::vec3(3, 4.9, 0), glm::identity<glm::quat>());
     // scene.InstantiatePrefab(capsule_prefab, glm::vec3(0, 5, 2), glm::identity<glm::quat>());
@@ -160,16 +168,15 @@ int main(int argc, char *argv[])
     //scene.InstantiatePrefab(playground_prefab, glm::vec3(0, 0, -5.0f), glm::identity<glm::quat>());
     // scene.InstantiatePrefab(cube_prefab, glm::vec3(0, 5.1, 0));
     // scene.InstantiatePrefab(cube_prefab, glm::vec3(3, 4.9, 0));
-    /*for(int y = 0; y < 3; y++)
-    for (int x = -5; x < 4; x++)
+    /*for(int y = 0; y < 4; y++)
+    for (int x = -4; x < 5; x++)
     {
-        for (int z = -5; z < 4; z++)
+        for (int z = -4; z < 5; z++)
         {
-            scene.InstantiatePrefab(sphere_prefab, glm::vec3(x+0.5f, y+3.0f, z+0.5f));
+            scene.InstantiatePrefab(small_sphere_prefab, glm::vec3(x+0.5f, y+5.0f, z+0.5f));
             y += 0.5f;
         }
     }*/
-    EntityID playerID = scene.InstantiatePrefab(player, glm::vec3(30, 0, -28), glm::identity<glm::quat>());
     //scene.InstantiatePrefab(zombie_woman, glm::vec3(3, -10.0f, -11.5f), Math::ViewDirToQuat({0.0f ,0.0f, 1.0f}));
     //scene.InstantiatePrefab(zombie_woman, glm::vec3(3, 0.0f, -7.5f), Math::ViewDirToQuat({ 0.0f ,0.0f, 1.0f }));
     //scene.InstantiatePrefab(zombie_woman, glm::vec3(-3, 0.0f, -11.5f), Math::ViewDirToQuat({ 0.0f ,0.0f, 1.0f }));
@@ -246,6 +253,14 @@ int main(int argc, char *argv[])
             frame_time_accumulation = 0.0;
             num_frames_accumulated = 0;
         }
+
+        
+        //const RigidBody* platform = scene.GetPhysicsManager().getBody(platformID);
+        ////scene.GetPhysicsManager().setVelocity(platformID, { -2.0f, 0.0f ,0.0f });
+        //if(platform->position.x > 5)
+        //    scene.GetPhysicsManager().setVelocity(platformID, { -0.1f, 0.0f ,0.0f });
+        //if(platform->position.x < -5)
+        //    scene.GetPhysicsManager().setVelocity(platformID, { 0.1f, 0.0f ,0.0f });
 
         // Event Loop
         SDL_Event event;

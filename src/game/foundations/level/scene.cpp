@@ -234,10 +234,11 @@ EntityID Scene::InstantiatePrefab(Asset* prefab, glm::vec3 spawnPosition, glm::q
                 rbDesc.position = translation; // from the transform
                 rbDesc.orientation = rotation; // from the transform
                 rbDesc.mass = importedRigidbody.mass;
+                if (importedRigidbody.is_character) rbDesc.mass = 70.0f;
                 rbDesc.gravityScale = importedRigidbody.gravity_scale;
                 rbDesc.damping = importedRigidbody.damping;
-                rbDesc.restitution = 0.0f;
-                rbDesc.friction = 0.2f;
+                rbDesc.restitution = 0.9f;
+                rbDesc.friction = 0.1f;
                 rbDesc.forceLayers = importedRigidbody.force_layers;
 
                 // Important bit
