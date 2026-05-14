@@ -54,7 +54,7 @@ namespace
 
     constexpr float MOUSE_SENSITIVITY  = 0.10f;
     constexpr float GAMEPAD_LOOK_SPEED = 120.0f;
-    constexpr float OCCLUSION_MIN_DISTANCE = 0.80f;
+    constexpr float OCCLUSION_MIN_DISTANCE = 0.05f;
     constexpr float OCCLUSION_HIT_PADDING = 0.12f;
     constexpr float CAM_PULLING_SPEED = 35.0f;
     constexpr float CAM_PUSHING_SPEED = 12.0f;
