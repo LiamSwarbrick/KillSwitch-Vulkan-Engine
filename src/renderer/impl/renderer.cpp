@@ -2,6 +2,9 @@
 #include "internal_state.h"
 #include "renderpasses/metadata.h"
 
+// CPU profiler scopes (Vulkan multithreading-relevant breakdown).
+#include "core/profiler.h"
+
 #include <float.h>
 #include "SDL3/SDL_vulkan.h"
 #include "imgui.h"
@@ -978,6 +981,7 @@ bool Renderer_LoadUITexture(const char* filepath, bool nearest_sampling, Rendere
 
 void Renderer_DrawFrame(CameraInfo main_camera)
 {
+    PROFILE_SCOPE("Renderer_DrawFrame"); // total CPU cost of the renderer's per-frame work
     /*  Get current swapchain image, and wait on sync structures
 
         This happens before building the frame graph, since we need to know
@@ -1015,6 +1019,8 @@ void Renderer_DrawFrame(CameraInfo main_camera)
         For instance, an outline effect should be togglable in gameplay code. Same with visibility.
     */
 
+    // Drawcall sorting is per-renderable and trivially parallelizable across worker threads.
+    auto _t_drawcall_sort = Profile_Now();
     BeginDrawCalls();
 
     for (uint32_t i = 0; i < renderstate.renderables_arena.num_renderables; ++i)
@@ -1086,6 +1092,7 @@ void Renderer_DrawFrame(CameraInfo main_camera)
     }
 
     EndDrawCalls();
+    Profile_AddSection("Renderer_DrawCallSort", Profile_ElapsedMs(_t_drawcall_sort));
 
 
 
@@ -1095,6 +1102,8 @@ void Renderer_DrawFrame(CameraInfo main_camera)
 
 
     // Wait for rendering to be complete for this frame in flight.
+    // CPU stall on GPU - tracked separately so it doesn't pollute 'parallelizable' figures.
+    auto _t_fence_wait = Profile_Now();
     // NOTE: We don't reset the fence until after we know the swapchain does not need recreating.
     u64 sync_timeout_nanoseconds;
 #ifdef NDEBUG
@@ -1104,6 +1113,7 @@ void Renderer_DrawFrame(CameraInfo main_camera)
     sync_timeout_nanoseconds = 1000000000ULL * 120ULL;  // <- 2 mins in case some pipelines take rediculous amounts of time to build
 #endif
     VK_CHECK(vkWaitForFences(renderstate.device, 1, &renderstate.frames[renderstate.frame_in_flight].rendering_complete_fence, VK_TRUE, sync_timeout_nanoseconds));
+    Profile_AddSection("Renderer_FenceWait", Profile_ElapsedMs(_t_fence_wait));
 
     // Get next swapchain image
     // NOTE: If another frame isn't finished with the swapchain image, the GPU must't execute commands on the next swapchain image.
@@ -1496,6 +1506,9 @@ void Renderer_DrawFrame(CameraInfo main_camera)
 
     // Begin recording graphics commands
     //
+    // This is the PRIMARY multithreading target for a Vulkan renderer:
+    // each thread can record into its own command pool / secondary cb in parallel.
+    auto _t_record_cmds = Profile_Now();
     renderstate.currently_bound_pipeline = VK_NULL_HANDLE;  // <- Each time we start recording cmd bufs, the bound pipeline is reset
     VK_CHECK(vkBeginCommandBuffer(gcmd, &graphics_cmd_begin_info));
     {
@@ -1519,6 +1532,7 @@ void Renderer_DrawFrame(CameraInfo main_camera)
         FG_CmdTransitionSwapchainForPresentation(gcmd, swapchain_image_resource_id);
     }
     VK_CHECK(vkEndCommandBuffer(gcmd));
+    Profile_AddSection("Renderer_RecordCmds", Profile_ElapsedMs(_t_record_cmds));
 
     //
     // End of graphics commands recording
@@ -1563,7 +1577,10 @@ void Renderer_DrawFrame(CameraInfo main_camera)
         .signalSemaphoreInfoCount  = 1,
         .pSignalSemaphoreInfos     = &gcmd_signal_info
     };
-    VK_CHECK(vkQueueSubmit2(renderstate.graphics_queue, 1, &submit_info, renderstate.frames[renderstate.frame_in_flight].rendering_complete_fence));
+    {
+        PROFILE_SCOPE("Renderer_QueueSubmit");
+        VK_CHECK(vkQueueSubmit2(renderstate.graphics_queue, 1, &submit_info, renderstate.frames[renderstate.frame_in_flight].rendering_complete_fence));
+    }
 
     // Present to screen
     // (after waiting on the rendering complete semaphore so that all drawing is completed first)
@@ -1577,6 +1594,7 @@ void Renderer_DrawFrame(CameraInfo main_camera)
         .pImageIndices       = &swapchain_image_index,
         .pResults            = NULL  // <- Only relevant when swapchainCount > 1
     };
+    PROFILE_SCOPE("Renderer_Present"); // tail of function: scope ends with the function
     VkResult present_result = vkQueuePresentKHR(renderstate.presentation_queue, &present_info);
     if (present_result == VK_ERROR_OUT_OF_DATE_KHR || present_result == VK_SUBOPTIMAL_KHR)
     {

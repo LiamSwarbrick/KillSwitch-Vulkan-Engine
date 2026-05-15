@@ -5,6 +5,9 @@
 
 // animation update
 #include "core/animation.h"
+// per-system CPU profiler
+#include "core/profiler.h"
+#include <typeinfo>
 // RapidJSON 
 #include "rapidjson/document.h"
 // Imported components for automated de-serialization
@@ -309,6 +312,17 @@ EntityID Scene::InstantiatePrefab(Asset* prefab, glm::vec3 spawnPosition, glm::q
                     m_ecs.AddComponent<C_Faction>(eID, { FactionType::Zombie });
                     m_ecs.AddComponent<C_CombatMeleeStats>(eID, C_CombatMeleeStats::ZombieDefaultCombatStats());
                     m_ecs.AddComponent<C_Health>(eID, C_Health::ZombieDefaultHealth());
+
+                    // In headless profile mode, make zombie vision/alert ranges tiny so AI
+                    // stays mostly in Idle/Patrol -- isolates renderer/physics/animation cost.
+                    if (Profile_IsProfileModeActive())
+                    {
+                        C_EnemyAIStats& stats = m_ecs.GetComponent<C_EnemyAIStats>(eID);
+                        stats.visionDistance = 0.5f;
+                        stats.alertDistance  = 0.5f;
+                        C_EnemyAIInfo& info = m_ecs.GetComponent<C_EnemyAIInfo>(eID);
+                        info.visionDistance = 0.5f;
+                    }
                 }
 
                 m_ecs.AddComponent<C_MovementInput>(eID);
@@ -430,15 +444,35 @@ void Scene::BuildRendererScene()
 
 void Scene::Update(float dt)
 {
+    PROFILE_SCOPE("Scene::Update");
 
+    // Time each registered system by classifying via dynamic_cast so we get
+    // stable, human-readable column names in the CSV regardless of compiler mangling.
     for (auto& system : m_systems)
+    {
+        System* raw = system.get();
+        const char* tag = "OtherSystem";
+        if      (dynamic_cast<PhysicsSystem*>(raw))    tag = "Physics";
+        else if (dynamic_cast<AnimationSystem*>(raw))  tag = "Animation_System";
+        else if (dynamic_cast<EnemyAISystem*>(raw))    tag = "AI_Threading"; // candidate for multithreading
+        else if (dynamic_cast<MovementSystem*>(raw))   tag = "Movement";
+        else if (dynamic_cast<PlayerInputSystem*>(raw))tag = "PlayerInput";
+        else if (dynamic_cast<CombatSystem*>(raw))     tag = "Combat";
+        else if (dynamic_cast<HealthSystem*>(raw))     tag = "Health";
+        else if (dynamic_cast<DespawnSystem*>(raw))    tag = "Despawn";
+        ProfileScope sys_scope(tag);
         system->Update(dt);
+    }
 
     Ray ray = { glm::vec3(0.0f, 0.5f, 2.0f), glm::normalize(glm::vec3(0.0f, 0.0f, -1.0f)), 10.0f};
     QueryFilterExternal filter;
     filter.hasLayerOfQuery = true;
     filter.layerOfQuery = (uint8_t) BodyLayer::WEAPON;
-    auto hits = m_physicsManager.raycastAll(ray, filter);
+    decltype(m_physicsManager.raycastAll(ray, filter)) hits;
+    {
+        PROFILE_SCOPE("Physics_Raycast");
+        hits = m_physicsManager.raycastAll(ray, filter);
+    }
     /*for (EntityRaycastHit hit : hits)
     {
         std::cout << "[Raycast Hit] Entity: [" << hit.entity << " | " << m_ecs.GetEntityTag(hit.entity) << "] at t : " << hit.t
@@ -446,7 +480,10 @@ void Scene::Update(float dt)
             << ", normal: [" << hit.normal.x << "," << hit.normal.y << "," << hit.normal.z << "]"
             << std::endl;
     }*/
-    Animation_Update(&m_ecs, dt);
+    {
+        PROFILE_SCOPE("Animation");
+        Animation_Update(&m_ecs, dt);
+    }
 }
 
 void Scene::Render()

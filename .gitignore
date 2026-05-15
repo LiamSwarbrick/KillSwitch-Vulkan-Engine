@@ -19,6 +19,7 @@ imgui.ini
 bin/
 build-artefacts/
 shaderspv/
+profile/
 
 # --- Clangd ---
 compile_commands.json

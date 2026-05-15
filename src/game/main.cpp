@@ -13,6 +13,9 @@
 
 #include "core/utils/math_utils.h"
 
+// Profiler API (implementation lives in src/core/impl/profiler.cpp).
+#include "core/profiler.h"
+
 #include "SDL3/SDL.h"
 #include "SDL3/SDL_main.h"
 #include "foundations/level/LevelGeneration.h"
@@ -31,8 +34,25 @@ InternalGameState gamestate = {
 
 int main(int argc, char *argv[])
 {
-    (void)argc;
-    (void)argv;
+    // Headless profile capture mode:
+    //   --profile-wave    N   Force the game to start at wave N (default disabled)
+    //   --profile-seconds S   Capture S seconds of frames then quit (default 10)
+    //   --profile-out     DIR Output directory (default 'profile')
+    // Example: bin/debug-game.exe --profile-wave 5 --profile-seconds 10
+    int  profile_wave    = 0;     // 0 == disabled (normal interactive run)
+    int  profile_seconds = 10;
+    const char* profile_out_dir = "profile";
+    for (int i = 1; i < argc; ++i)
+    {
+        if (SDL_strcmp(argv[i], "--profile-wave") == 0 && i + 1 < argc)
+            profile_wave = SDL_atoi(argv[++i]);
+        else if (SDL_strcmp(argv[i], "--profile-seconds") == 0 && i + 1 < argc)
+            profile_seconds = SDL_atoi(argv[++i]);
+        else if (SDL_strcmp(argv[i], "--profile-out") == 0 && i + 1 < argc)
+            profile_out_dir = argv[++i];
+    }
+    const bool profile_mode = profile_wave > 0;
+    Profile_SetProfileModeActive(profile_mode);
 
     bool enabled_validation_layers = false;
     // NOTE: For non production builds, we still want Vulkan validation layers on in release mode, because release mode can have different bugs
@@ -142,7 +162,8 @@ int main(int argc, char *argv[])
 
     LevelGeneration generator;
     generator.LoadAssetsAndBuildPalette(&scene, "assets/Final_Levels/");
-    int levelsSpawned = 0, wave = 1;
+    // Start at the requested profile wave if headless profiling is active.
+    int levelsSpawned = 0, wave = profile_mode ? profile_wave : 1;
     bool zombiesWereSpawned = false, isLevelGenerating = true;
     LevelFloor floor;
     std::future<LevelFloor> pendingFloor = std::async(std::launch::async, &LevelGeneration::GenerateGrid, &generator, 7, 7,
@@ -224,8 +245,24 @@ int main(int argc, char *argv[])
     GameState last_ui_state = GameUI_GetState();
     int placeholder_level_index = 0;
 
+    // Headless profile mode: jump straight into Playing, suppress the skill popup,
+    // and arrange to quit after profile_seconds. The CSV capture is started once
+    // the async level generation finishes, so warm-up time isn't billed to the wave.
+    uint64_t profile_start_ns = 0;
+    bool     profile_capture_started = false;
+    if (profile_mode)
+    {
+        GameUI_SetState(GameState::Playing);
+        last_ui_state = GameState::Playing;   // suppresses MainMenu->Playing skill-select popup
+        SDL_Log("[Profile] Headless mode armed: wave=%d, seconds=%d",
+                profile_wave, profile_seconds);
+    }
+
     while (running)
     {
+        // begin profile frame (no-op when capture is not active)
+        Profile_FrameBegin(wave);
+
 		// delta time calculation for testing
         uint64_t current_time = SDL_GetTicksNS();
         float dt = (float)((double)(current_time - last_time) / 1000000000.0);
@@ -433,12 +470,44 @@ int main(int argc, char *argv[])
         uint32_t flags = SDL_GetWindowFlags(window);
         if (!(flags & SDL_WINDOW_MINIMIZED))
         {
-            scene.Render();
-
-            Renderer_DrawFrame(DebugUI_IsOpen() ? DebugUI_GetCameraInfo(dt) : InGameCam_GetGameplayCamera());
+            {
+                PROFILE_SCOPE("Render_Submit");
+                scene.Render();
+            }
+            {
+                PROFILE_SCOPE("Renderer_DrawFrame");
+                Renderer_DrawFrame(DebugUI_IsOpen() ? DebugUI_GetCameraInfo(dt) : InGameCam_GetGameplayCamera());
+            }
         }
         // Quit if requested from any menu
         if (GameUI_GetState() == GameState::Quitting) running = false;
+
+        // close profile frame (records a CSV row when capture active)
+        Profile_FrameEnd();
+
+        // Headless profile mode: start the CSV capture once the level is loaded,
+        // and stop after the requested wall-clock window has elapsed.
+        if (profile_mode)
+        {
+            if (!profile_capture_started && !isLevelGenerating)
+            {
+                char path[160];
+                SDL_snprintf(path, sizeof(path), "%s/wave%d.csv", profile_out_dir, profile_wave);
+                Profile_BeginCapture(path, profile_wave, /*max_frames*/ 1000000);
+                profile_start_ns = SDL_GetTicksNS();
+                profile_capture_started = true;
+                SDL_Log("[Profile] Capture started -> %s", path);
+            }
+            if (profile_capture_started && profile_start_ns != 0)
+            {
+                uint64_t elapsed_ns = SDL_GetTicksNS() - profile_start_ns;
+                if (elapsed_ns >= (uint64_t)profile_seconds * 1000000000ULL)
+                {
+                    Profile_EndCapture();
+                    running = false;
+                }
+            }
+        }
     }
 
     InGameCam_Shutdown();
@@ -447,6 +516,9 @@ int main(int argc, char *argv[])
     Input_Shutdown();
     Renderer_Shutdown();
     Core_Shutdown(window);
+
+    // Flush any in-progress profile capture so partial data is not lost on quit.
+    if (Profile_IsCapturing()) Profile_EndCapture();
 
     if (restart_program)
     {
