@@ -504,10 +504,38 @@ LevelFloor LevelGeneration::GenerateGrid(int width, int height, glm::ivec2 start
 			if (leafRooms.empty())
 				break;
 
+			// Calculate the lowest entropy in the grid
+			size_t lowestEntropy = 100000;
+			for (size_t i = 0; i < leafRooms.size(); ++i)
+			{
+				if (leafRooms[i].x < 0 || leafRooms[i].x >= width || leafRooms[i].y < 0 || leafRooms[i].y >= height)
+					break;
+
+				gridIndex = leafRooms[i].y * width + leafRooms[i].x;
+				GridCell& cell = floor.grid[gridIndex];
+
+				if (cell.validRooms.size() < lowestEntropy)
+					lowestEntropy = cell.validRooms.size();
+			}
+
+			// Store all cells with the lowest entropy
+			std::vector<glm::ivec2> lowestEntropyRooms;
+			for (size_t i = 0; i < leafRooms.size(); ++i)
+			{
+				if (leafRooms[i].x < 0 || leafRooms[i].x >= width || leafRooms[i].y < 0 || leafRooms[i].y >= height)
+					break;
+
+				gridIndex = leafRooms[i].y * width + leafRooms[i].x;
+				GridCell& cell = floor.grid[gridIndex];
+
+				if (cell.validRooms.size() == lowestEntropy)
+					lowestEntropyRooms.push_back(leafRooms[i]);
+			}
+
 			// Pick a random room from the list of placeable rooms to place
 			glm::ivec2 nextRoomCoords = { -1, -1 };
-			std::uniform_int_distribution<size_t> pick(0, leafRooms.size() - 1);
-			nextRoomCoords = leafRooms[pick(rng)];
+			std::uniform_int_distribution<size_t> pick(0, lowestEntropyRooms.size() - 1);
+			nextRoomCoords = lowestEntropyRooms[pick(rng)];
 
 			if (nextRoomCoords.x < 0 || nextRoomCoords.x >= width || nextRoomCoords.y < 0 || nextRoomCoords.y >= height)
 				break;
