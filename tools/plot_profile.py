@@ -40,8 +40,6 @@ matplotlib.use("Agg")  # headless safe
 import matplotlib.pyplot as plt
 import numpy as np
 
-# bit harsh for me to get where to be the "baseline" for the scaling story
-# bcuz of tight time so I paid some money to get Opus 4.7
 
 # Sections we report on (grouped) and the columns from the CSV that feed them.
 # A section is the sum (per frame) of all listed columns that exist in the CSV.
