@@ -54,7 +54,7 @@ typedef struct ResourceIDs
     //      so atassing the shadow (e.g. splitting up a massive texture into tiles) is a better solution
 
     // Ring buffered resources
-    RingBufferedRIDs ring[NUM_FRAMES_IN_FLIGHT];
+    RingBufferedRIDs ring[MAX_SWAPCHAIN_IMAGE_COUNT];
 }
 ResourceIDs;
 

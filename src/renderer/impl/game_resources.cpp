@@ -431,6 +431,13 @@ void create_window_dependent_resources()
             swapchain_image_name, FG_RESOURCE_TYPE_IMAGE, flags, import_info
         );
     }
+    // NOTE(Liam): Wow I just realised swapchain image count may change, and then gaps could occur
+    // I'm adding padding (unused dummy resources) to make sure the same number of resource slots are
+    // always used by swapchain images.
+    for (uint32_t i = renderstate.swapchain_image_count; i < MAX_SWAPCHAIN_IMAGE_COUNT; ++i)
+    {
+        FG_ImportResource("Unused dummy swapchain resource", FG_RESOURCE_TYPE_DUMMY, flags, (ResourceImportInfo){});
+    }
 
     const uint32_t width = renderstate.swapchain_extent.width;
     const uint32_t height = renderstate.swapchain_extent.height;

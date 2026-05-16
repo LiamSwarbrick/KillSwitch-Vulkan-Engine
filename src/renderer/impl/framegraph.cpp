@@ -161,7 +161,7 @@ void fg_add_barrier(FG_Resource* res, PassResourceUsage* usage,
         };
         res->current_layout = usage->layout;
     } 
-    else
+    else if (res->type == FG_RESOURCE_TYPE_IMAGE)
     {
         buf_barriers[(*buf_count)++] = (VkBufferMemoryBarrier2){
             .sType                = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER_2,
@@ -590,7 +590,7 @@ uint32_t add_resource_to_registry_and_heap(const char* debug_name, FG_ResourceTy
         );
         #endif
     }
-    else
+    else if (type == FG_RESOURCE_TYPE_IMAGE)
     {
         #ifdef VERBOSE_FRAMEGRAPH_LOGGING
         printf("Adding IMAGE resource to registry. (" ANSI_CYAN "%s" ANSI_RESET ")\n", res->debug_name);
@@ -730,7 +730,7 @@ void FG_DeallocateResource(FG_Resource* res)
         {
             vmaDestroyBuffer(renderstate.vma_allocator, res->buffer.handle, res->allocation);
         }
-        else
+        else if (res->type == FG_RESOURCE_TYPE_IMAGE)
         {
             SDL_assert(res->image.view != VK_NULL_HANDLE);
             vkDestroyImageView(renderstate.device, res->image.view, NULL);
