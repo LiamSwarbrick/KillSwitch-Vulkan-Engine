@@ -7,7 +7,7 @@
 
 #include "shared_types.glsl"
 
-#define MAX_SHADOWMAPS 3
+#define MAX_SHADOWMAPS 5
 #define MAX_POINTLIGHTS 5000
 #define MAX_SPOTLIGHTS  5000
 #define CLUSTER_GRID_SIZE_X 16
