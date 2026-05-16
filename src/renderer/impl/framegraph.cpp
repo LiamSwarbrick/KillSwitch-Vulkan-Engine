@@ -200,14 +200,14 @@ void fg_apply_barriers(VkCommandBuffer cmd, RenderPassDesc* pass)
         FG_Resource* res = &renderstate.registry.resources[usage->rid];
 
         #ifdef VERBOSE_FRAMEGRAPH_BARRIER_LOGGING
-        printf(" - Image %p before input res=%s: stage=", res->image.handle, res->debug_name);
+        printf(" - Before: Input/Sampled Image %p res=%s: stage=", res->image.handle, res->debug_name);
         vklayer_print_pipelinestageflags2(res->current_stage);
         #endif
 
         fg_add_barrier(res, usage, image_barriers, &img_count, buffer_barriers, &buf_count);
 
         #ifdef VERBOSE_FRAMEGRAPH_BARRIER_LOGGING
-        printf("   Image %p before input res=%s: stage=", res->image.handle, res->debug_name);
+        printf("   After: Input/Sampled Image %p res=%s: stage=", res->image.handle, res->debug_name);
         vklayer_print_pipelinestageflags2(res->current_stage);
         #endif
     }
@@ -218,14 +218,14 @@ void fg_apply_barriers(VkCommandBuffer cmd, RenderPassDesc* pass)
         FG_Resource* res = &renderstate.registry.resources[pass->outputs[i].rid];
 
         #ifdef VERBOSE_FRAMEGRAPH_BARRIER_LOGGING
-        printf(" - Image %p before output attachment res=%s: stage=", res->image.handle, res->debug_name);
+        printf(" - Before: Output/Attachment Image %p res=%s: stage=", res->image.handle, res->debug_name);
         vklayer_print_pipelinestageflags2(res->current_stage);
         #endif
         
         fg_add_barrier(res, &pass->outputs[i], image_barriers, &img_count, buffer_barriers, &buf_count);
 
         #ifdef VERBOSE_FRAMEGRAPH_BARRIER_LOGGING
-        printf("   Image %p after output attachment res=%s: stage=", res->image.handle, res->debug_name);
+        printf("    After: Output/Attachment Image %p res=%s: stage=", res->image.handle, res->debug_name);
         vklayer_print_pipelinestageflags2(res->current_stage);
         #endif
 
