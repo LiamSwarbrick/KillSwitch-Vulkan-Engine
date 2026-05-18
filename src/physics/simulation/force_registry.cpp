@@ -94,7 +94,7 @@ void ForceRegistry::applyAll(std::vector<BodySlot>& bodies, float dt)
 	for (BodySlot& slot : bodies)
 	{
 		if (!slot.occupied) continue;
-		RigidBody& body = slot.body;
+		RigidBody& body = slot.value;
 		if (body.sleeping || body.isStatic || body.isTrigger || body.isKinematic) continue;
 
 		for (IForceGenerator* gen : globalGenerators)

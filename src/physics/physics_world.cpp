@@ -17,9 +17,8 @@ PhysicsWorld::PhysicsWorld(uint8_t numBodyLayers, uint32_t expectedBodies)
 	broadPhase = BroadPhase(&bodyLayerFilter);
 
 	bodyPool.reserve(expectedBodies);
-	shapes.Reserve(expectedBodies);
-	characters.Reserve(300);
-	planes.Reserve(100);
+	shapePool.reserve(expectedBodies);
+	characterPool.reserve(300);
 	
 	contacts.reserve(expectedBodies * 2);
 
@@ -37,23 +36,23 @@ void PhysicsWorld::clear()
 {
 	bodyPool.clear();
 	clearShapeRefs();
-	characters.Clear();
-	planes.Clear();
+	characterPool.clear();
+	//planes.clear();
 
 	freeBodyIndices.clear();
 	freeShapeIndices.clear();
 	freeCharacterIndices.clear();
-	freePlaneIndices.clear();
+	//freePlaneIndices.clear();
 }
 
 void PhysicsWorld::clearShapeRefs()
 {
-	for (ShapeRef& s : shapes.Data())
+	for (ShapeSlot& s : shapePool)
 	{
-		delete s.shape;
-		s.shape = nullptr;
+		delete s.value.shape;
+		s.value.shape = nullptr;
 	}
-	shapes.Clear();
+	shapePool.clear();
 }
 
 void PhysicsWorld::syncTransformsIn(std::span<const TransformData> transforms)
@@ -279,7 +278,7 @@ RigidBodyHandle PhysicsWorld::addBody(const RigidBodyDesc& desc)
 
 	BodySlot& slot = bodyPool[index];
 	slot.occupied = true;
-	RigidBody& body = slot.body;
+	RigidBody& body = slot.value;
 
 	// Build the body based on the descriptor
 
@@ -337,7 +336,7 @@ void PhysicsWorld::removeBody(RigidBodyHandle handle)
 
 	// Quick fix to the bodies // because we're going to swap
 	BodySlot& slot = bodyPool[handle.index];
-	RigidBody& body = slot.body;
+	RigidBody& body = slot.value;
 
 	
 	// remove from broad-phase
@@ -374,7 +373,7 @@ RigidBody* PhysicsWorld::getBody(RigidBodyHandle handle)
 	if (!handle.isValid()) return nullptr;
 
 	BodySlot& slot = bodyPool[handle.index];
-	return &slot.body;
+	return &slot.value;
 }
 
 const RigidBody* PhysicsWorld::getBody(RigidBodyHandle handle) const
@@ -383,16 +382,16 @@ const RigidBody* PhysicsWorld::getBody(RigidBodyHandle handle) const
 	if (!handle.isValid()) return nullptr;
 
 	const BodySlot& slot = bodyPool[handle.index];
-	return &slot.body;
+	return &slot.value;
 }
 
 void PhysicsWorld::setBodyShape(RigidBodyHandle bodyHandle, ShapeHandle shapeHandle)
 {
 	BodySlot& slot = bodyPool[bodyHandle.index];
-	RigidBody* body = &slot.body;
+	RigidBody* body = &slot.value;
 	if (shapeHandle == body->shapeHandle || !shapeHandle.isValid()) return;
 
-	Shape* shape = shapes.GetPtr(shapeHandle.index)->shape;
+	Shape* shape = shapePool[shapeHandle.index].value.shape;
 	if (!body || !shape) return;
 
 	// Doing retain first just in case our newHandle is the oldHandle
@@ -412,7 +411,7 @@ PhysicsCharacter* PhysicsWorld::getCharacter(RigidBodyHandle r)
 
 	if (!cHandle.isValid()) return nullptr;
 
-	return characters.GetPtr(cHandle);
+	return &characterPool[cHandle.index].value;
 }
 
 inline CharacterHandle PhysicsWorld::getCharacterHandle(RigidBodyHandle r)
@@ -436,19 +435,18 @@ void PhysicsWorld::addCharacter(RigidBody* body)
 {
 	if (body == nullptr) return;
 
-	PhysicsCharacter defaultCharacter;
-	defaultCharacter.body = body;
 
 	// Check the index
 	uint32_t index;
-	if (freeCharacterIndices.size() == 0)
+	if (freeCharacterIndices.empty())
 	{
-		if (characters.Size() == UINT32_MAX)
+		if (characterPool.size() == UINT32_MAX)
 		{
 			SDL_assert(false && "RigidBody count has reached its limit, can't insert more");
 		}
 
-		index = characters.Size();
+		index = characterPool.size();
+		characterPool.emplace_back();
 	}
 	else
 	{
@@ -456,9 +454,15 @@ void PhysicsWorld::addCharacter(RigidBody* body)
 		freeCharacterIndices.pop_back();
 	}
 
+	CharacterSlot& slot = characterPool[index];
+	slot.occupied = true;
+
+	PhysicsCharacter& character = slot.value;
+	character.Reset();
+	character.body = body;
+
 	CharacterHandle cHandle = { index };
 
-	characters.Set(index, std::move(defaultCharacter));
 	bodyToCharacter.insert({ body->bodyID, cHandle });
 }
 
@@ -470,9 +474,10 @@ void PhysicsWorld::removeCharacter(RigidBodyHandle r)
 
 	if (!cHandle.isValid()) return;
 
-	characters.Delete(cHandle.index);
+	CharacterSlot& slot = characterPool[cHandle.index];
+
+	slot.occupied = false;
 	freeCharacterIndices.push_back(cHandle.index);
-	bodyToCharacter.erase(r);
 }
 
 // NOTE: to change the default character info please go into physics/core/types.h and change PhysicsCharacter's default values instead!!!!!!!!
@@ -498,14 +503,15 @@ ShapeHandle PhysicsWorld::createShape(const ShapeDesc& desc)
 	// If we don't have recyclable entities
 	if (freeShapeIndices.size() == 0)
 	{
-		if (shapes.Size() == UINT32_MAX)
+		if (shapePool.size() == UINT32_MAX)
 		{
 			// SDL_ log (not logarithm) ("Max number of entities reached");
 			SDL_assert(false && "Shapes count has reached its limit, can't insert more");
 		}
 
 		// Get the next index (so bodies.size());
-		index = shapes.Size();
+		index = shapePool.size();
+		shapePool.emplace_back();
 	}
 	else
 	{
@@ -514,7 +520,10 @@ ShapeHandle PhysicsWorld::createShape(const ShapeDesc& desc)
 		freeShapeIndices.pop_back();
 	}
 
-	ShapeRef ref;
+	ShapeSlot& slot = shapePool[index];
+	slot.occupied = true;
+
+	ShapeRef& ref = slot.value;
 	ref.refCount = 0;
 	switch (desc.type)
 	{
@@ -539,15 +548,9 @@ ShapeHandle PhysicsWorld::createShape(const ShapeDesc& desc)
 	ref.shape->localOffset = desc.localOffset;
 	ref.shape->localOrientation = desc.localOrientation;
 
-	shapes.Set(index, std::move(ref));
-
 	return { index };
 }
 
-inline PhysicsWorld::ShapeRef* PhysicsWorld::getShapeRef(ShapeHandle handle)
-{
-	return shapes.GetPtr(handle.index);
-}
 
 void PhysicsWorld::retainShape(ShapeHandle handle)
 {
@@ -575,78 +578,78 @@ void PhysicsWorld::destroyShape(ShapeHandle handle)
 {
 	SDL_assert(handle.isValid() && "Trying to remove a shape with invalid handle");
 	
-	ShapeRef* ref = getShapeRef(handle);
-	if (ref && ref->refCount > 0)
+	ShapeSlot& slot = shapePool[handle.index];
+	slot.occupied = false;
+	ShapeRef& ref = slot.value;
+
+	if (ref.refCount > 0)
 		SDL_assert(false && "Destroying a shape with dangling references");
 
 	// delete the pointer before removing ShapeRef
-	delete ref->shape;
-	ref->shape = nullptr;
+	delete ref.shape;
+	ref.shape = nullptr;
 
-	shapes.Delete(handle.index);
 	freeShapeIndices.push_back(handle.index);
 }
 
 Shape* PhysicsWorld::getShape(ShapeHandle handle)
 {
 	if (!handle.isValid()) return nullptr;
-
-	return shapes.GetPtr(handle.index)->shape;
+	
+	return getShapeRef(handle)->shape;
 }
 
 const Shape* PhysicsWorld::getShape(ShapeHandle handle) const
 {
 	if (!handle.isValid()) return nullptr;
 	
-	const ShapeRef* ret = shapes.GetPtr(handle.index);
-	if (!ret)
-	{
-		return nullptr;
-		shapes.GetPtr(handle.index);
-	}
-
-	return shapes.GetPtr(handle.index)->shape;
+	return getShapeRef(handle)->shape;
 }
 
 
-PlaneHandle PhysicsWorld::addPlane(const ShapeDesc& desc)
-{
-	SDL_assert(desc.type == ShapeType::Plane && "ShapeDesc in addPlane should have type::Plane");
-	// Check the index
-	uint32_t index;
-	// If we don't have recyclable entities
-	if (freePlaneIndices.size() == 0)
-	{
-		if (planes.Size() == UINT32_MAX)
-		{
-			// SDL_ log (not logarithm) ("Max number of entities reached");
-			SDL_assert(false && "Planes count has reached its limit, can't insert more");
-		}
-
-		// Get the next index (so bodies.size());
-		index = shapes.Size();
-	}
-	else
-	{
-		// Recycle index
-		index = freePlaneIndices.back();
-		freePlaneIndices.pop_back();
-	}
-
-	if (desc.type != ShapeType::Plane) return InvalidPlaneHandle;
-	PlaneShape plane(desc.plane.normal, desc.plane.distance);
-
-	planes.Set(index, plane);
-
-	return { index };
-}
-
-void PhysicsWorld::removePlane(PlaneHandle handle)
-{
-	SDL_assert(handle.isValid() && "Invalid handle on removePlane");
-
-	planes.Delete(handle.index);
-}
+//PlaneHandle PhysicsWorld::addPlane(const ShapeDesc& desc)
+//{
+//	SDL_assert(desc.type == ShapeType::Plane && "ShapeDesc in addPlane should have type::Plane");
+//	// Check the index
+//	uint32_t index;
+//	// If we don't have recyclable entities
+//	if (freePlaneIndices.size() == 0)
+//	{
+//		if (planes.size() == UINT32_MAX)
+//		{
+//			// SDL_ log (not logarithm) ("Max number of entities reached");
+//			SDL_assert(false && "Planes count has reached its limit, can't insert more");
+//		}
+//
+//		// Get the next index (so bodies.size());
+//		index = planes.size();
+//		planes.emplace_back();
+//	}
+//	else
+//	{
+//		// Recycle index
+//		index = freePlaneIndices.back();
+//		freePlaneIndices.pop_back();
+//	}
+//
+//	PlaneSlot& slot = planes[index];
+//	slot.occupied = true;
+//	PlaneShape& plane = slot.value;
+//
+//	if (desc.type != ShapeType::Plane) return InvalidPlaneHandle;
+//	plane.normal = desc.plane.normal;
+//	plane.distance = desc.plane.distance;
+//
+//
+//	return { index };
+//}
+//
+//void PhysicsWorld::removePlane(PlaneHandle handle)
+//{
+//	SDL_assert(handle.isValid() && "Invalid handle on removePlane");
+//
+//	planes[handle.index].occupied = false;
+//}
 
 void PhysicsWorld::addGenerator(IForceGenerator* gen)
 {
@@ -866,8 +869,12 @@ void PhysicsWorld::integrate(float dt)
 {
 	// Before we integrate the bodies, add the baseVelocity from the characters to their respective bodies
 	// BECAUSE WE ARE ASSUMING FOR CHARACTERS, GAME-SIDE UPDATES SETS THE SPEED EVERY FRAME
-	for (PhysicsCharacter& c : characters.Data())
+	for (CharacterSlot& slot : characterPool)
 	{
+		if (!slot.occupied) continue;
+
+		PhysicsCharacter& c = slot.value;
+
 		if (!c.body) continue;
 
 		c.body->velocity += c.baseVelocity;
@@ -877,7 +884,7 @@ void PhysicsWorld::integrate(float dt)
 	for (BodySlot& slot : bodyPool)
 	{
 		if (!slot.occupied) continue;
-		RigidBody& body = slot.body;
+		RigidBody& body = slot.value;
 		integrator.integrate(body, dt);
 	}
 }
@@ -890,7 +897,7 @@ void PhysicsWorld::updateBroadPhase()
 	for (BodySlot& slot : bodyPool)
 	{
 		if (!slot.occupied) continue;
-		RigidBody& body = slot.body;
+		RigidBody& body = slot.value;
 		if (body.sleeping || body.isStatic || body.isTrigger) continue;
 
 		// Not calling calculateAABB(&body) because we're not fattening the newAABB
@@ -936,19 +943,22 @@ void PhysicsWorld::detectCollisions()
 
 void PhysicsWorld::testPlanes()
 {
-	for (const PlaneShape& plane : planes.Data())
+	/*for (const PlaneSlot& planeSlot : planes)
 	{
+		if (!planeSlot.occupied) continue;
+		const PlaneShape& plane = planeSlot.value;
+
 		for (BodySlot& slot : bodyPool)
 		{
 			if (!slot.occupied) continue;
-			RigidBody& body = slot.body;
+			RigidBody& body = slot.value;
 			if (body.sleeping || body.isStatic || body.isKinematic || body.isTrigger) continue;
 
 			Contact contact = narrowPhase.testPlane(body, plane, *this);
 			if (contact.isValid())
 				contacts.push_back(contact);
 		}
-	}
+	}*/
 }
 
 void PhysicsWorld::solve(float dt)
@@ -961,7 +971,7 @@ void PhysicsWorld::updateSleep(float dt)
 	for (BodySlot& slot : bodyPool)
 	{
 		if (!slot.occupied) continue;
-		RigidBody& body = slot.body;
+		RigidBody& body = slot.value;
 		if (body.sleeping || body.isStatic || body.isKinematic || body.isTrigger) continue;
 
 		float kineticEnergy = 0.5f * body.mass * glm::dot(body.velocity, body.velocity); // velocity squared, we can just square the threshold
@@ -1104,7 +1114,7 @@ void PhysicsWorld::wakeAllBodies()
 	for (BodySlot& slot : bodyPool)
 	{
 		if (!slot.occupied) continue;
-		RigidBody& body = slot.body;
+		RigidBody& body = slot.value;
 		body.wakeUp();
 	}
 }

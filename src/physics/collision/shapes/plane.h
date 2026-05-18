@@ -11,9 +11,14 @@ class PlaneShape : public Shape
 {
 public:
 	glm::vec3 normal;
-	float distance; // distance from center to each sphere's origin along local Y axis
+	float distance; // distance to origin along the normal
 
 public:
+	explicit PlaneShape()
+		: Shape(ShapeType::Plane), normal(glm::vec3(0.0f)), distance(0.0f)
+	{
+	}
+
 	explicit PlaneShape(glm::vec3 normal, float distance)
 		: Shape(ShapeType::Plane), normal(normal), distance(distance)
 	{

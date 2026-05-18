@@ -2,10 +2,6 @@
 #define PHYSICS_PHYSICS_WORLD_H
 
 
-
-// Sparse set for our rigidbodies (and shapes and planes)
-#include "core/ecs/sparse_set.h"
-
 #include "physics/core/types.h"
 #include "physics/physics_settings.h"
 
@@ -128,8 +124,8 @@ public:
 	// ------------------------------
 	// PLANE MANAGEMENT (because we have a floor. it could be terrain, but would change things)
 	// ------------------------------
-	PlaneHandle addPlane(const ShapeDesc& desc);
-	void removePlane(PlaneHandle handle);
+	//PlaneHandle addPlane(const ShapeDesc& desc);
+	//void removePlane(PlaneHandle handle);
 
 	// ------------------------------
 	// FORCE REGISTRY
@@ -234,15 +230,15 @@ private:
 	// Fairly similar to the ECS registry, we will just have a couple sparse sets for shapes (though planes is a little bit overkill)
 	// Templating it in case we might need to use it on characters too, or any others
 	// Slot<T> and BodySlot are defined in physics/core/types.h
-	std::vector<BodySlot> bodyPool;
+	Pool<RigidBody> bodyPool;
 	std::vector<uint32_t> freeBodyIndices;
 
-	SparseSet<PhysicsCharacter> characters;
+	Pool<PhysicsCharacter> characterPool;
 	std::vector<uint32_t> freeCharacterIndices;
 
 	std::unordered_map<uint32_t, CharacterHandle> bodyToCharacter;
 
-	// i will use a sparseset of pointers... for polymorphism, even thought we could have a better data structure
+	// i will use a pool of pointers for polymorphism, even thought we could have a better data structure
 	// a pool would suffice, because we do not worry about cache friendliness when it comes to shapes
 	// we're not going to iterate over shapes, they are going to be accesed from rigidbodies
 	struct ShapeRef
@@ -251,16 +247,27 @@ private:
 		uint32_t refCount = 0;
 	};
 
-	ShapeRef* getShapeRef(ShapeHandle handle);
+	inline PhysicsWorld::ShapeRef* getShapeRef(ShapeHandle handle)
+	{
+		return &shapePool[handle.index].value;
+	}
+
+	inline const PhysicsWorld::ShapeRef* getShapeRef(ShapeHandle handle) const
+	{
+		return &shapePool[handle.index].value;
+	}
+
 	void retainShape(ShapeHandle handle);
 	void releaseShape(ShapeHandle handle);
 	void clearShapeRefs(); // Have to free the memory using delete manually
 
-	SparseSet<ShapeRef> shapes;
+	using ShapeSlot = Slot<ShapeRef>;
+	Pool<ShapeRef> shapePool;
 	std::vector<uint32_t> freeShapeIndices;
 
-	SparseSet<PlaneShape> planes;
-	std::vector<uint32_t> freePlaneIndices;
+	//using PlaneSlot = Slot<PlaneShape>;
+	//Pool<PlaneShape> planes;
+	//std::vector<uint32_t> freePlaneIndices;
 
 	// --- EACH FRAME ---
 	// we keep it here with .reserve() so we don't allocate too much in the step.

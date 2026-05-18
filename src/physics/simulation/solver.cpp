@@ -274,8 +274,11 @@ void Solver::resolveVelocities(const ExtendedContact& contact, float dt)
 
 void Solver::prepareCharacters(float dt)
 {
-    for (PhysicsCharacter& c : world.characters.Data())
+    for (CharacterSlot& slot : world.characterPool)
     {
+        if (!slot.occupied) continue;
+        PhysicsCharacter& c = slot.value;
+
         RigidBody* b = c.body;
         if (b->sleeping) continue;
         c.lastFrameGroundState = c.groundState;
@@ -293,8 +296,11 @@ void Solver::prepareCharacters(float dt)
 void Solver::resolveCharactersExtended(float dt)
 {
     // Resolving the character's position
-    for (PhysicsCharacter& c : world.characters.Data())
+    for (CharacterSlot& slot : world.characterPool)
     {
+        if (!slot.occupied) continue;
+        PhysicsCharacter& c = slot.value;
+
         RigidBody* b = c.body;
         if (b->sleeping) continue;
 
