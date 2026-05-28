@@ -7,11 +7,16 @@
 
 void EnemyAISystem::Update(float dt) const
 {
-    auto view = ecs->GetView<C_Transform, C_EnemyAIStats, C_EnemyAIInfo, C_RigidBody, C_MovementInput, C_CombatInput, C_CombatInfo, C_Faction>();
-    view.ForEach([&](EntityID entity, C_Transform& transform, C_EnemyAIStats& stats, C_EnemyAIInfo& info, C_RigidBody& bodyHandle, C_MovementInput& moveInput, C_CombatInput& combatInput, C_CombatInfo& combatInfo, C_Faction& faction)
+    auto view = ecs->GetView<C_Transform, C_EnemyAIStats, C_EnemyAIInfo, C_MovementInput, C_CombatInput, C_CombatInfo, C_Faction>();
+    view.ForEach([&](EntityID entity, C_Transform& transform, C_EnemyAIStats& stats, C_EnemyAIInfo& info, C_MovementInput& moveInput, C_CombatInput& combatInput, C_CombatInfo& combatInfo, C_Faction& faction)
         {
             // READ FROM: ZombieAIInfo and PhysicsManager
             // WRITE TO: ZombieAIInfo, MovementInput, CombatInput
+
+            if (!ecs->Has<C_RigidBody>(entity))
+                return;
+
+            C_RigidBody bodyHandle = ecs->GetComponent<C_RigidBody>(entity);
 
             glm::vec3 scale;
             glm::quat rotation;
