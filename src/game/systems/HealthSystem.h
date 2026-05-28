@@ -26,6 +26,11 @@ public:
 					{
 						if (health.currentHealth <= 0)
 						{
+							if (ecs->Has<C_RigidBody>(entity))
+							{
+								physics->destroyBody(entity);
+								ecs->RemoveComponent<C_RigidBody>(entity);
+							}
 							// make sure we only trigger once by checking if we already have the timer
 							if (!ecs->Has<C_DespawnTimer>(entity))
 							{
@@ -37,6 +42,8 @@ public:
 								{
 									ecs->AddComponent<C_DespawnTimer>(entity, C_DespawnTimer{ 15.5f });
 								}
+
+								ecs->RemoveComponent<C_Health>(entity);
 							}
 						}
 
