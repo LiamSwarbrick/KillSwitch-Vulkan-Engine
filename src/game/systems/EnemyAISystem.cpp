@@ -13,10 +13,13 @@ void EnemyAISystem::Update(float dt) const
             // READ FROM: ZombieAIInfo and PhysicsManager
             // WRITE TO: ZombieAIInfo, MovementInput, CombatInput
 
+            C_RigidBody bodyHandle{ InvalidRigidBodyHandle };
             if (!ecs->Has<C_RigidBody>(entity))
-                return;
-
-            C_RigidBody bodyHandle = ecs->GetComponent<C_RigidBody>(entity);
+            {
+                SDL_assert(combatInfo.isDead && "Zombi shud be ded");
+            }
+            else
+                bodyHandle = ecs->GetComponent<C_RigidBody>(entity);
 
             glm::vec3 scale;
             glm::quat rotation;
