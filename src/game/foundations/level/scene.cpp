@@ -2,6 +2,7 @@
 #include "game/foundations/components.h"
 #include "physics/body_layers.h"
 #include "renderer/renderer.h"
+#include "game/game_ui.h"
 
 // animation update
 #include "core/animation.h"
@@ -433,8 +434,13 @@ void Scene::BuildRendererScene()
     info.num_animated_meshes = (uint32_t)anim_meshes.size();
     info.animated_meshes = anim_meshes.data();
 
+    GameUI_SceneTexturePaths tex_paths = {};
+    GameUI_GetSceneUITexturePaths(&tex_paths);
+
     Renderer_ChangeScene(info);
     
+    
+
     uint64_t after_uploadtogpu = SDL_GetPerformanceCounter();
 
     uint64_t counter_freq = SDL_GetPerformanceFrequency();

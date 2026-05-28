@@ -1629,6 +1629,22 @@ static void DrawPauseMenu()
 //  Public API
 // ============================================================
 
+typedef struct GameUI_SceneTextures
+{
+    uint32_t num_ui_textures;
+    char ui_texture_paths[256][64];
+}
+GameUI_SceneTextures;
+
+void GameUI_GetSceneUITexturePaths(GameUI_SceneTexturePaths* out_texture_paths)
+{
+    out_texture_paths->num_ui_textures = 0;
+
+    out_texture_paths->ui_texture_paths[out_texture_paths++] = HUD_HEART_ICON_PATH;
+    out_texture_paths->ui_texture_paths[out_texture_paths++] = HUD_LAYER_BANNER_PATH;
+    out_texture_paths->ui_texture_paths[out_texture_paths++] = HUD_DAMAGE_OVERLAY_PATH;
+}
+
 void GameUI_Init()
 {
     s_state = GameState::MainMenu;

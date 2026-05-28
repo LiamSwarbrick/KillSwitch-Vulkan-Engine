@@ -1,5 +1,7 @@
 #pragma once
 
+#include <stdint.h>
+
 //  Usage (in main loop):
 //    GameUI_Init();
 //    // per-frame:
@@ -84,6 +86,15 @@ void      GameUI_DebugDamagePlayer(Scene& scene, int damage_amount);
 
 // Trigger the short damage vignette used when the player gets hit.
 void      GameUI_TriggerDamageFlash();
+
+typedef struct GameUI_SceneTexturePaths
+{
+    uint32_t num_ui_textures;
+    char ui_texture_paths[256][64];
+}
+GameUI_SceneTexturePaths;
+
+void GameUI_GetSceneUITexturePaths(GameUI_SceneTexturePaths* out_texture_paths);
 
 void      GameUI_Init();
 void      GameUI_Update();          // call once per frame (handles ACTION_PAUSE etc.)

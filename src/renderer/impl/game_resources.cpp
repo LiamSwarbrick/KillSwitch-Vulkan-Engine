@@ -518,6 +518,30 @@ void create_scene_resources()
     Scene_InitInfo* init_info = &renderstate.next_scene_info;
     ResourceIDs* rids = &renderstate.rids;
 
+    // Load UI textures
+    for (uint32_t i = 0; i < init_info->num_ui_textures; ++i)
+    {
+        uint32_t ui_texture_rid = UINT32_MAX;
+        // stbi_set_flip_vertically_on_load(1);
+        int width, height, num_channels;
+
+        char* filepath = init_info->ui_texture_paths[i];
+        uint8_t* data = stbi_load(, &width, &height, &num_channels, 4);
+        if (data == NULL)
+        {
+            fprintf(stderr, "Failure to load image (%s)\n", filepath);
+            exit(1);  // TODO: Fallback to default texture
+        }
+        uint64_t data_size = width * height * 4;
+        VkFormat format = VK_FORMAT_R8G8B8A8_SRGB;
+        ui_texture_rid = create_mipmapped_texture2d_resource(
+            filepath, flags, data, data_size, width, height, format
+        );
+        stbi_image_free(data);
+
+        #error finish this
+    }
+
     ///////////////////////////////////////////////////////////////////////////////////////////////////
     // TODO: Create stylised gradients via colour buffer for characters meshes (i.e. skinned meshes) //
     ///////////////////////////////////////////////////////////////////////////////////////////////////
