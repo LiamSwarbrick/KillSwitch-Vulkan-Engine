@@ -75,7 +75,11 @@ typedef struct Renderable
     // CPU-side joints buffer we memcpy from to GPU joints buffer
     uint32_t joint_count;
     glm::mat4* joints;    // <- Pointer to animation system side joints array
+    // glm::mat4* __restrict joints;
     // NOTE: Fucking make sure joints arrays are not allocated every frame
+    
+    // TODO: When refactoring this API, make sure __restrict or restrict is used on the joints pointer
+    //       Not using it at the moment, despite optimisations, because I don't know what the animation system in core does with this pointer.
 }
 Renderable;
 

@@ -86,18 +86,23 @@ void PhysicsWorld::syncTransformsOut(std::span<TransformData> outTransforms)
 
 void PhysicsWorld::update(float dt)
 {
-	stepAccumulator += dt;
-	int steps = 0;
+	step(dt);
 
-	while (stepAccumulator >= fixedStep && steps < maxSteps)
-	{
-		step(fixedStep);
-		stepAccumulator -= fixedStep;
-		steps++;
-	}
+	// OLD fixed step code that was either too performance intensive with 2 steps
+	// or under stepping with 0/1 steps:
 
-	if (steps == maxSteps)
-		stepAccumulator = 0.0f;
+	// stepAccumulator += dt;
+	// int steps = 0;
+
+	// while (stepAccumulator >= fixedStep && steps < maxSteps)
+	// {
+	// 	step(fixedStep);
+	// 	stepAccumulator -= fixedStep;
+	// 	steps++;
+	// }
+
+	// if (steps == maxSteps)
+	// 	stepAccumulator = 0.0f;
 }
 
 glm::vec3 PhysicsWorld::getVelocity(RigidBodyHandle r)
