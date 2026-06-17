@@ -14,7 +14,7 @@ SDL_Window* Core_Init(Core_InitInfo init_info)
 
     SDL_SetAppMetadata("Adventure Engine Game", "earlyprototype", NULL);
     
-    SDL_Window* window = SDL_CreateWindow(init_info.title, init_info.width, init_info.height, SDL_WINDOW_VULKAN | SDL_WINDOW_RESIZABLE);
+    SDL_Window* window = SDL_CreateWindow(init_info.title, init_info.width, init_info.height, SDL_WINDOW_VULKAN | SDL_WINDOW_RESIZABLE | SDL_WINDOW_FULLSCREEN);
     if (window == NULL)
     {
         SDL_LogError(SDL_LOG_CATEGORY_ERROR, "Failed to create window: %s\n", SDL_GetError());

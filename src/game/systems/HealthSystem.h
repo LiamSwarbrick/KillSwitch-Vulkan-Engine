@@ -36,7 +36,7 @@ public:
 							{
 								if (faction.type == FactionType::Player)
 								{
-									ecs->AddComponent<C_DespawnTimer>(entity, C_DespawnTimer{ 3.0f });
+									ecs->AddComponent<C_DespawnTimer>(entity, C_DespawnTimer{ 0.0f });
 								}
 								else if (faction.type == FactionType::Zombie)
 								{
