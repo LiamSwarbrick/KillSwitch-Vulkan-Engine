@@ -90,21 +90,14 @@ void get_vec3_from_extras(const char* extras, const char* key, float out[3]) {
     }
 }
 
-Image load_image(const char* name, const char* uri)
+
+Image load_image(const char* name, const char* filename)
 {
-	// Extract just the filename from the uri
-	const char* slash = strrchr(uri, '/');
-	const char* filename = slash ? slash + 1 : uri;
-
-	// all textures stored in assets/
-	char full_path[1024];
-	snprintf(full_path, sizeof(full_path), "assets/%s", filename);
-
 	// Load images from disk (4 channels: RGBA8 image).
 	// (No decision necessary here about whether it's sRGB or linear)
 	Image image = {
 		.name = duplicate_string(name),
-		.uri = duplicate_string(full_path)
+		.uri = duplicate_string(filename)
 	};
 
 	stbi_set_flip_vertically_on_load(0);
@@ -223,8 +216,19 @@ Asset* load_asset(const char* filename) {
 			// GLTF
 			const char* img_name = duplicate_string(gltf_image->name);
 			const char* img_uri = duplicate_string(gltf_image->uri);
+			
+			// Extract just the filename from the uri
+			char image_path[1024] = {};
+			strcpy(image_path, filename);
+			char* slash = strrchr(image_path, '/');
+			if (slash)
+				*(slash + 1) = '\0';
 
-			asset->images[i] = load_image(img_name, img_uri);
+			strcat(image_path, img_uri);
+
+
+
+			asset->images[i] = load_image(img_name, image_path);
 		}
 	}
 

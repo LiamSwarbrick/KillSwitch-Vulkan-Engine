@@ -7,11 +7,19 @@
 
 void EnemyAISystem::Update(float dt) const
 {
-    auto view = ecs->GetView<C_Transform, C_EnemyAIStats, C_EnemyAIInfo, C_RigidBody, C_MovementInput, C_CombatInput, C_CombatInfo, C_Faction>();
-    view.ForEach([&](EntityID entity, C_Transform& transform, C_EnemyAIStats& stats, C_EnemyAIInfo& info, C_RigidBody& bodyHandle, C_MovementInput& moveInput, C_CombatInput& combatInput, C_CombatInfo& combatInfo, C_Faction& faction)
+    auto view = ecs->GetView<C_Transform, C_EnemyAIStats, C_EnemyAIInfo, C_MovementInput, C_CombatInput, C_CombatInfo, C_Faction>();
+    view.ForEach([&](EntityID entity, C_Transform& transform, C_EnemyAIStats& stats, C_EnemyAIInfo& info, C_MovementInput& moveInput, C_CombatInput& combatInput, C_CombatInfo& combatInfo, C_Faction& faction)
         {
             // READ FROM: ZombieAIInfo and PhysicsManager
             // WRITE TO: ZombieAIInfo, MovementInput, CombatInput
+
+            C_RigidBody bodyHandle{ InvalidRigidBodyHandle };
+            if (!ecs->Has<C_RigidBody>(entity))
+            {
+                SDL_assert(combatInfo.isDead && "Zombi shud be ded");
+            }
+            else
+                bodyHandle = ecs->GetComponent<C_RigidBody>(entity);
 
             glm::vec3 scale;
             glm::quat rotation;
@@ -79,11 +87,20 @@ void EnemyAISystem::Update(float dt) const
 
                 // We're chasing a player, stop if we're within a certain range
                 Shape* playerShape = physics->getShape(info.activeTargetID);
-                CapsuleShape* playerCapsule = static_cast<CapsuleShape*>(playerShape);
-                if (distanceToTarget <= playerCapsule->radius + 0.2f)
+                if (!playerShape)
                 {
+                    info.activeTargetID = NULL_ENTITY;
                     moveInput.moveAmount = 0.0f;
                 }
+                else
+                {
+                    CapsuleShape* playerCapsule = static_cast<CapsuleShape*>(playerShape);
+                    if (distanceToTarget <= playerCapsule->radius + 0.2f)
+                    {
+                        moveInput.moveAmount = 0.0f;
+                    }
+                }
+                
                     
                 moveInput.desiredDir = facingDir;
                 moveInput.wantsRun = true;
@@ -132,6 +149,7 @@ void EnemyAISystem::Update(float dt) const
                 // Attacking (written from C_Combat hopefully)
                 // Wait for attack to finish, fall back to previous state (hopefully Chase)
                 // If vision with target lost, go to last seen target and remain alerted (or patrol between those 2 points or randomly)
+                if (!ecs->IsEntityValid(info.activeTargetID)) return;
                 C_Transform& targetTransform = ecs->GetComponent<C_Transform>(info.activeTargetID);
                 glm::vec3 targetPosition = glm::vec3(targetTransform.matrix[3]);
                 info.target = targetPosition;
@@ -494,8 +512,14 @@ bool EnemyAISystem::ShouldAttack(const C_EnemyAIStats& stats, C_EnemyAIInfo& inf
     }
 
     // As we are using this after the physics engine, we know we can use C_Transform instead, but we might rather choose the RigidBody and check its position just in case
+    if (!ecs->IsEntityValid(info.activeTargetID)) return false;
     C_Transform& targetTransform = ecs->GetComponent<C_Transform>(info.activeTargetID);
     Shape* targetShape = physics->getShape(info.activeTargetID);
+    if (!targetShape)
+    {
+        info.activeTargetID = NULL_ENTITY;
+        return false;
+    }
     CapsuleShape* targetCapsule = static_cast<CapsuleShape*>(targetShape);
     float targetRadius = targetCapsule->radius;
 

@@ -26,17 +26,24 @@ public:
 					{
 						if (health.currentHealth <= 0)
 						{
+							if (ecs->Has<C_RigidBody>(entity))
+							{
+								physics->destroyBody(entity);
+								ecs->RemoveComponent<C_RigidBody>(entity);
+							}
 							// make sure we only trigger once by checking if we already have the timer
 							if (!ecs->Has<C_DespawnTimer>(entity))
 							{
 								if (faction.type == FactionType::Player)
 								{
-									ecs->AddComponent<C_DespawnTimer>(entity, C_DespawnTimer{ 3.0f });
+									ecs->AddComponent<C_DespawnTimer>(entity, C_DespawnTimer{ 0.0f });
 								}
 								else if (faction.type == FactionType::Zombie)
 								{
 									ecs->AddComponent<C_DespawnTimer>(entity, C_DespawnTimer{ 15.5f });
 								}
+
+								ecs->RemoveComponent<C_Health>(entity);
 							}
 						}
 

@@ -17,14 +17,6 @@
 // For floats
 constexpr float F_EPSILON = 1e-6f;
 
-// Important for a fix
-template<typename T>
-struct Slot
-{
-    T body;
-    bool occupied = false;
-};
-using BodySlot = Slot<RigidBody>;
 
 // ------------------
 // SHAPES RELATED
@@ -452,6 +444,21 @@ struct PhysicsCharacter
     glm::vec3 lastNonWalkableNormalContact = glm::vec3(0.0f); // instead of storing if we were blocked last frame, we can store the normal to give us more information (we might not even use the extra info)
     glm::vec3 preSolvingPosition{}; // the origin of the step-up
     glm::vec3 preSolvingVelocity{}; // basically desired movement for the step-up
+
+    void Reset()
+    {
+        body = nullptr;
+
+        groundState = GroundState::InAir;
+        lastFrameGroundState = GroundState::InAir;
+        groundNormal = glm::vec3(0.0f, 1.0f, 0.0f); // use character's groundNormal to project the horizontal velocity before applying, that way we would get a much smoother movement
+
+        // DO NOT MODIFY GAME-SIDE (or maybe idk, you should move body.velocity)
+        baseVelocity = glm::vec3(0.0f); // In case of contact with kinematic objects, we need to store this speed
+
+        maxWalkableAngle = glm::radians(50.0f);
+        stepHeight = 0.4f;
+    }
 };
 
 struct PhysicsCharacterInfo
@@ -506,6 +513,40 @@ struct BodyPairComparer
         return a.bodyB < b.bodyB;
     }
 };
+
+
+
+// ------
+// POOL RELATED
+// ------
+
+// To create pools
+template<typename T>
+struct Slot
+{
+    T value;
+    bool occupied = false;
+};
+
+// Za pool
+template<typename T>
+using Pool = std::vector<Slot<T>>;
+
+// If im ever bored for "optimizing"
+//template<typename T>
+//class Pool
+//{
+//
+//
+//    std::vector<T> m_values;
+//    std::vector<bool> m_occupied;
+//};
+
+
+// For easier getting
+using BodySlot = Slot<RigidBody>;
+using CharacterSlot = Slot<PhysicsCharacter>;
+// Not shape cause its only internally used in the physics world
 
 
 #endif // !PHYSICS_CORE_TYPES_H
