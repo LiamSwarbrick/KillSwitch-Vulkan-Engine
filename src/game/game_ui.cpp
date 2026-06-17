@@ -124,7 +124,7 @@ static const LevelStartSkillOption s_default_skill_options[LEVEL_START_SKILL_OPT
     // NOTE(Liam): Deciding to remove the hints about how to use the upgrades so they discover it themselves
     //             We can decide whether to add it back maybe.
     { "skill_placeholder_alpha", "Quick Draw", "Reload barrel 1.25x faster!" },
-    { "skill_placeholder_beta",  "Big Fat Gun", "+1 Piering but higher recoil.\nPierce through 1 more zombie with a single bullet." },// Line 'em up in hoards to use ammo wisely!" },
+    { "skill_placeholder_beta",  "Big Fat Gun", "+1 Piercing but higher recoil.\nPierce through 1 more zombie with a single bullet." },// Line 'em up in hoards to use ammo wisely!" },
     { "skill_placeholder_gamma", "Juggernaut", "Tank another chomp to the face!\n+1 Health." }// If you run out of bullets you can tank some zombo damage on your way to an ammo box!" },
 };
 
@@ -1524,7 +1524,11 @@ static void DrawGameOverMenu()
     ImGui::Dummy(ImVec2(0, gap));
 
     if (ImGui::Button("Return to Main Menu", ImVec2(btn_w, btn_h)))
-        GameUI_SetState(GameState::MainMenu);
+    {
+        GameUI_SetState(GameState::Playing);
+        restart_program = true;
+    }
+     //   GameUI_SetState(GameState::MainMenu);
 
     ImGui::Dummy(ImVec2(0, gap));
 
