@@ -1,34 +1,35 @@
 ## KillSwitch. A Vulkan-1.4 High Performance Game Engine Built in 3 Months from Scratch.
-#### A handmade framegraph-based 3D renderer, physics engine, dual-layer skeletal animation system, prefab-based entity system, procedural generation, key-rebinding, and more.
+##### A handmade framegraph-based 3D renderer, physics engine, dual-layer skeletal animation system, prefab-based entity system, procedural generation, key-rebinding, and more.
 
 ![Juking dumb ah zombo in procedually generated](demo-dumb-zombo.gif)
+<a href="killswitch-poster.png" target="_blank">
+  <img src="killswitch-poster.png" />
+</a>
+<!-- ![KillSwitch Poster](killswitch-poster.png) -->
 
-TODO: Add poster image to showcase the engine here.
-TODO: Full names and emails.
+- Jaime Gine: Physics engine and ECS
+- Liam Swarbrick: Renderer, Build-system & Engine Architecture.
+- Finley Byrne: Procedural Generation, Skeletal Animation, Blender Level Editor
+- Nansong Yue: Key rebinds, GUI, intelligent thirdperson camera.
+- Pio Cañas: Asset System, Skeletal Animation, rigged our assets for the demo game.
+- Xiangyu Liu: Audio System
 
-- Jaime: Physics engine and ECS
-- Liam: Renderer, Build-system & High-Level Architecture.
-- Finley: Procedural Generation, Skeletal Animation, Blender Level Editor
-- Nansong: Key rebinds, GUI, intelligent thirdperson camera.
-- Pio: Asset System, Skeletal Animation, rigged our assets for the demo game.
-- Xiangyu: Audio System
+Of course a huge amount was done collectively. Code for demo game, core systems, etc. \:)
 
-Of course many tasks were done collectively. Code for demo game, core systems, etc.
 
 ### Libraries
 
 Libraries we did end up rellying on to reach the 3 month deadline (all very replacable, although SDL3 gives support for so many controllers and platforms it should probably stay):
-- SDL3
-- miniaudio
-- cgltf (btw, glTF 2.0 is a shit native format for an engine. It was a mistake that we decided to use it with our ECS over a custom format)
-- imgui
-- imgui-node-editor
-- rapidjson
-- stb_image.h (for PNG loading), stb_ds.h (for hash table used in renderer's pipeline hashing because the C++ STL is dog water)
-- AMD's Vulkan Memory Allocator (vk_mem_alloc.h).
-- volk: Vulkan Proc Loader Library
-  
-TODO: Make these links^
+- _SDL3_ - (cross platform way to open a window and get input)
+- _miniaudio_ - (abstraction over the per-platform audio APIs)
+- _cgltf_ (btw, glTF 2.0 is a ~~shit~~ meh native format for an engine. It was a mistake that we decided to use it with our ECS over a custom format)
+- _imgui_ - (getting a ui on the screen fast was very useful for debugging especially)
+- _imgui-node-editor_ - (to show the framegraph visually for debugging)
+- _rapidjson_ - (JSON parser since our entities are JSON within glTF, not that we would do that if we were to do it again)
+- _stb_image.h_ (for PNG loading), stb_ds.h (for hash table used in renderer's pipeline hashing because the C++ STL ~~is dog water~~ me no approve)
+- AMD's Vulkan Memory Allocator (_vk_mem_alloc.h_).
+- _volk_: Vulkan Proc Loader Library
+
 
 ### Build
 ```
