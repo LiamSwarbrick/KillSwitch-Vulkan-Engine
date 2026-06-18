@@ -1,13 +1,10 @@
 ## KillSwitch. A Vulkan-1.4 High Performance Game Engine Built in 3 Months from Scratch.
 ##### A handmade framegraph-based 3D renderer, physics engine, dual-layer skeletal animation system, prefab-based entity system, procedural generation, key-rebinding, and more.
 
-<a href="demo-dumb-zombo.gif" target="_blank" alt="Gameplay gif">
-  <img src="demo-dumb-zombo.gif" />
-</a>
-<a href="killswitch-poster.png" target="_blank" alt="Engine showcase poster">
+![Juking dumb ah zombo in procedually generated](demo-dumb-zombo.gif)
+<a href="https://raw.githubusercontent.com/LiamSwarbrick/KillSwitch-Vulkan-Engine/refs/heads/main/killswitch-poster.png" target="_blank" alt="Engine showcase poster">
   <img src="killswitch-poster.png" />
 </a>
-<!-- ![Juking dumb ah zombo in procedually generated](demo-dumb-zombo.gif) -->
 <!-- ![KillSwitch Poster](killswitch-poster.png) -->
 
 - Jaime Gine: Physics engine and ECS
