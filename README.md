@@ -26,7 +26,7 @@ Libraries we did end up rellying on to reach the 3 month deadline (all very repl
 - _imgui_ - (getting a ui on the screen fast was very useful for debugging especially)
 - _imgui-node-editor_ - (to show the framegraph visually for debugging)
 - _rapidjson_ - (JSON parser since our entities are JSON within glTF, not that we would do that if we were to do it again)
-- _stb_image.h_ (for PNG loading), stb_ds.h (for hash table used in renderer's pipeline hashing because the C++ STL ~~is dog water~~ me no approve)
+- _stb_image.h_ (for PNG loading), stb_ds.h (for hash table used in renderer's pipeline hashing because the C++ STL ~~is dog water~~)
 - AMD's Vulkan Memory Allocator (_vk_mem_alloc.h_).
 - _volk_: Vulkan Proc Loader Library
 
